@@ -412,3 +412,7 @@ const MP = (function () {
     get room() { return currentRoom; }
   };
 })();
+
+// const/let 전역 선언은 window 객체에 자동으로 안 붙기 때문에,
+// 다른 <script> 태그에서 window.MP 로 체크하는 코드가 항상 실패하던 문제를 해결.
+window.MP = MP;
