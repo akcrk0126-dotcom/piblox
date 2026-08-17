@@ -1,20 +1,10 @@
 /*
   ================================================================
    multiplayer.js — Firebase 공용 모듈
-   (익명/이메일 로그인, 실시간 멀티플레이, 리더보드)
+   (익명/이메일 로그인, 실시간 멀티플레이, 친구/온라인 상태, 리더보드)
   ================================================================
   이 파일은 hub.html / jumpmap.html / aura-battle-3.html 이 함께 씁니다.
   같은 폴더에 꼭 넣어주세요.
-
-  ★★★ 설정 방법 (필수) ★★★
-  1) https://console.firebase.google.com 에서 새 프로젝트를 만듭니다.
-     (기존 프로젝트를 같이 써도 됩니다 — 아래처럼 전용 네임스페이스를
-      쓰기 때문에 다른 앱의 데이터와 섞이지 않습니다)
-  2) "빌드 > Realtime Database" 메뉴에서 데이터베이스를 만듭니다.
-  3) "빌드 > Authentication > Sign-in method" 에서
-     "익명"과 "이메일/비밀번호" 두 가지를 모두 사용 설정합니다.
-  4) 프로젝트 설정(⚙) > "내 앱" > 웹 앱 추가(</>) 후 나오는
-     firebaseConfig 객체를 아래 FIREBASE_CONFIG 에 그대로 붙여넣으세요.
 
   보안 규칙 예시 (Realtime Database > 규칙):
   {
@@ -26,8 +16,19 @@
           }
         },
         "users": {
+          ".read": "auth != null",
+          ".indexOn": ["nicknameLower"],
           "$uid": {
-            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "presence": {
+          ".read": true,
+          "$uid": { ".write": "auth != null && auth.uid === $uid" }
+        },
+        "friends": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
             ".write": "auth != null && auth.uid === $uid"
           }
         },
@@ -40,9 +41,6 @@
       }
     }
   }
-
-  ★ 참고: 모든 데이터는 최상위 "playhub_mp" 노드 아래에만 저장되어
-  다른 프로젝트(예: 기존 가챠 게임 DB)와 절대 겹치지 않습니다.
 */
 
 const FIREBASE_CONFIG = {
@@ -223,13 +221,14 @@ const MP = (function () {
   function signUp(email, password, nickname, cb) {
     if (!isConfigured()) { cb && cb(null, 'no-config'); return; }
     ensureApp();
+    const finalNick = (nickname || getNickname()).trim().slice(0,12);
     const finish = (user) => {
-      setNickname(nickname || getNickname());
+      setNickname(finalNick);
       db.ref(`${MP_ROOT}/users/${user.uid}`).set({
-        email: email, nickname: nickname || getNickname(),
+        email: email, nickname: finalNick, nicknameLower: finalNick.toLowerCase(),
         createdAt: firebase.database.ServerValue.TIMESTAMP
       });
-      if (nickname) user.updateProfile({ displayName: nickname }).catch(()=>{});
+      if (finalNick) user.updateProfile({ displayName: finalNick }).catch(()=>{});
       cb && cb(user, null);
     };
     const cur = auth.currentUser;
@@ -300,6 +299,90 @@ const MP = (function () {
     }).catch(err => { console.error('[MP] 리더보드 조회 실패', err); cb && cb([]); });
   }
 
+  // ---------- 접속 상태(온라인/플레이 중인 게임) ----------
+  let presenceRef = null;
+  function setPresence(game) {
+    if (!isConfigured() || !db || !uid) return;
+    if (!presenceRef || presenceRef.key !== uid) {
+      presenceRef = db.ref(`${MP_ROOT}/presence/${uid}`);
+      presenceRef.onDisconnect().update({ online:false, game:null, ts: firebase.database.ServerValue.TIMESTAMP });
+    }
+    presenceRef.update({
+      online:true, game: game || null, name: getDisplayName(),
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  }
+
+  // ---------- 유저 검색 (닉네임/아이디로 친구 찾기) ----------
+  function searchUsers(queryStr, cb) {
+    if (!isConfigured() || !db) { cb && cb([]); return; }
+    const q = (queryStr || '').trim().toLowerCase();
+    if (!q) { cb && cb([]); return; }
+    db.ref(`${MP_ROOT}/users`).orderByChild('nicknameLower').startAt(q).endAt(q + '\uf8ff').limitToFirst(20)
+      .once('value').then(snap => {
+        const arr = [];
+        snap.forEach(child => { arr.push(Object.assign({ uid: child.key }, child.val())); });
+        cb && cb(arr.filter(u => u.uid !== uid));
+      }).catch(err => { console.error('[MP] 유저 검색 실패', err); cb && cb([]); });
+  }
+
+  // ---------- 친구 / 팔로우 ----------
+  function addFriend(targetUid, targetName, type, cb) {
+    if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
+    db.ref(`${MP_ROOT}/friends/${uid}/${targetUid}`).set({
+      name: targetName || '친구', type: type || 'friend',
+      ts: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+  function removeFriend(targetUid, cb) {
+    if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
+    db.ref(`${MP_ROOT}/friends/${uid}/${targetUid}`).remove()
+      .then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+
+  let friendsListRef = null;
+  let friendPresenceRefs = {};
+  let onFriendsCb = null;
+  function onFriendsUpdate(cb) {
+    onFriendsCb = cb;
+    if (!isConfigured() || !db || !uid) { cb && cb([]); return; }
+    if (friendsListRef) friendsListRef.off();
+    friendsListRef = db.ref(`${MP_ROOT}/friends/${uid}`);
+    friendsListRef.on('value', snap => {
+      const friends = snap.val() || {};
+      const fUids = Object.keys(friends);
+      Object.keys(friendPresenceRefs).forEach(fid => {
+        if (!fUids.includes(fid)) { friendPresenceRefs[fid].off(); delete friendPresenceRefs[fid]; }
+      });
+      const result = {};
+      function emit() { if (onFriendsCb) onFriendsCb(fUids.map(id => result[id]).filter(Boolean)); }
+      if (fUids.length === 0) { emit(); return; }
+      fUids.forEach(fid => {
+        db.ref(`${MP_ROOT}/users/${fid}`).once('value').then(uSnap => {
+          const uData = uSnap.val() || {};
+          result[fid] = {
+            uid: fid, type: friends[fid].type || 'friend',
+            nickname: uData.nickname || friends[fid].name || '친구',
+            online:false, game:null
+          };
+          emit();
+          if (!friendPresenceRefs[fid]) {
+            const pRef = db.ref(`${MP_ROOT}/presence/${fid}`);
+            friendPresenceRefs[fid] = pRef;
+            pRef.on('value', pSnap => {
+              const p = pSnap.val() || {};
+              if (result[fid]) {
+                result[fid].online = !!p.online;
+                result[fid].game = p.game || null;
+              }
+              emit();
+            });
+          }
+        });
+      });
+    });
+  }
+
   return {
     init,
     initAuthOnly,
@@ -320,6 +403,11 @@ const MP = (function () {
     signOutUser,
     submitScore,
     fetchLeaderboard,
+    setPresence,
+    searchUsers,
+    addFriend,
+    removeFriend,
+    onFriendsUpdate,
     get uid() { return uid; },
     get room() { return currentRoom; }
   };
