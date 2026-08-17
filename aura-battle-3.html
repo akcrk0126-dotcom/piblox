@@ -1,0 +1,3452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>아우라 배틀</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#87CEEB; font-family: -apple-system, 'Malgun Gothic', sans-serif; touch-action:none; cursor:none; }
+  #canvas { display:block; width:100%; height:100%; cursor:none; }
+
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #title { position:absolute; top:14px; left:50%; transform:translateX(-50%); color:#fff; font-size:15px; font-weight:700; text-shadow:0 2px 6px rgba(0,0,0,.5); letter-spacing:1px; }
+  #hint { position:absolute; top:38px; left:50%; transform:translateX(-50%); color:#fff; font-size:11px; opacity:.85; text-shadow:0 1px 4px rgba(0,0,0,.5); text-align:center; }
+
+  /* Joystick */
+  #joyZone { position:absolute; left:0; bottom:0; width:45%; height:55%; pointer-events:auto; }
+  #joyBase { position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(255,255,255,.18); border:3px solid rgba(255,255,255,.55); box-shadow:0 0 0 6px rgba(0,0,0,.08), inset 0 0 20px rgba(255,255,255,.08); display:none; }
+  #joyBase::after { content:''; position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:rgba(255,255,255,.4); }
+  #joyStick { position:absolute; width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.9); box-shadow:0 3px 10px rgba(0,0,0,.35), inset 0 -3px 6px rgba(0,0,0,.12); }
+
+  /* Camera drag zone */
+  #camZone { position:absolute; right:0; bottom:0; width:55%; height:100%; pointer-events:auto; }
+
+  /* Jump button */
+  #jumpBtn { position:absolute; right:32px; bottom:54px; width:74px; height:74px; border-radius:50%; background:rgba(255,255,255,.28); border:3px solid rgba(255,255,255,.6); pointer-events:auto; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:800; text-shadow:0 1px 4px rgba(0,0,0,.4); }
+  #jumpBtn:active { background:rgba(255,255,255,.5); }
+
+  /* Shift lock toggle: 점프 버튼 살짝 아래-오른쪽의 작은 자물쇠 아이콘 버튼 */
+  #lockBtn { position:absolute; right:14px; bottom:14px; width:44px; height:44px; border-radius:50%;
+    background:rgba(20,20,30,.55); border:2px solid rgba(255,255,255,.55); pointer-events:auto;
+    display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1;
+    box-shadow:0 3px 10px rgba(0,0,0,.35); transition:background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+  #lockBtn.active { background:#1e88ff; border-color:#fff; box-shadow:0 0 14px rgba(30,136,255,.85), 0 3px 10px rgba(0,0,0,.35); }
+
+  /* 터치 기기가 아니면 모바일 조작 클러스터(조이스틱/점프/시점고정)는 숨김 - 데스크톱은 WASD·마우스·단축키 사용 */
+  body:not(.has-touch) #joyZone,
+  body:not(.has-touch) #jumpBtn,
+  body:not(.has-touch) #lockBtn { display:none !important; }
+
+  #speedTag { position:absolute; top:66px; right:14px; padding:8px 12px; border-radius:20px; background:rgba(0,0,0,.35); color:#fff; font-size:11px; font-weight:700; }
+
+  #crosshair { position:fixed; top:50%; left:50%; width:16px; height:16px; margin:-8px 0 0 -8px; pointer-events:none; z-index:25; }
+  #crosshair::before, #crosshair::after { content:''; position:absolute; background:rgba(255,255,255,.9); box-shadow:0 0 2px rgba(0,0,0,.7); }
+  #crosshair::before { left:50%; top:0; width:2px; height:100%; margin-left:-1px; }
+  #crosshair::after { top:50%; left:0; height:2px; width:100%; margin-top:-1px; }
+
+  /* ===== 아우라 가챠 ===== */
+  #gachaBtn { position:absolute; right:32px; bottom:142px; width:74px; height:74px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #8a6bff, #4a2fb8 65%, #2a1a70); border:3px solid rgba(255,255,255,.7);
+    pointer-events:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    color:#fff; font-size:11px; font-weight:800; font-family:inherit; cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.4), 0 0 22px rgba(150,110,255,.65); text-shadow:0 1px 4px rgba(0,0,0,.5); }
+  #gachaBtn .dice { font-size:24px; line-height:1; }
+  #gachaBtn:active { transform:scale(.94); }
+  #gachaBtn:disabled { opacity:.45; pointer-events:none; }
+
+  #auraBadge { position:absolute; top:66px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:7px;
+    padding:6px 14px; border-radius:20px; background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.35);
+    color:#fff; font-size:11px; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,.5); white-space:nowrap; }
+  #auraBadge em { font-style:normal; opacity:.75; margin-left:2px; }
+  .badgeDot { width:9px; height:9px; border-radius:50%; flex:none; }
+
+  #auraTag { position:fixed; left:0; top:0; pointer-events:none; z-index:30; padding:4px 4px; border-radius:10px;
+    text-align:center; white-space:nowrap; opacity:0; transform:translate(-50%,-100%) scale(.7);
+    transition:opacity .5s ease, transform .4s cubic-bezier(.34,1.56,.64,1); }
+  #auraTag .tagName { font-size:16px; font-weight:900; letter-spacing:.5px; }
+  #auraTag .tagName.font-cursive { font-family:'Dancing Script', cursive; font-size:22px; font-weight:700; letter-spacing:1px; }
+  #auraTag .tagName.font-fantasy { font-family:'Cinzel Decorative', serif; font-size:15px; font-weight:900; letter-spacing:1.5px; }
+  #auraTag .windWrap { position:relative; display:inline-block; }
+  #auraTag .windWrap::before, #auraTag .windWrap::after {
+    content:''; position:absolute; top:50%; left:50%; width:140%; height:140%;
+    border:1.5px dashed currentColor; border-radius:50%; opacity:.35; pointer-events:none;
+    transform:translate(-50%,-50%) rotate(0deg);
+  }
+  #auraTag .windWrap::before { animation: windSpin1 2.6s linear infinite; border-top-color:transparent; border-bottom-color:transparent; }
+  #auraTag .windWrap::after { animation: windSpin2 3.6s linear infinite reverse; width:170%; height:170%; border-left-color:transparent; border-right-color:transparent; opacity:.22; }
+  @keyframes windSpin1 { from{ transform:translate(-50%,-50%) rotate(0deg); } to{ transform:translate(-50%,-50%) rotate(360deg); } }
+  @keyframes windSpin2 { from{ transform:translate(-50%,-50%) rotate(0deg); } to{ transform:translate(-50%,-50%) rotate(360deg); } }
+  #auraTag .tagProb { font-size:11px; font-weight:700; opacity:.9; margin-top:1px; }
+  #auraTag .tagTrait { font-size:10px; font-weight:700; opacity:.8; margin-top:2px; color:#fff; }
+  /* 등급별 색상은 AURA_TIERS로부터 동적으로 생성되어 주입됨 (아래 JS 참고) */
+  @keyframes legendaryPulse {
+    0%,100% { filter:drop-shadow(0 0 12px rgba(255,180,0,.85)); }
+    50%     { filter:drop-shadow(0 0 24px rgba(255,100,0,1)); }
+  }
+  @keyframes legendaryTextGlow {
+    0%,100% {
+      text-shadow:
+        0 0 6px rgba(255,255,255,.85),
+        0 0 14px rgba(255,180,0,.85),
+        0 0 24px rgba(255,110,0,.7);
+    }
+    50% {
+      text-shadow:
+        0 0 10px rgba(255,255,255,1),
+        0 0 22px rgba(255,200,0,1),
+        0 0 40px rgba(255,90,0,1);
+    }
+  }
+  /* ===== 추후 추가 예정인 텍스트 연출 (지금은 정의만 해두고 아직 적용 안 함) =====
+     .tagName.fx-shake     : 살짝 흔들리는 글씨 (등급이 더 올라가면 추가 예정)
+     .tagName.fx-mono-glow : 흑백 명암 대비 + 스캔라인 느낌의 간지나는 텍스트
+  */
+  .tagName.fx-shake { animation: tagShake .35s ease-in-out infinite; }
+  @keyframes tagShake {
+    0%,100%  { transform:translate(0,0); }
+    20%      { transform:translate(-1px,1px); }
+    40%      { transform:translate(1px,-1px); }
+    60%      { transform:translate(-1px,-1px); }
+    80%      { transform:translate(1px,1px); }
+  }
+  .tagName.fx-mono-glow {
+    color:#f5f5f5;
+    text-shadow:0 0 4px #fff, 0 0 12px #ccc, 0 0 22px #999;
+    filter:grayscale(1) contrast(1.3);
+  }
+
+  #gachaOverlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0); z-index:50; pointer-events:auto; transition:background .35s ease; }
+  #gachaOverlay.show { background:rgba(0,0,0,.72); }
+
+  #multOverlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0); z-index:55; pointer-events:none; transition:background .2s ease; }
+  #multOverlay.show { background:rgba(0,0,0,.6); }
+  #multText { font-weight:900; text-align:center; letter-spacing:1px; transform:scale(0.3); opacity:0;
+    transition:transform .22s cubic-bezier(.34,1.9,.64,1), opacity .18s ease; }
+  #multOverlay.show #multText { transform:scale(1); opacity:1; }
+  #multText.shake { animation: multShake .45s ease-in-out; }
+  @keyframes multShake {
+    0%,100% { transform:translate(0,0) scale(1); }
+    20% { transform:translate(-7px,4px) scale(1.05); }
+    40% { transform:translate(7px,-4px) scale(1.05); }
+    60% { transform:translate(-5px,3px) scale(1.03); }
+    80% { transform:translate(5px,-3px) scale(1.03); }
+  }
+  #gachaPanel { width:260px; background:linear-gradient(180deg,#241a44,#100a24); border:2px solid rgba(255,255,255,.25);
+    border-radius:18px; padding:14px; box-shadow:0 20px 60px rgba(0,0,0,.6);
+    transform:scale(.85); opacity:0; transition:transform .35s cubic-bezier(.34,1.56,.64,1), opacity .3s ease; }
+  #gachaOverlay.show #gachaPanel { transform:scale(1); opacity:1; }
+  #gachaTitle { text-align:center; color:#fff; font-size:13px; font-weight:800; letter-spacing:2px; margin-bottom:10px; opacity:.8; }
+  #gachaWindow { position:relative; height:340px; overflow:hidden; border-radius:12px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.15); }
+  #gachaWindow::before, #gachaWindow::after { content:''; position:absolute; left:0; right:0; height:110px; z-index:2; pointer-events:none; }
+  #gachaWindow::before { top:0; background:linear-gradient(#100a24, transparent); }
+  #gachaWindow::after { bottom:0; background:linear-gradient(transparent, #100a24); }
+  #gachaCenterLine { position:absolute; left:6px; right:6px; top:136px; height:68px; border-radius:8px;
+    box-shadow:0 0 0 2px rgba(255,255,255,.6) inset, 0 0 18px rgba(255,255,255,.3); z-index:3; pointer-events:none; }
+  #gachaReel { position:relative; will-change:transform; }
+  .reelItem { height:68px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  .reelItem .reelName { font-size:16px; font-weight:900; text-shadow:0 2px 6px rgba(0,0,0,.6); transition:transform .1s ease; }
+  .reelItem .reelProb { font-size:10px; font-weight:700; opacity:.7; color:#fff; }
+  .reelItem.tickFlash .reelName { transform:scale(1.15); }
+  .reelItem.winner { animation:winnerPop .5s ease; }
+  @keyframes winnerPop { 0%{ transform:scale(1); } 45%{ transform:scale(1.25); } 100%{ transform:scale(1); } }
+  /* reelItem 등급별 색상도 AURA_TIERS로부터 동적으로 생성되어 주입됨 */
+
+  /* ===== 아우라 도감 ===== */
+  #dexBtn { position:absolute; top:66px; left:14px; padding:8px 12px; border-radius:20px;
+    background:rgba(0,0,0,.35); border:2px solid rgba(255,255,255,.5); pointer-events:auto;
+    color:#fff; font-size:11px; font-weight:700; font-family:inherit; cursor:pointer; }
+  #dexBtn:active { background:rgba(255,255,255,.25); }
+
+  /* ===== 물약 상점 / 인벤토리 버튼 ===== */
+  #shopBtn, #invBtn { position:absolute; left:14px; padding:8px 12px; border-radius:20px;
+    background:rgba(0,0,0,.35); border:2px solid rgba(255,255,255,.5); pointer-events:auto;
+    color:#fff; font-size:11px; font-weight:700; font-family:inherit; cursor:pointer; }
+  #shopBtn { top:110px; }
+  #invBtn { top:154px; }
+  #shopBtn:active, #invBtn:active { background:rgba(255,255,255,.25); }
+  #invBtn .invBadgeDot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#ffd700; margin-left:4px; box-shadow:0 0 6px #ffd700; vertical-align:middle; }
+
+  #dexOverlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0); z-index:50; pointer-events:auto; transition:background .3s ease; }
+  #dexOverlay.show { background:rgba(0,0,0,.78); }
+  #dexPanel { width:min(94vw, 420px); max-height:82vh; display:flex; flex-direction:column;
+    background:linear-gradient(180deg,#241a44,#100a24); border:2px solid rgba(255,255,255,.25);
+    border-radius:18px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.6);
+    transform:scale(.9); opacity:0; transition:transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s ease; }
+  #dexOverlay.show #dexPanel { transform:scale(1); opacity:1; }
+  #dexHeader { display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; }
+  #dexTitle { color:#fff; font-size:14px; font-weight:800; letter-spacing:1px; }
+  #dexCloseBtn { width:28px; height:28px; border-radius:50%; border:1px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.1); color:#fff; font-size:14px; font-family:inherit; cursor:pointer; pointer-events:auto; }
+  #dexProgress { color:#fff; font-size:11px; opacity:.7; text-align:center; margin-bottom:10px; }
+  #dexGrid { overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:14px; padding-right:2px; pointer-events:auto; }
+  .dexTierLabel { font-size:11px; font-weight:800; letter-spacing:1px; margin-bottom:6px; }
+  .dexTierItems { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .dexCard { position:relative; border-radius:12px; padding:10px 4px 12px; text-align:center;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); cursor:pointer; }
+  .dexCard.locked { opacity:.5; cursor:default; }
+  .dexCard .dexSwatch { width:26px; height:26px; border-radius:50%; margin:0 auto; }
+  .dexCard .dexName { font-size:11px; font-weight:800; margin-top:5px; color:#fff; }
+  .dexCard .dexProb { font-size:9px; opacity:.65; margin-top:2px; color:#fff; }
+  .dexCard .dexTrait { font-size:9px; opacity:.85; margin-top:2px; color:#8CFFA0; font-weight:700; }
+  .dexCard .dexCount { position:absolute; top:4px; right:6px; font-size:9px; opacity:.6; color:#fff; }
+  .dexCard.equipped { border-color:#fff; box-shadow:0 0 0 2px #fff, 0 0 14px rgba(255,255,255,.6); }
+  .dexCard.equipped::after { content:'착용중'; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
+    font-size:8px; background:#fff; color:#111; padding:1px 6px; border-radius:8px; font-weight:800; white-space:nowrap; }
+  /* dexCard 스와치 색상도 AURA_TIERS로부터 동적으로 생성되어 주입됨 */
+  .dexCard.locked .dexSwatch { background:#333 !important; }
+
+  /* ===== 물약 상점 / 인벤토리 (도감과 별개의 UI) ===== */
+  #shopOverlay, #invOverlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0); z-index:50; pointer-events:auto; transition:background .3s ease; }
+  #shopOverlay.show, #invOverlay.show { background:rgba(0,0,0,.78); }
+  #shopPanel, #invPanel { width:min(94vw, 420px); max-height:82vh; display:flex; flex-direction:column;
+    background:linear-gradient(180deg,#241a44,#100a24); border:2px solid rgba(255,255,255,.25);
+    border-radius:18px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.6);
+    transform:scale(.9); opacity:0; transition:transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s ease; }
+  #shopOverlay.show #shopPanel, #invOverlay.show #invPanel { transform:scale(1); opacity:1; }
+  .panelHeader { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .panelTitle { color:#fff; font-size:14px; font-weight:800; letter-spacing:1px; }
+  .panelCloseBtn { width:28px; height:28px; border-radius:50%; border:1px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.1); color:#fff; font-size:14px; font-family:inherit; cursor:pointer; pointer-events:auto; }
+
+  .potionIcon { width:34px; height:34px; border-radius:50%; flex:none; }
+  .potionIcon.kind-luck  { background:radial-gradient(circle at 35% 30%, #baffc9, #1fae5c); }
+  .potionIcon.kind-speed { background:radial-gradient(circle at 35% 30%, #b9e4ff, #1e78d6); }
+  .potionIcon.kind-godly { background:conic-gradient(from 0deg, #ffd700, #ff5ecb, #66e0ff, #ffd700); box-shadow:0 0 10px rgba(255,215,0,.8); }
+
+  #shopList { overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:10px; pointer-events:auto; }
+  .shopItem { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:10px; }
+  .shopItem.godly { border-color:#ffd700; box-shadow:0 0 14px rgba(255,215,0,.35); }
+  .shopItem .shopInfo { flex:1; min-width:0; }
+  .shopItem .shopName { font-size:12px; font-weight:800; color:#fff; }
+  .shopItem .shopDesc { font-size:10px; opacity:.7; color:#fff; margin-top:2px; }
+  .shopItem .shopBuyBtn { flex:none; padding:7px 10px; border-radius:10px; border:none;
+    background:#2ecc71; color:#08351d; font-weight:800; font-size:11px; font-family:inherit; cursor:pointer; }
+  .shopItem .shopBuyBtn:active { transform:scale(.94); }
+
+  #invEmpty { color:#fff; opacity:.6; font-size:12px; text-align:center; padding:26px 0; }
+  #invGrid { overflow-y:auto; -webkit-overflow-scrolling:touch; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; pointer-events:auto; }
+  .invCard { position:relative; border-radius:12px; padding:10px 4px 8px; text-align:center;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); cursor:pointer; }
+  .invCard.godly { border-color:#ffd700; box-shadow:0 0 14px rgba(255,215,0,.4); }
+  .invCard .potionIcon { margin:0 auto; }
+  .invCard .invName { font-size:10.5px; font-weight:800; margin-top:5px; color:#fff; }
+  .invCard .invCount { position:absolute; top:4px; right:6px; font-size:9px; opacity:.7; color:#fff; }
+  .invCard .invUseHint { font-size:8px; opacity:.55; margin-top:2px; color:#fff; }
+  .invCard:active { transform:scale(.95); }
+
+  /* 물약 효과 지속시간 상태 배지 */
+  #potionStatus { position:absolute; top:100px; left:50%; transform:translateX(-50%); display:none;
+    flex-direction:column; gap:4px; align-items:center; pointer-events:none; }
+  .potionStatusRow { padding:4px 10px; border-radius:14px; background:rgba(0,0,0,.5);
+    color:#fff; font-size:10px; font-weight:700; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div id="title">아우라 배틀</div>
+  <div id="hint">왼쪽 조이스틱: 이동 · 오른쪽 화면 드래그: 카메라 · G: 뽑기 · B: 도감 · P: 상점 · I: 인벤토리</div>
+
+  <button id="lockBtn" type="button" title="시점고정(Shift Lock)"><span id="lockIcon">🔓</span></button>
+  <button id="dexBtn" type="button">📖 도감</button>
+  <button id="shopBtn" type="button">🛒 상점</button>
+  <button id="invBtn" type="button">🎒 인벤토리<span id="invBadgeDot" class="invBadgeDot" style="display:none;"></span></button>
+  <div id="speedTag">걷기</div>
+  <div id="potionStatus"></div>
+
+  <div id="joyZone">
+    <div id="joyBase"><div id="joyStick"></div></div>
+  </div>
+  <div id="camZone"></div>
+  <div id="jumpBtn">점프</div>
+
+  <button id="gachaBtn" type="button"><span class="dice">🎲</span><span>뽑기</span></button>
+  <div id="auraBadge"></div>
+</div>
+
+<div id="crosshair"></div>
+<div id="auraTag"></div>
+
+<div id="gachaOverlay">
+  <div id="gachaPanel">
+    <div id="gachaTitle">✦ AURA GACHA ✦</div>
+    <div id="gachaWindow">
+      <div id="gachaReel"></div>
+      <div id="gachaCenterLine"></div>
+    </div>
+  </div>
+</div>
+
+<div id="multOverlay"><div id="multText">10x!</div></div>
+
+<div id="dexOverlay">
+  <div id="dexPanel">
+    <div id="dexHeader">
+      <div id="dexTitle">✦ 아우라 도감 ✦</div>
+      <button id="dexCloseBtn" type="button">✕</button>
+    </div>
+    <div id="dexProgress"></div>
+    <div id="dexGrid"></div>
+  </div>
+</div>
+
+<div id="shopOverlay">
+  <div id="shopPanel">
+    <div class="panelHeader">
+      <div class="panelTitle">✦ 물약 상점 ✦</div>
+      <button id="shopCloseBtn" type="button" class="panelCloseBtn">✕</button>
+    </div>
+    <div id="shopList"></div>
+  </div>
+</div>
+
+<div id="invOverlay">
+  <div id="invPanel">
+    <div class="panelHeader">
+      <div class="panelTitle">✦ 인벤토리 ✦</div>
+      <button id="invCloseBtn" type="button" class="panelCloseBtn">✕</button>
+    </div>
+    <div id="invEmpty">가지고 있는 물약이 없어요. 상점에서 얻어보세요!</div>
+    <div id="invGrid"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+(function(){
+  // ---------- 터치 기기 감지: 터치가 인식되면 조이스틱/점프/시점고정 클러스터 표시 ----------
+  const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+  if (isTouchDevice) document.body.classList.add('has-touch');
+
+  // ---------- Scene setup ----------
+  const canvas = document.getElementById('canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x8fd3f4);
+  scene.fog = new THREE.Fog(0x8fd3f4, 40, 140);
+
+  const camera = new THREE.PerspectiveCamera(62, window.innerWidth/window.innerHeight, 0.1, 500);
+
+  // ---------- Bloom 후처리 ----------
+  const composer = new THREE.EffectComposer(renderer);
+  const renderPass = new THREE.RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.05, 0.45, 0.88);
+  composer.addPass(bloomPass);
+
+  function resize(){
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Lights ----------
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x6b8e5a, 0.9);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff4dd, 1.1);
+  sun.position.set(30, 50, 20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096,4096);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+  sun.shadow.camera.far = 150;
+  scene.add(sun);
+
+  // ---------- 잔디 섬 ----------
+  scene.fog = new THREE.Fog(0x9fd3ff, 60, 220);
+  scene.background = new THREE.Color(0x9fd3ff);
+
+  function makeGrassTexture(){
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#4CA84A'; ctx.fillRect(0,0,512,512);
+    // 큰 얼룩으로 명암 베이스 (지형 느낌)
+    for (let i=0; i<300; i++){
+      const x = Math.random()*512, y = Math.random()*512;
+      const r = 14 + Math.random()*30;
+      ctx.fillStyle = Math.random() < 0.5
+        ? `rgba(58,140,55,${0.10+Math.random()*0.1})`
+        : `rgba(120,190,80,${0.08+Math.random()*0.1})`;
+      ctx.beginPath(); ctx.ellipse(x,y,r,r*0.65,Math.random()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+    // 짧은 풀잎 붓터치를 빽빽하게 그려서 "들판에 촘촘한 잔디" 느낌을 텍스처 자체에 표현
+    const bladeColors = ['#3E8F3E','#5CB85C','#347A34','#6FC96A','#4AA34A'];
+    for (let i=0; i<5000; i++){
+      const x = Math.random()*512, y = Math.random()*512;
+      const len = 4 + Math.random()*7;
+      const ang = -Math.PI/2 + (Math.random()-0.5)*1.1; // 대체로 위쪽을 향하되 살짝 흩어짐
+      ctx.strokeStyle = bladeColors[(Math.random()*bladeColors.length)|0];
+      ctx.globalAlpha = 0.55 + Math.random()*0.35;
+      ctx.lineWidth = 1 + Math.random()*1.2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(
+        x + Math.cos(ang)*len*0.5 + (Math.random()-0.5)*3, y + Math.sin(ang)*len*0.5,
+        x + Math.cos(ang)*len, y + Math.sin(ang)*len
+      );
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(14, 14);
+    return tex;
+  }
+
+  function makeDirtTexture(){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#7a5a3a'; ctx.fillRect(0,0,256,128);
+    for (let i=0; i<600; i++){
+      const x = Math.random()*256, y = Math.random()*128;
+      ctx.fillStyle = Math.random()<0.5 ? 'rgba(60,42,26,0.3)' : 'rgba(140,105,70,0.25)';
+      ctx.fillRect(x, y, 3+Math.random()*4, 2+Math.random()*3);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(12, 2);
+    return tex;
+  }
+
+  const platformMeshes = [];
+  const colliders = []; // 정밀 박스 충돌용 (표시되는 크기 그대로, 여분 히트박스 없음)
+
+  const ISLAND_RADIUS = 30;
+  const ISLAND_DEPTH = 5;
+
+  // 섬 윗면(잔디, 살짝 울퉁불퉁하게 정점을 랜덤 변위)
+  {
+    const geo = new THREE.CircleGeometry(ISLAND_RADIUS, 96, 0, Math.PI*2);
+    geo.rotateX(-Math.PI/2);
+    const pos = geo.attributes.position;
+    for (let i=0; i<pos.count; i++){
+      const x = pos.getX(i), z = pos.getZ(i);
+      const distRatio = Math.min(1, Math.hypot(x,z)/ISLAND_RADIUS);
+      // 가장자리로 갈수록 변위를 줄여서 경계는 매끈하게, 안쪽은 울퉁불퉁하게
+      const bump = (Math.sin(x*0.6)*Math.cos(z*0.55) + Math.sin(x*1.3+z*0.7)*0.5) * 0.22 * (1-distRatio*0.6);
+      pos.setY(i, bump);
+    }
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: makeGrassTexture(), roughness:1 }));
+    mesh.receiveShadow = true; mesh.castShadow = false;
+    scene.add(mesh);
+    platformMeshes.push(mesh);
+  }
+
+  // 섬 옆면/아랫면(흙 덩어리, 원기둥으로 두께감)
+  {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(ISLAND_RADIUS, ISLAND_RADIUS*0.82, ISLAND_DEPTH, 48, 1, true),
+      new THREE.MeshStandardMaterial({ map: makeDirtTexture(), roughness:1, side: THREE.DoubleSide })
+    );
+    mesh.position.set(0, -ISLAND_DEPTH/2, 0);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+    platformMeshes.push(mesh);
+    // 바닥 마개
+    const bottomCap = new THREE.Mesh(
+      new THREE.CircleGeometry(ISLAND_RADIUS*0.82, 48),
+      new THREE.MeshStandardMaterial({ map: makeDirtTexture(), roughness:1 })
+    );
+    bottomCap.rotation.x = Math.PI/2;
+    bottomCap.position.set(0, -ISLAND_DEPTH, 0);
+    scene.add(bottomCap);
+  }
+
+  // 풀 디테일: 짧고 촘촘한 "얕은 잔디" 레이어 + 가끔 튀어나온 "긴 풀" 레이어, 짙은 초록 포함해서 색 다양화
+  function scatterGrass(count, coneRadius, coneHeight, shades, heightJitter){
+    const geo = new THREE.ConeGeometry(coneRadius, coneHeight, 3);
+    geo.translate(0, coneHeight/2, 0);
+    const dummy = new THREE.Object3D();
+    shades.forEach(color=>{
+      const n = Math.floor(count / shades.length);
+      const mat = new THREE.MeshStandardMaterial({ color, roughness:0.9 });
+      const instances = new THREE.InstancedMesh(geo, mat, n);
+      for (let i=0; i<n; i++){
+        const ang = Math.random()*Math.PI*2;
+        const r = Math.sqrt(Math.random()) * (ISLAND_RADIUS - 1.2);
+        const x = Math.cos(ang)*r, z = Math.sin(ang)*r;
+        const bump = (Math.sin(x*0.6)*Math.cos(z*0.55) + Math.sin(x*1.3+z*0.7)*0.5) * 0.22 * (1-Math.min(1,r/ISLAND_RADIUS)*0.6);
+        dummy.position.set(x, bump, z);
+        dummy.rotation.y = Math.random()*Math.PI*2;
+        dummy.rotation.z = (Math.random()-0.5)*0.3;
+        const s = 1 - heightJitter/2 + Math.random()*heightJitter;
+        dummy.scale.set(s, s*(0.8+Math.random()*0.6), s);
+        dummy.updateMatrix();
+        instances.setMatrixAt(i, dummy.matrix);
+      }
+      instances.castShadow = true;
+      scene.add(instances);
+    });
+  }
+  // 짧고 촘촘한 얕은 잔디 (더 짙은 톤 포함, 밀도 높게)
+  scatterGrass(2600, 0.05, 0.28, [0x2E6B30, 0x3E9A44, 0x4CB050, 0x347F3C], 0.7);
+  // 가끔 삐죽 튀어나오는 긴 풀 (성기게, 눈에 띄게 길게)
+  scatterGrass(220, 0.07, 0.8, [0x3E9A44, 0x4CB050, 0x2A5F2C], 0.9);
+
+  // 섬은 원형이라 사각 콜라이더 대신 findLanding에서 반지름 기반으로 직접 판정함 (아래 ISLAND_RADIUS 참조)
+
+  // 스폰 지점 (초록 정사각형 마커)
+  const SPAWN = { x:0, y:0.05, z:0, w:5, h:0.1, d:5 };
+  {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(SPAWN.w, SPAWN.h, SPAWN.d),
+      new THREE.MeshStandardMaterial({ color:0x3DBB4C, roughness:0.7 })
+    );
+    mesh.position.set(SPAWN.x, SPAWN.y, SPAWN.z);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  const START_POS = new THREE.Vector3(SPAWN.x, 0.1, SPAWN.z);
+  let respawnPos = START_POS.clone();
+  const VOID_Y = -25; // 이 아래로 떨어지면 리스폰(섬 밖으로 나가면 낭떠러지)
+
+
+  // 트러스 없음(빈 목록) - 나중에 필요하면 buildTruss로 추가 가능
+  const TRUSS_LIST = [];
+  function getActiveTruss(x, z, y, sticky){
+    const enterReach = 0.2 + CHAR_HALF_W;
+    for (const t of TRUSS_LIST){
+      const reach = (sticky === t) ? enterReach + 0.15 : enterReach;
+      if (x > t.bounds.minX - reach && x < t.bounds.maxX + reach &&
+          z > t.bounds.minZ - reach && z < t.bounds.maxZ + reach &&
+          y > t.bounds.minY - 0.3 && y < t.bounds.maxY + 0.3){
+        return t;
+      }
+    }
+    return null;
+  }
+
+  // ---------- Character (classic R6 avatar proportions & colors) ----------
+  const character = new THREE.Group();
+  const STUD = 0.62; // 씬 스케일 환산 단위
+  const headColor  = 0xF5CD30; // R6 기본 헤드(밝은 노랑)
+  const torsoColor = 0x0B62C4; // R6 기본 몸통(밝은 파랑)
+  const armColor   = 0xF5CD30; // R6 기본 팔(밝은 노랑)
+  const legColor   = 0x287F35; // R6 기본 다리(밝은 초록)
+
+  const LEG_W = 1*STUD, LEG_H = 2*STUD, LEG_D = 1*STUD;
+  const TORSO_W = 2*STUD, TORSO_H = 2*STUD, TORSO_D = 1*STUD;
+  const HEAD_W = 2*STUD, HEAD_H = 1*STUD, HEAD_D = 1*STUD;
+  const ARM_W = 1*STUD, ARM_H = 2*STUD, ARM_D = 1*STUD;
+
+  const legTopY = LEG_H;                          // 다리 상단(엉덩이 관절) 높이
+  const torsoCenterY = legTopY + TORSO_H/2;        // 몸통 중심 높이
+  const headCenterY = legTopY + TORSO_H + HEAD_H/2;// 머리 중심 높이
+  const shoulderY = legTopY + TORSO_H - ARM_H*0.08;// 어깨 관절 높이
+
+  const HEAD_R = STUD*0.62; // (다리/구 계산에 쓰이던 기존 값, 위치 계산용으로 유지)
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(TORSO_W, TORSO_H, TORSO_D), new THREE.MeshStandardMaterial({color:torsoColor}));
+  torso.position.y = torsoCenterY;
+  torso.castShadow = true;
+  character.add(torso);
+
+  // 모서리가 둥근 사각 머리(로블록스 클래식 헤드 실루엣) - Shape+Extrude로 라운드 코너 구현
+  function roundedRectShape(w, h, r){
+    const s = new THREE.Shape();
+    const x = -w/2, y = -h/2;
+    s.moveTo(x, y+r);
+    s.lineTo(x, y+h-r);
+    s.quadraticCurveTo(x, y+h, x+r, y+h);
+    s.lineTo(x+w-r, y+h);
+    s.quadraticCurveTo(x+w, y+h, x+w, y+h-r);
+    s.lineTo(x+w, y+r);
+    s.quadraticCurveTo(x+w, y, x+w-r, y);
+    s.lineTo(x+r, y);
+    s.quadraticCurveTo(x, y, x, y+r);
+    return s;
+  }
+  const HEAD_W2 = HEAD_W*0.9, HEAD_H2 = HEAD_H*1.5, HEAD_D2 = HEAD_D*0.9;
+  const headShape = roundedRectShape(HEAD_W2, HEAD_H2, HEAD_W2*0.32);
+  const headGeo = new THREE.ExtrudeGeometry(headShape, { depth: HEAD_D2, bevelEnabled:true, bevelThickness:HEAD_W2*0.12, bevelSize:HEAD_W2*0.12, bevelSegments:5, curveSegments:10 });
+  headGeo.translate(0, 0, -HEAD_D2/2);
+  const head = new THREE.Mesh(headGeo, new THREE.MeshStandardMaterial({color:headColor, roughness:0.6}));
+  head.position.y = legTopY + TORSO_H + HEAD_H2/2;
+  head.castShadow = true;
+  character.add(head);
+
+  // 얼굴 데칼(눈+웃는입) - 캔버스 텍스처를 머리 앞면에 살짝 띄워서 부착
+  const faceCanvas = document.createElement('canvas');
+  faceCanvas.width = 128; faceCanvas.height = 128;
+  const fctx = faceCanvas.getContext('2d');
+  fctx.clearRect(0,0,128,128);
+  fctx.fillStyle = '#1a1a1a';
+  // 눈 (짧은 세로 막대 두 개)
+  fctx.beginPath(); fctx.roundRect(38,46,8,20,4); fctx.fill();
+  fctx.beginPath(); fctx.roundRect(82,46,8,20,4); fctx.fill();
+  // 웃는 입 (아래로 볼록한 브이자 곡선)
+  fctx.lineWidth = 7;
+  fctx.lineCap = 'round';
+  fctx.strokeStyle = '#1a1a1a';
+  fctx.beginPath();
+  fctx.moveTo(46, 82);
+  fctx.quadraticCurveTo(64, 104, 82, 82);
+  fctx.stroke();
+  const faceTex = new THREE.CanvasTexture(faceCanvas);
+  const facePlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(HEAD_W2*0.78, HEAD_H2*0.62),
+    new THREE.MeshBasicMaterial({ map:faceTex, transparent:true })
+  );
+  facePlane.position.set(0, head.position.y - HEAD_H2*0.06, HEAD_D2/2 + 0.02);
+  character.add(facePlane);
+
+  function makeLimb(color, w,h,d){
+    const g = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color}));
+    mesh.position.y = -h/2;
+    mesh.castShadow = true;
+    g.add(mesh);
+    return g;
+  }
+
+  const armL = makeLimb(armColor, ARM_W, ARM_H, ARM_D);
+  armL.position.set(-(TORSO_W/2 + ARM_W/2), shoulderY, 0);
+  const armR = makeLimb(armColor, ARM_W, ARM_H, ARM_D);
+  armR.position.set(TORSO_W/2 + ARM_W/2, shoulderY, 0);
+  character.add(armL, armR);
+
+  const legL = makeLimb(legColor, LEG_W, LEG_H, LEG_D);
+  legL.position.set(-LEG_W/2, legTopY, 0);
+  const legR = makeLimb(legColor, LEG_W, LEG_H, LEG_D);
+  legR.position.set(LEG_W/2, legTopY, 0);
+  character.add(legL, legR);
+
+  // ground contact shadow blob
+  const shadowBlob = new THREE.Mesh(
+    new THREE.CircleGeometry(0.7,24),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.28})
+  );
+  shadowBlob.rotation.x = -Math.PI/2;
+  shadowBlob.position.y = 0.02;
+  scene.add(shadowBlob);
+
+  character.position.set(0, 0, 0);
+  scene.add(character);
+
+  // ---------- Camera rig (Roblox-style orbit follow) ----------
+  let rawYaw = 0;          // 드래그로 즉시 갱신되는 목표 각도
+  let rawPitch = 0.35;
+  let camYaw = 0;          // 실제 렌더/이동 계산에 쓰이는 각도(시프트락 아닐 때만 부드럽게 따라감)
+  let camPitch = 0.35;
+  let camDist = 7.5;
+  const CAM_PITCH_MIN = -0.1, CAM_PITCH_MAX = 1.15;
+
+  let shiftLock = false;
+  const camRaycaster = new THREE.Raycaster();
+  const collidableMeshes = platformMeshes;
+
+  // ---------- Movement state ----------
+  const pos = START_POS.clone();
+  let velY = 0;
+  let grounded = true;
+  let facing = 0; // character yaw
+  const WALK_SPEED = 10.5;
+  const GRAVITY = -133;   // 로블록스 실제 중력(196.2 studs/s²)을 캐릭터 스케일에 맞게 환산
+  const JUMP_VEL = 34.46; // 순수 점프 높이가 정확히 공식 수치(Humanoid.JumpHeight 기본값 7.2 studs)가 되도록 역산한 값
+
+  let moveVec = new THREE.Vector2(0,0); // joystick input, x=right, y=forward(-1..1)
+  let curSpeed = new THREE.Vector2(0,0); // smoothed velocity for accel/decel ramp
+  let finished = false;
+  let mountFacing = 0;   // 트러스에 올라탄 순간의 접근 방향(그 방향을 계속 바라봄)
+  let wasClimbing = false;
+  let currentTruss = null; // 지금 붙어있는(또는 마지막으로 붙어있던) 트러스 객체
+  let onTruss = false;         // onJumpPress에서도 참조 (트러스 위에서는 점프 동작이 달라짐)
+  let trussExitCooldown = 0;   // 트러스에서 점프로 이탈한 직후 잠깐 재부착 방지
+  let jumpHeld = false;        // 스페이스/점프버튼을 누르고 있는 동안 계속 점프(연속 점프)
+  let coyoteTimer = 0;         // 가장자리를 벗어난 직후 잠깐(코요테 타임) 동안은 여전히 점프 가능
+  let wallJumpCooldown = 0;    // 벽점프 연타로 무한 더블점프처럼 되는 것 방지
+  let jumpBufferTimer = 0;     // 착지 직전에 눌러도 착지 순간 바로 점프되도록 하는 버퍼
+  let mantling = false;        // 가까스로 턱에 손이 닿아 매달려 올라가는 중
+  let mantleTimer = 0;
+  const mantleStartPos = new THREE.Vector3();
+  const mantleEndPos = new THREE.Vector3();
+
+  // ---------- Joystick ----------
+  const joyZone = document.getElementById('joyZone');
+  const joyBase = document.getElementById('joyBase');
+  const joyStick = document.getElementById('joyStick');
+  let joyTouchId = null;
+  let joyCenter = {x:0,y:0};
+  const JOY_RADIUS = 55;
+
+  function joyStart(x,y,id){
+    joyTouchId = id;
+    joyCenter = {x,y};
+    joyBase.style.display = 'block';
+    joyBase.style.left = (x-55)+'px';
+    joyBase.style.top = (y-55)+'px';
+    joyStick.style.left = '31px';
+    joyStick.style.top = '31px';
+  }
+  function joyMove(x,y){
+    let dx = x - joyCenter.x, dy = y - joyCenter.y;
+    const dist = Math.min(Math.hypot(dx,dy), JOY_RADIUS);
+    const ang = Math.atan2(dy,dx);
+    dx = Math.cos(ang)*dist; dy = Math.sin(ang)*dist;
+    joyStick.style.left = (55+dx-24)+'px';
+    joyStick.style.top = (55+dy-24)+'px';
+    moveVec.x = dx / JOY_RADIUS;
+    moveVec.y = dy / JOY_RADIUS; // positive = down/back on screen
+  }
+  function joyEnd(){
+    joyTouchId = null;
+    joyBase.style.display = 'none';
+    moveVec.set(0,0);
+  }
+
+  joyZone.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joyStart(t.clientX, t.clientY, t.identifier);
+  }, {passive:false});
+  joyZone.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for (const t of e.changedTouches){
+      if (t.identifier === joyTouchId) joyMove(t.clientX, t.clientY);
+    }
+  }, {passive:false});
+  joyZone.addEventListener('touchend', e=>{
+    for (const t of e.changedTouches){
+      if (t.identifier === joyTouchId) joyEnd();
+    }
+  });
+  joyZone.addEventListener('touchcancel', joyEnd);
+
+  // 개별 존에서 touchend/touchcancel이 유실될 경우를 대비한 전역 안전망
+  // (조이스틱이 마지막 입력 방향에 그대로 고정되어 계속 한쪽으로 이동하는 버그 방지)
+  window.addEventListener('touchend', e=>{
+    for (const t of e.changedTouches){
+      if (t.identifier === joyTouchId) joyEnd();
+      if (t.identifier === camTouchId) camTouchId = null;
+    }
+  });
+  window.addEventListener('touchcancel', e=>{
+    for (const t of e.changedTouches){
+      if (t.identifier === joyTouchId) joyEnd();
+      if (t.identifier === camTouchId) camTouchId = null;
+    }
+  });
+  // 창/탭이 포커스를 잃으면 모든 입력을 강제로 초기화
+  window.addEventListener('blur', ()=>{
+    joyEnd();
+    camTouchId = null;
+    mouseJoyActive = false;
+    jumpHeld = false;
+    jumpBufferTimer = 0;
+    for (const k in keys) keys[k] = false;
+  });
+
+  // mouse fallback (desktop testing)
+  let mouseJoyActive = false;
+  joyZone.addEventListener('mousedown', e=>{ mouseJoyActive = true; joyStart(e.clientX, e.clientY, 'mouse'); });
+  window.addEventListener('mousemove', e=>{ if (mouseJoyActive) joyMove(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', ()=>{ if (mouseJoyActive){ mouseJoyActive=false; joyEnd(); } });
+
+  // ---------- Camera drag zone ----------
+  const camZone = document.getElementById('camZone');
+  let camTouchId = null;
+  let lastCamPos = {x:0,y:0};
+
+  function camDragStart(x,y,id){
+    camTouchId = id;
+    lastCamPos = {x,y};
+  }
+  function camDragMove(x,y){
+    const dx = x - lastCamPos.x;
+    const dy = y - lastCamPos.y;
+    lastCamPos = {x,y};
+    rawYaw -= dx * 0.006;
+    rawPitch += dy * 0.0035; // 상하는 원래 잘 안 만지는 축이라 좌우보다 살짝 둔감하게
+    rawPitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, rawPitch));
+  }
+  camZone.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    camDragStart(t.clientX, t.clientY, t.identifier);
+  }, {passive:false});
+  camZone.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for (const t of e.changedTouches){
+      if (t.identifier === camTouchId) camDragMove(t.clientX, t.clientY);
+    }
+  }, {passive:false});
+  camZone.addEventListener('touchend', e=>{
+    for (const t of e.changedTouches){
+      if (t.identifier === camTouchId) camTouchId = null;
+    }
+  });
+
+  // ---------- PC: 포인터락으로 무한 마우스룩 (커서는 Esc 누르기 전까지 완전히 숨겨짐) ----------
+  // 브라우저 정책상 포인터락은 반드시 사용자 동작(클릭/키입력) 이후에만 걸 수 있어서,
+  // 첫 상호작용 시 자동으로 잠금을 시도함(이후엔 별도 클릭 없이 계속 잠긴 상태 유지)
+  let lastLockAttempt = 0;
+  function tryLock(e){
+    if (e && e.repeat) return; // 키를 누르고 있을 때(반복 입력)마다 재시도하지 않음 - 버벅임 원인
+    if (document.pointerLockElement === canvas || !canvas.requestPointerLock) return;
+    const now = performance.now();
+    if (now - lastLockAttempt < 800) return; // 짧은 간격으로 반복 요청하지 않게 디바운스
+    lastLockAttempt = now;
+    canvas.requestPointerLock();
+  }
+  function isUITarget(el){
+    return !!(el && el.closest && el.closest('#gachaBtn, #lockBtn, #jumpBtn, #gachaOverlay, #dexBtn, #dexOverlay, #shopBtn, #shopOverlay, #invBtn, #invOverlay'));
+  }
+  window.addEventListener('mousedown', e=>{
+    if (isUITarget(e.target)){
+      // UI 버튼 클릭은 카메라 잠금을 걸지 않음 (걸려있었다면 즉시 풀어서 커서를 되돌려줌)
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
+      return;
+    }
+    tryLock(e);
+  });
+  window.addEventListener('keydown', tryLock);
+  window.addEventListener('touchstart', tryLock, {passive:true});
+  document.addEventListener('pointerlockchange', ()=>{
+    // Esc 등으로 잠금이 풀리면, 다음 상호작용에서 다시 자동으로 잠기도록 그대로 둠(이미 리스너 등록됨)
+  });
+
+  window.addEventListener('mousemove', e=>{
+    if (document.pointerLockElement !== canvas) return; // 잠겨있을 때만 회전 (무한 회전 보장)
+    rawYaw -= e.movementX * 0.0026;
+    rawPitch += e.movementY * 0.0016; // 상하는 좌우보다 둔감하게
+    rawPitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, rawPitch));
+  });
+
+  // ---------- Jump button ----------
+  const jumpBtn = document.getElementById('jumpBtn');
+  function onJumpPress(e){
+    if (e) e.preventDefault();
+    if (onTruss){
+      // 트러스에서 점프로 깔끔하게 이탈 (매달린 반대 방향으로 살짝 밀려나며 떨어짐, 재부착 쿨다운)
+      velY = JUMP_VEL * 0.5;
+      grounded = false;
+      trussExitCooldown = 0.4;
+      pos.x -= Math.sin(mountFacing) * 0.9;
+      pos.z -= Math.cos(mountFacing) * 0.9;
+      return;
+    }
+    jumpHeld = true;
+    jumpBufferTimer = 0.15; // 착지 0.15초 전에 눌러도 착지하자마자 바로 점프됨
+    if (grounded || coyoteTimer > 0){
+      velY = JUMP_VEL * equippedJumpMult;
+      grounded = false;
+      jumpBufferTimer = 0;
+      coyoteTimer = 0;
+      return;
+    }
+    if (!mantling){
+      // 벽점프: 벽 안쪽으로 미는 입력(오르려는 의도)이면 쿨다운 없이 계속 위로, 옆으로 빠지는 용도면 0.15초 쿨다운
+      const wall = findAdjacentWall(pos.x, pos.z, pos.y);
+      if (wall){
+        const speedLen = Math.hypot(curSpeed.x, curSpeed.y);
+        let intoWall = false;
+        if (speedLen > 0.5){
+          const dot = (curSpeed.x/speedLen)*(-wall.nx) + (curSpeed.y/speedLen)*(-wall.nz);
+          intoWall = dot > 0.3;
+        }
+        if (intoWall || wallJumpCooldown <= 0){
+          velY = JUMP_VEL * 0.55;
+          const kick = WALK_SPEED * 0.3; // 벽에서 아주 살짝만 떨어짐(다시 붙기 쉽게)
+          curSpeed.x = wall.nx * kick;
+          curSpeed.y = wall.nz * kick;
+          jumpBufferTimer = 0;
+          if (!intoWall) wallJumpCooldown = 0.15; // 옆으로 빠지는 경우에만 쿨다운 부여
+        }
+      }
+    }
+  }
+  function onJumpRelease(){ jumpHeld = false; }
+  jumpBtn.addEventListener('touchstart', onJumpPress, {passive:false});
+  jumpBtn.addEventListener('touchend', onJumpRelease);
+  jumpBtn.addEventListener('touchcancel', onJumpRelease);
+  jumpBtn.addEventListener('mousedown', onJumpPress);
+  window.addEventListener('mouseup', onJumpRelease);
+
+  // ---------- Shift lock toggle ----------
+  const lockBtn = document.getElementById('lockBtn');
+  const lockIcon = document.getElementById('lockIcon');
+  lockBtn.addEventListener('click', ()=>{
+    shiftLock = !shiftLock;
+    lockBtn.classList.toggle('active', shiftLock);
+    lockIcon.textContent = shiftLock ? '🔒' : '🔓';
+  });
+
+  // ---------- Keyboard fallback (desktop) ----------
+  const keys = {};
+  const MOVE_KEYS = ['Space','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  window.addEventListener('keydown', e=>{
+    if (MOVE_KEYS.includes(e.code)) e.preventDefault(); // 브라우저 기본 스크롤 등 개입 차단(스페이스 반응 지연 원인)
+    keys[e.code] = true;
+    if (e.code === 'Space' && !e.repeat) onJumpPress(e);
+    if (e.code === 'KeyG' && !e.repeat) runGacha(); // PC 단축키: 마우스가 카메라 잠금 중이어도 항상 뽑기 가능
+    if (e.code === 'KeyB' && !e.repeat) toggleDex(); // PC 단축키: 도감 열기/닫기
+    if (e.code === 'KeyP' && !e.repeat) toggleShop(); // PC 단축키: 물약 상점
+    if (e.code === 'KeyI' && !e.repeat) toggleInventory(); // PC 단축키: 인벤토리
+    if (e.code === 'Escape' && !e.repeat){
+      if (dexOverlay.classList.contains('show')) closeDex();
+      if (shopOverlay.classList.contains('show')) closeShop();
+      if (invOverlay.classList.contains('show')) closeInventory();
+      if (gachaOverlay.classList.contains('show') && !gachaSpinning) { gachaOverlay.classList.remove('show'); setTimeout(()=>{ gachaOverlay.style.display='none'; }, 300); }
+    }
+  });
+  window.addEventListener('keyup', e=>{
+    keys[e.code] = false;
+    if (e.code === 'Space') onJumpRelease();
+  });
+
+  // ---------- 오비 정밀 충돌 (벽/착지/천장, 장애물은 보이는 크기 그대로 - 여분 히트박스 없음) ----------
+  const CHAR_HALF_W = 0.42; // 캐릭터 자신의 물리적 반너비 (장애물 쪽엔 패딩 없음)
+  const CHAR_HEIGHT = 3.0;  // 캐릭터 물리적 키(발~머리)
+
+  function resolveWalls(p){
+    for (const c of colliders){
+      const withinY = (p.y + CHAR_HEIGHT > c.minY + 0.06) && (p.y < c.maxY - 0.06);
+      if (!withinY) continue; // 위에 서있거나 완전히 아래/위에 있으면 벽 판정 제외
+      const minX = c.minX - CHAR_HALF_W, maxX = c.maxX + CHAR_HALF_W;
+      const minZ = c.minZ - CHAR_HALF_W, maxZ = c.maxZ + CHAR_HALF_W;
+      if (p.x > minX && p.x < maxX && p.z > minZ && p.z < maxZ){
+        const overlapX = Math.min(p.x-minX, maxX-p.x);
+        const overlapZ = Math.min(p.z-minZ, maxZ-p.z);
+        const cx = (c.minX+c.maxX)/2, cz = (c.minZ+c.maxZ)/2;
+        if (overlapX < overlapZ){
+          p.x += (p.x < cx ? -overlapX : overlapX);
+        } else {
+          p.z += (p.z < cz ? -overlapZ : overlapZ);
+        }
+      }
+    }
+  }
+
+  // 벽점프용: 공중에서 옆 벽에 거의 맞닿아 있으면 감지해서 어느 방향으로 차고 나가야 할지 계산
+  function findAdjacentWall(x, z, y){
+    const pad = CHAR_HALF_W + 0.16;
+    for (const c of colliders){
+      const withinY = (y + CHAR_HEIGHT > c.minY + 0.06) && (y < c.maxY - 0.4);
+      if (!withinY) continue;
+      const nearX = x > c.minX - pad && x < c.maxX + pad;
+      const nearZ = z > c.minZ - pad && z < c.maxZ + pad;
+      if (!(nearX && nearZ)) continue;
+      const overlapX = Math.min(x-(c.minX-pad), (c.maxX+pad)-x);
+      const overlapZ = Math.min(z-(c.minZ-pad), (c.maxZ+pad)-z);
+      const cx = (c.minX+c.maxX)/2, cz = (c.minZ+c.maxZ)/2;
+      let nx = 0, nz = 0;
+      if (overlapX < overlapZ) nx = (x < cx ? -1 : 1);
+      else nz = (z < cz ? -1 : 1);
+      return { nx, nz };
+    }
+    return null;
+  }
+
+  function findLanding(prevY, newY, x, z){
+    let best = null;
+    for (const c of colliders){
+      const overlapXZ = (x > c.minX - CHAR_HALF_W && x < c.maxX + CHAR_HALF_W &&
+                          z > c.minZ - CHAR_HALF_W && z < c.maxZ + CHAR_HALF_W);
+      if (!overlapXZ) continue;
+      if (prevY >= c.topY - 0.05 && newY <= c.topY + 0.3){
+        if (!best || c.topY > best.topY) best = c;
+      }
+    }
+    // 섬(원형) 바닥 - 시각적 잔디 경계(반지름)와 정확히 일치하는 원형 판정
+    // type을 'normal'로 둬서 체크포인트 갱신 로직(좌표 없어 NaN 나던 버그)을 타지 않게 함 - 리스폰은 항상 고정 스폰 지점
+    if (Math.hypot(x, z) < ISLAND_RADIUS + CHAR_HALF_W*0.3){
+      if (prevY >= -0.05 && newY <= 0.3){
+        if (!best || 0 > best.topY) best = { topY: 0, type: 'normal' };
+      }
+    }
+    return best;
+  }
+
+  function findCeiling(prevY, newY, x, z, exclude){
+    for (const c of colliders){
+      if (c === exclude) continue;
+      const overlapXZ = (x > c.minX - CHAR_HALF_W*0.6 && x < c.maxX + CHAR_HALF_W*0.6 &&
+                          z > c.minZ - CHAR_HALF_W*0.6 && z < c.maxZ + CHAR_HALF_W*0.6);
+      if (!overlapXZ) continue;
+      const prevHead = prevY + CHAR_HEIGHT, newHead = newY + CHAR_HEIGHT;
+      if (prevHead <= c.minY + 0.05 && newHead >= c.minY){
+        return c;
+      }
+    }
+    return null;
+  }
+
+  // 로블록스 공식 기본값: 점프 없이 자동으로 걸어 올라갈 수 있는 최대 높이 = 2.5 studs
+  const STEP_HEIGHT = 2.5 * STUD;
+  function tryStepUp(x, z, curY){
+    let best = null;
+    for (const c of colliders){
+      const overlapXZ = (x > c.minX - CHAR_HALF_W && x < c.maxX + CHAR_HALF_W &&
+                          z > c.minZ - CHAR_HALF_W && z < c.maxZ + CHAR_HALF_W);
+      if (!overlapXZ) continue;
+      const diff = c.topY - curY;
+      if (diff > 0.06 && diff <= STEP_HEIGHT){
+        if (best === null || c.topY > best) best = c.topY;
+      }
+    }
+    return best;
+  }
+
+  // 맨틀(가까스로 매달려 올라가기): 오토스텝(2.5studs)보다 높지만, 점프해서 손이 닿는 턱을 붙잡고 기어오름
+  const MANTLE_MIN = STEP_HEIGHT;
+  const MANTLE_MAX = STEP_HEIGHT + 0.85; // 이 이상은 손도 안 닿아서 그냥 못 올라감 (점프+맨틀 합산 사기 방지로 축소)
+  function tryMantle(x, z, curY){
+    let best = null;
+    for (const c of colliders){
+      const overlapXZ = (x > c.minX - CHAR_HALF_W - 0.15 && x < c.maxX + CHAR_HALF_W + 0.15 &&
+                          z > c.minZ - CHAR_HALF_W - 0.15 && z < c.maxZ + CHAR_HALF_W + 0.15);
+      if (!overlapXZ) continue;
+      const diff = c.topY - curY;
+      if (diff > MANTLE_MIN && diff <= MANTLE_MAX){
+        if (best === null || c.topY < best.topY) best = c; // 가장 가까운(낮은) 턱을 우선 붙잡음
+      }
+    }
+    return best;
+  }
+
+
+
+  // ================= 아우라 가챠 시스템 =================
+  // 각 등급(tier)이 곧 하나의 고유한 아우라. 등급마다 이름/색/전용 이펙트가 하나씩만 있음.
+  const AURA_TIERS = {
+    common:    { label:'Common',   order:1,  color:0xB0B0B0, fx:'dust',     font:'cursive', family:'orbital', trait:{ label:'특성 없음' } },
+    uncommon:  { label:'Uncommon', order:2,  color:0xF2F2F2, fx:'sparkle',  font:'cursive', family:'sphere', icon:'star', trait:{ label:'행운 +3%', luckMult:1.03 } },
+    rare:      { label:'Rare',     order:3,  color:0x9CC7EF, fx:'coldair',  font:'cursive', wind:true, family:'sphere', icon:'spiral', trait:{ label:'이동속도 +5%', speedMult:1.05 } },
+    good:      { label:'Good',     order:4,  color:0x9EDE9A, fx:'bubble',   font:'cursive', family:'sphere', icon:'leaf', trait:{ label:'점프력 +5%', jumpMult:1.05 } },
+    epic:      { label:'Epic',     order:5,  color:0xA463D9, fx:'wavepulse',font:'fantasy', family:'pillar', icon:'spiral', trait:{ label:'행운 +8%', luckMult:1.08 } },
+    topaz:     { label:'Topaz',    order:6,  color:0xFF9A2E, color2:0xFFD24D, fx:'auraring', font:'fantasy', family:'orbital', icon:'gem', trait:{ label:'이동속도 +8%', speedMult:1.08 } },
+    great:     { label:'Great',    order:7,  color:0x7FD1EE, fx:'orbittrail',font:'cursive', family:'orbital', icon:'star', trait:{ label:'점프력 +10%', jumpMult:1.10 } },
+    gilded:    { label:'Gilded',   order:7.5, color:0xFFD700, color2:0xFFF3B0, fx:'gilded', font:'fantasy', icon:'crown', nOverride:1000, trait:{ label:'행운 +9%', luckMult:1.09 } },
+    quartz:    { label:'Quartz',   order:8,  color:0xF5F8FF, fx:'shard',    font:'fantasy', family:'crystal', icon:'gem', trait:{ label:'행운 +10%', luckMult:1.10 } },
+    acorn:     { label:'Acorn',    order:9,  color:0x8B5A2B, fx:'debris',   font:'cursive', family:'crystal', icon:'leaf', trait:{ label:'이동속도 +6%', speedMult:1.06 } },
+    glacier:   { label:'Glacier',  order:9.5, color:0x8FD9FF, color2:0xFFFFFF, fx:'glacier', font:'fantasy', icon:'drop', nOverride:5000, trait:{ label:'이동속도 +9%', speedMult:1.09 } },
+    pollen:    { label:'Pollen',   order:10, color:0xF2D93E, fx:'pollen',   font:'cursive', family:'sphere', icon:'leaf', trait:{ label:'행운 +12%', luckMult:1.12 } },
+    hazard:    { label:'Hazard',   order:10.5, color:0x9CFF1F, color2:0x1A1A1A, fx:'hazard', font:'fantasy', icon:'skull', nOverride:10000, trait:{ label:'점프력 +13%', jumpMult:1.13 } },
+    plain:     { label:'Plain',    order:11, color:0xCCCCCC, fx:'none',     font:'cursive', trait:{ label:'특성 없음 (무색 그대로)' } },
+    inferno:   { label:'Inferno',  order:11.5, color:0xFF3300, color2:0xFFAA00, fx:'inferno', font:'fantasy', icon:'flame', nOverride:50000, trait:{ label:'이동속도 +16%', speedMult:1.16 } },
+    hydro:     { label:'Hydro',    order:12, color:0x2E8FCC, fx:'ripple',   font:'cursive', family:'pillar', icon:'drop', trait:{ label:'점프력 +15%', jumpMult:1.15 } },
+    starlight: { label:'Starlight',order:12.5, color:0x8A5CFF, color2:0xBFE3FF, fx:'starlight', font:'fantasy', icon:'star', nOverride:100000, trait:{ label:'행운 +16%', luckMult:1.16 } },
+    ignis:     { label:'Ignis',    order:13, color:0xE0442B, fx:'flame',    font:'fantasy', family:'pillar', icon:'flame', trait:{ label:'이동속도 +15%', speedMult:1.15 } },
+    overclock: { label:'Overclock',order:13.5, color:0xFF2A2A, color2:0xFFA030, fx:'overclock', font:'fantasy', icon:'bolt', nOverride:500000, trait:{ label:'이동속도/행운 +19%', speedMult:1.19, luckMult:1.19 } },
+    flicker:   { label:'Flicker',  order:14, color:0xFF9B3D, fx:'flicker',  font:'fantasy', family:'sphere', icon:'flame', trait:{ label:'행운 +18%', luckMult:1.18 } },
+    eclipse:   { label:'Eclipse',  order:14.5, color:0x000000, color2:0xFFD700, fx:'eclipse', font:'fantasy', icon:'moon', nOverride:1000000, trait:{ label:'이동속도/점프력/행운 +22%', speedMult:1.22, jumpMult:1.22, luckMult:1.22 } },
+    mist:      { label:'Mist',     order:15, color:0xC9C9C9, fx:'mist',     font:'cursive', wind:true, family:'orbital', icon:'spiral', trait:{ label:'이동속도 +12%', speedMult:1.12 } },
+    amber:     { label:'Amber',    order:16, color:0xB5601A, color2:0xFFB35C, fx:'amberring', font:'fantasy', family:'crystal', icon:'gem', trait:{ label:'행운 +20%', luckMult:1.20 } },
+    sanguine:  { label:'Sanguine', order:16.5, color:0x8B0000, color2:0xFF2E2E, fx:'sanguine', font:'fantasy', icon:'moon', nOverride:5000000, trait:{ label:'이동속도/점프력/행운 +26%', speedMult:1.26, jumpMult:1.26, luckMult:1.26 } },
+    aero:      { label:'Aero',     order:17, color:0x6FE0C0, fx:'windspiral',font:'cursive', wind:true, family:'orbital', icon:'spiral', trait:{ label:'이동속도 +20%', speedMult:1.20 } },
+    static:    { label:'Static',   order:18, color:0xF5E23D, fx:'spark',    font:'fantasy', family:'sphere', icon:'bolt', trait:{ label:'점프력 +22%', jumpMult:1.22 } },
+    terra:     { label:'Terra',    order:19, color:0x6B4A32, fx:'rocks',    font:'fantasy', family:'crystal', icon:'gem', trait:{ label:'점프력 +18%', jumpMult:1.18 } },
+    radiance:  { label:'Radiance', order:20, color:0xFFFFFF, color2:0xFFF3B0, fx:'beams', font:'fantasy', family:'pillar', icon:'star', trait:{ label:'이동속도/점프력/행운 전부 +30%', speedMult:1.30, jumpMult:1.30, luckMult:1.30 } },
+    void:      { label:'Void',      order:21, color:0x1A0B2E, color2:0x8B3FE8, fx:'voidhole',   font:'fantasy', groundCircle:true, icon:'eye', nOverride:12000000, trait:{ label:'행운 +35%', luckMult:1.35 } },
+    supernova: { label:'Supernova', order:22, color:0xFFFFFF, color2:0xFF5A1F, fx:'supernova',  font:'fantasy', groundCircle:true, icon:'star', nOverride:25000000, trait:{ label:'이동속도/점프력 +35%', speedMult:1.35, jumpMult:1.35 } },
+    glitch:    { label:'Glitch',    order:23, color:0x39FF14, color2:0xFF00E4, fx:'glitch',      font:'fantasy', groundCircle:true, icon:'bolt', nOverride:40000000, trait:{ label:'행운 +40%', luckMult:1.40 } },
+    celestial: { label:'Celestial', order:24, color:0x2B3A8C, color2:0xFFD700, fx:'celestial',   font:'fantasy', groundCircle:true, icon:'star', nOverride:65000000, trait:{ label:'이동속도/점프력/행운 전부 +40%', speedMult:1.40, jumpMult:1.40, luckMult:1.40 } },
+    chrono:    { label:'Chrono',    order:25, color:0xC9A227, color2:0x2E8B8B, fx:'chrono',      font:'fantasy', groundCircle:true, nOverride:99000000, trait:{ label:'이동속도/점프력/행운 전부 +50%', speedMult:1.50, jumpMult:1.50, luckMult:1.50 } },
+  };
+
+  // 특성 보너스는 speedMult/jumpMult/luckMult 배율로 표현 (기본값 1 = 보너스 없음)
+  let equippedSpeedMult = 1, equippedJumpMult = 1, equippedLuckMult = 1;
+  function applyAuraTrait(aura){
+    const trait = AURA_TIERS[aura.tier].trait || {};
+    equippedSpeedMult = trait.speedMult || 1;
+    equippedJumpMult = trait.jumpMult || 1;
+    equippedLuckMult = trait.luckMult || 1;
+  }
+
+  const AURA_LIST = Object.keys(AURA_TIERS).map(key => ({
+    name: AURA_TIERS[key].label,
+    tier: key,
+    n: AURA_TIERS[key].nOverride != null
+      ? AURA_TIERS[key].nOverride
+      : (AURA_TIERS[key].order === 1 ? 2 : Math.round(2 * Math.pow(2.55, AURA_TIERS[key].order - 1)))
+  }));
+  AURA_LIST.forEach(a => { a.weight = 1 / a.n; });
+  const AURA_TOTAL_WEIGHT = AURA_LIST.reduce((s,a)=>s+a.weight, 0);
+
+  // 등급별 CSS를 하드코딩 대신 AURA_TIERS로부터 동적으로 생성 (20개 등급 전부 자동 반영)
+  {
+    const rgbOf = n => ({ r:(n>>16)&255, g:(n>>8)&255, b:n&255 });
+    let css = '';
+    Object.keys(AURA_TIERS).forEach(key=>{
+      const t = AURA_TIERS[key];
+      const col = hexStr(t.color);
+      const rgb = rgbOf(t.color);
+      const glowStrength = 6 + t.order * 0.6;
+      css += `
+        #auraTag.tier-${key} { color:${col}; filter:drop-shadow(0 0 ${glowStrength}px rgba(${rgb.r},${rgb.g},${rgb.b},.9)); }
+        .reelItem.tier-${key} .reelName { color:${col}; }
+        .dexCard.tier-${key} .dexSwatch { background:radial-gradient(circle at 35% 30%, #fff, ${col}); }
+      `;
+      if (t.order >= 18){
+        css += `#auraTag.tier-${key} { animation: legendaryPulse 1.1s ease-in-out infinite; }\n`;
+        css += `#auraTag.tier-${key} .tagName { font-size:20px; letter-spacing:1px; animation: legendaryTextGlow 1.1s ease-in-out infinite; }\n`;
+      }
+    });
+    const styleEl = document.createElement('style');
+    styleEl.textContent = css;
+    document.head.appendChild(styleEl);
+  }
+
+
+
+  // ================= 물약 시스템 =================
+  const POTIONS = [
+    { id:'tutorial', name:'튜토리얼 포션',    kind:'luck',  power:20,   duration:30, desc:'초반에 좋은 아우라를 노려볼 수 있는 일회성 럭 UP (x20) · 30초 (지금은 무료 무제한)' },
+    { id:'luck1',  name:'럭 포션 I',       kind:'luck',  power:5,    duration:60, desc:'등급 확률 UP (약, x5) · 60초' },
+    { id:'luck2',  name:'럭 포션 II',      kind:'luck',  power:15,   duration:60, desc:'등급 확률 UP (중, x15) · 60초' },
+    { id:'luck3',  name:'럭 포션 III',     kind:'luck',  power:25,   duration:60, desc:'등급 확률 UP (강, x25) · 60초' },
+    { id:'speed1', name:'롤 속도 포션 I',   kind:'speed', power:0.7,  duration:60, desc:'가챠 연출 속도 UP (약) · 60초' },
+    { id:'speed2', name:'롤 속도 포션 II',  kind:'speed', power:0.45, duration:60, desc:'가챠 연출 속도 UP (중) · 60초' },
+    { id:'speed3', name:'롤 속도 포션 III', kind:'speed', power:0.25, duration:60, desc:'가챠 연출 속도 UP (강) · 60초' },
+    { id:'godly',  name:'갓들리 포션',      kind:'godly', luckPower:100, speedPower:0.15, duration:90, desc:'럭 x100 + 롤속도 동시 폭발적 상승 · 90초 (프리미엄, 지금은 무료)' },
+  ];
+  const potionById = {};
+  POTIONS.forEach(p => { potionById[p.id] = p; });
+
+  const potionInventory = {}; // 포션 id -> 보유 개수 (중복 획득분은 여기로 전부 스택됨)
+
+  // ---- 알파 v1 사전등록 지급 ----
+  // 개발자는 URL에 ?dev=akdev2026 붙여서 한 번 열면 이 브라우저에 개발자 모드가 저장됨(그 뒤로는 파라미터 없이도 유지)
+  const DEV_UNLOCK_KEY = 'auraDevMode2026';
+  const PREREG_CLAIMED_KEY = 'auraPreRegClaimed_v1';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('dev') === 'akdev2026') localStorage.setItem(DEV_UNLOCK_KEY, '1');
+  } catch(e){}
+  const isDevMode = (function(){
+    try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch(e){ return false; }
+  })();
+
+  addPotion('tutorial'); // 게임 시작하자마자 튜토리얼 포션 1개 지급 (기존 그대로 유지)
+
+  (function grantPreRegBonus(){
+    let alreadyClaimed = false;
+    try { alreadyClaimed = localStorage.getItem(PREREG_CLAIMED_KEY) === '1'; } catch(e){}
+    if (alreadyClaimed) return;
+    const amount = isDevMode ? 999 : 10; // 개발자는 사실상 무제한, 일반 플레이어는 사전등록 기념 10개씩
+    POTIONS.forEach(p=>{
+      if (p.id === 'tutorial') return; // 튜토리얼 포션은 별도 로직으로 이미 지급됨
+      for (let i=0;i<amount;i++) addPotion(p.id);
+    });
+    try { localStorage.setItem(PREREG_CLAIMED_KEY, '1'); } catch(e){}
+  })();
+
+  let luckMult = 1, luckUntil = 0;
+  let speedMult = 1, speedUntil = 0;
+
+  function activeLuckMult(){ return performance.now() < luckUntil ? luckMult : 1; }
+  function activeSpeedMult(){ return performance.now() < speedUntil ? speedMult : 1; }
+
+  function fmtCountdown(ms){ return Math.max(0, Math.ceil(ms/1000)) + '초'; }
+  const potionStatusEl = document.getElementById('potionStatus');
+  function updatePotionStatus(){
+    const now = performance.now();
+    const rows = [];
+    if (now < luckUntil)  rows.push('🍀 럭 x' + luckMult + ' (' + fmtCountdown(luckUntil - now) + ')');
+    if (now < speedUntil) rows.push('⚡ 롤속도 x' + speedMult.toFixed(2) + ' (' + fmtCountdown(speedUntil - now) + ')');
+    potionStatusEl.innerHTML = rows.map(r => '<div class="potionStatusRow">' + r + '</div>').join('');
+    potionStatusEl.style.display = rows.length ? 'flex' : 'none';
+  }
+  setInterval(updatePotionStatus, 1000);
+
+  function applyPotion(p){
+    const now = performance.now();
+    if (p.kind === 'luck'){
+      luckMult = p.power; luckUntil = now + p.duration*1000;
+    } else if (p.kind === 'speed'){
+      speedMult = p.power; speedUntil = now + p.duration*1000;
+    } else if (p.kind === 'godly'){
+      luckMult = p.luckPower;  luckUntil  = now + p.duration*1000;
+      speedMult = p.speedPower; speedUntil = now + p.duration*1000;
+    }
+    updatePotionStatus();
+  }
+
+  function addPotion(id){
+    potionInventory[id] = (potionInventory[id] || 0) + 1;
+    updateInvBadge();
+  }
+  function usePotion(id){
+    if (!potionInventory[id]) return;
+    potionInventory[id]--;
+    if (potionInventory[id] <= 0) delete potionInventory[id];
+    applyPotion(potionById[id]);
+    updateInvBadge();
+    renderInventory();
+  }
+  function updateInvBadge(){
+    const hasAny = Object.keys(potionInventory).length > 0;
+    document.getElementById('invBadgeDot').style.display = hasAny ? 'inline-block' : 'none';
+  }
+
+  function weightedRandomAura(bonusMult){
+    const lm = activeLuckMult() * (bonusMult || 1) * equippedLuckMult;
+    // 럭 배율을 가중치에 단순히 곱하면(구버전) 등급 간 확률 차이가 수백만 배라 사실상 체감이 안 됨.
+    // 대신 n(확률 분모)의 지수를 럭만큼 압축해서, 희귀 등급일수록 실질적으로 훨씬 크게 확률이 오르도록 함.
+    let total = 0;
+    const weights = AURA_LIST.map(a=>{
+      const effectiveN = lm > 1 ? Math.pow(a.n, 1/lm) : a.n;
+      const w = 1 / effectiveN;
+      total += w;
+      return w;
+    });
+    let r = Math.random() * total;
+    for (let i=0; i<AURA_LIST.length; i++){
+      r -= weights[i];
+      if (r <= 0) return AURA_LIST[i];
+    }
+    return AURA_LIST[AURA_LIST.length - 1];
+  }
+
+  // ================= 뮤테이션 (실버/골드/블러드) =================
+  const MUTATIONS = [
+    { id:'blood',  name:'Blood',  color:0xB01020, n:1000 },
+    { id:'gold',   name:'Gold',   color:0xFFD700, n:200 },
+    { id:'silver', name:'Silver', color:0xC8C8C8, n:40 },
+  ];
+  function rollMutation(){
+    // 희귀한 것부터 순서대로 체크 (조건 겹치면 더 희귀한 쪽이 우선 적용됨)
+    for (const m of MUTATIONS){
+      if (Math.random() < 1/m.n) return m;
+    }
+    return null;
+  }
+
+  // ================= 10x/100x/1000x 멀티플라이어 체인 =================
+  const MULT_TRIGGER_CHANCE = 0.10;   // 가챠 한 번당 이 이벤트가 발동할 확률
+  const MULT_ESCALATE_CHANCE = 0.15;  // 각 단계에서 다음 단계로 이어질 확률 (10x→100x→1000x...)
+  function rollMultiplierChain(){
+    if (Math.random() >= MULT_TRIGGER_CHANCE) return 1;
+    let mult = 10;
+    while (Math.random() < MULT_ESCALATE_CHANCE){
+      mult *= 10;
+    }
+    return mult;
+  }
+  const multOverlay = document.getElementById('multOverlay');
+  const multText = document.getElementById('multText');
+  function showMultiplierStage(mult){
+    return new Promise(resolve=>{
+      const stageColors = { 10:'#FFD84D', 100:'#FF9A2E', 1000:'#FF3B3B', 10000:'#FF3BE0', 100000:'#7CFFEA' };
+      const color = stageColors[mult] || '#FFFFFF';
+      multText.textContent = mult + 'x!';
+      multText.style.color = color;
+      const sizePx = 42 + Math.log10(mult)*16;
+      multText.style.fontSize = sizePx + 'px';
+      multText.style.textShadow =
+        '0 0 ' + (10+Math.log10(mult)*8) + 'px ' + color + ', ' +
+        '0 0 ' + (24+Math.log10(mult)*16) + 'px ' + color;
+      multOverlay.style.display = 'flex';
+      requestAnimationFrame(()=>{
+        multOverlay.classList.add('show');
+        multText.classList.remove('shake');
+        void multText.offsetWidth;
+        multText.classList.add('shake');
+      });
+      playTick(500 + Math.log10(mult)*140);
+      setTimeout(()=>{
+        multOverlay.classList.remove('show');
+        setTimeout(()=>{
+          multOverlay.style.display = 'none';
+          resolve();
+        }, 200);
+      }, 620);
+    });
+  }
+  async function playMultiplierChain(finalMult){
+    let stage = 10;
+    while (stage <= finalMult){
+      await showMultiplierStage(stage);
+      stage *= 10;
+    }
+  }
+
+  function fmtProb(n){ return '1/' + n.toLocaleString('ko-KR'); }
+  function hexStr(n){ return '#' + n.toString(16).padStart(6,'0'); }
+
+  // ---- 등급별 글로우 텍스처 ----
+  function makeGlowTexture(hex, hex2){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col1 = hexStr(hex), col2 = hexStr(hex2 != null ? hex2 : hex);
+    const grad = ctx.createRadialGradient(128,128,0, 128,128,128);
+    grad.addColorStop(0,    col2 + 'ff');
+    grad.addColorStop(0.32, col1 + 'dd');
+    grad.addColorStop(0.68, col1 + '33');
+    grad.addColorStop(1,    col1 + '00');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,256,256);
+    return new THREE.CanvasTexture(c);
+  }
+  function makeRingTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,128);
+    for (let i=0;i<3;i++){
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.55 - i*0.15;
+      ctx.lineWidth = 10 - i*2;
+      ctx.arc(0,0, 96 - i*16, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    return new THREE.CanvasTexture(c);
+  }
+
+  // ---- 등 뒤 후광 모양을 테마별로 다르게: 각진 별/크리스탈 ----
+  function makeStarShapeTexture(hex, points){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,128);
+    const n = points || 8;
+    ctx.beginPath();
+    for (let i=0;i<n*2;i++){
+      const r = i%2===0 ? 100 : 40;
+      const a = (i/(n*2))*Math.PI*2;
+      const x = Math.cos(a)*r, y = Math.sin(a)*r;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    const grad = ctx.createRadialGradient(0,0,0,0,0,100);
+    grad.addColorStop(0, col+'ff'); grad.addColorStop(0.6, col+'99'); grad.addColorStop(1, col+'00');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    return new THREE.CanvasTexture(c);
+  }
+  // ---- 화염 모양 후광 ----
+  function makeFlameShapeTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,150);
+    ctx.beginPath();
+    ctx.moveTo(0,-118);
+    ctx.bezierCurveTo(55,-70, 45,10, 20,40);
+    ctx.bezierCurveTo(50,20, 62,-6, 66,-30);
+    ctx.bezierCurveTo(88,10, 78,70, 30,98);
+    ctx.bezierCurveTo(-8,112, -60,90, -66,45);
+    ctx.bezierCurveTo(-70,10, -50,-4, -46,-30);
+    ctx.bezierCurveTo(-30,-8, -22,10, -18,20);
+    ctx.bezierCurveTo(-30,-30, -18,-90, 0,-118);
+    ctx.closePath();
+    const grad = ctx.createRadialGradient(0,-10,0,0,-10,130);
+    grad.addColorStop(0, col+'ff'); grad.addColorStop(0.65, col+'aa'); grad.addColorStop(1, col+'00');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    return new THREE.CanvasTexture(c);
+  }
+  // ---- 물방울 모양 후광 ----
+  function makeDropShapeTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,140);
+    ctx.beginPath();
+    ctx.moveTo(0,-110);
+    ctx.bezierCurveTo(60,-30, 92,30, 92,60);
+    ctx.bezierCurveTo(92,110, 50,110, 0,110);
+    ctx.bezierCurveTo(-50,110, -92,110, -92,60);
+    ctx.bezierCurveTo(-92,30, -60,-30, 0,-110);
+    ctx.closePath();
+    const grad = ctx.createRadialGradient(0,20,0,0,20,120);
+    grad.addColorStop(0, col+'ff'); grad.addColorStop(0.6, col+'99'); grad.addColorStop(1, col+'00');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    return new THREE.CanvasTexture(c);
+  }
+  // ---- 뭉게구름 모양 후광 ----
+  function makeCloudShapeTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,128);
+    const puffs = [[-55,10,42],[-10,-20,52],[45,5,46],[0,30,50],[80,20,32],[-90,25,28]];
+    puffs.forEach(([px,py,pr])=>{
+      const grad = ctx.createRadialGradient(px,py,0,px,py,pr);
+      grad.addColorStop(0, col+'ee'); grad.addColorStop(0.7, col+'77'); grad.addColorStop(1, col+'00');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(px,py,pr,0,Math.PI*2); ctx.fill();
+    });
+    return new THREE.CanvasTexture(c);
+  }
+  // ---- 나뭇잎/꽃잎 모양 후광 ----
+  function makeLeafShapeTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(128,128);
+    for (let i=0;i<5;i++){
+      ctx.save();
+      ctx.rotate((i/5)*Math.PI*2);
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(38,-55, 0,-104);
+      ctx.quadraticCurveTo(-38,-55, 0,0);
+      const grad = ctx.createLinearGradient(0,0,0,-104);
+      grad.addColorStop(0, col+'ff'); grad.addColorStop(1, col+'00');
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  // ---- 성운(네뷸라)처럼 일렁이는 아우라 구름 텍스처 ----
+  // ---- 등급 상징 아이콘(엠블럼) 텍스처 - 한눈에 알아볼 수 있는 심볼 ----
+  function makeIconTexture(iconType, color){
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.translate(64,64);
+    ctx.fillStyle = hexStr(color);
+    ctx.strokeStyle = hexStr(color);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    switch (iconType){
+      case 'flame':
+        ctx.beginPath();
+        ctx.moveTo(0,-42);
+        ctx.bezierCurveTo(24,-8,20,12,8,22);
+        ctx.bezierCurveTo(20,10,28,-2,30,-16);
+        ctx.bezierCurveTo(40,8,32,36,10,44);
+        ctx.bezierCurveTo(-18,50,-32,28,-27,6);
+        ctx.bezierCurveTo(-22,20,-9,22,-8,10);
+        ctx.bezierCurveTo(-18,-4,-10,-30,0,-42);
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'drop':
+        ctx.beginPath();
+        ctx.moveTo(0,-42);
+        ctx.bezierCurveTo(26,-6,38,16,38,28);
+        ctx.bezierCurveTo(38,48,20,48,0,48);
+        ctx.bezierCurveTo(-20,48,-38,48,-38,28);
+        ctx.bezierCurveTo(-38,16,-26,-6,0,-42);
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'leaf':
+        ctx.beginPath();
+        ctx.moveTo(0,-40);
+        ctx.quadraticCurveTo(40,-18,0,46);
+        ctx.quadraticCurveTo(-40,-18,0,-40);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0,-28); ctx.lineTo(0,38); ctx.stroke();
+        break;
+      case 'bolt':
+        ctx.beginPath();
+        ctx.moveTo(8,-46); ctx.lineTo(-22,4); ctx.lineTo(-2,4); ctx.lineTo(-10,46); ctx.lineTo(24,-8); ctx.lineTo(4,-8);
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'gem':
+        ctx.beginPath();
+        ctx.moveTo(0,-44); ctx.lineTo(34,-10); ctx.lineTo(18,44); ctx.lineTo(-18,44); ctx.lineTo(-34,-10);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 0.35; ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(0,-44); ctx.lineTo(0,44); ctx.stroke();
+        ctx.globalAlpha = 1;
+        break;
+      case 'star':
+        ctx.beginPath();
+        for (let i=0;i<10;i++){
+          const r = i%2===0 ? 44 : 19;
+          const a = (i/10)*Math.PI*2 - Math.PI/2;
+          const x = Math.cos(a)*r, y = Math.sin(a)*r;
+          if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'spiral':
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        for (let i=0;i<140;i++){
+          const th = i/140*Math.PI*4.5;
+          const r = th*6.2;
+          const x = Math.cos(th)*r, y = Math.sin(th)*r;
+          if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+        break;
+      case 'skull':
+        ctx.beginPath(); ctx.arc(0,-10,32,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-22,8); ctx.lineTo(22,8); ctx.lineTo(15,36); ctx.lineTo(-15,36); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath(); ctx.arc(-12,-10,8,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(12,-10,8,0,Math.PI*2); ctx.fill();
+        break;
+      case 'crown':
+        ctx.beginPath();
+        ctx.moveTo(-38,22); ctx.lineTo(-38,-8); ctx.lineTo(-19,10); ctx.lineTo(0,-26); ctx.lineTo(19,10); ctx.lineTo(38,-8); ctx.lineTo(38,22);
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'eye':
+        ctx.beginPath();
+        ctx.moveTo(-44,0); ctx.quadraticCurveTo(0,-38,44,0); ctx.quadraticCurveTo(0,38,-44,0);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill();
+        break;
+      case 'moon':
+        ctx.beginPath(); ctx.arc(0,0,38,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath(); ctx.arc(17,-7,34,0,Math.PI*2); ctx.fill();
+        break;
+      default:
+        ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill();
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  function makeNebulaTexture(hex, hex2, seed){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    const col1 = hexStr(hex), col2 = hexStr(hex2 != null ? hex2 : hex);
+    const colors = [col1, col2, col1, col2];
+    let s = seed || 1;
+    const rnd = () => { s = (s*9301 + 49297) % 233280; return s/233280; }; // 항상 같은 패턴을 만드는 시드 난수(텍스처 재사용 안정성)
+    for (let i=0;i<8;i++){
+      const cx = 40 + rnd()*176;
+      const cy = 40 + rnd()*176;
+      const r  = 36 + rnd()*74;
+      const col = colors[i % colors.length];
+      const g = ctx.createRadialGradient(cx,cy,0, cx,cy,r);
+      g.addColorStop(0,   col + 'bb');
+      g.addColorStop(0.45,col + '55');
+      g.addColorStop(1,   col + '00');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fill();
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  // ---- 소형 파티클용 각진(샤드) 텍스처 ----
+  function makeShardTexture(hex){
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 128;
+    const ctx = c.getContext('2d');
+    const col = hexStr(hex);
+    ctx.translate(64,64);
+    ctx.rotate(Math.PI/4);
+    const grad = ctx.createLinearGradient(-40,-40,40,40);
+    grad.addColorStop(0, col+'00');
+    grad.addColorStop(0.5, col+'ee');
+    grad.addColorStop(1, col+'00');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-6,-40,12,80);
+    ctx.fillRect(-40,-6,80,12);
+    return new THREE.CanvasTexture(c);
+  }
+
+  // ---- 아우라 장착 시 배경/안개/조명까지 침식되는 환경 연출 (등급 비례 디머 + 최상위는 색상까지 물듦) ----
+  const DEFAULT_SKY_COLOR = new THREE.Color(0x9fd3ff);
+  const DEFAULT_FOG_COLOR = new THREE.Color(0x9fd3ff);
+  const DEFAULT_HEMI_SKY = new THREE.Color(0xffffff);
+  const DEFAULT_HEMI_INTENSITY = 0.9;
+  const DEFAULT_SUN_INTENSITY = 1.1;
+  const ENV_SHIFT_TIER_ORDER = 18; // 이 등급(order) 이상부터 배경색까지 물듦
+  let envShiftTarget = {
+    sky: DEFAULT_SKY_COLOR.clone(), fog: DEFAULT_FOG_COLOR.clone(), hemi: DEFAULT_HEMI_SKY.clone(),
+    hemiIntensity: DEFAULT_HEMI_INTENSITY, sunIntensity: DEFAULT_SUN_INTENSITY, active:false
+  };
+  function applyEnvironmentForAura(aura){
+    const tier = AURA_TIERS[aura.tier];
+    const sf = tierScaleFactor(tier.order);
+    // 등급이 높을수록 주변이 어두워지며 캐릭터만 스포트라이트처럼 돋보이는 디머 (모든 등급에 연속 적용)
+    const dimFactor = 1 - sf*0.6;
+    if (tier.order >= ENV_SHIFT_TIER_ORDER){
+      const c = new THREE.Color(tier.color2 != null ? tier.color2 : tier.color);
+      envShiftTarget = {
+        sky: DEFAULT_SKY_COLOR.clone().lerp(c, 0.55),
+        fog: DEFAULT_FOG_COLOR.clone().lerp(c, 0.7),
+        hemi: DEFAULT_HEMI_SKY.clone().lerp(c, 0.5),
+        hemiIntensity: DEFAULT_HEMI_INTENSITY*dimFactor,
+        sunIntensity: DEFAULT_SUN_INTENSITY*dimFactor,
+        active:true
+      };
+    } else {
+      envShiftTarget = {
+        sky:DEFAULT_SKY_COLOR.clone(), fog:DEFAULT_FOG_COLOR.clone(), hemi:DEFAULT_HEMI_SKY.clone(),
+        hemiIntensity: DEFAULT_HEMI_INTENSITY*dimFactor, sunIntensity: DEFAULT_SUN_INTENSITY*dimFactor,
+        active:false
+      };
+    }
+  }
+  function updateEnvironmentShift(dt){
+    scene.background.lerp(envShiftTarget.sky, Math.min(1, dt*1.5));
+    scene.fog.color.lerp(envShiftTarget.fog, Math.min(1, dt*1.5));
+    hemi.color.lerp(envShiftTarget.hemi, Math.min(1, dt*1.5));
+    hemi.intensity += (envShiftTarget.hemiIntensity - hemi.intensity) * Math.min(1, dt*1.5);
+    sun.intensity += (envShiftTarget.sunIntensity - sun.intensity) * Math.min(1, dt*1.5);
+  }
+
+  // ---- 캐릭터에 붙는 아우라 이펙트: 등급마다 완전히 다른 전용 파티클 ----
+  let currentAuraEffect = null;
+  function clearAuraEffect(){
+    if (currentAuraEffect){
+      scene.remove(currentAuraEffect.group);
+      currentAuraEffect = null;
+    }
+  }
+  const MAX_TIER_ORDER = 25; // Chrono 기준
+  function tierScaleFactor(order){
+    // 낮은 등급은 거의 안 보일 만큼 미세하고, 최상위로 갈수록 기하급수적으로 커짐 (선형 증가로는 격차가 안 느껴져서 지수 곡선 사용)
+    return Math.pow(Math.min(order, MAX_TIER_ORDER) / MAX_TIER_ORDER, 1.7);
+  }
+
+  function makeAuraSprite(tex, color, size, opacity){
+    const mat = new THREE.SpriteMaterial({ map:tex, color, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(size, size, 1);
+    return s;
+  }
+
+  // ==================== 시그니처 입체 구조물 4계열 ====================
+  // ① 궤도형: 여러 각도로 기울어진 입체 토러스 링 3~4개가 서로 다른 속도로 회전 + 숨쉬듯 맥동
+  function addOrbitalFamily(group, particles, tier, color, sf){
+    const ringCount = tier.order > 12 ? 4 : 3;
+    for (let i=0;i<ringCount;i++){
+      const r = 0.5 + i*0.22 + sf*1.6;
+      const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.18+sf*0.5, blending:THREE.AdditiveBlending, depthWrite:false });
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(r, 0.02+sf*0.05, 8, 44), mat);
+      torus.rotation.x = 0.3 + (i/ringCount)*Math.PI*0.65;
+      torus.rotation.y = (i/ringCount)*Math.PI*0.8;
+      torus.position.y = 1.3;
+      group.add(torus);
+      particles.push({ mesh:torus, mode:'orbitalring', axis:i%2===0?'z':'x', speed:(0.5+i*0.22+sf*1.2)*(i%2===0?1:-1), breathPhase:Math.random()*Math.PI*2 });
+    }
+  }
+  // ② 크리스탈/파편형: 공중 부양하며 회전+미세 진동하는 3D 결정체 파편들
+  function addCrystalFamily(group, particles, tier, color, sf){
+    const geo = new THREE.OctahedronGeometry(1, 0);
+    const count = 4 + Math.floor(sf*10);
+    for (let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*0.6+sf*0.9, h = 0.4+Math.random()*1.9;
+      const mat = new THREE.MeshPhysicalMaterial({
+        color, transparent:true, opacity:0.35+sf*0.4, roughness:0.08, metalness:0.1,
+        transmission:0.4, clearcoat:1, emissive:color, emissiveIntensity:0.2+sf*0.25
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      const sc = 0.08+Math.random()*0.07+sf*0.22;
+      mesh.scale.set(sc, sc*1.6, sc);
+      mesh.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+      group.add(mesh);
+      particles.push({ mesh, mode:'crystaljitter', orbitR:r, orbitA:a, baseH:h, spin:(0.4+sf*2.5)*(Math.random()<0.5?1:-1), jitterPhase:Math.random()*Math.PI*2 });
+    }
+  }
+  // ③ 기둥/소환진형: 바닥에서 하늘로 치솟는 에너지 기둥(빠르게 수축했다 퍼짐) + 발밑 이중 회전 마법진
+  function addPillarFamily(group, particles, tier, color, ringTex, sf){
+    const pillarH = 1.4 + sf*10;
+    const pillarGeo = new THREE.CylinderGeometry(0.06+sf*0.28, 0.16+sf*0.6, pillarH, 16, 1, true);
+    const pillarMat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.14+sf*0.42, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.y = pillarH/2;
+    group.add(pillar);
+    particles.push({ mesh:pillar, mode:'pillarburst', baseOpacity:0.14+sf*0.42 });
+
+    for (let i=0;i<2;i++){
+      const mat = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.55-i*0.15 });
+      const size = 1.0 + i*0.5 + sf*4.5;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size,size), mat);
+      mesh.rotation.x = -Math.PI/2;
+      mesh.position.y = 0.03+i*0.012;
+      group.add(mesh);
+      particles.push({ mesh, mode:'ringspin', slow:i===1 });
+    }
+  }
+  // ④ 구체/번개형: 캐릭터 중심에서 퍼져나가는 플라즈마 구체 + 짧게 번쩍이는 번개 스파크
+  function addSphereLightningFamily(group, particles, tier, color, sf){
+    const sphereGeo = new THREE.SphereGeometry(1, 10, 10);
+    const count = 3 + Math.floor(sf*9);
+    for (let i=0;i<count;i++){
+      const a = (i/count)*Math.PI*2, r = 0.5+Math.random()*0.45+sf*0.9, h = 0.5+Math.random()*1.6;
+      const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.4+sf*0.4, blending:THREE.AdditiveBlending, depthWrite:false });
+      const mesh = new THREE.Mesh(sphereGeo, mat);
+      const sc = 0.06+Math.random()*0.05+sf*0.16;
+      mesh.scale.setScalar(sc);
+      mesh.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+      group.add(mesh);
+      particles.push({ mesh, mode:'plasmaorb', orbitR:r, orbitA:a, baseH:h, flickerPhase:Math.random()*Math.PI*2, orbitSpeed:0.2+sf*1.2 });
+    }
+    for (let i=0;i<3;i++){
+      const lineMat = new THREE.LineBasicMaterial({ color, transparent:true, opacity:0 });
+      const points = [];
+      for (let j=0;j<5;j++) points.push(new THREE.Vector3((Math.random()-0.5)*0.5, 0.2+j*0.42, (Math.random()-0.5)*0.5));
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(lineGeo, lineMat);
+      group.add(line);
+      particles.push({ mesh:line, mode:'lightningflash', delay:Math.random()*2.2 });
+    }
+  }
+
+  function createAuraEffect(aura){
+    clearAuraEffect();
+    const tier = AURA_TIERS[aura.tier];
+    const group = new THREE.Group();
+    const dotTex = makeGlowTexture(tier.color, tier.color2);
+    const ringTex = makeRingTexture(tier.color2 != null ? tier.color2 : tier.color);
+    const shardTex = makeShardTexture(tier.color2 != null ? tier.color2 : tier.color);
+    const particles = [];
+    const type = tier.fx;
+
+    function addDot(px,py,pz,size,opacity,extra){
+      const s = makeAuraSprite(dotTex, tier.color, size, opacity);
+      s.position.set(px,py,pz);
+      group.add(s);
+      particles.push(Object.assign({ mesh:s, baseX:px, baseY:py, baseZ:pz, phase:Math.random()*Math.PI*2 }, extra||{}));
+      return s;
+    }
+
+    if (type === 'none'){
+      // Plain: 아무 파티클도 없음, 이름표만 뜸
+    }
+    else if (type === 'dust'){
+      // Common: 발밑에서 미세하게 흔들리는 먼지 입자
+      for (let i=0;i<14;i++){
+        const a = Math.random()*Math.PI*2, r = Math.random()*0.55;
+        addDot(Math.cos(a)*r, 0.06+Math.random()*0.1, Math.sin(a)*r, 0.18+Math.random()*0.08, 0.35+Math.random()*0.25, {mode:'jitter'});
+      }
+    }
+    else if (type === 'sparkle'){
+      // Uncommon: 주변에 아주 작게 반짝이는 빛가루
+      for (let i=0;i<18;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*0.7, h = 0.3+Math.random()*2.0;
+        addDot(Math.cos(a)*r, h, Math.sin(a)*r, 0.12+Math.random()*0.08, 0.5+Math.random()*0.4, {mode:'twinkle', orbitR:r, orbitA:a, baseH:h});
+      }
+    }
+    else if (type === 'coldair'){
+      // Rare: 캐릭터 몸을 스쳐 지나가는 차가운 공기 흐름
+      for (let i=0;i<5;i++){
+        const s = makeAuraSprite(dotTex, tier.color, 1.4, 0.3);
+        s.scale.set(1.4, 0.32, 1);
+        group.add(s);
+        particles.push({ mesh:s, mode:'coldair', phase:(i/5)*Math.PI*2, h:0.4+Math.random()*1.6 });
+      }
+    }
+    else if (type === 'bubble'){
+      // Good: 가끔씩 위로 동글동글 올라오는 기포 이펙트
+      for (let i=0;i<7;i++){
+        const a = Math.random()*Math.PI*2, r = Math.random()*0.4;
+        addDot(Math.cos(a)*r, 0, Math.sin(a)*r, 0.14+Math.random()*0.08, 0, {mode:'bubble', speed:0.45+Math.random()*0.35, wob:Math.random()*0.3, cycleT:Math.random()*3.5, maxH:1.8+Math.random()*0.6});
+      }
+    }
+    else if (type === 'wavepulse' || type === 'ripple'){
+      // Epic: 발밑에서 은은하게 퍼지는 파동 / Hydro: 발밑에서 물결치는 파문+방울
+      for (let i=0;i<2;i++){
+        const ringMat = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.8 });
+        const ring = new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6), ringMat);
+        ring.rotation.x = -Math.PI/2;
+        ring.position.y = 0.03;
+        group.add(ring);
+        particles.push({ mesh:ring, mode:'wave', phase:i*0.7 });
+      }
+      if (type === 'ripple'){
+        for (let i=0;i<6;i++){
+          addDot((Math.random()-0.5)*0.7, 0.1, (Math.random()-0.5)*0.7, 0.1, 0, {mode:'droplet', delay:Math.random()*2});
+        }
+      }
+    }
+    else if (type === 'auraring' || type === 'amberring'){
+      // Topaz: 노란빛+주황 작은 오라 링 / Amber: 굳어있는 호박석 링+실제 3D 보석
+      const ringMat = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.75 });
+      const ring = new THREE.Mesh(new THREE.PlaneGeometry(2.0,2.0), ringMat);
+      ring.rotation.x = -Math.PI/2;
+      ring.position.y = 0.03;
+      group.add(ring);
+      particles.push({ mesh:ring, mode:'ringspin', slow: type==='amberring' });
+      const count = type==='amberring' ? 5 : 7;
+      for (let i=0;i<count;i++){
+        const a = (i/count)*Math.PI*2;
+        addDot(Math.cos(a)*0.85, 0.15, Math.sin(a)*0.85, 0.13, 0.7, {mode: type==='amberring' ? 'static' : 'orbitring', orbitR:0.85, orbitA:a});
+      }
+      if (type === 'amberring'){
+        // 실제 3D 호박석 보석(둥근 유리질) 5개가 굳은 채 천천히 떠 있음
+        const gemGeo = new THREE.IcosahedronGeometry(1, 0);
+        for (let i=0;i<5;i++){
+          const a = (i/5)*Math.PI*2 + 0.4, r = 0.65+Math.random()*0.4, h = 0.5+Math.random()*1.3;
+          const gemMat = new THREE.MeshPhysicalMaterial({
+            color:0xB5601A, transparent:true, opacity:0.75, roughness:0.15, metalness:0.05,
+            transmission:0.35, clearcoat:1, emissive:0xB5601A, emissiveIntensity:0.4
+          });
+          const gem = new THREE.Mesh(gemGeo, gemMat);
+          const sc = 0.13+Math.random()*0.08;
+          gem.scale.set(sc, sc, sc);
+          gem.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+          group.add(gem);
+          particles.push({ mesh:gem, mode:'amberdrift', orbitR:r, orbitA:a, baseH:h, spin:0.3+Math.random()*0.4 });
+        }
+      }
+    }
+    else if (type === 'orbittrail'){
+      // Great: 캐릭터 주위를 천천히 도는 빛의 궤적
+      for (let i=0;i<6;i++){
+        addDot(0,1.6,0, 0.16-(i*0.015), 0.7-(i*0.1), {mode:'orbit', orbitR:1.0, orbitPhase:-i*0.28, speed:1.1, h:1.6});
+      }
+    }
+    else if (type === 'shard'){
+      // Quartz: 실제 3D 크리스탈(팔면체)이 주변에 떠다니며 반짝임 + 작은 유리 파편 스프라이트 보조
+      const crystalGeo = new THREE.OctahedronGeometry(1, 0);
+      for (let i=0;i<6;i++){
+        const a = Math.random()*Math.PI*2, r = 0.6+Math.random()*0.7, h = 0.4+Math.random()*1.7;
+        const crystalMat = new THREE.MeshPhysicalMaterial({
+          color: tier.color, transparent:true, opacity:0.55, roughness:0.05, metalness:0.1,
+          transmission:0.5, clearcoat:1, emissive: tier.color, emissiveIntensity:0.35
+        });
+        const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+        const sc = 0.14 + Math.random()*0.1;
+        crystal.scale.set(sc, sc*1.7, sc);
+        crystal.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(crystal);
+        particles.push({ mesh:crystal, mode:'crystal', orbitR:r, orbitA:a, baseH:h, spin:(Math.random()-0.5)*2 });
+      }
+      for (let i=0;i<8;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*0.6, h = 0.3+Math.random()*1.8;
+        const s = makeAuraSprite(shardTex, tier.color, 0.16+Math.random()*0.08, 0.6);
+        s.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'shard', orbitR:r, orbitA:a, baseH:h, spin:(Math.random()-0.5)*3 });
+      }
+    }
+    else if (type === 'debris'){
+      // Acorn: 바닥에 흩날리는 작은 도토리와 나뭇잎 파편
+      const acornGeo = new THREE.ConeGeometry(0.06,0.14,6);
+      const leafGeo = new THREE.PlaneGeometry(0.12,0.08);
+      for (let i=0;i<8;i++){
+        const a = Math.random()*Math.PI*2, r = Math.random()*0.7;
+        const useAcorn = Math.random()<0.5;
+        const mesh = new THREE.Mesh(useAcorn?acornGeo:leafGeo, new THREE.MeshStandardMaterial({ color: useAcorn?0x6B4A2B:0x9C7A3C, roughness:0.9, side:THREE.DoubleSide }));
+        mesh.position.set(Math.cos(a)*r, 0.04, Math.sin(a)*r);
+        mesh.rotation.set(useAcorn?0:Math.PI/2, Math.random()*Math.PI*2, 0);
+        group.add(mesh);
+        particles.push({ mesh, mode:'sway' });
+      }
+    }
+    else if (type === 'pollen'){
+      // Pollen: 주변에 둥둥 떠다니며 퍼지는 노란 꽃가루 (더 풍성하게, 실제 3D 꽃잎 메시 포함)
+      for (let i=0;i<20;i++){
+        const a = Math.random()*Math.PI*2, r = 0.4+Math.random()*1.1, h = 0.3+Math.random()*1.9;
+        addDot(Math.cos(a)*r, h, Math.sin(a)*r, 0.11+Math.random()*0.07, 0.55, {mode:'drift', dx:(Math.random()-0.5)*0.4, dz:(Math.random()-0.5)*0.4, dy:(Math.random()-0.5)*0.2});
+      }
+      // 실제 3D 꽃잎 조각 (작은 평면, 앞뒤로 살랑거리며 부유)
+      const petalGeo = new THREE.PlaneGeometry(0.13, 0.09);
+      for (let i=0;i<9;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*0.9, h = 0.4+Math.random()*1.6;
+        const petalMat = new THREE.MeshStandardMaterial({ color:0xF2D93E, emissive:0xF2D93E, emissiveIntensity:0.3, roughness:0.7, side:THREE.DoubleSide, transparent:true, opacity:0.85 });
+        const petal = new THREE.Mesh(petalGeo, petalMat);
+        petal.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(petal);
+        particles.push({ mesh:petal, mode:'petal', orbitR:r, orbitA:a, baseH:h, phase:Math.random()*Math.PI*2 });
+      }
+      // 발밑에 은은하게 퍼지는 꽃밭 빛 (연노랑 링)
+      const fieldMat = new THREE.MeshBasicMaterial({ map:makeGlowTexture(0xF2D93E), color:0xffffff, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.28 });
+      const field = new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6), fieldMat);
+      field.rotation.x = -Math.PI/2;
+      field.position.y = 0.025;
+      group.add(field);
+      particles.push({ mesh:field, mode:'powerpulse', baseScale:1 });
+    }
+    else if (type === 'flame'){
+      // Ignis: 발밑에서 위로 피어오르는 불꽃 열기
+      for (let i=0;i<10;i++){
+        const a = Math.random()*Math.PI*2, r = Math.random()*0.35;
+        addDot(Math.cos(a)*r, Math.random()*1.4, Math.sin(a)*r, 0.16, 0.7, {mode:'flame', speed:1.3+Math.random()*0.6, wob:Math.random()*0.4});
+      }
+    }
+    else if (type === 'flicker'){
+      // Flicker: 등불처럼 깜빡이는 미세한 불빛
+      const light = new THREE.PointLight(tier.color, 1.0, 5, 2);
+      light.position.y = 1.8;
+      group.add(light);
+      particles.push({ mesh:null, mode:'light', light });
+      for (let i=0;i<4;i++){
+        addDot((Math.random()-0.5)*0.4, 1.6+Math.random()*0.3, (Math.random()-0.5)*0.4, 0.14, 0.6, {mode:'flickerdot'});
+      }
+    }
+    else if (type === 'mist'){
+      // Mist: 캐릭터 하체를 감싸고 흐르는 옅은 연기
+      for (let i=0;i<4;i++){
+        const a = (i/4)*Math.PI*2;
+        const s = makeAuraSprite(dotTex, tier.color, 1.3, 0.22);
+        s.position.set(Math.cos(a)*0.4, 0.6, Math.sin(a)*0.4);
+        group.add(s);
+        particles.push({ mesh:s, mode:'mist', orbitA:a });
+      }
+    }
+    else if (type === 'windspiral'){
+      // Aero: 캐릭터 주위를 빠르게 회전하는 바람 줄기 + 머리 바로 위에 떠 있는 미니 하늘
+      for (let i=0;i<6;i++){
+        const s = makeAuraSprite(dotTex, tier.color, 0.9, 0.6);
+        s.scale.set(0.9,0.22,1);
+        group.add(s);
+        particles.push({ mesh:s, mode:'windspiral', phase:(i/6)*Math.PI*2 });
+      }
+      const skyCanvas = document.createElement('canvas');
+      skyCanvas.width = 128; skyCanvas.height = 128;
+      const skyCtx = skyCanvas.getContext('2d');
+      const skyGrad = skyCtx.createRadialGradient(64,64,0, 64,64,64);
+      skyGrad.addColorStop(0, '#DFF7FF');
+      skyGrad.addColorStop(0.55, hexStr(tier.color));
+      skyGrad.addColorStop(1, hexStr(tier.color)+'00');
+      skyCtx.fillStyle = skyGrad;
+      skyCtx.beginPath(); skyCtx.arc(64,64,64,0,Math.PI*2); skyCtx.fill();
+      // 뭉게구름 몇 점
+      skyCtx.fillStyle = 'rgba(255,255,255,.85)';
+      for (let i=0;i<5;i++){
+        const cx = 30+Math.random()*68, cy = 40+Math.random()*48, r = 8+Math.random()*10;
+        skyCtx.beginPath(); skyCtx.arc(cx,cy,r,0,Math.PI*2); skyCtx.fill();
+      }
+      const skyTex = new THREE.CanvasTexture(skyCanvas);
+      const skyMat = new THREE.MeshBasicMaterial({ map:skyTex, transparent:true, opacity:0.8, depthWrite:false, side:THREE.DoubleSide });
+      const skyDisc = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), skyMat);
+      skyDisc.rotation.x = -Math.PI/2;
+      skyDisc.position.y = 3.3;
+      group.add(skyDisc);
+      particles.push({ mesh:skyDisc, mode:'skyabove' });
+    }
+    else if (type === 'spark'){
+      // Static: 몸 주변에서 짧게 치지직거리는 스파크
+      for (let i=0;i<8;i++){
+        const s = makeAuraSprite(dotTex, tier.color, 0.4, 0);
+        s.scale.set(0.5,0.12,1);
+        group.add(s);
+        particles.push({ mesh:s, mode:'spark', delay:Math.random()*1.5 });
+      }
+    }
+    else if (type === 'rocks'){
+      // Terra: 발밑에서 자잘한 돌멩이가 살짝 떠올랐다 떨어짐
+      const rockGeo = new THREE.DodecahedronGeometry(0.08,0);
+      for (let i=0;i<7;i++){
+        const a = (i/7)*Math.PI*2 + Math.random()*0.3, r = 0.4+Math.random()*0.4;
+        const mesh = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({ color:0x5C4530, roughness:0.95 }));
+        mesh.position.set(Math.cos(a)*r, 0.06, Math.sin(a)*r);
+        group.add(mesh);
+        particles.push({ mesh, mode:'levitate', baseX:Math.cos(a)*r, baseZ:Math.sin(a)*r, phase:Math.random()*Math.PI*2 });
+      }
+    }
+    else if (type === 'beams'){
+      // Radiance: 캐릭터 중심으로 사방으로 뻗어나가는 강렬한 빛줄기 + 회전하는 신성한 후광 + 상승하는 황금빛 파티클
+      for (let i=0;i<14;i++){
+        const a = (i/14)*Math.PI*2;
+        const s = makeAuraSprite(dotTex, 0xFFFFFF, 3.2, 0.7);
+        s.scale.set(3.2,0.22,1);
+        group.add(s);
+        particles.push({ mesh:s, mode:'beam', angle:a });
+      }
+      // 머리 뒤 회전하는 신성한 후광(할로) - 두 겹
+      const haloTex1 = makeRingTexture(0xFFFFFF);
+      const halo1Mat = new THREE.MeshBasicMaterial({ map:haloTex1, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.85 });
+      const halo1 = new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6), halo1Mat);
+      halo1.position.y = 2.9;
+      group.add(halo1);
+      particles.push({ mesh:halo1, mode:'radhalo', speed:0.6 });
+      const haloTex2 = makeRingTexture(tier.color2 != null ? tier.color2 : 0xFFE9A8);
+      const halo2Mat = new THREE.MeshBasicMaterial({ map:haloTex2, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.6 });
+      const halo2 = new THREE.Mesh(new THREE.PlaneGeometry(3.3,3.3), halo2Mat);
+      halo2.position.y = 2.9;
+      group.add(halo2);
+      particles.push({ mesh:halo2, mode:'radhalo', speed:-0.35 });
+      // 상승하는 황금빛 빛 파티클(스트림)
+      for (let i=0;i<16;i++){
+        const a = Math.random()*Math.PI*2, r = 0.3+Math.random()*1.0;
+        const s = makeAuraSprite(dotTex, 0xFFF3C4, 0.13+Math.random()*0.08, 0);
+        s.position.set(Math.cos(a)*r, 0, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'bubble', baseX:Math.cos(a)*r, baseZ:Math.sin(a)*r, speed:0.7+Math.random()*0.6, wob:0.15+Math.random()*0.2, cycleT:Math.random()*3, maxH:2.4+Math.random()*0.8 });
+      }
+      const core = makeAuraSprite(dotTex, 0xFFFFFF, 1.4, 0.9);
+      core.position.y = 1.6;
+      group.add(core);
+      particles.push({ mesh:core, mode:'core' });
+    }
+    else if (type === 'voidhole'){
+      // Void: 사건의 지평선(블랙홀) - 모든 게 안으로 빨려들어가는 느낌
+      const holeMat = new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.9 });
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(0.55, 32), holeMat);
+      hole.position.y = 1.5;
+      group.add(hole);
+      particles.push({ mesh:hole, mode:'voidcore' });
+      const rimTex = makeRingTexture(tier.color2);
+      const rimMat = new THREE.MeshBasicMaterial({ map:rimTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.9 });
+      const rim = new THREE.Mesh(new THREE.PlaneGeometry(1.4,1.4), rimMat);
+      rim.position.y = 1.5;
+      group.add(rim);
+      particles.push({ mesh:rim, mode:'radhalo', speed:1.4 });
+      // 안으로 빨려들어가는 나선 파티클 (바깥에서 시작해 중심으로 빨려듦)
+      for (let i=0;i<18;i++){
+        const a0 = Math.random()*Math.PI*2;
+        const s = makeAuraSprite(dotTex, tier.color2, 0.12, 0.7);
+        group.add(s);
+        particles.push({ mesh:s, mode:'voidsuck', angle0:a0, r0:1.6+Math.random()*0.6, cycleT:Math.random()*3, period:2.2+Math.random()*0.8 });
+      }
+    }
+    else if (type === 'supernova'){
+      // Supernova: 별이 폭발하듯 주기적으로 터져나가는 강렬한 버스트
+      const core = makeAuraSprite(dotTex, 0xFFFFFF, 0.9, 0.95);
+      core.position.y = 1.6;
+      group.add(core);
+      particles.push({ mesh:core, mode:'novacore' });
+      for (let i=0;i<3;i++){
+        const ringMat2 = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0 });
+        const ring2 = new THREE.Mesh(new THREE.PlaneGeometry(1,1), ringMat2);
+        ring2.rotation.x = -Math.PI/2;
+        ring2.position.y = 0.05;
+        group.add(ring2);
+        particles.push({ mesh:ring2, mode:'novashock', delay:i*0.5 });
+      }
+      // 폭발 파편(방사형으로 튀어나갔다 리셋)
+      for (let i=0;i<20;i++){
+        const a = Math.random()*Math.PI*2;
+        const s = makeAuraSprite(dotTex, 0xFFB07A, 0.1+Math.random()*0.06, 0);
+        s.position.y = 1.6;
+        group.add(s);
+        particles.push({ mesh:s, mode:'novaburst', angle:a, tilt:(Math.random()-0.5)*1.2, delay:Math.random()*1.6 });
+      }
+    }
+    else if (type === 'glitch'){
+      // Glitch: 순간이동하듯 깨지는 움직임 + RGB 색분리 + 지지직거리는 바닥 그리드
+      const boxGeo = new THREE.BoxGeometry(0.14,0.14,0.14);
+      for (let i=0;i<10;i++){
+        const mat = new THREE.MeshBasicMaterial({ color: i%2===0?tier.color:tier.color2, transparent:true, opacity:0.8 });
+        const mesh = new THREE.Mesh(boxGeo, mat);
+        const h = 0.3+Math.random()*1.9;
+        mesh.position.set((Math.random()-0.5)*1.4, h, (Math.random()-0.5)*1.4);
+        group.add(mesh);
+        particles.push({ mesh, mode:'glitchjump', baseH:h, nextJump:Math.random()*0.3 });
+      }
+      // RGB 분리 코어(같은 자리에 두 색이 살짝 어긋나 겹침)
+      const coreG = makeAuraSprite(dotTex, tier.color, 0.55, 0.6);
+      coreG.position.set(0.03, 1.55, 0);
+      group.add(coreG);
+      particles.push({ mesh:coreG, mode:'glitchcore', dx:0.05 });
+      const coreM = makeAuraSprite(dotTex, tier.color2, 0.55, 0.6);
+      coreM.position.set(-0.03, 1.55, 0);
+      group.add(coreM);
+      particles.push({ mesh:coreM, mode:'glitchcore', dx:-0.05 });
+    }
+    else if (type === 'celestial'){
+      // Celestial: 별자리처럼 반짝이는 작은 별들 + 천천히 도는 행성 2개
+      for (let i=0;i<20;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*1.1, h = 0.2+Math.random()*2.4;
+        const s = makeAuraSprite(dotTex, 0xFFFFFF, 0.07+Math.random()*0.05, 0.6);
+        s.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'twinkle', orbitR:r, orbitA:a, baseH:h, phase:Math.random()*Math.PI*2 });
+      }
+      const planetGeo = new THREE.SphereGeometry(1, 14, 14);
+      const planetColors = [tier.color2, 0x8FA8FF];
+      for (let i=0;i<2;i++){
+        const mat = new THREE.MeshBasicMaterial({ color:planetColors[i] });
+        const planet = new THREE.Mesh(planetGeo, mat);
+        planet.scale.setScalar(0.11+i*0.05);
+        group.add(planet);
+        particles.push({ mesh:planet, mode:'orbitplanet', orbitR:0.9+i*0.5, tiltX:0.5+i*0.4, speed:0.35-i*0.1, phase:i*Math.PI });
+      }
+    }
+    else if (type === 'chrono'){
+      // Chrono: 진짜 시곗바늘처럼 돌아가는 시계 (초침은 똑딱거리며 점프)
+      const faceTex = makeRingTexture(tier.color);
+      const faceMat = new THREE.MeshBasicMaterial({ map:faceTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.7 });
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6), faceMat);
+      face.position.y = 1.6;
+      group.add(face);
+      particles.push({ mesh:face, mode:'static' });
+      // 12개 시각 눈금
+      for (let i=0;i<12;i++){
+        const a = (i/12)*Math.PI*2;
+        const tick = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.09,0.01), new THREE.MeshBasicMaterial({ color:tier.color2 }));
+        tick.position.set(Math.cos(a)*0.75, 1.6+Math.sin(a)*0.75, 0.01);
+        tick.rotation.z = a;
+        group.add(tick);
+        particles.push({ mesh:tick, mode:'static' });
+      }
+      // 시침/분침/초침
+      const hourHand = new THREE.Mesh(new THREE.BoxGeometry(0.045,0.4,0.01), new THREE.MeshBasicMaterial({ color:tier.color2 }));
+      hourHand.geometry.translate(0,0.2,0);
+      hourHand.position.y = 1.6;
+      group.add(hourHand);
+      particles.push({ mesh:hourHand, mode:'clockhand', speed:0.15 });
+      const minHand = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.58,0.01), new THREE.MeshBasicMaterial({ color:tier.color2 }));
+      minHand.geometry.translate(0,0.29,0);
+      minHand.position.y = 1.6;
+      group.add(minHand);
+      particles.push({ mesh:minHand, mode:'clockhand', speed:0.55 });
+      const secHand = new THREE.Mesh(new THREE.BoxGeometry(0.018,0.68,0.01), new THREE.MeshBasicMaterial({ color:0xE0524A }));
+      secHand.geometry.translate(0,0.34,0);
+      secHand.position.y = 1.6;
+      group.add(secHand);
+      particles.push({ mesh:secHand, mode:'clocktick', angle:0 });
+    }
+    else if (type === 'gilded'){
+      // Gilded: 황금빛 스파크가 은은하게 팡팡 터지며 발밑에 가벼운 황금 링
+      for (let i=0;i<10;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*0.7, h = 0.3+Math.random()*1.8;
+        addDot(Math.cos(a)*r, h, Math.sin(a)*r, 0.1+Math.random()*0.06, 0, {mode:'gildedspark', baseH:h, baseR:r, delay:Math.random()*2.5});
+      }
+      const gRingMat = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.4 });
+      const gRing = new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.3), gRingMat);
+      gRing.rotation.x = -Math.PI/2;
+      gRing.position.y = 0.03;
+      group.add(gRing);
+      particles.push({ mesh:gRing, mode:'ringspin', slow:true });
+    }
+    else if (type === 'glacier'){
+      // Glacier: 날카로운 푸른 얼음 결정체가 공중 부양하며 잔잔히 회전
+      const iceGeo = new THREE.ConeGeometry(0.11, 0.48, 5);
+      for (let i=0;i<7;i++){
+        const a = Math.random()*Math.PI*2, r = 0.55+Math.random()*0.6, h = 0.4+Math.random()*1.7;
+        const mat = new THREE.MeshPhysicalMaterial({ color:0x8FD9FF, transparent:true, opacity:0.72, roughness:0.05, metalness:0.05, transmission:0.5, clearcoat:1, emissive:0x8FD9FF, emissiveIntensity:0.25 });
+        const mesh = new THREE.Mesh(iceGeo, mat);
+        mesh.rotation.x = Math.PI;
+        mesh.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(mesh);
+        particles.push({ mesh, mode:'icecrystal', orbitR:r, orbitA:a, baseH:h, spin:0.2+Math.random()*0.3 });
+      }
+    }
+    else if (type === 'hazard'){
+      // Hazard: 방사능 형광 초록 연기 + 빠르게 회전하는 경고 표식 링
+      for (let i=0;i<10;i++){
+        const a = Math.random()*Math.PI*2, r = 0.3+Math.random()*0.6;
+        const s = makeAuraSprite(dotTex, 0x9CFF1F, 0.32+Math.random()*0.2, 0);
+        s.position.set(Math.cos(a)*r, 0.2, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'bubble', baseX:Math.cos(a)*r, baseZ:Math.sin(a)*r, speed:0.35+Math.random()*0.3, wob:0.2, cycleT:Math.random()*3, maxH:1.6+Math.random()*0.5 });
+      }
+      const warnTex = makeStarShapeTexture(0x9CFF1F, 3);
+      const warnMat = new THREE.MeshBasicMaterial({ map:warnTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.8 });
+      const warn = new THREE.Mesh(new THREE.PlaneGeometry(1.5,1.5), warnMat);
+      warn.rotation.x = -Math.PI/2;
+      warn.position.y = 0.04;
+      group.add(warn);
+      particles.push({ mesh:warn, mode:'ringspin', fast:true });
+    }
+    else if (type === 'inferno'){
+      // Inferno: 붉은 화염 기둥이 소폭 치솟고 바닥이 용암처럼 불타오름
+      const pillarGeo = new THREE.CylinderGeometry(0.15,0.32,1.6,14,1,true);
+      const pillarMat = new THREE.MeshBasicMaterial({ color:0xFF3300, transparent:true, opacity:0.4, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      pillar.position.y = 0.8;
+      group.add(pillar);
+      particles.push({ mesh:pillar, mode:'pillarburst', baseOpacity:0.4 });
+      const lavaMat = new THREE.MeshBasicMaterial({ color:0xFF6600, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.32 });
+      const lava = new THREE.Mesh(new THREE.CircleGeometry(1.0,24), lavaMat);
+      lava.rotation.x = -Math.PI/2;
+      lava.position.y = 0.02;
+      group.add(lava);
+      particles.push({ mesh:lava, mode:'powerpulse', baseScale:1 });
+      for (let i=0;i<8;i++){
+        const a = Math.random()*Math.PI*2, r = Math.random()*0.5;
+        addDot(Math.cos(a)*r, 0, Math.sin(a)*r, 0.14, 0, {mode:'flame', speed:1.1+Math.random()*0.5, wob:0.3, phase:Math.random()*10});
+      }
+    }
+    else if (type === 'starlight'){
+      // Starlight: 은하수 잔상 + 등 뒤 작은 별자리 링
+      for (let i=0;i<14;i++){
+        const a = Math.random()*Math.PI*2, r = 0.5+Math.random()*1.0, h = 0.3+Math.random()*2.0;
+        addDot(Math.cos(a)*r, h, Math.sin(a)*r, 0.08+Math.random()*0.05, 0.55, {mode:'twinkle', orbitR:r, orbitA:a, baseH:h, phase:Math.random()*Math.PI*2});
+      }
+      const starTex = makeStarShapeTexture(0xBFE3FF, 6);
+      const starMat = new THREE.MeshBasicMaterial({ map:starTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.7 });
+      const constellationRing = new THREE.Mesh(new THREE.PlaneGeometry(1.8,1.8), starMat);
+      constellationRing.position.set(0,1.7,-0.3);
+      group.add(constellationRing);
+      particles.push({ mesh:constellationRing, mode:'radhalo', speed:0.25 });
+    }
+    else if (type === 'overclock'){
+      // Overclock: 붉은 레이저 선 + 주황 회로 궤도 링이 진동하며 감쌈
+      for (let i=0;i<4;i++){
+        const lineMat = new THREE.LineBasicMaterial({ color:0xFF2A2A, transparent:true, opacity:0.7 });
+        const a0 = (i/4)*Math.PI*2;
+        const points = [ new THREE.Vector3(Math.cos(a0)*0.5,0.5,Math.sin(a0)*0.5), new THREE.Vector3(Math.cos(a0)*1.1,1.4,Math.sin(a0)*1.1) ];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(lineGeo, lineMat);
+        group.add(line);
+        particles.push({ mesh:line, mode:'laserline', angle:a0 });
+      }
+      for (let i=0;i<2;i++){
+        const cMat = new THREE.MeshBasicMaterial({ color:0xFFA030, transparent:true, opacity:0.55-i*0.15, blending:THREE.AdditiveBlending, depthWrite:false });
+        const torus = new THREE.Mesh(new THREE.TorusGeometry(0.7+i*0.3, 0.02, 6, 30), cMat);
+        torus.rotation.x = Math.PI/2.2 + i*0.5;
+        torus.position.y = 1.2;
+        group.add(torus);
+        particles.push({ mesh:torus, mode:'circuitorbit', speed:(1.2+i*0.6)*(i%2===0?1:-1) });
+      }
+    }
+    else if (type === 'eclipse'){
+      // Eclipse: 개기일식 - 황금 테두리가 있는 검은 후광 링
+      const blackDisc = new THREE.Mesh(new THREE.CircleGeometry(0.5,32), new THREE.MeshBasicMaterial({ color:0x000000 }));
+      blackDisc.position.y = 1.6;
+      group.add(blackDisc);
+      particles.push({ mesh:blackDisc, mode:'static' });
+      const rimTex2 = makeRingTexture(0xFFD700);
+      const rimMat2 = new THREE.MeshBasicMaterial({ map:rimTex2, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.9 });
+      const rim2 = new THREE.Mesh(new THREE.PlaneGeometry(1.15,1.15), rimMat2);
+      rim2.position.y = 1.6;
+      group.add(rim2);
+      particles.push({ mesh:rim2, mode:'radhalo', speed:0.15 });
+      for (let i=0;i<8;i++){
+        const a = (i/8)*Math.PI*2;
+        addDot(Math.cos(a)*0.9, 1.6, Math.sin(a)*0.9, 0.08, 0.5, {mode:'orbitring', orbitR:0.9, orbitA:a});
+      }
+    }
+    else if (type === 'sanguine'){
+      // Sanguine: 핏빛 붉은 달 + 기하학적 룬문자 링 3중 회전
+      const moon = new THREE.Mesh(new THREE.SphereGeometry(0.42,20,20), new THREE.MeshBasicMaterial({ color:0x8B0000 }));
+      moon.position.set(0,1.7,-0.4);
+      group.add(moon);
+      particles.push({ mesh:moon, mode:'static' });
+      for (let i=0;i<3;i++){
+        const runeTex = makeStarShapeTexture(0xFF2E2E, 6+i*2);
+        const runeMat = new THREE.MeshBasicMaterial({ map:runeTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.55-i*0.1 });
+        const ring = new THREE.Mesh(new THREE.PlaneGeometry(1.4+i*0.5,1.4+i*0.5), runeMat);
+        ring.position.set(0,1.7,-0.35);
+        group.add(ring);
+        particles.push({ mesh:ring, mode:'radhalo', speed:(0.3+i*0.2)*(i%2===0?1:-1) });
+      }
+    }
+
+    // 모든 등급 공통 "파워 오라" 베이스 레이어 (Sol's RNG 스타일: Core/Swirl/Sparkle 3단 레이어, 등급이 높을수록 웅장하게) - Plain 제외
+    if (type !== 'none'){
+      const baseGlowColor = tier.color2 != null ? tier.color2 : tier.color;
+      const baseGlowTex = makeGlowTexture(baseGlowColor);
+      const coreTex = makeGlowTexture(0xffffff, baseGlowColor);
+      const sf = tierScaleFactor(tier.order); // 0(커먼)~1(크로노) 사이 지수 곡선 스케일값
+
+      // ---- ⓪ Nebula: 부드러운 색 구름을 여러 겹 스택해서 뒤에 깔아 입체감과 화려함을 더함 ----
+      const nebTexA = makeNebulaTexture(baseGlowColor, tier.color, tier.order*7+1);
+      const nebTexB = makeNebulaTexture(tier.color, baseGlowColor, tier.order*13+3);
+      const nebLayers = 2 + Math.round(sf*3); // 등급 높을수록 겹수도 더 쌓임("겁나 많이 스택")
+      for (let i=0;i<nebLayers;i++){
+        const tex = i%2===0 ? nebTexA : nebTexB;
+        const nebScale = 1.5 + sf*3.2 + i*0.35;
+        const nebOpacity = (0.14 + sf*0.24) * (1 - i*0.12);
+        const neb = makeAuraSprite(tex, 0xffffff, nebScale, nebOpacity);
+        neb.position.y = 1.5 + (i - nebLayers/2)*0.25;
+        neb.material.rotation = Math.random()*Math.PI*2;
+        group.add(neb);
+        particles.push({ mesh:neb, mode:'nebuladrift', spin:(0.04+sf*0.2)*(i%2===0?1:-1), baseOpacity:nebOpacity, phase:Math.random()*Math.PI*2 });
+      }
+
+      // ---- 상징 아이콘(엠블럼) 배지: 머리 위에 또렷하게 떠서 이 아우라의 정체성을 한눈에 알려줌 ----
+      if (tier.icon){
+        const badgeBackTex = makeGlowTexture(baseGlowColor);
+        const badgeBack = makeAuraSprite(badgeBackTex, baseGlowColor, 0.55+sf*0.35, 0.35+sf*0.2);
+        const iconTex = makeIconTexture(tier.icon, 0xffffff);
+        const icon = makeAuraSprite(iconTex, 0xffffff, 0.38+sf*0.28, 0.95);
+        const badgeY = 2.55 + sf*0.35;
+        badgeBack.position.y = badgeY;
+        icon.position.y = badgeY;
+        icon.position.z = 0.001; // 배지 원반보다 살짝 앞
+        group.add(badgeBack);
+        group.add(icon);
+        particles.push({ mesh:badgeBack, mode:'iconbadgeback', baseScale:0.55+sf*0.35, baseY:badgeY });
+        particles.push({ mesh:icon, mode:'iconbadge', baseScale:0.38+sf*0.28, baseY:badgeY });
+      }
+
+      // ---- ① Core: 밝고 또렷한 중심부 광구 (안쪽 레이어라 빠르게 맥동) ----
+      const coreScale = 0.28 + sf*1.9;
+      const coreOpacity = 0.55 + sf*0.35;
+      const core2 = makeAuraSprite(coreTex, 0xffffff, coreScale, coreOpacity);
+      core2.position.y = 1.5;
+      group.add(core2);
+      particles.push({ mesh:core2, mode:'corepulse', baseScale:coreScale, baseOpacity:coreOpacity, pulseSpeed:2.5+sf*3 });
+
+      // ---- ② Swirl: 캐릭터를 감싸며 아주 빠르게 회전하는 입체 링(토러스) + 솟구치는 에너지 기둥 ----
+      const torusR = 0.5 + sf*1.9;
+      const torusMat = new THREE.MeshBasicMaterial({ color:baseGlowColor, transparent:true, opacity:0.2+sf*0.55, blending:THREE.AdditiveBlending, depthWrite:false });
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(torusR, 0.025+sf*0.06, 8, 48), torusMat);
+      torus.rotation.x = Math.PI/2.4;
+      torus.position.y = 1.1;
+      group.add(torus);
+      particles.push({ mesh:torus, mode:'swirltorus', baseR:torusR, spinSpeed:2.6+sf*3.5 });
+
+      // 두 번째 토러스(반대 방향, 다른 축) - 입체적인 이중 회전 느낌
+      const torus2Mat = new THREE.MeshBasicMaterial({ color:baseGlowColor, transparent:true, opacity:0.12+sf*0.42, blending:THREE.AdditiveBlending, depthWrite:false });
+      const torus2 = new THREE.Mesh(new THREE.TorusGeometry(torusR*0.82, 0.018+sf*0.045, 8, 40), torus2Mat);
+      torus2.rotation.x = Math.PI/1.7;
+      torus2.position.y = 1.7;
+      group.add(torus2);
+      particles.push({ mesh:torus2, mode:'swirltorus2', baseR:torusR*0.82, spinSpeed:1.8+sf*4 });
+
+      // 발밑에서 은은하게 맥동하는 파워 링 (평면 메시로 실제 바닥에 눕힘) - 커먼은 거의 안 보일 정도로 작고 흐릿함
+      const groundGlowMat = new THREE.MeshBasicMaterial({ map:baseGlowTex, color:0xffffff, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0.1+sf*0.3 });
+      const groundGlow = new THREE.Mesh(new THREE.PlaneGeometry(1,1), groundGlowMat);
+      groundGlow.rotation.x = -Math.PI/2;
+      groundGlow.position.y = 0.03;
+      const gScale = 0.8 + sf*4.8;
+      groundGlow.scale.set(gScale, gScale, 1);
+      group.add(groundGlow);
+      particles.push({ mesh:groundGlow, mode:'powerpulse', baseScale:gScale });
+
+      // 위로 솟구치는 에너지 기둥
+      const columnScaleY = 0.7 + sf*6.5;
+      const column = makeAuraSprite(baseGlowTex, baseGlowColor, 1.0, 0.05+sf*0.32);
+      column.scale.set(0.35+sf*0.5, columnScaleY, 1);
+      column.position.y = columnScaleY*0.28;
+      group.add(column);
+      particles.push({ mesh:column, mode:'energycolumn', baseScaleY:columnScaleY, baseOpacity:0.05+sf*0.32 });
+
+      // 주기적으로 터져나가는 파워 펄스 링 (발밑 마법진처럼)
+      const pulseRingMat = new THREE.MeshBasicMaterial({ map:ringTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, opacity:0 });
+      const pulseRing = new THREE.Mesh(new THREE.PlaneGeometry(1,1), pulseRingMat);
+      pulseRing.rotation.x = -Math.PI/2;
+      pulseRing.position.y = 0.04;
+      group.add(pulseRing);
+      particles.push({ mesh:pulseRing, mode:'powerburst', maxSize:1.0+sf*9, period:3.2-sf*1.8 });
+
+      // ---- 시그니처 입체 구조물: 4개 계열(궤도링/크리스탈/기둥+마법진/구체+번개) 중 등급에 배정된 것 ----
+      const fam = tier.family;
+      if (fam === 'orbital') addOrbitalFamily(group, particles, tier, baseGlowColor, sf);
+      else if (fam === 'crystal') addCrystalFamily(group, particles, tier, baseGlowColor, sf);
+      else if (fam === 'pillar') addPillarFamily(group, particles, tier, baseGlowColor, ringTex, sf);
+      else if (fam === 'sphere') addSphereLightningFamily(group, particles, tier, baseGlowColor, sf);
+
+      // ---- 위로 아지랑이처럼 솔솔 올라가며 사라지는 반짝임 스트림 (바깥 레이어라 느긋하게) ----
+      const risingCount = 3 + Math.floor(sf*14);
+      for (let i=0;i<risingCount;i++){
+        const a = Math.random()*Math.PI*2, r = 0.2+Math.random()*0.6;
+        const s = makeAuraSprite(baseGlowTex, baseGlowColor, 0.07+Math.random()*0.05, 0);
+        s.position.set(Math.cos(a)*r, 0, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'bubble', baseX:Math.cos(a)*r, baseZ:Math.sin(a)*r, speed:0.3+Math.random()*0.3, wob:0.1+Math.random()*0.14, cycleT:Math.random()*3, maxH:1.4+sf*1.2+Math.random()*0.4 });
+      }
+
+      // ---- ③ Sparkle: 불규칙하게 요동치는 외곽 파티클(크기/투명도/속도 전부 제각각, 가장 바깥이라 가장 느긋하게 부유) ----
+      const sparkCount = 5 + Math.floor(sf*20);
+      for (let i=0;i<sparkCount;i++){
+        const a = Math.random()*Math.PI*2, r = 0.7+Math.random()*(0.4+sf*0.9), h = 0.2+Math.random()*2.3;
+        const baseSz = 0.08+Math.random()*0.07;
+        const s = makeAuraSprite(baseGlowTex, baseGlowColor, baseSz, 0.5);
+        s.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(s);
+        particles.push({
+          mesh:s, mode:'erraticsparkle', orbitR:r, orbitA:a, baseH:h, baseSz,
+          freq1: 0.6+Math.random()*1.8, freq2: 1.1+Math.random()*2.6,
+          phase:Math.random()*Math.PI*2, phase2:Math.random()*Math.PI*2,
+          orbitSpeed:(0.15+Math.random()*0.35)*(Math.random()<0.5?1:-1)
+        });
+      }
+
+      // 등급이 높을수록 실제로 주변을 밝히는 빛
+      const powerLight = new THREE.PointLight(baseGlowColor, 0.25+tier.order*0.045, 4+tier.order*0.6, 2);
+      powerLight.position.y = 1.4;
+      group.add(powerLight);
+      particles.push({ mesh:null, mode:'powerlight', light:powerLight, baseIntensity:0.25+tier.order*0.045 });
+    }
+
+    // 뮤테이션(Silver/Gold/Blood)이 있으면 기본 등급 이펙트 위에 전용 색상 반짝임을 추가로 덧씌움
+    if (aura.mutation){
+      const mutTex = makeGlowTexture(aura.mutation.color);
+      for (let i=0;i<12;i++){
+        const a = Math.random()*Math.PI*2, r = 0.6+Math.random()*0.6, h = 0.4+Math.random()*2.0;
+        const s = makeAuraSprite(mutTex, aura.mutation.color, 0.13+Math.random()*0.07, 0.6);
+        s.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+        group.add(s);
+        particles.push({ mesh:s, mode:'twinkle', orbitR:r, orbitA:a, baseH:h, phase:Math.random()*Math.PI*2 });
+      }
+    }
+
+    scene.add(group);
+    currentAuraEffect = { group, tier, particles, t: Math.random()*10 };
+  }
+
+  function updateAuraEffect(dt){
+    if (!currentAuraEffect) return;
+    const fx = currentAuraEffect;
+    fx.t += dt;
+    fx.group.position.set(pos.x, pos.y, pos.z);
+    const t = fx.t;
+
+    for (const p of fx.particles){
+      switch (p.mode){
+        case 'jitter':
+          p.mesh.position.x = p.baseX + Math.sin(t*6+p.phase)*0.03;
+          p.mesh.position.z = p.baseZ + Math.cos(t*5+p.phase)*0.03;
+          p.mesh.material.opacity = 0.3 + 0.25*Math.sin(t*4+p.phase);
+          break;
+        case 'twinkle':
+          p.mesh.material.opacity = Math.max(0.05, 0.5 + 0.5*Math.sin(t*3+p.phase));
+          p.orbitA += dt*0.15;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t*1.2+p.phase)*0.15;
+          break;
+        case 'coldair': {
+          const cyc = (t*0.5 + p.phase) % (Math.PI*2);
+          p.mesh.position.set(Math.cos(cyc)*0.9, p.h, Math.sin(cyc)*0.9);
+          p.mesh.material.rotation = cyc;
+          p.mesh.material.opacity = 0.25*Math.max(0,Math.sin(cyc))+0.08;
+          break;
+        }
+        case 'rise':
+          p.mesh.position.y += dt*p.speed;
+          if (p.mesh.position.y > 2.2) p.mesh.position.y = 0;
+          p.mesh.position.x = p.baseX + Math.sin(t*2+p.phase)*p.wob;
+          p.mesh.position.z = p.baseZ + Math.cos(t*2+p.phase)*p.wob;
+          break;
+        case 'bubble': {
+          // 각자 독립된 주기: 발밑에서 서서히 페이드인 → 위로 올라가며 좌우로 살짝 흔들림 → 꼭대기에서 톡 터지듯 페이드아웃 → 대기 후 재시작
+          const cycleLen = p.maxH / p.speed + 0.8; // 상승 시간 + 대기 시간
+          p.cycleT += dt;
+          if (p.cycleT > cycleLen) p.cycleT -= cycleLen;
+          const riseT = Math.min(p.cycleT, p.maxH / p.speed);
+          const h = riseT * p.speed;
+          p.mesh.position.y = h;
+          p.mesh.position.x = p.baseX + Math.sin(t*1.6+p.phase)*p.wob;
+          p.mesh.position.z = p.baseZ + Math.cos(t*1.6+p.phase)*p.wob;
+          const fadeIn = Math.min(1, riseT*3);
+          const fadeOut = Math.min(1, (p.maxH/p.speed - riseT)*4);
+          p.mesh.material.opacity = 0.55 * Math.min(fadeIn, fadeOut) * (p.cycleT <= p.maxH/p.speed ? 1 : 0);
+          break;
+        }
+        case 'wave': {
+          const cyc = ((t*0.7)+p.phase) % 1.4 / 1.4;
+          const s = 0.3 + cyc*2.4;
+          p.mesh.scale.set(s,s,1);
+          p.mesh.material.opacity = 0.7*(1-cyc);
+          break;
+        }
+        case 'droplet': {
+          const cyc = ((t*0.6)+p.delay) % 2;
+          p.mesh.material.opacity = cyc < 0.3 ? (0.3-cyc)*2 : 0;
+          p.mesh.position.y = cyc < 0.3 ? cyc*1.2 : 0;
+          break;
+        }
+        case 'ringspin':
+          p.mesh.rotation.z += dt * (p.fast ? 1.6 : (p.slow ? 0.08 : 0.4));
+          break;
+        case 'gildedspark': {
+          // 은은하게 팡 하고 터졌다 사라지는 황금 스파크
+          const cyc = (t*1.5 + p.delay) % 2.5;
+          if (cyc < 0.15) p.mesh.material.opacity = (cyc/0.15)*0.85;
+          else if (cyc < 0.3) p.mesh.material.opacity = (1-(cyc-0.15)/0.15)*0.85;
+          else {
+            p.mesh.material.opacity = 0;
+            if (cyc > 2.3){
+              const a = Math.random()*Math.PI*2;
+              p.mesh.position.set(Math.cos(a)*p.baseR, p.baseH, Math.sin(a)*p.baseR);
+            }
+          }
+          break;
+        }
+        case 'icecrystal':
+          // 잔잔히 회전하는 얼음 결정체 (느긋한 궤도 + 느린 자전)
+          p.orbitA += dt*0.1;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t*0.5+p.orbitA)*0.08;
+          p.mesh.rotation.y += dt*p.spin;
+          break;
+        case 'laserline':
+          p.mesh.rotation.y = t*0.6 + p.angle;
+          p.mesh.material.opacity = 0.5 + 0.4*Math.sin(t*10+p.angle*3); // 진동
+          break;
+        case 'circuitorbit':
+          p.mesh.rotation.z += dt*p.speed;
+          break;
+        case 'orbitring':
+          p.orbitA += dt*0.5;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          break;
+        case 'static':
+          break;
+        case 'orbit':
+          p.orbitPhase += dt*p.speed;
+          p.mesh.position.set(Math.cos(p.orbitPhase)*p.orbitR, p.h+Math.sin(p.orbitPhase*2)*0.1, Math.sin(p.orbitPhase)*p.orbitR);
+          break;
+        case 'shard':
+          p.orbitA += dt*0.25;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t+p.orbitA)*0.1;
+          p.mesh.material.rotation += dt*p.spin;
+          p.mesh.material.opacity = 0.4+0.4*Math.abs(Math.sin(t*2+p.orbitA*3));
+          break;
+        case 'crystal':
+          p.orbitA += dt*0.18;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t*0.9+p.orbitA)*0.15;
+          p.mesh.rotation.y += dt*p.spin;
+          p.mesh.rotation.x += dt*p.spin*0.4;
+          p.mesh.material.emissiveIntensity = 0.25 + 0.25*Math.abs(Math.sin(t*1.6+p.orbitA*2));
+          break;
+        case 'amberdrift':
+          p.orbitA += dt*0.06; // 굳어있는 느낌으로 아주 천천히
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t*0.4+p.orbitA)*0.05;
+          p.mesh.rotation.y += dt*p.spin*0.2;
+          p.mesh.material.emissiveIntensity = 0.3 + 0.2*Math.abs(Math.sin(t*0.8+p.orbitA*2));
+          break;
+        case 'petal':
+          p.orbitA += dt*0.22;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.position.y = p.baseH + Math.sin(t*1.1+p.phase)*0.2;
+          p.mesh.rotation.y = t*0.8 + p.phase;
+          p.mesh.rotation.x = Math.sin(t*1.6+p.phase)*0.6;
+          break;
+        case 'sway':
+          p.mesh.rotation.y += dt*0.15;
+          break;
+        case 'drift':
+          p.mesh.position.x += p.dx*dt*0.3;
+          p.mesh.position.y += p.dy*dt*0.3;
+          p.mesh.position.z += p.dz*dt*0.3;
+          if (Math.hypot(p.mesh.position.x,p.mesh.position.z) > 1.6){ p.dx*=-1; p.dz*=-1; }
+          if (p.mesh.position.y > 2.1 || p.mesh.position.y < 0.2) p.dy *= -1;
+          break;
+        case 'flame':
+          p.mesh.position.y += dt*p.speed;
+          p.mesh.position.x = Math.sin(t*3+p.phase)*p.wob*0.3;
+          p.mesh.position.z = Math.cos(t*3+p.phase)*p.wob*0.3;
+          p.mesh.material.opacity = Math.max(0, 0.8*(1 - p.mesh.position.y/1.4));
+          if (p.mesh.position.y > 1.4){ p.mesh.position.y = 0; }
+          break;
+        case 'light':
+          p.light.intensity = 0.9 + Math.sin(t*7)*0.4 + Math.sin(t*13.3)*0.25;
+          if (Math.random()<0.015) p.light.intensity *= 0.3; // 가끔 훅 꺼졌다 켜짐
+          break;
+        case 'flickerdot':
+          p.mesh.material.opacity = 0.4 + 0.4*Math.max(0,Math.sin(t*8+p.phase));
+          break;
+        case 'mist':
+          p.orbitA += dt*0.2;
+          p.mesh.position.x = Math.cos(p.orbitA)*0.4;
+          p.mesh.position.z = Math.sin(p.orbitA)*0.4;
+          p.mesh.position.y = 0.6 + Math.sin(t*0.8+p.orbitA)*0.25;
+          break;
+        case 'windspiral':
+          p.phase += dt*3.2;
+          p.mesh.position.set(Math.cos(p.phase)*0.7, 0.8+Math.sin(p.phase*2)*0.7, Math.sin(p.phase)*0.7);
+          p.mesh.material.rotation = p.phase;
+          break;
+        case 'skyabove':
+          p.mesh.rotation.z += dt*0.15;
+          p.mesh.position.y = 3.3 + Math.sin(t*0.8)*0.08;
+          p.mesh.material.opacity = 0.7 + 0.1*Math.sin(t*1.1);
+          break;
+        case 'spark': {
+          const cyc = (t*2 + p.delay) % 3;
+          if (cyc < 0.12){
+            if (p.mesh.material.opacity === 0){
+              const a = Math.random()*Math.PI*2, r = 0.3+Math.random()*0.6, h = 0.3+Math.random()*1.8;
+              p.mesh.position.set(Math.cos(a)*r, h, Math.sin(a)*r);
+              p.mesh.material.rotation = Math.random()*Math.PI*2;
+            }
+            p.mesh.material.opacity = 0.9;
+          } else {
+            p.mesh.material.opacity = 0;
+          }
+          break;
+        }
+        case 'levitate':
+          p.mesh.position.y = 0.06 + Math.max(0, Math.sin(t*1.1+p.phase))*0.4;
+          break;
+        case 'beam': {
+          const ang = p.angle + t*0.3;
+          p.mesh.position.set(Math.cos(ang)*1.1, 1.6, Math.sin(ang)*1.1);
+          p.mesh.material.rotation = ang;
+          p.mesh.material.opacity = 0.4+0.3*Math.sin(t*2+p.angle);
+          break;
+        }
+        case 'core':
+          p.mesh.material.opacity = 0.6+0.3*Math.sin(t*3);
+          break;
+        case 'radhalo':
+          p.mesh.rotation.z += dt * p.speed;
+          p.mesh.position.y = 2.9 + Math.sin(t*0.7)*0.06;
+          break;
+        case 'orbitalring': {
+          // 궤도형: 회전 + 숨쉬듯 천천히 커졌다 작아짐
+          if (p.axis === 'z') p.mesh.rotation.z += dt*p.speed; else p.mesh.rotation.x += dt*p.speed;
+          const breath = 1 + 0.08*Math.sin(t*1.3+p.breathPhase);
+          p.mesh.scale.set(breath, breath, breath);
+          break;
+        }
+        case 'crystaljitter':
+          // 크리스탈형: 궤도를 돌며 미세하게 불규칙 진동(잘게 떨림)
+          p.orbitA += dt*0.14;
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR + Math.sin(t*9+p.jitterPhase)*0.02;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR + Math.cos(t*9+p.jitterPhase)*0.02;
+          p.mesh.position.y = p.baseH + Math.sin(t*8+p.jitterPhase)*0.035;
+          p.mesh.rotation.y += dt*p.spin;
+          p.mesh.rotation.x += dt*p.spin*0.35;
+          p.mesh.material.emissiveIntensity = 0.25 + 0.25*Math.abs(Math.sin(t*1.6+p.orbitA*2));
+          break;
+        case 'pillarburst': {
+          // 기둥형: 빠르게 수축했다가 위로 퍼지는 반복 버스트
+          const cyc = (t*0.8) % 2 / 2;
+          const s = cyc < 0.12 ? (cyc/0.12)*1.1 : Math.max(0.35, 1 - (cyc-0.12)/1.88*0.65);
+          p.mesh.scale.set(s, 1, s);
+          p.mesh.material.opacity = p.baseOpacity * (0.5+0.5*Math.sin(t*3.2));
+          break;
+        }
+        case 'plasmaorb':
+          // 구체형: 중심에서 퍼져나가듯 궤도 + 불규칙 명멸
+          p.orbitA += dt*(p.orbitSpeed || 0.4);
+          p.mesh.position.x = Math.cos(p.orbitA)*p.orbitR;
+          p.mesh.position.z = Math.sin(p.orbitA)*p.orbitR;
+          p.mesh.material.opacity = 0.35 + 0.5*Math.abs(Math.sin(t*5.5+p.flickerPhase)*Math.sin(t*2.1+p.flickerPhase));
+          break;
+        case 'lightningflash': {
+          // 번개형: 짧게 번쩍였다가 대부분 시간은 사라져 있음(불규칙 점멸)
+          const cyc = (t*1.4 + p.delay) % 2.6;
+          p.mesh.material.opacity = cyc < 0.07 ? 0.9 : 0;
+          break;
+        }
+        case 'voidcore':
+          p.mesh.scale.setScalar(1 + 0.05*Math.sin(t*1.1));
+          break;
+        case 'voidsuck': {
+          // 바깥에서 시작해 서서히 중심(블랙홀)으로 빨려들어가며 작아짐
+          const cyc = ((t + p.cycleT) % p.period) / p.period;
+          const r = p.r0 * (1 - cyc);
+          const a = p.angle0 + cyc*4.5; // 빨려들며 나선으로 휘어짐
+          p.mesh.position.set(Math.cos(a)*r, 1.5 + Math.sin(cyc*Math.PI)*0.15, Math.sin(a)*r);
+          p.mesh.material.opacity = 0.75 * (1-cyc*0.3);
+          const sc = 1 - cyc*0.7;
+          p.mesh.scale.set(sc, sc, 1);
+          break;
+        }
+        case 'novacore':
+          p.mesh.material.opacity = 0.75 + 0.25*Math.sin(t*4);
+          break;
+        case 'novashock': {
+          const cyc = ((t*0.9)+p.delay) % 1.5 / 1.5;
+          const s = 0.3 + cyc*3.2;
+          p.mesh.scale.set(s,s,1);
+          p.mesh.material.opacity = Math.max(0, 0.8*(1-cyc));
+          break;
+        }
+        case 'novaburst': {
+          const cyc = ((t*1.3)+p.delay) % 1.6 / 1.6;
+          const dist = cyc*2.2;
+          p.mesh.position.set(Math.cos(p.angle)*dist, 1.6+Math.sin(p.tilt)*dist*0.6, Math.sin(p.angle)*dist);
+          p.mesh.material.opacity = Math.max(0, 0.85*(1-cyc*1.1));
+          break;
+        }
+        case 'glitchjump':
+          // 순간이동하듯 깨지는 움직임: 부드럽게 움직이지 않고 갑자기 다음 위치로 뚝뚝 끊기며 점프
+          p.nextJump -= dt;
+          if (p.nextJump <= 0){
+            p.mesh.position.set((Math.random()-0.5)*1.4, p.baseH + (Math.random()-0.5)*0.6, (Math.random()-0.5)*1.4);
+            p.nextJump = 0.06 + Math.random()*0.25;
+            p.mesh.material.opacity = Math.random() < 0.2 ? 0.2 : 0.85;
+          }
+          break;
+        case 'glitchcore':
+          // RGB 색분리 코어: 두 색이 미세하게 흔들리며 어긋남
+          p.mesh.position.x = p.dx + (Math.random()-0.5)*0.02;
+          p.mesh.material.opacity = Math.random() < 0.08 ? 0.15 : 0.6;
+          break;
+        case 'orbitplanet':
+          p.phase += dt*p.speed;
+          p.mesh.position.set(
+            Math.cos(p.phase)*p.orbitR,
+            1.6 + Math.sin(p.phase)*p.orbitR*p.tiltX*0.4,
+            Math.sin(p.phase)*p.orbitR*Math.cos(p.tiltX)
+          );
+          break;
+        case 'clockhand':
+          p.mesh.rotation.z = -t*p.speed;
+          break;
+        case 'clocktick': {
+          // 초침: 부드럽게 돌지 않고 진짜 시계처럼 똑딱 단위로 점프
+          const tickIdx = Math.floor(t*1.2);
+          p.mesh.rotation.z = -tickIdx * (Math.PI*2/12);
+          break;
+        }
+        case 'powerpulse': {
+          const s = p.baseScale * (1 + 0.06*Math.sin(t*1.8));
+          p.mesh.scale.set(s, s, 1);
+          p.mesh.material.opacity = 0.2 + 0.12*Math.sin(t*1.8+1);
+          break;
+        }
+        case 'energycolumn':
+          p.mesh.material.opacity = p.baseOpacity * (0.7 + 0.3*Math.sin(t*2.4));
+          p.mesh.scale.y = p.baseScaleY * (0.9 + 0.1*Math.sin(t*1.3));
+          break;
+        case 'powerburst': {
+          const cyc = (t % p.period) / p.period;
+          const s = 0.4 + cyc*p.maxSize;
+          p.mesh.scale.set(s, s, 1);
+          p.mesh.material.opacity = Math.max(0, 0.5*(1-cyc));
+          break;
+        }
+        case 'powerlight':
+          p.light.intensity = p.baseIntensity * (0.85 + 0.15*Math.sin(t*2.2));
+          break;
+        case 'iconbadge': {
+          p.mesh.position.y = p.baseY + Math.sin(t*1.1)*0.06;
+          const pulse = 1 + 0.07*Math.sin(t*1.6);
+          p.mesh.scale.set(p.baseScale*pulse, p.baseScale*pulse, 1);
+          break;
+        }
+        case 'iconbadgeback':
+          p.mesh.position.y = p.baseY + Math.sin(t*1.1)*0.06;
+          p.mesh.material.rotation += dt*0.15;
+          break;
+        case 'nebuladrift':
+          p.mesh.material.rotation += dt*p.spin;
+          p.mesh.material.opacity = p.baseOpacity * (0.75 + 0.25*Math.sin(t*0.5+p.phase));
+          break;
+        case 'corepulse': {
+          // 여러 주파수의 사인파를 겹쳐서 불규칙하게 맥동하는 밝은 중심 광구 (안쪽 레이어라 등급 높을수록 훨씬 빠르게)
+          const ps = p.pulseSpeed || 3;
+          const wob = Math.sin(t*ps)*0.5 + Math.sin(t*ps*1.8+1.3)*0.3 + Math.sin(t*ps*0.6+2.6)*0.2;
+          const s = p.baseScale * (1 + wob*0.18);
+          p.mesh.scale.set(s, s, 1);
+          p.mesh.material.opacity = p.baseOpacity * (0.75 + 0.25*Math.sin(t*ps*1.35));
+          break;
+        }
+        case 'swirltorus':
+          p.mesh.rotation.z += dt * (p.spinSpeed || 2.6);
+          p.mesh.rotation.y += dt * 0.6;
+          p.mesh.position.y = 1.1 + Math.sin(t*1.4)*0.08;
+          break;
+        case 'swirltorus2':
+          p.mesh.rotation.z -= dt * (p.spinSpeed || 1.8);
+          p.mesh.rotation.x += dt * 0.9;
+          p.mesh.position.y = 1.7 + Math.sin(t*1.1+1.7)*0.1;
+          break;
+        case 'erraticsparkle': {
+          // 크기·투명도·궤도 속도가 제각각 불규칙하게 요동치는 외곽 파티클 (가장 바깥이라 가장 느긋함)
+          p.orbitA += dt * p.orbitSpeed * (1 + Math.sin(t*p.freq1+p.phase)*0.6);
+          const rr = p.orbitR * (1 + Math.sin(t*p.freq2+p.phase2)*0.15);
+          p.mesh.position.x = Math.cos(p.orbitA)*rr;
+          p.mesh.position.z = Math.sin(p.orbitA)*rr;
+          p.mesh.position.y = p.baseH + Math.sin(t*p.freq1*0.7+p.phase)*0.25;
+          const flick = Math.max(0, Math.sin(t*p.freq2+p.phase)) * Math.max(0, Math.sin(t*p.freq1*1.3+p.phase2));
+          p.mesh.material.opacity = 0.15 + flick*0.65;
+          const sc = p.baseSz * (0.7 + flick*0.9);
+          p.mesh.scale.set(sc, sc, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  // ---- 머리 위 이름/확률 태그 ----
+  const auraTag = document.getElementById('auraTag');
+  const auraBadge = document.getElementById('auraBadge');
+  let auraTagVisible = false;
+  let auraTagTimer = null;
+  function updateAuraTag(){
+    if (!auraTagVisible) return;
+    const headWorld = new THREE.Vector3(pos.x, pos.y + head.position.y + HEAD_H2*0.7, pos.z);
+    headWorld.project(camera);
+    if (headWorld.z > 1){ auraTag.style.opacity = '0'; return; }
+    const sx = (headWorld.x*0.5 + 0.5) * window.innerWidth;
+    const sy = (-headWorld.y*0.5 + 0.5) * window.innerHeight;
+    auraTag.style.left = sx + 'px';
+    auraTag.style.top = sy + 'px';
+  }
+  function auraDisplayName(aura){
+    return aura.mutation ? (aura.mutation.name + ' ' + aura.name) : aura.name;
+  }
+  function updateAuraBadge(aura){
+    const tier = AURA_TIERS[aura.tier];
+    auraBadge.innerHTML = '';
+    const dot = document.createElement('span');
+    dot.className = 'badgeDot';
+    const dotColor = aura.mutation ? hexStr(aura.mutation.color) : hexStr(tier.color);
+    dot.style.background = dotColor;
+    dot.style.boxShadow = '0 0 8px ' + dotColor;
+    auraBadge.appendChild(dot);
+    auraBadge.appendChild(document.createTextNode(auraDisplayName(aura) + ' '));
+    const em = document.createElement('em');
+    em.textContent = '(' + tier.label + ')';
+    auraBadge.appendChild(em);
+    auraBadge.style.display = 'flex';
+  }
+
+  // ---- 도감(수집/장착) ----
+  const ownedAuras = {}; // 아우라 이름 -> 보유 개수
+  let equippedAuraName = null;
+
+  function recordOwned(aura){
+    ownedAuras[aura.name] = (ownedAuras[aura.name] || 0) + 1;
+  }
+  // 뽑기 없이 도감에서 바로 장착
+  function equipAura(aura){
+    equippedAuraName = aura.name;
+    createAuraEffect(aura);
+    applyEnvironmentForAura(aura);
+    applyAuraTrait(aura);
+    updateAuraBadge(aura);
+    renderDex();
+    showAuraTag(aura);
+  }
+
+  function showAuraTag(aura){
+    auraTag.className = 'tier-' + aura.tier;
+    const tier = AURA_TIERS[aura.tier];
+    const probLabel = aura.mutation ? fmtProb(aura.n) + ' (' + aura.mutation.name + ' 1/' + aura.mutation.n.toLocaleString('ko-KR') + ')' : fmtProb(aura.n);
+    const traitLabel = (tier.trait || {}).label || '';
+    const fontClass = 'font-' + (tier.font || 'cursive');
+    const nameHtml = '<div class="tagName ' + fontClass + '">' + auraDisplayName(aura) + '</div>';
+    auraTag.innerHTML = (tier.wind ? '<span class="windWrap">' + nameHtml + '</span>' : nameHtml) +
+      '<div class="tagProb">' + probLabel + '</div>' + (traitLabel ? '<div class="tagTrait">' + traitLabel + '</div>' : '');
+    auraTagVisible = true;
+    updateAuraTag();
+    requestAnimationFrame(()=>{
+      auraTag.style.opacity = '1';
+      auraTag.style.transform = 'translate(-50%, -100%) scale(1)';
+    });
+    // 장착 중인 동안 계속 표시됨 (자동으로 사라지지 않음)
+    clearTimeout(auraTagTimer);
+  }
+
+  function showAuraResult(aura){
+    recordOwned(aura);
+    equippedAuraName = aura.name;
+    createAuraEffect(aura);
+    applyEnvironmentForAura(aura);
+    applyAuraTrait(aura);
+    updateAuraBadge(aura);
+    renderDex();
+    showAuraTag(aura);
+  }
+
+  // ---- 도감 UI ----
+  const dexBtn = document.getElementById('dexBtn');
+  const dexOverlay = document.getElementById('dexOverlay');
+  const dexCloseBtn = document.getElementById('dexCloseBtn');
+  const dexGrid = document.getElementById('dexGrid');
+  const dexProgress = document.getElementById('dexProgress');
+  const DEX_TIER_ORDER = Object.keys(AURA_TIERS).sort((a,b)=>AURA_TIERS[a].order-AURA_TIERS[b].order);
+
+  function renderDex(){
+    dexGrid.innerHTML = '';
+    let ownedCount = 0;
+    DEX_TIER_ORDER.forEach(tierKey=>{
+      const tier = AURA_TIERS[tierKey];
+      const row = document.createElement('div');
+      const label = document.createElement('div');
+      label.className = 'dexTierLabel';
+      label.style.color = hexStr(tier.color);
+      label.textContent = tier.label;
+      row.appendChild(label);
+      const items = document.createElement('div');
+      items.className = 'dexTierItems';
+      AURA_LIST.filter(a => a.tier === tierKey).forEach(a=>{
+        const owned = ownedAuras[a.name] || 0;
+        if (owned > 0) ownedCount++;
+        const card = document.createElement('div');
+        card.className = 'dexCard tier-' + a.tier + (owned > 0 ? '' : ' locked') + (equippedAuraName === a.name ? ' equipped' : '');
+        card.innerHTML =
+          '<div class="dexSwatch"></div>' +
+          '<div class="dexName">' + (owned > 0 ? a.name : '???') + '</div>' +
+          '<div class="dexProb">' + fmtProb(a.n) + '</div>' +
+          (owned > 0 && tier.trait && tier.trait.label ? '<div class="dexTrait">' + tier.trait.label + '</div>' : '') +
+          (owned > 0 ? '<div class="dexCount">x' + owned + '</div>' : '');
+        if (owned > 0) card.addEventListener('click', ()=> equipAura(a));
+        items.appendChild(card);
+      });
+      row.appendChild(items);
+      dexGrid.appendChild(row);
+    });
+    dexProgress.textContent = '수집 ' + ownedCount + ' / ' + AURA_LIST.length;
+  }
+
+  function openDex(){
+    renderDex();
+    dexOverlay.style.display = 'flex';
+    requestAnimationFrame(()=>{ dexOverlay.classList.add('show'); });
+  }
+  function closeDex(){
+    dexOverlay.classList.remove('show');
+    setTimeout(()=>{ dexOverlay.style.display = 'none'; }, 300);
+  }
+  function toggleDex(){ dexOverlay.classList.contains('show') ? closeDex() : openDex(); }
+
+  dexBtn.addEventListener('click', openDex);
+  dexCloseBtn.addEventListener('click', closeDex);
+  dexOverlay.addEventListener('click', e=>{ if (e.target === dexOverlay) closeDex(); });
+
+  // ---- 물약 상점 UI ----
+  const shopBtn = document.getElementById('shopBtn');
+  const shopOverlay = document.getElementById('shopOverlay');
+  const shopCloseBtn = document.getElementById('shopCloseBtn');
+  const shopList = document.getElementById('shopList');
+
+  function renderShop(){
+    shopList.innerHTML = '';
+    POTIONS.forEach(p=>{
+      const row = document.createElement('div');
+      row.className = 'shopItem' + (p.kind === 'godly' ? ' godly' : '');
+      const iconClass = 'potionIcon kind-' + p.kind;
+      row.innerHTML =
+        '<div class="' + iconClass + '"></div>' +
+        '<div class="shopInfo">' +
+          '<div class="shopName">' + p.name + (p.kind === 'godly' ? ' ✨' : '') + '</div>' +
+          '<div class="shopDesc">' + p.desc + ' · 보유 x' + (potionInventory[p.id] || 0) + '</div>' +
+        '</div>' +
+        '<button class="shopBuyBtn" type="button">무료 획득</button>';
+      const buyBtn = row.querySelector('.shopBuyBtn');
+      buyBtn.addEventListener('click', ()=>{
+        addPotion(p.id);
+        buyBtn.textContent = '✓ 획득!';
+        row.querySelector('.shopDesc').textContent = p.desc + ' · 보유 x' + potionInventory[p.id];
+        setTimeout(()=>{ buyBtn.textContent = '무료 획득'; }, 700);
+      });
+      shopList.appendChild(row);
+    });
+  }
+  function openShop(){
+    renderShop();
+    shopOverlay.style.display = 'flex';
+    requestAnimationFrame(()=>{ shopOverlay.classList.add('show'); });
+  }
+  function closeShop(){
+    shopOverlay.classList.remove('show');
+    setTimeout(()=>{ shopOverlay.style.display = 'none'; }, 300);
+  }
+  function toggleShop(){ shopOverlay.classList.contains('show') ? closeShop() : openShop(); }
+  shopBtn.addEventListener('click', openShop);
+  shopCloseBtn.addEventListener('click', closeShop);
+  shopOverlay.addEventListener('click', e=>{ if (e.target === shopOverlay) closeShop(); });
+
+  // ---- 인벤토리 UI (도감과 별개, 여기서 물약을 사용) ----
+  const invBtn = document.getElementById('invBtn');
+  const invOverlay = document.getElementById('invOverlay');
+  const invCloseBtn = document.getElementById('invCloseBtn');
+  const invGrid = document.getElementById('invGrid');
+  const invEmpty = document.getElementById('invEmpty');
+
+  function renderInventory(){
+    const ids = Object.keys(potionInventory);
+    invGrid.style.display = ids.length ? 'grid' : 'none';
+    invEmpty.style.display = ids.length ? 'none' : 'block';
+    invGrid.innerHTML = '';
+    ids.forEach(id=>{
+      const p = potionById[id];
+      const count = potionInventory[id];
+      const card = document.createElement('div');
+      card.className = 'invCard' + (p.kind === 'godly' ? ' godly' : '');
+      card.innerHTML =
+        '<div class="invCount">x' + count + '</div>' +
+        '<div class="potionIcon kind-' + p.kind + '"></div>' +
+        '<div class="invName">' + p.name + '</div>' +
+        '<div class="invUseHint">탭해서 사용</div>';
+      card.addEventListener('click', ()=> usePotion(id));
+      invGrid.appendChild(card);
+    });
+  }
+  function openInventory(){
+    renderInventory();
+    invOverlay.style.display = 'flex';
+    requestAnimationFrame(()=>{ invOverlay.classList.add('show'); });
+  }
+  function closeInventory(){
+    invOverlay.classList.remove('show');
+    setTimeout(()=>{ invOverlay.style.display = 'none'; }, 300);
+  }
+  function toggleInventory(){ invOverlay.classList.contains('show') ? closeInventory() : openInventory(); }
+  invBtn.addEventListener('click', openInventory);
+  invCloseBtn.addEventListener('click', closeInventory);
+  invOverlay.addEventListener('click', e=>{ if (e.target === invOverlay) closeInventory(); });
+
+  // ---- 뽑기 사운드(틱) ----
+  let audioCtx = null;
+  function playTick(freq){
+    try{
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.05;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.09);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    } catch(e){}
+  }
+
+  // ---- 슬롯머신 릴 뽑기 연출 ----
+  const gachaBtn = document.getElementById('gachaBtn');
+  const gachaOverlay = document.getElementById('gachaOverlay');
+  const gachaReel = document.getElementById('gachaReel');
+  let gachaSpinning = false;
+  const REEL_ITEM_H = 68;
+  const REEL_CENTER_SLOT = 2;
+
+  function easeOutQuint(t){ return 1 - Math.pow(1-t, 5); }
+
+  async function runGacha(){
+    if (gachaSpinning) return;
+    gachaSpinning = true;
+    gachaBtn.disabled = true;
+
+    // 멀티플라이어 체인 (10x → 100x → 1000x ...) - 발동하면 릴 스핀 전에 화려하게 먼저 보여주고, 실제 확률에도 반영됨
+    const chainMult = rollMultiplierChain();
+    if (chainMult > 1){
+      await playMultiplierChain(chainMult);
+    }
+
+    const won = Object.assign({}, weightedRandomAura(chainMult));
+    won.mutation = rollMutation();
+    won.chainMult = chainMult;
+
+    const seqLen = 34;
+    const seq = [];
+    for (let i=0; i<seqLen-1; i++) seq.push(weightedRandomAura(chainMult));
+    seq.push(won);
+
+    gachaReel.innerHTML = '';
+    gachaReel.style.transform = 'translateY(' + (REEL_CENTER_SLOT*REEL_ITEM_H) + 'px)';
+    seq.forEach(a=>{
+      const div = document.createElement('div');
+      div.className = 'reelItem tier-' + a.tier;
+      const displayName = a.mutation ? (a.mutation.name + ' ' + a.name) : a.name;
+      div.innerHTML = '<span class="reelName">'+displayName+'</span><span class="reelProb">'+fmtProb(a.n)+'</span>';
+      gachaReel.appendChild(div);
+    });
+
+    gachaOverlay.style.display = 'flex';
+    requestAnimationFrame(()=>{ gachaOverlay.classList.add('show'); });
+
+    const targetIndex = seq.length - 1;
+    const targetScroll = targetIndex * REEL_ITEM_H;
+    const DURATION = 3400 * activeSpeedMult();
+    const startTime = performance.now();
+    let lastIdx = -1;
+
+    function step(now){
+      const el = now - startTime;
+      const t = Math.min(1, el / DURATION);
+      const eased = easeOutQuint(t);
+      const scroll = targetScroll * eased;
+      gachaReel.style.transform = 'translateY(' + (-scroll + REEL_CENTER_SLOT*REEL_ITEM_H) + 'px)';
+
+      const idx = Math.min(targetIndex, Math.floor(scroll / REEL_ITEM_H));
+      if (idx !== lastIdx){
+        lastIdx = idx;
+        playTick(420 + (1-t)*520);
+        const el2 = gachaReel.children[idx];
+        if (el2){
+          el2.classList.add('tickFlash');
+          setTimeout(()=>{ el2.classList.remove('tickFlash'); }, 150);
+        }
+      }
+
+      if (t < 1){
+        requestAnimationFrame(step);
+      } else {
+        finishGacha(won, seq);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function finishGacha(won, seq){
+    const winnerEl = gachaReel.children[seq.length-1];
+    if (winnerEl) winnerEl.classList.add('winner');
+    playTick(880);
+
+    setTimeout(()=>{
+      gachaOverlay.classList.remove('show');
+      setTimeout(()=>{
+        gachaOverlay.style.display = 'none';
+        gachaSpinning = false;
+        gachaBtn.disabled = false;
+        showAuraResult(won);
+      }, 380);
+    }, 900);
+  }
+
+  gachaBtn.addEventListener('click', runGacha);
+
+  // ---------- Animation state ----------
+  let walkT = 0;
+  let climbT = 0;
+  const speedTag = document.getElementById('speedTag');
+
+  const clock = new THREE.Clock();
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    // 시프트락: 카메라·캐릭터가 완전히 일체화되어 즉시 반응. 아닐 때: 로블록스 특유의 부드러운 회전 감쇠
+    const rotFollow = shiftLock ? 1 : Math.min(1, 16*dt);
+    camYaw += (rawYaw - camYaw) * rotFollow;
+    camPitch += (rawPitch - camPitch) * rotFollow;
+
+    // --- input vector (joystick + keyboard) ---
+    let inX = moveVec.x, inY = moveVec.y;
+    if (keys['KeyW']||keys['ArrowUp']) inY = -1;
+    if (keys['KeyS']||keys['ArrowDown']) inY = 1;
+    if (keys['KeyA']||keys['ArrowLeft']) inX = -1;
+    if (keys['KeyD']||keys['ArrowRight']) inX = 1;
+    if (gachaSpinning){ inX = 0; inY = 0; } // 가챠 연출 중에는 조작 정지
+    const inLen = Math.hypot(inX, inY);
+    if (inLen > 1){ inX/=inLen; inY/=inLen; }
+
+    // camera-relative movement direction
+    const forward = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+    const right = new THREE.Vector3(-Math.cos(camYaw), 0, Math.sin(camYaw));
+    const moveDir = new THREE.Vector3();
+    moveDir.addScaledVector(forward, -inY);
+    moveDir.addScaledVector(right, inX);
+    const moving = moveDir.lengthSq() > 0.0001;
+    if (moving) moveDir.normalize();
+
+    // acceleration/deceleration ramp (not robotic stop)
+    const targetVX = moveDir.x * WALK_SPEED * equippedSpeedMult;
+    const targetVZ = moveDir.z * WALK_SPEED * equippedSpeedMult;
+    const accel = moving ? 55 : 40; // 로블록스 기본 이동은 거의 즉시 목표속도로 스냅됨(찰진 느낌의 핵심)
+    curSpeed.x += (targetVX - curSpeed.x) * Math.min(1, accel*dt);
+    curSpeed.y += (targetVZ - curSpeed.y) * Math.min(1, accel*dt);
+
+    const nearTruss = getActiveTruss(pos.x, pos.z, pos.y, wasClimbing ? currentTruss : null);
+    if (trussExitCooldown > 0) trussExitCooldown = Math.max(0, trussExitCooldown - dt);
+
+    if (nearTruss && !wasClimbing){
+      // 방금 올라탐: 접근한 방향(트러스를 바라보는 방향)을 그대로 고정해서 매달림
+      const dx = nearTruss.x - pos.x, dz = nearTruss.z - pos.z;
+      mountFacing = Math.atan2(dx, dz);
+      currentTruss = nearTruss;
+    }
+
+    let gripOK = true;
+    if (nearTruss && shiftLock){
+      let diff = camYaw - mountFacing;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > 1.05){ // 약 60도 넘게 카메라를 돌리면 손을 놓침
+        gripOK = false;
+      }
+    }
+    onTruss = !!nearTruss && gripOK && trussExitCooldown <= 0;
+    wasClimbing = onTruss;
+    if (onTruss) currentTruss = nearTruss;
+
+    // 맨틀 트리거: 점프 정점 근처(상승력이 거의 소진된 시점)에서 손이 닿는 턱에 다가가면 매달려 기어오름 시작
+    // (점프 초반 최고 속도로 상승 중에 걸리면 점프+맨틀이 그대로 합산되어 지나치게 높이 올라가므로 정점 근처로 제한)
+    if (!mantling && !onTruss && !grounded && moving && velY < 8){
+      const mtx = pos.x + curSpeed.x * dt;
+      const mtz = pos.z + curSpeed.y * dt;
+      const ledge = tryMantle(mtx, mtz, pos.y);
+      if (ledge){
+        mantling = true;
+        mantleTimer = 0.38;
+        mantleStartPos.set(pos.x, pos.y, pos.z);
+        const cx = Math.max(ledge.minX + 0.3, Math.min(ledge.maxX - 0.3, mtx));
+        const cz = Math.max(ledge.minZ + 0.3, Math.min(ledge.maxZ - 0.3, mtz));
+        mantleEndPos.set(cx, ledge.topY, cz);
+        velY = 0;
+        curSpeed.set(0, 0);
+      }
+    }
+
+    if (mantling){
+      // ---------- 맨틀: 가까스로 닿은 턱을 붙잡고 기어올라감 ----------
+      mantleTimer -= dt;
+      const tt = Math.min(1, 1 - Math.max(0, mantleTimer) / 0.38);
+      // 앞부분은 위로, 뒷부분은 앞으로 - 자연스러운 걸쳐 오르기 궤적
+      const upT = Math.min(1, tt / 0.6);
+      const fwdT = Math.max(0, (tt - 0.4) / 0.6);
+      pos.x = mantleStartPos.x + (mantleEndPos.x - mantleStartPos.x) * fwdT;
+      pos.z = mantleStartPos.z + (mantleEndPos.z - mantleStartPos.z) * fwdT;
+      pos.y = mantleStartPos.y + (mantleEndPos.y - mantleStartPos.y) * upT;
+      velY = 0;
+      grounded = false;
+      if (tt >= 1){
+        mantling = false;
+        pos.copy(mantleEndPos);
+        grounded = true;
+        curSpeed.set(0, 0);
+      }
+    } else if (onTruss){
+      // ---------- 트러스 클라이밍 (로블록스 공식: WalkSpeed의 70% 속도로 수직 이동, W=위 S=아래) ----------
+      const t = currentTruss;
+      const climbSpeed = WALK_SPEED * 0.7;
+      // 트러스 표면 밖 고정 지점에 붙어서 오름 (안으로 빨려들어가지 않음)
+      const standOffset = t.halfW + CHAR_HALF_W + 0.05;
+      const standX = t.x - Math.sin(mountFacing) * standOffset;
+      const standZ = t.z - Math.cos(mountFacing) * standOffset;
+
+      const prevClimbY = pos.y;
+      let climbY = pos.y + (-inY) * climbSpeed * dt; // W(-inY>0)면 상승, S면 하강
+      climbY = Math.max(t.bottomY - 0.1, climbY); // 위쪽은 꼭대기에서 바로 멈추므로 별도 오버슈트 없음
+
+      // 천장 판정: 오르는 도중 진짜 낮은 천장이 있으면 머리를 박고 멈춤 (꼭대기 자체는 제외)
+      if (climbY > prevClimbY){
+        const ceilingHit = findCeiling(prevClimbY, climbY, standX, standZ, t.topCollider);
+        if (ceilingHit){
+          climbY = Math.min(climbY, ceilingHit.minY - CHAR_HEIGHT);
+        }
+      }
+
+      // 꼭대기에 도달하면 기둥 폭 그대로의 좁은 바닥에 착지 (별도 발판 없이 살짝만 잘못 디디면 떨어짐)
+      let landedOnTop = false;
+      if (climbY >= t.topY){
+        climbY = t.topY;
+        landedOnTop = true;
+      }
+
+      // 바닥 판정: 내려가는 도중 다른 발판(바닥)이 있으면 뚫고 내려가지 못하고 그 위에 멈춤
+      let landedOnFloor = false;
+      if (!landedOnTop && climbY < prevClimbY){
+        for (const c of colliders){
+          if (c === t.topCollider) continue;
+          const overlapXZ = (standX > c.minX - CHAR_HALF_W && standX < c.maxX + CHAR_HALF_W &&
+                              standZ > c.minZ - CHAR_HALF_W && standZ < c.maxZ + CHAR_HALF_W);
+          if (!overlapXZ) continue;
+          if (c.topY <= prevClimbY + 0.05 && c.topY > climbY){
+            climbY = c.topY;
+            landedOnFloor = true;
+            break;
+          }
+        }
+      }
+
+      if (landedOnTop){
+        pos.x = t.x; // 좁은 기둥 꼭대기 중앙에 정확히 섬
+        pos.z = t.z;
+      } else {
+        pos.x = standX;
+        pos.z = standZ;
+      }
+      pos.y = climbY;
+      velY = 0;
+      if (landedOnTop || landedOnFloor){
+        grounded = true;
+        trussExitCooldown = 0.15; // 착지 직후 바로 재부착되지 않게 (조심스럽게 다시 다가가야 다시 붙음)
+      } else {
+        grounded = false;
+      }
+      facing = mountFacing; // 올라탄 방향을 그대로 유지
+    } else {
+      const testX = pos.x + curSpeed.x * dt;
+      const testZ = pos.z + curSpeed.y * dt;
+
+      // 1) 수직 판정(착지/오토스텝/천장)을 새 XZ 기준으로 먼저 확정
+      const prevY = pos.y;
+      const stepTop = grounded ? tryStepUp(testX, testZ, pos.y) : null;
+      let newY;
+      if (stepTop !== null){
+        newY = stepTop; // 로블록스처럼 낮은 턱은 점프 없이 자동으로 올라감
+        velY = 0;
+        grounded = true;
+      } else {
+        velY += GRAVITY * dt;
+        newY = pos.y + velY * dt;
+        if (velY <= 0){
+          const landing = findLanding(prevY, newY, testX, testZ);
+          if (landing){
+            newY = landing.topY;
+            velY = 0;
+            grounded = true;
+            if (landing.type === 'checkpoint' || landing.type === 'start'){
+              respawnPos.set((landing.minX+landing.maxX)/2, landing.topY, (landing.minZ+landing.maxZ)/2);
+            }
+            if (landing.type === 'finish' && !finished){
+              finished = true;
+              speedTag.textContent = '🏁 도착!';
+            }
+          } else {
+            grounded = false;
+          }
+        } else {
+          const ceiling = findCeiling(prevY, newY, testX, testZ);
+          if (ceiling){
+            newY = ceiling.minY - CHAR_HEIGHT;
+            velY = 0;
+          }
+          grounded = false;
+        }
+      }
+
+      // 2) 수평 이동/벽 충돌은 확정된 최종 Y를 기준으로 마지막에 적용
+      //    (착지 직전에 옆면 벽으로 먼저 오판정되던 버그 수정 지점)
+      pos.x = testX;
+      pos.z = testZ;
+      pos.y = newY;
+      if (stepTop === null) resolveWalls(pos);
+
+      // 낭떠러지로 떨어지면 마지막 체크포인트로 리스폰
+      if (pos.y < VOID_Y){
+        pos.copy(respawnPos);
+        velY = 0;
+        grounded = true;
+        curSpeed.set(0,0);
+      }
+    }
+
+    // 코요테 타임: 바닥에 있으면 유예시간을 채워두고, 벗어나면 서서히 소진 (가장자리에서 점프 씹힘 방지)
+    if (grounded) coyoteTimer = 0.12; else coyoteTimer = Math.max(0, coyoteTimer - dt);
+    if (wallJumpCooldown > 0) wallJumpCooldown = Math.max(0, wallJumpCooldown - dt);
+
+    // 점프 버퍼링 + 홀드 연속 점프: 착지 직전에 눌렀거나 계속 누르고 있으면 착지 즉시 재점프
+    if (jumpBufferTimer > 0) jumpBufferTimer = Math.max(0, jumpBufferTimer - dt);
+    if (!onTruss && (grounded || coyoteTimer > 0) && (jumpHeld || jumpBufferTimer > 0)){
+      velY = JUMP_VEL * equippedJumpMult;
+      grounded = false;
+      jumpBufferTimer = 0;
+      coyoteTimer = 0;
+    }
+
+    // facing direction
+    const speedMag = Math.hypot(curSpeed.x, curSpeed.y);
+    if (!onTruss && !mantling){
+      if (speedMag > 0.4){
+        if (shiftLock){
+          facing = camYaw; // shift lock: character always faces camera direction
+        } else {
+          const targetFacing = Math.atan2(curSpeed.x, curSpeed.y);
+          let diff = targetFacing - facing;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          facing += diff * Math.min(1, 12*dt);
+        }
+      } else if (shiftLock){
+        facing = camYaw;
+      }
+    }
+
+    character.position.set(pos.x, pos.y, pos.z);
+    character.rotation.y = facing;
+    shadowBlob.position.set(pos.x, 0.02, pos.z);
+    shadowBlob.scale.setScalar(Math.max(0.35, 1 - pos.y*0.14));
+
+    updateAuraEffect(dt);
+    updateEnvironmentShift(dt);
+
+    // walking / climbing animation (arm/leg swing)
+    if (mantling){
+      // 매달려 기어오르는 동작: 팔로 턱을 짚고 몸을 끌어올린 뒤 다리를 걸치는 느낌
+      const mt = 1 - Math.max(0, mantleTimer) / 0.38;
+      armL.rotation.x = -0.9 + mt * 0.5;
+      armR.rotation.x = -0.9 + mt * 0.5;
+      legL.rotation.x = 0.3 + mt * 0.9;
+      legR.rotation.x = 0.1 + mt * 0.6;
+      speedTag.textContent = '기어오르는 중';
+    } else if (onTruss){
+      // 트러스 클라이밍 애니메이션: 팔다리가 번갈아 사다리를 짚는 동작 (가만히 있으면 멈춤)
+      if (Math.abs(inY) > 0.05){
+        climbT += dt * (6 * Math.abs(inY) + 1.5);
+        const cs = Math.sin(climbT);
+        armL.rotation.x = -0.6 + cs*0.55;
+        armR.rotation.x = -0.6 - cs*0.55;
+        legL.rotation.x = cs*0.5;
+        legR.rotation.x = -cs*0.5;
+        speedTag.textContent = '오르는 중';
+      } else {
+        armL.rotation.x *= 0.8; armR.rotation.x *= 0.8;
+        legL.rotation.x *= 0.8; legR.rotation.x *= 0.8;
+        speedTag.textContent = '매달림';
+      }
+    } else if (speedMag > 0.4 && grounded){
+      // 로블록스처럼 실제 이동 속도(WalkSpeed 대비 비율)에 맞춰 보폭 주기가 스케일됨
+      const speedRatio = speedMag / WALK_SPEED;
+      walkT += dt * (6.5 * speedRatio + 2.5);
+      const swing = Math.sin(walkT) * (0.55 + speedRatio*0.35);
+      armL.rotation.x = swing;
+      armR.rotation.x = -swing;
+      legL.rotation.x = -swing;
+      legR.rotation.x = swing;
+      speedTag.textContent = '걷는 중';
+    } else if (!grounded){
+      if (velY > 2){
+        // 상승 중: 팔은 살짝 뒤로, 다리는 몸쪽으로 당겨짐
+        armL.rotation.x = -0.25; armR.rotation.x = -0.25;
+        legL.rotation.x = 0.35; legR.rotation.x = 0.35;
+      } else {
+        // 하강 중: 로블록스 특유의 양팔이 위로 들리는 포즈
+        const fallT = Math.min(1, Math.abs(velY) / 20);
+        armL.rotation.x = -0.25 - fallT*0.75;
+        armR.rotation.x = -0.25 - fallT*0.75;
+        legL.rotation.x = 0.1; legR.rotation.x = -0.1;
+      }
+      speedTag.textContent = velY > 2 ? '점프!' : '낙하 중';
+    } else {
+      armL.rotation.x *= 0.85; armR.rotation.x *= 0.85;
+      legL.rotation.x *= 0.85; legR.rotation.x *= 0.85;
+      speedTag.textContent = '대기';
+    }
+
+    // 스쿼시/스트레치 연출 제거 - R6 아바타는 항상 고정 비율
+
+    // --- camera orbit follow (with obstacle collision pull-in) ---
+    const camPivot = new THREE.Vector3(pos.x, pos.y + 2.2, pos.z);
+    const camDir = new THREE.Vector3(
+      -Math.sin(camYaw) * Math.cos(camPitch),
+      Math.sin(camPitch),
+      -Math.cos(camYaw) * Math.cos(camPitch)
+    );
+    let effectiveDist = camDist;
+    camRaycaster.set(camPivot, camDir);
+    camRaycaster.far = camDist + 0.5;
+    const hits = camRaycaster.intersectObjects(collidableMeshes, false);
+    if (hits.length > 0){
+      effectiveDist = Math.max(1.5, hits[0].distance - 0.4);
+    }
+    const targetCamPos = camPivot.clone().addScaledVector(camDir, effectiveDist);
+    camera.position.copy(targetCamPos);
+    camera.lookAt(pos.x, pos.y + 2.0, pos.z);
+
+    // ---- 희귀 아우라 연동 카메라 연출: FOV 확장 + 주기적 화면 흔들림 ----
+    const auraSf = currentAuraEffect ? tierScaleFactor(currentAuraEffect.tier.order) : 0;
+    const targetFov = 62 + auraSf*9;
+    if (Math.abs(camera.fov - targetFov) > 0.01){
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt*1.5);
+      camera.updateProjectionMatrix();
+    }
+    if (auraSf > 0.12){
+      const gt = clock.getElapsedTime();
+      const pulseEnv = Math.pow(Math.max(0, Math.sin(gt*0.6)), 5); // 계속 흔들리지 않고 주기적으로 미세하게 훅 옴
+      const shakeAmt = auraSf * 0.028 * pulseEnv;
+      camera.rotation.z += Math.sin(gt*23)*shakeAmt;
+      camera.rotation.x += Math.cos(gt*17)*shakeAmt*0.6;
+    }
+
+    updateAuraTag();
+    composer.render();
+  }
+  animate();
+})();
+</script>
+</body>
+</html>
