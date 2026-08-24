@@ -230,6 +230,7 @@ const MP = (function () {
   let app = null, auth = null, db = null;
   let uid = null;
   let myRef = null, playersRef = null;
+  let presenceStaleTimer = null;
   let onPlayersCb = null;
   let onAuthCb = null;
   let ready = false;          // 멀티플레이(방 접속)까지 준비됐는지
@@ -348,11 +349,26 @@ const MP = (function () {
 
     if (playersRef) playersRef.off();
     playersRef = db.ref(`${MP_ROOT}/rooms/${currentRoom}/players`);
-    playersRef.on('value', snap => {
-      const val = snap.val() || {};
+    const PRESENCE_STALE_MS = 15000; // 15초 넘게 위치 갱신이 없으면 유령 접속자로 간주하고 목록에서 제외
+    let lastPlayersSnapshot = {};
+    function emitFilteredPlayers(){
+      const val = Object.assign({}, lastPlayersSnapshot);
       if (uid) delete val[uid];
+      const now = Date.now();
+      Object.keys(val).forEach(k=>{
+        const p = val[k];
+        if (!p || !p.ts || (now - p.ts) > PRESENCE_STALE_MS) delete val[k];
+      });
       if (onPlayersCb) onPlayersCb(val);
+    }
+    playersRef.on('value', snap => {
+      lastPlayersSnapshot = snap.val() || {};
+      emitFilteredPlayers();
     });
+    // 다른 사람이 아무도 움직이지 않으면(=파이어베이스에 새 쓰기가 없으면) 위 'value' 리스너가
+    // 다시 안 불려서 낡은 유령이 그대로 남아있을 수 있음 - 5초마다 타이머로 강제 재검사해서 걸러냄
+    if (presenceStaleTimer) clearInterval(presenceStaleTimer);
+    presenceStaleTimer = setInterval(emitFilteredPlayers, 5000);
     ready = true;
   }
 
@@ -624,6 +640,7 @@ const MP = (function () {
     getLocalAvatarLoadout,
     fetchAccountAvatarLoadout,
     buildAvatar: mpBuildAvatar,
+    attachAvatarItem: mpAttachAvatarItem,
     AVATAR_CATALOG,
     AVATAR_SLOTS,
     get uid() { return uid; },
