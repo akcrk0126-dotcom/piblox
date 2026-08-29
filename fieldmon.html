@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>필드몬 — 실제 세계 정령 수집</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#16281F;
+    --bg-panel:#1F3A2C;
+    --bg-panel-2:#264633;
+    --cream:#F2E9D8;
+    --cream-dim:#C9BFA9;
+    --moss:#4F8163;
+    --moss-bright:#6FAE84;
+    --sky:#6FA8C9;
+    --coral:#E8734A;
+    --gold:#E3B341;
+    --epic:#B285D6;
+    --line: rgba(242,233,216,0.12);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg-deep);
+    font-family:'Noto Sans KR',sans-serif; color:var(--cream); user-select:none;}
+  .display{font-family:'Black Han Sans','Noto Sans KR',sans-serif; letter-spacing:0.5px;}
+  #app{position:fixed; inset:0;}
+  #map{position:absolute; inset:0; z-index:1; filter:saturate(0.55) brightness(0.75) hue-rotate(-6deg);}
+  .leaflet-tile-pane{ }
+  #fogCanvas{position:absolute; inset:0; z-index:2; pointer-events:none;}
+
+  /* HUD top */
+  #hud{position:absolute; top:0; left:0; right:0; z-index:10; padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+    display:flex; align-items:center; gap:10px; background:linear-gradient(180deg, rgba(16,24,18,0.92), rgba(16,24,18,0));}
+  .brand{font-family:'Black Han Sans'; font-size:20px; color:var(--gold); text-shadow:0 2px 0 rgba(0,0,0,0.4); flex:0 0 auto;}
+  .lvlchip{display:flex; align-items:center; gap:6px; background:rgba(31,58,44,0.85); border:1px solid var(--line);
+    border-radius:20px; padding:6px 10px; font-size:12px; font-weight:700;}
+  .xpbar{width:56px; height:6px; background:rgba(0,0,0,0.35); border-radius:4px; overflow:hidden;}
+  .xpbar>div{height:100%; background:linear-gradient(90deg,var(--moss-bright),var(--sky));}
+  .gpsdot{width:8px; height:8px; border-radius:50%; background:#e75959; box-shadow:0 0 6px #e75959;}
+  .gpsdot.on{background:#6FAE84; box-shadow:0 0 6px #6FAE84;}
+  .hudRight{margin-left:auto; display:flex; gap:8px;}
+  .iconbtn{width:38px; height:38px; border-radius:12px; background:rgba(31,58,44,0.9); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer;}
+  .iconbtn:active{transform:scale(0.92);}
+
+  /* nearby chip list */
+  #nearbyWrap{position:absolute; left:0; right:0; bottom:calc(14px + env(safe-area-inset-bottom)); z-index:10;
+    display:flex; gap:8px; overflow-x:auto; padding:0 12px; -ms-overflow-style:none; scrollbar-width:none;}
+  #nearbyWrap::-webkit-scrollbar{display:none;}
+  .nchip{flex:0 0 auto; background:rgba(22,40,31,0.92); border:1px solid var(--line); border-radius:16px; padding:8px 10px 8px 8px;
+    display:flex; align-items:center; gap:8px; box-shadow:0 6px 16px rgba(0,0,0,0.35); cursor:pointer;}
+  .nchip .thumb{width:34px; height:34px;}
+  .nchip .meta{display:flex; flex-direction:column; line-height:1.25;}
+  .nchip .nm{font-size:12px; font-weight:700;}
+  .nchip .dist{font-size:11px; color:var(--cream-dim);}
+  .nchip.ready{border-color:var(--coral);}
+  .nchip .dist.ready{color:var(--coral); font-weight:700;}
+
+  .creature-marker{filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5)); animation:bob 2.2s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .player-dot{width:18px;height:18px;border-radius:50%;background:var(--sky);border:3px solid var(--cream);box-shadow:0 0 0 6px rgba(111,168,201,0.28);}
+
+  .hidden{display:none !important;}
+  .sheet{position:absolute; inset:0; z-index:30; background:rgba(10,16,12,0.6); backdrop-filter:blur(2px);
+    display:flex; align-items:flex-end; justify-content:center;}
+  .sheet.center{align-items:center;}
+  .panel{width:100%; max-width:480px; background:var(--bg-panel); border-radius:22px 22px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height:86vh; overflow-y:auto; box-shadow:0 -10px 30px rgba(0,0,0,0.5);}
+  .sheet.center .panel{border-radius:22px; margin:16px;}
+  .panelHead{display:flex; align-items:center; margin-bottom:12px;}
+  .panelHead h2{font-family:'Black Han Sans'; font-size:20px; margin:0; color:var(--cream);}
+  .closeX{margin-left:auto; width:32px; height:32px; border-radius:10px; background:rgba(0,0,0,0.25); border:none; color:var(--cream);
+    font-size:16px; cursor:pointer;}
+
+  /* dex grid */
+  .dexGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .dexCard{background:var(--bg-panel-2); border:1px solid var(--line); border-radius:14px; padding:10px 6px; text-align:center; position:relative;}
+  .dexCard.locked{opacity:0.42;}
+  .dexCard .art{width:46px; height:46px; margin:0 auto 6px;}
+  .dexCard .nm{font-size:11px; font-weight:700;}
+  .dexCard .cnt{position:absolute; top:6px; right:8px; font-size:10px; background:rgba(0,0,0,0.35); border-radius:8px; padding:1px 6px;}
+  .rarity-common{color:var(--cream-dim);}
+  .rarity-rare{color:var(--sky);}
+  .rarity-epic{color:var(--epic);}
+  .rarity-legendary{color:var(--gold);}
+
+  /* catch modal */
+  #catchModal .panel{text-align:center;}
+  .catchArt{width:120px; height:120px; margin:6px auto 10px; filter:drop-shadow(0 8px 14px rgba(0,0,0,0.5));}
+  .catchName{font-family:'Black Han Sans'; font-size:22px;}
+  .catchRarity{font-size:12px; font-weight:700; margin-bottom:14px;}
+  .timingWrap{height:20px; background:rgba(0,0,0,0.35); border-radius:12px; position:relative; overflow:hidden; margin:0 8px 18px;}
+  .timingZone{position:absolute; top:0; bottom:0; background:rgba(232,115,74,0.55); border-left:2px solid var(--coral); border-right:2px solid var(--coral);}
+  .timingCursor{position:absolute; top:-3px; bottom:-3px; width:4px; background:var(--cream); border-radius:2px; box-shadow:0 0 8px rgba(255,255,255,0.7);}
+  .attempts{font-size:12px; color:var(--cream-dim); margin-bottom:10px;}
+  .timingCursor.frozen-hit{background:#7CD98A; box-shadow:0 0 12px #7CD98A;}
+  .timingCursor.frozen-miss{background:#E7605A; box-shadow:0 0 12px #E7605A;}
+  .stickRow{display:flex; gap:8px; margin:0 4px 14px; justify-content:center;}
+  .stickChip{flex:1; max-width:78px; background:var(--bg-panel-2); border:2px solid var(--line); border-radius:12px; padding:8px 4px;
+    text-align:center; cursor:pointer; position:relative;}
+  .stickChip.sel{border-color:var(--coral); background:rgba(232,115,74,0.16);}
+  .stickChip.empty{opacity:0.35;}
+  .stickChip .sname{font-size:10px; font-weight:700; line-height:1.2; margin-top:2px;}
+  .stickChip .scnt{font-size:11px; color:var(--cream-dim); font-weight:700;}
+  .stickIcon{width:22px; height:22px; margin:0 auto; border-radius:50%; border:3px solid rgba(0,0,0,0.35);}
+  .bigbtn{width:100%; padding:14px; border:none; border-radius:16px; background:linear-gradient(180deg,var(--coral),#c85a34);
+    color:#fff; font-family:'Black Han Sans'; font-size:18px; letter-spacing:1px; cursor:pointer; box-shadow:0 6px 0 #9a4527;}
+  .bigbtn:active{transform:translateY(3px); box-shadow:0 3px 0 #9a4527;}
+  .bigbtn:disabled{opacity:0.4;}
+  .ghostbtn{width:100%; padding:12px; margin-top:8px; border:1px solid var(--line); border-radius:14px; background:transparent; color:var(--cream-dim); font-size:13px;}
+
+  /* box */
+  .boxGrid{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; min-height:220px;}
+  .boxSlot{aspect-ratio:1; background:var(--bg-panel-2); border:1px solid var(--line); border-radius:12px;
+    display:flex; align-items:center; justify-content:center; padding:4px; cursor:pointer;}
+  .boxSlot.empty{opacity:0.25; cursor:default;}
+  .boxNav{display:flex; align-items:center; justify-content:space-between; margin-top:12px;}
+  .boxNav button{background:var(--bg-panel-2); border:1px solid var(--line); color:var(--cream); border-radius:10px; padding:8px 14px; font-weight:700;}
+  .boxNav button:disabled{opacity:0.3;}
+  .boxPageTxt{font-size:12px; color:var(--cream-dim);}
+
+  #toast{position:absolute; left:50%; top:14%; transform:translateX(-50%); z-index:50; background:rgba(22,40,31,0.95);
+    border:1px solid var(--line); padding:10px 16px; border-radius:12px; font-size:13px; font-weight:700; opacity:0; transition:opacity .25s, top .25s; pointer-events:none;}
+  #toast.show{opacity:1; top:18%;}
+
+  .testModeBadge{position:absolute; bottom:calc(80px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    z-index:9; background:rgba(232,115,74,0.9); font-size:11px; font-weight:700; padding:4px 10px; border-radius:10px;}
+
+  .locBanner{position:absolute; top:64px; left:12px; right:12px; z-index:10; background:rgba(31,58,44,0.95); border:1px solid var(--line);
+    border-radius:14px; padding:12px; font-size:13px; line-height:1.5;}
+  .locBanner button{margin-top:8px; background:var(--coral); border:none; color:#fff; font-weight:700; padding:8px 14px; border-radius:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <canvas id="fogCanvas"></canvas>
+
+  <div id="hud">
+    <div class="brand">필드몬</div>
+    <div class="lvlchip"><span id="gpsIndicator" class="gpsdot"></span><span id="lvlText">Lv.1</span>
+      <div class="xpbar"><div id="xpFill" style="width:0%"></div></div>
+    </div>
+    <div class="hudRight">
+      <div class="iconbtn" id="btnBox">📦</div>
+      <div class="iconbtn" id="btnDex">📖</div>
+      <div class="iconbtn" id="btnTest">🧪</div>
+    </div>
+  </div>
+
+  <div id="locBanner" class="locBanner hidden">
+    실제 위치를 불러올 수 없어요. 위치 권한을 허용해주세요.
+    <br><button id="btnRetryGps">위치 권한 다시 요청</button>
+  </div>
+
+  <div id="nearbyWrap"></div>
+  <div id="testBadge" class="testModeBadge hidden">🧪 테스트 이동 모드 — 지도를 탭해서 이동</div>
+
+  <div id="toast"></div>
+
+  <!-- Dex Sheet -->
+  <div id="dexSheet" class="sheet hidden">
+    <div class="panel">
+      <div class="panelHead"><h2>도감 <span id="dexCount" style="font-size:12px;color:var(--cream-dim);font-family:'Noto Sans KR'"></span></h2>
+        <button class="closeX" id="closeDex">✕</button></div>
+      <div class="dexGrid" id="dexGrid"></div>
+    </div>
+  </div>
+
+  <!-- Catch Modal -->
+  <div id="catchModal" class="sheet center hidden">
+    <div class="panel">
+      <div class="catchArt" id="catchArt"></div>
+      <div class="catchName" id="catchName"></div>
+      <div class="catchRarity" id="catchRarity"></div>
+      <div class="attempts" id="catchAttempts"></div>
+      <div class="timingWrap"><div class="timingZone" id="timingZone"></div><div class="timingCursor" id="timingCursor"></div></div>
+      <div class="stickRow" id="stickRow"></div>
+      <button class="bigbtn" id="btnThrow">포획!</button>
+      <button class="ghostbtn" id="btnFlee">놓아주기</button>
+    </div>
+  </div>
+
+  <!-- Box Sheet -->
+  <div id="boxSheet" class="sheet hidden">
+    <div class="panel">
+      <div class="panelHead"><h2>박스</h2><button class="closeX" id="closeBox">✕</button></div>
+      <div class="boxGrid" id="boxGrid"></div>
+      <div class="boxNav">
+        <button id="boxPrev">◀ 이전</button>
+        <span class="boxPageTxt" id="boxPageTxt"></span>
+        <button id="boxNext">다음 ▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ---------------- 종(species) 정의 ---------------- */
+const SPECIES = [
+  {id:"moku",  name:"모쿠",   rarity:"common",    hue:132, shape:"round"},
+  {id:"pyri",  name:"피리링", rarity:"common",    hue:18,  shape:"spike"},
+  {id:"aqua",  name:"아쿠비", rarity:"common",    hue:200, shape:"drop"},
+  {id:"terra", name:"테라몰", rarity:"common",    hue:38,  shape:"round"},
+  {id:"lumi",  name:"루미엘", rarity:"rare",      hue:280, shape:"star"},
+  {id:"volk",  name:"볼케오", rarity:"rare",      hue:8,   shape:"spike"},
+  {id:"friz",  name:"프리즈", rarity:"rare",      hue:195, shape:"drop"},
+  {id:"nyxi",  name:"닉시아", rarity:"epic",      hue:265, shape:"star"},
+  {id:"grovi", name:"그로비", rarity:"epic",      hue:150, shape:"round"},
+  {id:"tempo", name:"템포런", rarity:"epic",      hue:48,  shape:"spike"},
+  {id:"cael",  name:"카엘루스", rarity:"legendary", hue:222, shape:"star"},
+  {id:"sola",  name:"솔라티스", rarity:"legendary", hue:44,  shape:"round"}
+];
+const RARITY_COLOR = {common:"var(--cream-dim)", rare:"var(--sky)", epic:"var(--epic)", legendary:"var(--gold)"};
+const RARITY_KO = {common:"일반", rare:"희귀", epic:"에픽", legendary:"전설"};
+const RARITY_WEIGHT = {common:60, rare:25, epic:12, legendary:3};
+const RARITY_ZONE = {common:0.34, rare:0.24, epic:0.16, legendary:0.10}; // 포획 존 크기(비율)
+const RARITY_XP = {common:8, rare:18, epic:36, legendary:80};
+
+/* ---------------- 포획 스틱(아이템) ---------------- */
+const STICKS = [
+  {id:"normal", name:"일반 스틱", mult:1.00, color:"#8a9a90"},
+  {id:"super",  name:"슈퍼 스틱", mult:1.35, color:"#6FA8C9"},
+  {id:"hyper",  name:"하이퍼 스틱", mult:1.75, color:"#B285D6"},
+  {id:"ultra",  name:"울트라 스틱", mult:2.4, color:"#E3B341"}
+];
+// 레벨업 시 지급되는 스틱 보상
+const LEVEL_STICK_REWARDS = {
+  2:{normal:5}, 3:{normal:5,super:1}, 4:{normal:5}, 5:{super:2,hyper:1},
+  6:{normal:5}, 7:{super:2}, 8:{hyper:1}, 9:{normal:8}, 10:{hyper:1,ultra:1}
+};
+
+/* ---------------- 저장 상태 ---------------- */
+const SAVE_KEY = "fieldmon_save_v2";
+let state = loadState();
+function loadState(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem("fieldmon_save_v1");
+    if(raw){
+      const s = JSON.parse(raw);
+      if(!s.sticks) s.sticks = {normal:10, super:3, hyper:1, ultra:0};
+      if(!s.box) s.box = [];
+      if(s.xp===undefined) s.xp = 0;
+      if(!s.lastLevel) s.lastLevel = levelFromXp(s.xp);
+      return s;
+    }
+  }catch(e){}
+  return {caught:{}, fogCells:[], xp:0, sticks:{normal:10, super:3, hyper:1, ultra:0}, box:[], lastLevel:1};
+}
+function saveState(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function totalCaught(id){ return state.caught[id]||0; }
+function addCatch(id, xp){
+  state.caught[id] = (state.caught[id]||0)+1;
+  state.xp += xp;
+  state.box.push({uid: Date.now()+"_"+Math.floor(Math.random()*10000), speciesId:id, ts:Date.now()});
+  const newLevel = levelFromXp(state.xp);
+  if(newLevel > state.lastLevel){
+    for(let lv=state.lastLevel+1; lv<=newLevel; lv++){
+      const reward = LEVEL_STICK_REWARDS[lv];
+      if(reward){
+        Object.keys(reward).forEach(sid=>{ state.sticks[sid] = (state.sticks[sid]||0) + reward[sid]; });
+        const parts = Object.keys(reward).map(sid=>STICKS.find(s=>s.id===sid).name+" x"+reward[sid]);
+        setTimeout(()=>showToast(`레벨 업! Lv.${lv} 달성 — ${parts.join(', ')} 획득`), 350);
+      }
+    }
+    state.lastLevel = newLevel;
+  }
+  saveState();
+}
+function levelFromXp(xp){ return 1 + Math.floor(Math.sqrt(xp/12)); }
+function xpForLevel(lv){ return Math.pow(lv-1,2)*12; }
+
+/* ---------------- 유틸 ---------------- */
+function hashStr(s){
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h>>>0);
+}
+function seededRand(seed){ // 0~1
+  const x = Math.sin(seed)*10000;
+  return x - Math.floor(x);
+}
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function pickWeighted(seedBase){
+  let r = seededRand(seedBase)*100;
+  let acc=0, order=["legendary","epic","rare","common"];
+  // reverse so rarer checked with small slice first for determinism variety
+  const pool = ["common","rare","epic","legendary"];
+  let total=0; pool.forEach(p=>total+=RARITY_WEIGHT[p]);
+  acc=0;
+  for(const p of pool){
+    acc += RARITY_WEIGHT[p];
+    if(r <= acc){
+      const cands = SPECIES.filter(s=>s.rarity===p);
+      const idx = Math.floor(seededRand(seedBase*7.31)*cands.length);
+      return cands[idx];
+    }
+  }
+  return SPECIES[0];
+}
+
+/* ---------------- SVG 아트 생성 ---------------- */
+function svgFor(species, size){
+  const hue = species.hue;
+  const glow = species.rarity==="legendary" ? `<circle cx="50" cy="52" r="46" fill="hsla(${hue},80%,60%,0.28)"/>` : "";
+  const ring = species.rarity==="epic" ? `<circle cx="50" cy="52" r="40" fill="none" stroke="hsla(${hue},70%,70%,0.55)" stroke-width="3" stroke-dasharray="4 4"/>` : "";
+  const stripe = species.rarity==="rare" ? `<path d="M18 50 Q50 40 82 50" stroke="hsla(${hue},60%,88%,0.5)" stroke-width="4" fill="none" stroke-linecap="round"/>` : "";
+  let body="";
+  const fill1 = `hsl(${hue},58%,52%)`, fill2 = `hsl(${hue},70%,38%)`;
+  if(species.shape==="round"){
+    body = `<ellipse cx="50" cy="58" rx="30" ry="26" fill="url(#g${species.id})"/>
+      <ellipse cx="50" cy="34" rx="19" ry="17" fill="url(#g${species.id})"/>`;
+  } else if(species.shape==="spike"){
+    body = `<path d="M50 16 L64 40 L58 66 Q50 78 42 66 L36 40 Z" fill="url(#g${species.id})"/>`;
+  } else if(species.shape==="drop"){
+    body = `<path d="M50 14 C68 40 74 56 60 70 C52 78 48 78 40 70 C26 56 32 40 50 14Z" fill="url(#g${species.id})"/>`;
+  } else if(species.shape==="star"){
+    body = `<path d="M50 12 L58 40 L86 42 L62 58 L70 84 L50 68 L30 84 L38 58 L14 42 L42 40Z" fill="url(#g${species.id})"/>`;
+  }
+  const eyeY = species.shape==="round"?32:species.shape==="star"?48:44;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">
+    <defs><linearGradient id="g${species.id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${fill1}"/><stop offset="1" stop-color="${fill2}"/>
+    </linearGradient></defs>
+    ${glow}${body}${ring}${stripe}
+    <circle cx="42" cy="${eyeY}" r="4.2" fill="#1a1a1a"/><circle cx="58" cy="${eyeY}" r="4.2" fill="#1a1a1a"/>
+    <circle cx="43.3" cy="${eyeY-1.2}" r="1.3" fill="#fff"/><circle cx="59.3" cy="${eyeY-1.2}" r="1.3" fill="#fff"/>
+  </svg>`;
+}
+
+/* ---------------- 지도 초기화 ---------------- */
+const map = L.map('map', {zoomControl:false, attributionControl:false}).setView([37.5665,126.9780], 17);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+
+let player = {lat:37.5665, lng:126.9780, hasFix:false};
+const playerIcon = L.divIcon({className:"", html:'<div class="player-dot"></div>', iconSize:[18,18]});
+let playerMarker = L.marker([player.lat, player.lng], {icon:playerIcon, zIndexOffset:1000}).addTo(map);
+
+const CATCH_RADIUS = 60;   // m
+const SPAWN_RADIUS = 320;  // m
+const GRID_DEG = 0.0025;   // 스폰 그리드(약 250m)
+const FOG_GRID_DEG = 0.00028; // 안개 셀(약 25m)
+const MAX_SPAWNS = 5;
+
+let spawnMarkers = new Map(); // key -> {marker, species, lat, lng}
+let daySeed = new Date().toISOString().slice(0,10);
+
+function cellKey(lat,lng,deg){
+  return Math.floor(lat/deg)+"_"+Math.floor(lng/deg);
+}
+
+function regenSpawns(){
+  spawnMarkers.forEach(v=>map.removeLayer(v.marker));
+  spawnMarkers.clear();
+  const cellsAcross = Math.ceil(SPAWN_RADIUS/ (GRID_DEG*111000)) + 1;
+  const baseLatCell = Math.floor(player.lat/GRID_DEG);
+  const baseLngCell = Math.floor(player.lng/GRID_DEG);
+  let candidates = [];
+  for(let dy=-cellsAcross; dy<=cellsAcross; dy++){
+    for(let dx=-cellsAcross; dx<=cellsAcross; dx++){
+      const clat = (baseLatCell+dy)*GRID_DEG + GRID_DEG/2;
+      const clng = (baseLngCell+dx)*GRID_DEG + GRID_DEG/2;
+      const key = daySeed+"_"+(baseLatCell+dy)+"_"+(baseLngCell+dx);
+      const h = hashStr(key);
+      const spawnChance = seededRand(h*0.001);
+      if(spawnChance < 0.22){
+        const jitterLat = (seededRand(h*0.003)-0.5)*GRID_DEG*0.7;
+        const jitterLng = (seededRand(h*0.007)-0.5)*GRID_DEG*0.7;
+        const lat = clat+jitterLat, lng = clng+jitterLng;
+        const dist = haversine(player.lat, player.lng, lat, lng);
+        if(dist <= SPAWN_RADIUS){
+          candidates.push({key, lat, lng, h, dist});
+        }
+      }
+    }
+  }
+  candidates.sort((a,b)=>a.dist-b.dist);
+  candidates = candidates.slice(0, MAX_SPAWNS);
+  candidates.forEach(c=>{
+    const species = pickWeighted(c.h*0.0011);
+    const icon = L.divIcon({className:"creature-marker", html:svgFor(species,40), iconSize:[40,40]});
+    const marker = L.marker([c.lat,c.lng], {icon}).addTo(map);
+    marker.on('click', ()=>tryOpenCatch(c.key));
+    spawnMarkers.set(c.key, {marker, species, lat:c.lat, lng:c.lng});
+  });
+  renderNearby();
+}
+
+/* ---------------- 근처 몬스터 칩 ---------------- */
+function renderNearby(){
+  const wrap = document.getElementById('nearbyWrap');
+  wrap.innerHTML = "";
+  const list = Array.from(spawnMarkers.entries()).map(([key,v])=>{
+    const dist = Math.round(haversine(player.lat, player.lng, v.lat, v.lng));
+    return {key, v, dist};
+  }).sort((a,b)=>a.dist-b.dist);
+  list.forEach(({key,v,dist})=>{
+    const ready = dist<=CATCH_RADIUS;
+    const chip = document.createElement('div');
+    chip.className = "nchip"+(ready?" ready":"");
+    chip.innerHTML = `<div class="thumb">${svgFor(v.species,34)}</div>
+      <div class="meta"><div class="nm">${v.species.name}</div><div class="dist${ready?' ready':''}">${ready?'포획 가능!':dist+'m'}</div></div>`;
+    chip.onclick = ()=>tryOpenCatch(key);
+    wrap.appendChild(chip);
+  });
+}
+
+function tryOpenCatch(key){
+  const v = spawnMarkers.get(key);
+  if(!v) return;
+  const dist = haversine(player.lat, player.lng, v.lat, v.lng);
+  if(dist > CATCH_RADIUS){
+    showToast(`너무 멀어요! ${Math.round(dist-CATCH_RADIUS)}m 더 가까이 가세요`);
+    return;
+  }
+  openCatchModal(key);
+}
+
+/* ---------------- 안개(Fog of Exploration) ---------------- */
+const fogCanvas = document.getElementById('fogCanvas');
+const fogCtx = fogCanvas.getContext('2d');
+function resizeFog(){
+  fogCanvas.width = window.innerWidth * devicePixelRatio;
+  fogCanvas.height = window.innerHeight * devicePixelRatio;
+  fogCanvas.style.width = window.innerWidth+"px";
+  fogCanvas.style.height = window.innerHeight+"px";
+  drawFog();
+}
+window.addEventListener('resize', resizeFog);
+
+function metersPerPixel(){
+  const c = map.getCenter();
+  const p1 = map.latLngToContainerPoint(c);
+  const p2 = map.latLngToContainerPoint(L.latLng(c.lat, c.lng+0.001));
+  const px = Math.hypot(p2.x-p1.x, p2.y-p1.y);
+  const dist = haversine(c.lat,c.lng,c.lat,c.lng+0.001);
+  return px>0 ? dist/px : 1;
+}
+
+function drawFog(){
+  const w = fogCanvas.width, h = fogCanvas.height;
+  fogCtx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  fogCtx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  fogCtx.fillStyle = "rgba(8,14,10,0.86)";
+  fogCtx.fillRect(0,0,window.innerWidth,window.innerHeight);
+  fogCtx.globalCompositeOperation = "destination-out";
+  const mpp = metersPerPixel();
+  const revealRadiusPx = Math.max(28, 55/Math.max(mpp,0.3));
+  const bounds = map.getBounds().pad(0.2);
+  state.fogCells.forEach(cellStr=>{
+    const [cy,cx] = cellStr.split('_').map(Number);
+    const lat = cy*FOG_GRID_DEG + FOG_GRID_DEG/2;
+    const lng = cx*FOG_GRID_DEG + FOG_GRID_DEG/2;
+    if(!bounds.contains([lat,lng])) return;
+    const pt = map.latLngToContainerPoint([lat,lng]);
+    const grad = fogCtx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,revealRadiusPx);
+    grad.addColorStop(0,"rgba(0,0,0,1)");
+    grad.addColorStop(0.7,"rgba(0,0,0,0.9)");
+    grad.addColorStop(1,"rgba(0,0,0,0)");
+    fogCtx.fillStyle = grad;
+    fogCtx.beginPath();
+    fogCtx.arc(pt.x,pt.y,revealRadiusPx,0,Math.PI*2);
+    fogCtx.fill();
+  });
+  fogCtx.globalCompositeOperation = "source-over";
+}
+map.on('move zoom', drawFog);
+
+function markVisited(lat,lng){
+  const key = cellKey(lat,lng,FOG_GRID_DEG);
+  if(!state.fogCells.includes(key)){
+    state.fogCells.push(key);
+    if(state.fogCells.length>4000) state.fogCells.shift();
+    saveState();
+  }
+}
+
+/* ---------------- GPS ---------------- */
+let lastSpawnRegenAt = null;
+function onPosition(pos){
+  const {latitude, longitude} = pos.coords;
+  setPlayerPos(latitude, longitude, true);
+  document.getElementById('gpsIndicator').classList.add('on');
+  document.getElementById('locBanner').classList.add('hidden');
+}
+function onPositionError(err){
+  document.getElementById('gpsIndicator').classList.remove('on');
+  if(!testMode) document.getElementById('locBanner').classList.remove('hidden');
+}
+function setPlayerPos(lat,lng, fromGps){
+  player.lat=lat; player.lng=lng; player.hasFix=true;
+  playerMarker.setLatLng([lat,lng]);
+  markVisited(lat,lng);
+  if(!lastSpawnRegenAt || haversine(lastSpawnRegenAt.lat,lastSpawnRegenAt.lng,lat,lng) > 90){
+    lastSpawnRegenAt = {lat,lng};
+    regenSpawns();
+  } else {
+    renderNearby();
+  }
+  drawFog();
+}
+function startGps(){
+  if(!navigator.geolocation){
+    document.getElementById('locBanner').classList.remove('hidden');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude],17); onPosition(p); }, onPositionError, {enableHighAccuracy:true,timeout:8000});
+  navigator.geolocation.watchPosition(onPosition, onPositionError, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
+}
+document.getElementById('btnRetryGps').onclick = startGps;
+
+/* ---------------- 테스트 이동 모드 ---------------- */
+let testMode = false;
+document.getElementById('btnTest').onclick = ()=>{
+  testMode = !testMode;
+  document.getElementById('testBadge').classList.toggle('hidden', !testMode);
+  showToast(testMode ? "테스트 이동 모드 ON — 지도를 탭하세요" : "테스트 이동 모드 OFF");
+};
+map.on('click', (e)=>{
+  if(!testMode) return;
+  setPlayerPos(e.latlng.lat, e.latlng.lng, false);
+});
+
+/* ---------------- 포획 미니게임 ---------------- */
+let currentCatch = null; // {key, species}
+let attemptsLeft = 3;
+let cursorAnim = null;
+let cursorPos = 0, cursorDir = 1;
+let zoneStart = 0, zoneW = 0;
+let selectedStick = "normal";
+let throwLocked = false;
+
+function bestAvailableStick(){
+  for(let i=STICKS.length-1;i>=0;i--){ if((state.sticks[STICKS[i].id]||0)>0) return STICKS[i].id; }
+  return "normal";
+}
+function renderStickRow(){
+  const row = document.getElementById('stickRow');
+  row.innerHTML = "";
+  STICKS.forEach(st=>{
+    const cnt = state.sticks[st.id]||0;
+    const chip = document.createElement('div');
+    chip.className = "stickChip"+(st.id===selectedStick?" sel":"")+(cnt<=0?" empty":"");
+    chip.innerHTML = `<div class="stickIcon" style="background:${st.color}"></div>
+      <div class="sname">${st.name.replace(' 스틱','')}</div><div class="scnt">x${cnt}</div>`;
+    chip.onclick = ()=>{ if(cnt<=0) return; selectedStick = st.id; renderStickRow(); };
+    row.appendChild(chip);
+  });
+}
+function openCatchModal(key){
+  const v = spawnMarkers.get(key);
+  if(!v) return;
+  currentCatch = {key, species:v.species};
+  attemptsLeft = 3;
+  selectedStick = bestAvailableStick();
+  document.getElementById('catchArt').innerHTML = svgFor(v.species,110);
+  document.getElementById('catchName').textContent = v.species.name;
+  const rc = document.getElementById('catchRarity');
+  rc.textContent = RARITY_KO[v.species.rarity];
+  rc.style.color = RARITY_COLOR[v.species.rarity];
+  renderStickRow();
+  document.getElementById('catchModal').classList.remove('hidden');
+  setupRound();
+}
+function setupRound(){
+  document.getElementById('catchAttempts').textContent = `남은 기회: ${attemptsLeft}`;
+  const stickMult = STICKS.find(s=>s.id===selectedStick).mult;
+  zoneW = Math.min(0.92, RARITY_ZONE[currentCatch.species.rarity] * stickMult * (1 - (3-attemptsLeft)*0.03));
+  zoneStart = Math.random()*(1-zoneW);
+  const zoneEl = document.getElementById('timingZone');
+  zoneEl.style.left = (zoneStart*100)+"%";
+  zoneEl.style.width = (zoneW*100)+"%";
+  cursorPos = 0; cursorDir = 1;
+  const cursorEl = document.getElementById('timingCursor');
+  cursorEl.classList.remove('frozen-hit','frozen-miss');
+  if(cursorAnim) cancelAnimationFrame(cursorAnim);
+  const speed = 0.016 + (3-attemptsLeft)*0.003;
+  function tick(){
+    cursorPos += speed*cursorDir;
+    if(cursorPos>=1){cursorPos=1; cursorDir=-1;}
+    if(cursorPos<=0){cursorPos=0; cursorDir=1;}
+    cursorEl.style.left = (cursorPos*100)+"%";
+    cursorAnim = requestAnimationFrame(tick);
+  }
+  tick();
+  throwLocked = false;
+}
+document.getElementById('btnThrow').onclick = ()=>{
+  if(!currentCatch || throwLocked) return;
+  const cnt = state.sticks[selectedStick]||0;
+  if(cnt<=0){ showToast("해당 스틱이 없어요! 다른 스틱을 선택하세요"); return; }
+  throwLocked = true;
+  // 클릭하는 순간 커서를 그 자리에 멈춤
+  if(cursorAnim) cancelAnimationFrame(cursorAnim);
+  state.sticks[selectedStick] = cnt-1;
+  saveState();
+  renderStickRow();
+  const hit = cursorPos>=zoneStart && cursorPos<=zoneStart+zoneW;
+  document.getElementById('timingCursor').classList.add(hit?'frozen-hit':'frozen-miss');
+  setTimeout(()=>{
+    if(hit){
+      const xp = RARITY_XP[currentCatch.species.rarity];
+      addCatch(currentCatch.species.id, xp);
+      const key = currentCatch.key;
+      const v = spawnMarkers.get(key);
+      if(v){ map.removeLayer(v.marker); spawnMarkers.delete(key); }
+      showToast(`${currentCatch.species.name} 포획 성공! +${xp}XP`);
+      closeCatchModal();
+      updateHud();
+      renderNearby();
+    } else {
+      attemptsLeft--;
+      if(attemptsLeft<=0){
+        showToast(`${currentCatch.species.name}(이)가 도망쳤어요...`);
+        const key = currentCatch.key;
+        const v = spawnMarkers.get(key);
+        if(v){ map.removeLayer(v.marker); spawnMarkers.delete(key); }
+        closeCatchModal();
+        renderNearby();
+      } else {
+        setupRound();
+      }
+    }
+  }, 480);
+};
+document.getElementById('btnFlee').onclick = closeCatchModal;
+function closeCatchModal(){
+  if(cursorAnim) cancelAnimationFrame(cursorAnim);
+  document.getElementById('catchModal').classList.add('hidden');
+  currentCatch = null;
+}
+
+/* ---------------- 도감 ---------------- */
+document.getElementById('btnDex').onclick = ()=>{
+  const grid = document.getElementById('dexGrid');
+  grid.innerHTML = "";
+  let owned=0;
+  SPECIES.forEach(sp=>{
+    const c = totalCaught(sp.id);
+    if(c>0) owned++;
+    const card = document.createElement('div');
+    card.className = "dexCard"+(c>0?"":" locked");
+    card.innerHTML = `<div class="art">${c>0?svgFor(sp,46):'<div style="width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.08)"></div>'}</div>
+      <div class="nm">${c>0?sp.name:'???'}</div>
+      <div class="nm rarity-${sp.rarity}" style="font-size:10px">${RARITY_KO[sp.rarity]}</div>
+      ${c>0?`<div class="cnt">x${c}</div>`:""}`;
+    grid.appendChild(card);
+  });
+  document.getElementById('dexCount').textContent = `${owned} / ${SPECIES.length}`;
+  document.getElementById('dexSheet').classList.remove('hidden');
+};
+document.getElementById('closeDex').onclick = ()=> document.getElementById('dexSheet').classList.add('hidden');
+
+/* ---------------- 박스(포켓몬 박스 스타일 보관함) ---------------- */
+const BOX_PAGE_SIZE = 20; // 4 x 5
+let boxPage = 0;
+function renderBox(){
+  const grid = document.getElementById('boxGrid');
+  grid.innerHTML = "";
+  const list = state.box.slice().reverse(); // 최근 포획순
+  const totalPages = Math.max(1, Math.ceil(list.length/BOX_PAGE_SIZE));
+  if(boxPage >= totalPages) boxPage = totalPages-1;
+  if(boxPage < 0) boxPage = 0;
+  const start = boxPage*BOX_PAGE_SIZE;
+  const pageItems = list.slice(start, start+BOX_PAGE_SIZE);
+  for(let i=0;i<BOX_PAGE_SIZE;i++){
+    const item = pageItems[i];
+    const slot = document.createElement('div');
+    if(item){
+      const sp = SPECIES.find(s=>s.id===item.speciesId);
+      slot.className = "boxSlot";
+      slot.innerHTML = svgFor(sp,40);
+      slot.onclick = ()=> showToast(`${sp.name} · ${RARITY_KO[sp.rarity]}`);
+    } else {
+      slot.className = "boxSlot empty";
+    }
+    grid.appendChild(slot);
+  }
+  document.getElementById('boxPageTxt').textContent = `${boxPage+1} / ${totalPages}  (총 ${list.length}마리)`;
+  document.getElementById('boxPrev').disabled = boxPage<=0;
+  document.getElementById('boxNext').disabled = boxPage>=totalPages-1;
+}
+document.getElementById('btnBox').onclick = ()=>{ boxPage=0; renderBox(); document.getElementById('boxSheet').classList.remove('hidden'); };
+document.getElementById('closeBox').onclick = ()=> document.getElementById('boxSheet').classList.add('hidden');
+document.getElementById('boxPrev').onclick = ()=>{ boxPage--; renderBox(); };
+document.getElementById('boxNext').onclick = ()=>{ boxPage++; renderBox(); };
+
+/* ---------------- HUD ---------------- */
+function updateHud(){
+  const lv = levelFromXp(state.xp);
+  const curBase = xpForLevel(lv), nextBase = xpForLevel(lv+1);
+  const pct = Math.min(100, Math.round(((state.xp-curBase)/(nextBase-curBase))*100));
+  document.getElementById('lvlText').textContent = "Lv."+lv;
+  document.getElementById('xpFill').style.width = pct+"%";
+}
+
+/* ---------------- 토스트 ---------------- */
+let toastTimer=null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------------- 시작 ---------------- */
+resizeFog();
+updateHud();
+startGps();
+setInterval(()=>{ if(player.hasFix){ regenSpawns(); } }, 3*60*1000);
+
+})();
+</script>
+</body>
+</html>
