@@ -59,8 +59,14 @@
   .nchip.ready{border-color:var(--coral);}
   .nchip .dist.ready{color:var(--coral); font-weight:700;}
 
-  .creature-marker{filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5)); animation:bob 2.2s ease-in-out infinite;}
+  .creature-marker{filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5)); animation:bob 2.2s ease-in-out infinite; position:relative;}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .creature-marker::before{content:""; position:absolute; inset:-8px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.6), transparent 70%); opacity:0; animation:sparkleGlow 1.9s ease-in-out infinite; pointer-events:none;}
+  .creature-marker::after{content:"✦"; position:absolute; top:-7px; right:-5px; font-size:12px; color:#fff;
+    text-shadow:0 0 5px rgba(255,255,255,0.95); opacity:0; animation:twinkle 1.5s ease-in-out infinite; pointer-events:none;}
+  @keyframes sparkleGlow{0%,100%{opacity:0; transform:scale(0.7);}50%{opacity:0.85; transform:scale(1.2);}}
+  @keyframes twinkle{0%,100%{opacity:0; transform:scale(0.3) rotate(0deg);}50%{opacity:1; transform:scale(1.1) rotate(20deg);}}
   .player-dot{width:18px;height:18px;border-radius:50%;background:var(--sky);border:3px solid var(--cream);box-shadow:0 0 0 6px rgba(111,168,201,0.28);}
 
   .hidden{display:none !important;}
@@ -343,7 +349,7 @@ function svgFor(species, size){
 }
 
 /* ---------------- 지도 초기화 ---------------- */
-const map = L.map('map', {zoomControl:false, attributionControl:false}).setView([37.5665,126.9780], 17);
+const map = L.map('map', {zoomControl:false, attributionControl:false}).setView([37.5665,126.9780], 16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
 
 let player = {lat:37.5665, lng:126.9780, hasFix:false};
@@ -351,10 +357,11 @@ const playerIcon = L.divIcon({className:"", html:'<div class="player-dot"></div>
 let playerMarker = L.marker([player.lat, player.lng], {icon:playerIcon, zIndexOffset:1000}).addTo(map);
 
 const CATCH_RADIUS = 60;   // m
-const SPAWN_RADIUS = 320;  // m
-const GRID_DEG = 0.0025;   // 스폰 그리드(약 250m)
+const SPAWN_RADIUS = 170;  // m — 시야는 넓혀도 스폰은 가까운 곳에만
+const VISION_RADIUS = 170; // m — 밝게 보이는 범위(안개 없는 구역), 스폰 반경과 동일
+const GRID_DEG = 0.00045;  // 스폰 그리드(약 50m, 촘촘하게)
 const FOG_GRID_DEG = 0.00028; // 안개 셀(약 25m)
-const MAX_SPAWNS = 5;
+const MAX_SPAWNS = 10;
 
 let spawnMarkers = new Map(); // key -> {marker, species, lat, lng}
 let daySeed = new Date().toISOString().slice(0,10);
@@ -377,7 +384,7 @@ function regenSpawns(){
       const key = daySeed+"_"+(baseLatCell+dy)+"_"+(baseLngCell+dx);
       const h = hashStr(key);
       const spawnChance = seededRand(h*0.001);
-      if(spawnChance < 0.22){
+      if(spawnChance < 0.4){
         const jitterLat = (seededRand(h*0.003)-0.5)*GRID_DEG*0.7;
         const jitterLng = (seededRand(h*0.007)-0.5)*GRID_DEG*0.7;
         const lat = clat+jitterLat, lng = clng+jitterLng;
@@ -455,39 +462,24 @@ function drawFog(){
   const w = fogCanvas.width, h = fogCanvas.height;
   fogCtx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
   fogCtx.clearRect(0,0,window.innerWidth,window.innerHeight);
-  fogCtx.fillStyle = "rgba(8,14,10,0.86)";
+  fogCtx.fillStyle = "rgba(8,14,10,0.88)";
   fogCtx.fillRect(0,0,window.innerWidth,window.innerHeight);
+  if(!player.hasFix) return;
   fogCtx.globalCompositeOperation = "destination-out";
   const mpp = metersPerPixel();
-  const revealRadiusPx = Math.max(28, 55/Math.max(mpp,0.3));
-  const bounds = map.getBounds().pad(0.2);
-  state.fogCells.forEach(cellStr=>{
-    const [cy,cx] = cellStr.split('_').map(Number);
-    const lat = cy*FOG_GRID_DEG + FOG_GRID_DEG/2;
-    const lng = cx*FOG_GRID_DEG + FOG_GRID_DEG/2;
-    if(!bounds.contains([lat,lng])) return;
-    const pt = map.latLngToContainerPoint([lat,lng]);
-    const grad = fogCtx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,revealRadiusPx);
-    grad.addColorStop(0,"rgba(0,0,0,1)");
-    grad.addColorStop(0.7,"rgba(0,0,0,0.9)");
-    grad.addColorStop(1,"rgba(0,0,0,0)");
-    fogCtx.fillStyle = grad;
-    fogCtx.beginPath();
-    fogCtx.arc(pt.x,pt.y,revealRadiusPx,0,Math.PI*2);
-    fogCtx.fill();
-  });
+  const radiusPx = VISION_RADIUS/Math.max(mpp,0.3);
+  const pt = map.latLngToContainerPoint([player.lat, player.lng]);
+  const grad = fogCtx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,radiusPx);
+  grad.addColorStop(0,"rgba(0,0,0,1)");
+  grad.addColorStop(0.92,"rgba(0,0,0,1)");
+  grad.addColorStop(1,"rgba(0,0,0,0)");
+  fogCtx.fillStyle = grad;
+  fogCtx.beginPath();
+  fogCtx.arc(pt.x,pt.y,radiusPx,0,Math.PI*2);
+  fogCtx.fill();
   fogCtx.globalCompositeOperation = "source-over";
 }
 map.on('move zoom', drawFog);
-
-function markVisited(lat,lng){
-  const key = cellKey(lat,lng,FOG_GRID_DEG);
-  if(!state.fogCells.includes(key)){
-    state.fogCells.push(key);
-    if(state.fogCells.length>4000) state.fogCells.shift();
-    saveState();
-  }
-}
 
 /* ---------------- GPS ---------------- */
 let lastSpawnRegenAt = null;
@@ -504,7 +496,6 @@ function onPositionError(err){
 function setPlayerPos(lat,lng, fromGps){
   player.lat=lat; player.lng=lng; player.hasFix=true;
   playerMarker.setLatLng([lat,lng]);
-  markVisited(lat,lng);
   if(!lastSpawnRegenAt || haversine(lastSpawnRegenAt.lat,lastSpawnRegenAt.lng,lat,lng) > 90){
     lastSpawnRegenAt = {lat,lng};
     regenSpawns();
@@ -518,7 +509,7 @@ function startGps(){
     document.getElementById('locBanner').classList.remove('hidden');
     return;
   }
-  navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude],17); onPosition(p); }, onPositionError, {enableHighAccuracy:true,timeout:8000});
+  navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude],16); onPosition(p); }, onPositionError, {enableHighAccuracy:true,timeout:8000});
   navigator.geolocation.watchPosition(onPosition, onPositionError, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
 }
 document.getElementById('btnRetryGps').onclick = startGps;
