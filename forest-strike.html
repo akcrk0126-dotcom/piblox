@@ -239,6 +239,7 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
   <div class="rpg-page active" id="page-stats"></div>
   <div class="rpg-page" id="page-bag"></div>
   <div class="rpg-page" id="page-quests"></div>
+  <button id="loadout-ready" type="button" style="display:none;width:100%;padding:13px;margin-top:14px;border:none;border-radius:8px;background:#d6a542;color:#1a1405;font-weight:900;font-size:14px;letter-spacing:.06em;cursor:pointer;">준비 완료</button>
   <button id="rpg-close" type="button">닫기</button>
 </div></div>
 
@@ -571,7 +572,7 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
   }
 
   let scene, renderer, camera, yaw, pitch, weaponRig, muzzleFlash, muzzleLight, clock, raycaster, dustMotes;
-  let currentGun, grass, forestGroup=null, mapGroup=null;
+  let currentGun, grass, forestGroup=null, mapGroup=null, terrainMesh=null;
   const targets=[], targetMeshes=[], casings=[], tracers=[], debris=[], rockets=[];
   const tempVec=new THREE.Vector3(), tempVec2=new THREE.Vector3(), tempQuat=new THREE.Quaternion();
   const WORLD_LIMIT = 56;
@@ -730,7 +731,7 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     }
     geom.setAttribute("color",new THREE.Float32BufferAttribute(colors,3)); geom.computeVertexNormals();
     const terrain=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({ map:createGroundTexture(), vertexColors:true, roughness:.96 }));
-    terrain.receiveShadow=true; scene.add(terrain);
+    terrain.receiveShadow=true; scene.add(terrain); terrainMesh=terrain;
     const grassGeom=new THREE.PlaneGeometry(.14,.70,1,3); grassGeom.translate(0,.35,0);
     const grassMat=new THREE.MeshStandardMaterial({ map:createGrassBladeTexture(), side:THREE.DoubleSide, transparent:true, alphaTest:.38, roughness:.92, color:0xd7f0b0 });
     const bladeCount=state.highQuality?18000:7000;
@@ -884,7 +885,10 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
       x:yaw.position.x, y:yaw.position.y-1.7, z:yaw.position.z, ry:yaw.rotation.y,
       hp:Math.max(0,Math.round(state.playerHp)), dead:state.playerHp<=0,
       name:(MP.getDisplayName?MP.getDisplayName():"나"), avatarLoadout:MPX.myAvatar,
-      kills:MPX.myKills, lastHit:MPX.lastHit || null
+      kills:MPX.myKills, lastHit:MPX.lastHit || null,
+      inRing: !!state.inRing,        // 내가 원 안에 서 있는지(양쪽 준비 판정용)
+      picked: !!state.loadoutLocked, // 무기 선택을 끝냈는지
+      phase: state.phase
     });
   }
   function mpReportHit(uid,dmg){
@@ -1160,10 +1164,38 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     r.add(new THREE.PointLight(0xffa040,8,7)); r.position.copy(origin); scene.add(r);
     rockets.push({ mesh:r, dir:dir.clone(), speed:46, life:5, def });
   }
+  // 총알을 막는 지형지물 목록(맵 오브젝트/나무/바위/로비 벽/지면)
+  function blockerObjects(){
+    const arr=[];
+    if (mapGroup && mapGroup.visible) arr.push(mapGroup);
+    if (forestGroup && forestGroup.visible) arr.push(forestGroup);
+    if (lobbyGroup && lobbyGroup.visible) arr.push(lobbyGroup);
+    if (terrainMesh) arr.push(terrainMesh);
+    return arr;
+  }
   function shootRay(direction,damage){
-    scene.updateMatrixWorld(true); raycaster.set(camera.getWorldPosition(tempVec2),direction);
+    scene.updateMatrixWorld(true);
+    const origin=camera.getWorldPosition(tempVec2).clone();
+    raycaster.set(origin,direction);
     const hit=raycaster.intersectObjects(targetMeshes,false)[0];
+    // 엄폐물이 적보다 가까이 있으면 총알이 거기서 막힌다(예전엔 벽을 그냥 통과했음)
+    const wall=raycaster.intersectObjects(blockerObjects(),true)[0];
+    if (wall && (!hit || wall.distance < hit.distance)){
+      spawnImpact(wall.point, wall.face ? wall.face.normal : null);
+      return;
+    }
     if (hit) hitEnemy(hit.object.userData.target,hit.object.userData.zone,damage);
+  }
+  // 벽에 맞았을 때 튀는 먼지 - 막혔다는 걸 눈으로 알 수 있게
+  function spawnImpact(point,normal){
+    for (let i=0;i<5;i++){
+      const p=new THREE.Mesh(new THREE.SphereGeometry(.035+Math.random()*.03,4,3),
+        new THREE.MeshBasicMaterial({ color:0xcfc7b4, transparent:true, opacity:.9 }));
+      p.position.copy(point); scene.add(p);
+      const v=new THREE.Vector3((Math.random()-.5)*3,Math.random()*2.4,(Math.random()-.5)*3);
+      if (normal) v.add(normal.clone().multiplyScalar(2));
+      debris.push({ mesh:p, life:.35, vel:v, gravity:true, fade:true });
+    }
   }
   function autoAimDirection(baseDir,origin){
     if (!state.autoAim) return baseDir;
@@ -1231,8 +1263,9 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     if (state.deadUntil && now>state.deadUntil){
       state.deadUntil=0; state.playerHp=maxHp(); state.grounded=true; state.vel.set(0,0,0);
       state.airJumpsUsed=0; state.slideUntil=0;
-      const a=Math.random()*6.28, r=14+Math.random()*16;
-      yaw.position.set(Math.cos(a)*r, heightAt(Math.cos(a)*r,Math.sin(a)*r)+1.7, Math.sin(a)*r);
+      const sp=spawnPointFor(mySpawnIndex());
+      const jx=sp.x+(Math.random()-.5)*6, jz=sp.z+(Math.random()-.5)*6;
+      yaw.position.set(jx, floorAt(jx,jz)+1.7, jz);
       state.lookPitch=0; state.viewKick=0; state.targetViewKick=0;
       showFeed("재투입 완료"); updateHUD();
     }
@@ -1580,12 +1613,55 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     showBanner("포탈 진입","전장으로 이동합니다","#9fd6ff",1600);
     if (state.soundOn) sfx.whoosh();
     if (state.shakeOn) addScreenShake(.6);
-    setTimeout(()=>startCountdown(),900);
+    setTimeout(()=>{ applyMap(state.chosenMap||"forest"); openLoadoutPhase(true); },900);
+  }
+  // ---------- 무기 선택 페이즈 ----------
+  // 첫 라운드(0:0)는 10초, 이후 라운드는 5초. 모두 고르면 기다리지 않고 바로 시작.
+  const LOADOUT_FIRST_MS = 10000, LOADOUT_NEXT_MS = 5000;
+  function openLoadoutPhase(isFirst){
+    state.phase="loadout";
+    state.loadoutLocked=false;
+    state.loadoutEnd=performance.now()+(isFirst?LOADOUT_FIRST_MS:LOADOUT_NEXT_MS);
+    state.lastCountShown=-1;
+    resetRound(true);   // 미리 전장 스폰 지점에 배치(로비 좌표에 떠있지 않도록)
+    // 가방을 자동으로 열어준다
+    renderStats(); renderBag(); renderQuests(); syncRpgHud();
+    document.querySelectorAll(".rpg-tab").forEach(t=>t.classList.toggle("active",t.dataset.page==="bag"));
+    document.querySelectorAll(".rpg-page").forEach(p=>p.classList.toggle("active",p.id==="page-bag"));
+    document.querySelector("#rpg-panel").classList.add("show");
+    document.querySelector("#loadout-ready").style.display="block";
+    state.mouseDown=false;
+    if (document.pointerLockElement) document.exitPointerLock();
+    showBanner("무기를 고르세요", isFirst?"10초":"5초", "#ffd76b", 1600);
+  }
+  function lockLoadout(){
+    if (state.phase!=="loadout"||state.loadoutLocked) return;
+    state.loadoutLocked=true;
+    const b=document.querySelector("#loadout-ready");
+    b.textContent="상대를 기다리는 중..."; b.style.opacity=".6";
+    if (state.soundOn) sfx.reloadClick();
+  }
+  function closeLoadoutPhase(){
+    document.querySelector("#rpg-panel").classList.remove("show");
+    const b=document.querySelector("#loadout-ready");
+    b.style.display="none"; b.textContent="준비 완료"; b.style.opacity="1";
+    startCountdown();
+  }
+  function updateLoadoutPhase(now){
+    if (state.phase!=="loadout") return;
+    const left=Math.ceil((state.loadoutEnd-now)/1000);
+    el.timer.textContent="0:"+String(Math.max(0,left)).padStart(2,"0");
+    el.timer.classList.toggle("urgent",left<=3);
+    const b=document.querySelector("#loadout-ready");
+    if (!state.loadoutLocked) b.textContent="준비 완료 ("+Math.max(0,left)+"초)";
+    // 모두 골랐으면 즉시 시작
+    const others=Object.values(MPX.players);
+    const allPicked = state.loadoutLocked && (!state.hasRealOpponent || (others.length>0 && others.every(p=>p && p.picked)));
+    if (allPicked || now>=state.loadoutEnd) closeLoadoutPhase();
   }
   function startCountdown(){
     state.phase="countdown";
     state.countdownEnd=performance.now()+3000; state.lastCountShown=-1;
-    applyMap(state.chosenMap||"forest");
     resetRound(true); renderScoreboard();
     if (!isMobile){ try{ const l=renderer.domElement.requestPointerLock(); if(l&&l.catch)l.catch(()=>{});}catch(e){} }
   }
@@ -1603,10 +1679,31 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
       makeEnemy(0,spread,0,{ team:"red", tier:"grunt", hp:150, scale:1 });
     }
   }
+  // 맵 둘레에 고르게 배치된 스폰 지점들. uid 순서로 자리를 나눠 가져서
+  // 같은 방 사람들이 서로 다른 곳에서 시작한다(예전엔 전부 같은 자리에서 스폰됐음).
+  const SPAWN_POINTS = [
+    {x:0,z:26},{x:0,z:-26},{x:26,z:0},{x:-26,z:0},
+    {x:19,z:19},{x:-19,z:-19},{x:19,z:-19},{x:-19,z:19}
+  ];
+  function mySpawnIndex(){
+    if (!MPX.enabled || !window.MP || !MP.uid) return 0;
+    const ids=Object.keys(MPX.ghosts).concat([MP.uid]).sort();
+    const i=ids.indexOf(MP.uid);
+    return i<0?0:i;
+  }
+  function spawnPointFor(i){
+    const base=SPAWN_POINTS[i % SPAWN_POINTS.length];
+    const spread=(state.mapSpread||26)/26;
+    return { x:base.x*spread, z:base.z*spread };
+  }
   function resetRound(silent){
     spawnDuelist();
     state.playerHp=maxHp(); state.vel.set(0,0,0); state.deadUntil=0; state.roundOver=false;
-    yaw.position.set(0,floorAt(0,5)+1.7,5); state.lookPitch=0;
+    const sp=spawnPointFor(mySpawnIndex());
+    yaw.position.set(sp.x, floorAt(sp.x,sp.z)+1.7, sp.z);
+    // 맵 중앙을 바라보게 회전시켜서 시작하자마자 헤매지 않도록
+    yaw.rotation.y=Math.atan2(-sp.x,-sp.z);
+    state.lookPitch=0;
     state.roundEndsAt=performance.now()+MATCH.ROUND_SECONDS*1000;
     updateHUD(); if (!silent) renderScoreboard();
   }
@@ -1656,8 +1753,12 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
   // ---------- 로비 루프 ----------
   // 파란 원에 들어가면 대기 시작. 실제 플레이어가 방에 있으면 3초,
   // 아무도 없으면 10초까지 기다렸다가 AI 상대로 매칭한다.
-  const RING_WAIT_WITH_PLAYER = 3000, RING_WAIT_SOLO = 10000;
+  const RING_READY_COUNTDOWN = 3000, RING_WAIT_SOLO = 10000;
   function realOpponentCount(){ return Object.keys(MPX.ghosts).length; }
+  // 상대들 중 자기 원 안에 들어가 준비된 사람 수
+  function readyOpponentCount(){
+    return Object.values(MPX.players).filter(p=>p && p.inRing).length;
+  }
   function updateLobby(delta,now){
     if (!lobbyGroup) return;
     const showLobby=inLobbyPhase();
@@ -1676,34 +1777,53 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
       lobbyPortal.userData.surf.material.opacity=.28+Math.sin(now*.003)*.08; }
 
     const inBlue=Math.hypot(yaw.position.x-LOBBY.blueRing.x,yaw.position.z-LOBBY.blueRing.z)<LOBBY.radius;
-    const realCount=realOpponentCount();
+    state.inRing=inBlue;   // 이 값이 mpBroadcast로 상대에게 전달된다
+    const realCount=realOpponentCount(), readyCount=readyOpponentCount();
     state.hasRealOpponent = realCount>0;
     setOpponentTag(state.hasRealOpponent?"실제 플레이어":"AI 상대", state.hasRealOpponent?"#7fc9ff":"#ff9a86");
 
-    // 상대 아바타를 빨간 원으로 걸어오게 함(연출)
+    // 상대 아바타 연출 - 실제 플레이어가 있으면 그 사람이 준비했을 때만 원으로 들어옴
     state.opponentT=(state.opponentT||0)+delta;
     const opp=opponentAvatar, target=LOBBY.redRing;
     const d=Math.hypot(opp.position.x-target.x,opp.position.z-target.z);
-    if (inBlue&&d>.6){
+    const oppShouldWalk = state.hasRealOpponent ? (readyCount>0) : inBlue;
+    if (oppShouldWalk && d>.6){
       const step=3.4*delta, dx=(target.x-opp.position.x)/d, dz=(target.z-opp.position.z)/d;
       opp.position.x+=dx*step; opp.position.z+=dz*step; opp.position.y=LOBBY.floorY;
       opp.rotation.y=Math.atan2(dx,dz); animateR6(opp,1,state.opponentT);
     } else animateR6(opp,0,state.opponentT);
+    // 실제 상대가 있으면 AI 더미 아바타는 숨긴다(진짜 상대 고스트가 따로 보이므로)
+    opp.visible = !state.hasRealOpponent;
 
-    if (inBlue){
-      const waitMs = state.hasRealOpponent ? RING_WAIT_WITH_PLAYER : RING_WAIT_SOLO;
-      if (!state.ringTimerStart) { state.ringTimerStart=now; state.lastCountShown=-1; }
-      // 대기 중에 실제 플레이어가 들어오면 즉시 3초 대기로 단축
-      const elapsed=now-state.ringTimerStart, left=Math.ceil((waitMs-elapsed)/1000);
-      lobbyPrompt(state.hasRealOpponent
-        ? "상대 플레이어 발견! — <b style='color:#ffd76b'>"+Math.max(0,left)+"</b>초 뒤 맵 선택"
-        : "상대를 찾는 중... <b style='color:#ffd76b'>"+Math.max(0,left)+"</b>초 뒤 AI와 매칭<br><span style='color:#8fa088;font-size:10px'>방 코드를 친구와 공유하면 같이 할 수 있어요</span>");
-      if (left!==state.lastCountShown && left>0 && left<=3){ state.lastCountShown=left; popCountdown(String(left)); }
-      if (elapsed>=waitMs){ state.ringTimerStart=0; openMapVote(); }
+    if (state.hasRealOpponent){
+      // ── 서버에 나 말고 누가 있으면 AI 매칭은 하지 않는다.
+      //    양쪽 다 원에 들어와야만 카운트다운이 돌아간다(한쪽이 낙오되면 대기).
+      const bothReady = inBlue && readyCount>0;
+      if (bothReady){
+        if (!state.ringTimerStart){ state.ringTimerStart=now; state.lastCountShown=-1; }
+        const left=Math.ceil((RING_READY_COUNTDOWN-(now-state.ringTimerStart))/1000);
+        lobbyPrompt("양쪽 준비 완료! — <b style='color:#ffd76b'>"+Math.max(0,left)+"</b>초 뒤 맵 선택");
+        if (left!==state.lastCountShown && left>0 && left<=3){ state.lastCountShown=left; popCountdown(String(left)); }
+        if (now-state.ringTimerStart>=RING_READY_COUNTDOWN){ state.ringTimerStart=0; openMapVote(); }
+      } else {
+        // 한쪽이라도 빠지면 카운트다운을 처음부터 다시
+        state.ringTimerStart=0; state.lastCountShown=-1;
+        lobbyPrompt(inBlue
+          ? "상대가 원에 들어오길 기다리는 중... <span style='color:#8fa088;font-size:10px'>(접속 "+(realCount+1)+"명)</span>"
+          : "<b style='color:#7fc9ff'>파란 원</b>에 들어가세요<br><span style='color:#8fa088;font-size:10px'>둘 다 원 안에 있어야 시작돼요 · 접속 "+(realCount+1)+"명</span>");
+      }
     } else {
-      state.ringTimerStart=0; state.lastCountShown=-1;
-      lobbyPrompt("파란 원 안에 서면 매칭이 시작됩니다<br><span style='color:#8fa088;font-size:10px'>"
-        +(state.hasRealOpponent?("접속 중인 플레이어 "+realCount+"명 · 3초 뒤 시작"):"플레이어가 없으면 10초 뒤 AI와 매칭")+"</span>");
+      // ── 서버에 나 혼자일 때만 기다렸다가 AI와 매칭
+      if (inBlue){
+        if (!state.ringTimerStart){ state.ringTimerStart=now; state.lastCountShown=-1; }
+        const left=Math.ceil((RING_WAIT_SOLO-(now-state.ringTimerStart))/1000);
+        lobbyPrompt("상대를 찾는 중... <b style='color:#ffd76b'>"+Math.max(0,left)+"</b>초 뒤 AI와 매칭<br><span style='color:#8fa088;font-size:10px'>방 코드를 친구와 공유하면 같이 할 수 있어요</span>");
+        if (left!==state.lastCountShown && left>0 && left<=3){ state.lastCountShown=left; popCountdown(String(left)); }
+        if (now-state.ringTimerStart>=RING_WAIT_SOLO){ state.ringTimerStart=0; openMapVote(); }
+      } else {
+        state.ringTimerStart=0; state.lastCountShown=-1;
+        lobbyPrompt("파란 원 안에 서면 매칭이 시작됩니다<br><span style='color:#8fa088;font-size:10px'>지금 서버에 나 혼자예요 · 10초 뒤 AI와 매칭</span>");
+      }
     }
   }
   function updateMatch(now){
@@ -1726,12 +1846,13 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     }
     if (state.phase==="roundend" && now>state.roundEndAt){
       if (state.blueScore>=MATCH.WIN_ROUNDS||state.redScore>=MATCH.WIN_ROUNDS){ endMatch(); return; }
-      resetRound(); startCountdownNextRound();
+      openLoadoutPhase(false);
     }
   }
   function updateMatchTimer(now){
     if (!state.started) return;
     if (inLobbyPhase()){ el.timer.textContent="--:--"; el.timer.classList.remove("urgent"); return; }
+    if (state.phase==="loadout") return;   // 선택 페이즈 타이머는 updateLoadoutPhase가 관리
     if (state.phase!=="live"){ el.timer.classList.remove("urgent"); return; }
     const left=(state.roundEndsAt-now)/1000;
     el.timer.textContent=fmtTime(left);
@@ -1961,13 +2082,22 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     const rpgPanel=document.querySelector("#rpg-panel");
     function openRpg(){ renderStats(); renderBag(); renderQuests(); syncRpgHud(); rpgPanel.classList.add("show"); state.mouseDown=false; if (document.pointerLockElement) document.exitPointerLock(); }
     document.querySelector("#rpg-btn").addEventListener("click",openRpg);
-    document.querySelector("#rpg-close").addEventListener("click",()=>rpgPanel.classList.remove("show"));
+    document.querySelector("#loadout-ready").addEventListener("click",lockLoadout);
+    document.querySelector("#rpg-close").addEventListener("click",()=>{
+      // 무기 선택 시간에는 창을 닫는 대신 "준비 완료"로 처리한다
+      if (state.phase==="loadout"){ lockLoadout(); return; }
+      rpgPanel.classList.remove("show");
+    });
     document.querySelectorAll(".rpg-tab").forEach(tab=>tab.addEventListener("click",()=>{
       document.querySelectorAll(".rpg-tab").forEach(t=>t.classList.remove("active"));
       document.querySelectorAll(".rpg-page").forEach(p=>p.classList.remove("active"));
       tab.classList.add("active"); document.querySelector("#page-"+tab.dataset.page).classList.add("active");
     }));
-    document.addEventListener("keydown",e=>{ if (e.code==="KeyB"){ e.preventDefault(); rpgPanel.classList.contains("show")?rpgPanel.classList.remove("show"):openRpg(); } });
+    document.addEventListener("keydown",e=>{
+      if (e.code==="KeyB"){ e.preventDefault();
+        if (state.phase==="loadout") return;   // 무기 선택 중에는 가방을 계속 열어둔다
+        rpgPanel.classList.contains("show")?rpgPanel.classList.remove("show"):openRpg(); }
+    });
     if (!isMobile) touchEl.autoAimRow.style.display="none";
     touchEl.autoAimToggle.classList.toggle("on",state.autoAim);
     touchEl.autoAimToggle.addEventListener("click",()=>{ state.autoAim=!state.autoAim; touchEl.autoAimToggle.classList.toggle("on",state.autoAim); });
@@ -2036,7 +2166,7 @@ body.mobile-mode #xp-wrap{bottom:240px;width:150px;left:16px}
     finishReload(now); updatePlayerRespawn(now); updateMovement(delta);
     if (state.mouseDown&&state.started&&state.phase==="live") fire();
     updateTargets(now,delta); updateGhosts(delta); mpBroadcast(delta);
-    updateLobby(delta,now); updateMatch(now); updateMatchTimer(now);
+    updateLobby(delta,now); updateMatch(now); updateLoadoutPhase(now); updateMatchTimer(now);
     updateEffects(delta,now); updateWeapon(delta,now); updateShake(delta); updateDamageNumbers(delta);
     renderer.render(scene,camera); requestAnimationFrame(loop);
   }
