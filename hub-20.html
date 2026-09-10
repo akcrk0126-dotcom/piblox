@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>플레이 허브</title>
+
+<!-- ---------- PWA ---------- -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15130E">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS는 위 표준 태그를 아직 다 안 따라줘서 애플 전용 태그를 같이 넣어야 홈 화면에 제대로 추가된다 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="플레이허브">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-main:#15130E;
+    --bg-surface:#211C13;
+    --bg-hover:#3A311D;
+    --bg-elevated:#2B2417;
+    --text-primary:#F3EEDF;
+    --text-secondary:#A89C82;
+    --text-disabled:#6B6249;
+    --accent-green:#6CBF6A;
+    --accent-green-hover:#7ED37B;
+    --accent-blue:#4C86D6;
+    --accent-amber:#E8A33D;
+    --accent-red:#D6604C;
+    --divider:#3B331F;
+    --display-font:'Black Han Sans','Noto Sans KR',sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  .avatarTabBtn { padding:7px 12px; border-radius:16px; border:1px solid var(--divider); background:var(--bg-surface);
+    color:var(--text-secondary); font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .avatarTabBtn.active { background:var(--accent-blue); color:#fff; border-color:var(--accent-blue); }
+  .avatarItemCard { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 8px;
+    border-radius:14px; background:var(--bg-surface); border:2px solid transparent; cursor:pointer; text-align:center; }
+  .avatarItemCard.equipped { border-color:var(--accent-green); background:rgba(0,176,111,.12); }
+  .avatarItemSwatch { width:52px; height:52px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:26px; }
+
+  /* ---------- 아바타 꾸미기 리뉴얼 ---------- */
+  #avatarTopBar { flex:none; display:flex; align-items:center; gap:10px; padding:12px 14px;
+    border-bottom:1px solid var(--divider); background:var(--bg-surface); }
+  #avatarTopBar .avTitle { flex:1; font-family:var(--display-font); font-size:18px; color:#fff; }
+  #avatarTopBar button { width:36px; height:36px; border-radius:10px; border:1px solid var(--divider);
+    background:var(--bg-main); color:#fff; font-size:15px; font-weight:800; cursor:pointer; }
+  #avatarTopBar button:active { background:var(--bg-hover); }
+  .avTopActions { display:flex; gap:7px; }
+  #avatarBody { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  #avatarPreviewPane { height:46%; flex:none; position:relative; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 28%, #33405c, #12131a 72%); }
+  #avatarCanvas { width:100%; height:78%; display:block; cursor:grab; touch-action:none; }
+  #avatarCanvas:active { cursor:grabbing; }
+  #avatarNameTag { color:#fff; font-weight:800; font-size:14px; }
+  #avatarDragHint { margin-top:3px; font-size:10px; color:rgba(255,255,255,.4); letter-spacing:.04em; }
+  /* 착용 중인 것들을 한눈에 */
+  #avatarWearing { position:absolute; left:10px; top:10px; display:flex; flex-direction:column; gap:5px; }
+  .avWearChip { display:flex; align-items:center; gap:5px; padding:4px 9px; border-radius:20px;
+    background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.13);
+    font-size:10px; font-weight:800; color:#e8ecef; backdrop-filter:blur(4px); }
+  .avWearChip i { font-style:normal; }
+  #avatarCatalogPane { flex:1; overflow-y:auto; padding:14px; border-top:1px solid var(--divider);
+    border-radius:18px 18px 0 0; background:var(--bg-main); box-shadow:0 -6px 20px rgba(0,0,0,.35); }
+  #avatarTabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  #avatarTabs::-webkit-scrollbar { display:none; }
+  #avatarItemGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  @media (min-width:520px){ #avatarItemGrid { grid-template-columns:repeat(4,1fr); } }
+  .avatarTabBtn.secret { border-color:#B79CD4; color:#D9C6EE; }
+
+  /* ---------- 레벨 ---------- */
+  .lvChip { display:flex; align-items:center; gap:6px; padding:5px 9px; border-radius:8px;
+    background:var(--bg-main); border:1px solid var(--divider); cursor:pointer; }
+  .lvChip b { font-size:12.5px; font-weight:900; color:var(--accent-amber); }
+  .lvChip b::before { content:'LV '; font-size:8.5px; color:var(--text-secondary); font-weight:800; }
+  .lvBar { display:block; width:34px; height:4px; border-radius:2px; background:rgba(255,255,255,.14); overflow:hidden; }
+  .lvBar i { display:block; height:100%; width:0%; background:var(--accent-amber); transition:width .4s ease; }
+  #lvPanel { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.78); padding:22px; }
+  #lvPanel.show { display:flex; }
+  .lvCard { width:min(90vw,330px); background:var(--bg-surface); border:1px solid var(--divider);
+    border-radius:18px; padding:24px; text-align:center; }
+  .lvBig { font-family:var(--display-font); font-size:52px; color:var(--accent-amber); line-height:1; }
+  .lvBigBar { height:9px; border-radius:5px; background:rgba(255,255,255,.12); overflow:hidden; margin:16px 0 8px; }
+  .lvBigBar i { display:block; height:100%; background:linear-gradient(90deg,#d68a1e,#ffd76b); width:0%; }
+
+  /* ---------- 지금 플레이 중 ---------- */
+  #liveRooms { display:flex; flex-direction:column; gap:8px; }
+  .liveRoom { display:flex; align-items:center; gap:11px; padding:11px 12px; border-radius:12px;
+    background:var(--bg-surface); border:1px solid var(--divider); border-left:4px solid var(--accent-green); }
+  .liveRoom .lrIcon { width:38px; height:38px; border-radius:9px; display:flex; align-items:center;
+    justify-content:center; font-size:20px; background:var(--bg-elevated); flex:none; }
+  .liveRoom .lrInfo { flex:1; min-width:0; }
+  .liveRoom .lrName { font-size:13px; font-weight:900; color:#fff; }
+  .liveRoom .lrWho { font-size:11px; color:var(--text-secondary); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .liveRoom .lrJoin { flex:none; height:36px; padding:0 15px; border:none; border-radius:9px;
+    background:var(--accent-green); color:#0a0f0d; font-weight:900; font-size:12px; cursor:pointer;
+    font-family:inherit; }
+  /* 카드 위 실시간 인원 배지 */
+  .liveBadge { position:absolute; top:6px; right:6px; z-index:4; display:none;
+    align-items:center; gap:3px; padding:3px 7px; border-radius:20px;
+    background:rgba(10,20,12,.82); color:#8fe0a0; font-size:9px; font-weight:900; }
+  .liveBadge.on { display:flex; }
+  .liveBadge i { width:5px; height:5px; border-radius:50%; background:#5ee08a; font-style:normal;
+    animation:livePulse 1.6s ease-in-out infinite; }
+  @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .avatarItemName { font-size:11px; font-weight:700; color:var(--text-primary); line-height:1.3; }
+  .avatarItemEquippedTag { font-size:9px; font-weight:800; color:var(--accent-green); }
+  html, body { width:100%; min-height:100%; background:var(--bg-main); }
+  body {
+    font-family:'Noto Sans KR', -apple-system, 'Malgun Gothic', 'Helvetica Neue', sans-serif;
+    font-weight:500;
+    color:var(--text-primary);
+    min-height:100vh;
+    padding-bottom:78px; /* 하단 탭바 공간 */
+  }
+  svg { display:block; }
+
+  /* ---------- 상단바 ---------- */
+  #topbar {
+    position:sticky; top:0; z-index:20;
+    height:54px; background:var(--bg-surface);
+    border-bottom:2px solid var(--divider);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 12px;
+  }
+  .brand { display:flex; align-items:center; gap:9px; }
+  .brandMark {
+    width:32px; height:32px; border-radius:4px 10px 4px 10px;
+    background:var(--accent-amber);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--display-font); font-size:17px; color:#15130E;
+    box-shadow:2px 2px 0 rgba(0,0,0,.35);
+    transform:rotate(-4deg);
+  }
+  .brandName { font-family:var(--display-font); font-size:19px; letter-spacing:.02em; color:var(--text-primary); }
+
+  .topIcons { display:flex; align-items:center; gap:4px; }
+  .iconBtn {
+    width:34px; height:34px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-secondary); background:var(--bg-main);
+    border:1px solid var(--divider); cursor:pointer;
+  }
+  .iconBtn:active { background:var(--bg-hover); color:var(--text-primary); }
+
+  /* ---------- 검색 모드 ---------- */
+  #topbar.searching .brand,
+  #topbar.searching .searchTrigger,
+  #topbar.searching .coinBadge,
+  #topbar.searching .avatar { display:none; }
+  #searchBar {
+    display:none; align-items:center; gap:8px;
+    flex:1; height:38px;
+    background:var(--bg-main); border:1px solid var(--divider); border-radius:19px;
+    padding:0 6px 0 12px;
+  }
+  #topbar.searching #searchBar { display:flex; }
+  #searchBackBtn {
+    width:30px; height:30px; border-radius:50%; border:none; background:none;
+    color:var(--text-primary); display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;
+  }
+  #searchInput {
+    flex:1; min-width:0; height:100%; background:none; border:none; outline:none;
+    color:var(--text-primary); font-family:'Noto Sans KR', sans-serif; font-weight:700; font-size:14px;
+  }
+  #searchInput::placeholder { color:var(--text-disabled); font-weight:500; }
+  #searchClearBtn {
+    width:26px; height:26px; border-radius:50%; border:none; background:var(--bg-hover);
+    color:var(--text-secondary); font-size:12px; display:none; align-items:center; justify-content:center; cursor:pointer; flex:none;
+  }
+  #searchInput:not(:placeholder-shown) ~ #searchClearBtn { display:flex; }
+
+  #emptyState { display:none; flex-direction:column; align-items:center; gap:10px; padding:60px 20px; text-align:center; }
+  #emptyState.show { display:flex; }
+  #emptyState .emoji { font-size:34px; }
+  #emptyState .msg { font-size:13px; font-weight:700; color:var(--text-secondary); }
+  #emptyState .sub { font-size:11.5px; color:var(--text-disabled); }
+
+  .card.filteredOut { display:none; }
+
+  .coinBadge {
+    display:flex; align-items:center; gap:5px;
+    background:var(--bg-main); border:1px solid var(--divider);
+    padding:6px 10px; border-radius:8px;
+    font-size:12.5px; font-weight:800; color:var(--accent-amber);
+    margin-left:2px;
+  }
+  .avatar {
+    width:32px; height:32px; border-radius:8px;
+    background:var(--bg-elevated); border:1px solid var(--divider);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px;
+    margin-left:4px;
+  }
+
+  /* ---------- 메인 ---------- */
+  main { max-width:720px; margin:0 auto; padding:16px 12px 0; }
+
+  .sectionHead { display:flex; align-items:baseline; justify-content:space-between; margin:20px 4px 12px; }
+  .sectionTitle { font-family:var(--display-font); font-size:19px; color:var(--text-primary); }
+  .sectionMore { font-size:12px; font-weight:700; color:var(--text-secondary); }
+
+  /* ---------- 친구 로스터 ---------- */
+  #friendsRow {
+    display:flex; gap:10px; overflow-x:auto; padding:14px 12px 6px;
+    scrollbar-width:none;
+  }
+  #friendsRow::-webkit-scrollbar { display:none; }
+  .friendItem {
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    flex:none; width:62px; cursor:pointer;
+  }
+  .friendCircleWrap { position:relative; width:56px; height:56px; }
+  .friendCircle {
+    width:56px; height:56px; border-radius:6px 14px 6px 14px;
+    background:var(--bg-elevated);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; border:1px solid var(--divider);
+    box-sizing:border-box;
+  }
+  .friendCircle.online { border-color:var(--accent-green); border-width:2px; }
+  .onlineDot {
+    position:absolute; left:0; right:0; bottom:-3px; height:5px; margin:0 8px;
+    border-radius:3px; background:var(--text-disabled);
+  }
+  .onlineDot.on { background:var(--accent-green); }
+  .friendName {
+    font-size:10.5px; font-weight:700; color:var(--text-secondary);
+    max-width:62px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .friendGame {
+    font-size:9px; font-weight:800; color:var(--accent-green);
+    max-width:62px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .addFriendCircle {
+    width:56px; height:56px; border-radius:6px 14px 6px 14px;
+    background:var(--bg-surface); border:2px dashed var(--divider);
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px; font-weight:900; color:var(--text-secondary);
+    cursor:pointer; flex:none;
+  }
+  .addFriendCircle:active { background:var(--bg-hover); }
+
+  /* ---------- 친구 검색 오버레이 ---------- */
+  #friendSearchOverlay {
+    position:fixed; inset:0; z-index:60; display:none; flex-direction:column;
+    background:var(--bg-main);
+  }
+  #friendSearchOverlay.show { display:flex; }
+  #fsTopbar {
+    height:54px; flex:none; display:flex; align-items:center; gap:10px;
+    padding:0 12px; border-bottom:1px solid var(--divider); background:var(--bg-surface);
+  }
+  #fsBackBtn {
+    width:32px; height:32px; border-radius:50%; border:none; background:none;
+    color:var(--text-primary); display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;
+  }
+  #fsSearchInput {
+    flex:1; height:38px; background:var(--bg-main); border:1px solid var(--divider); border-radius:19px;
+    padding:0 14px; color:var(--text-primary); font-family:'Noto Sans KR', sans-serif; font-weight:700; font-size:14px; outline:none;
+  }
+  #fsSearchInput::placeholder { color:var(--text-disabled); font-weight:500; }
+  #fsResults { flex:1; overflow-y:auto; padding:8px 12px; }
+  #fsHint { padding:40px 20px; text-align:center; font-size:12.5px; color:var(--text-disabled); }
+  .fsRow {
+    display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--divider);
+  }
+  .fsAvatar {
+    width:44px; height:44px; border-radius:50%; flex:none;
+    background:linear-gradient(135deg,#5a5f63,#33363a);
+    display:flex; align-items:center; justify-content:center; font-size:19px;
+  }
+  .fsInfo { flex:1; min-width:0; }
+  .fsName { font-size:14px; font-weight:800; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fsBtns { display:flex; gap:6px; flex:none; }
+  .fsBtn {
+    border:none; border-radius:14px; padding:8px 12px; font-size:11.5px; font-weight:800; cursor:pointer;
+  }
+  .fsBtn.friend { background:var(--accent-green); color:#0a0f0d; }
+  .fsBtn.follow { background:var(--bg-hover); color:#fff; }
+  .fsBtn.added { background:var(--bg-main); color:var(--text-disabled); border:1px solid var(--divider); }
+
+  .grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
+  @media (min-width:480px){ .grid { grid-template-columns:repeat(3, 1fr); } }
+
+  .card {
+    background:var(--bg-surface);
+    border:1px solid var(--divider);
+    border-bottom:4px solid var(--spine,var(--accent-amber));
+    border-radius:10px;
+    overflow:hidden;
+    cursor:pointer;
+    transition:background .12s ease, transform .12s ease;
+  }
+  .card:active { transform:scale(.97); background:var(--bg-hover); }
+  .card.locked { cursor:default; opacity:.6; }
+  .card.locked:active { transform:none; background:var(--bg-surface); }
+  .card[data-game="gacha"]{ --spine:#8a6fd6; }
+  .card[data-game="jump"]{ --spine:#e0a01e; }
+  .card[data-game="forest"]{ --spine:#5a9a4a; }
+  .card[data-game="backrooms"]{ --spine:#9a8a2e; }
+  .card[data-game="potion"]{ --spine:#2fae7a; }
+
+  .thumb {
+    position:relative; aspect-ratio:1/1;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; border-radius:10px 10px 0 0;
+  }
+  .thumb .glyph { font-size:44px; z-index:2; filter:drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+  .thumb.gacha { background:radial-gradient(circle at 32% 26%, #6d4fd6, #3a2280 65%, #1c1245); }
+  .thumb.jump  { background:radial-gradient(circle at 32% 26%, #e08a1e, #a85608 65%, #5c2c02); }
+  .thumb.backrooms { background:radial-gradient(circle at 32% 26%, #6b5f1e, #3a3208 65%, #141006); }
+  .thumb.forest { background:radial-gradient(circle at 32% 26%, #4a7a3a, #24512a 65%, #0d1c10); }
+  .thumb.potion { background:radial-gradient(circle at 32% 26%, #2fae7a, #1a6b4a 65%, #0d3a28); }
+  .thumb.soon  { background:var(--bg-elevated); }
+
+  .ring { position:absolute; width:70%; height:70%; border:2px dashed rgba(255,255,255,.28); border-radius:50%; animation:spin 12s linear infinite; z-index:1; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .flagpole { position:absolute; z-index:1; bottom:10%; left:50%; width:3px; height:42%; background:#e9e2ff; transform:translateX(-50%); border-radius:2px; }
+
+  .genreTag {
+    position:absolute; top:0; left:10px; z-index:3;
+    font-size:8.5px; font-weight:800; letter-spacing:.02em;
+    padding:4px 7px 3px; border-radius:0 0 5px 5px;
+    background:var(--spine,var(--accent-amber)); color:#15130E;
+  }
+
+  .cardBody { padding:9px 10px 11px; }
+  .cardTitle {
+    font-family:var(--display-font); font-size:14px; color:var(--text-primary);
+    line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .cardStats { display:flex; align-items:center; gap:9px; margin-top:6px; }
+  .statItem { display:flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:var(--text-secondary); }
+  .statItem .statIcon { font-size:11px; }
+  .statItem.like { color:var(--accent-green); }
+  .lockedLabel { font-size:11px; font-weight:700; color:var(--text-disabled); margin-top:6px; }
+
+  /* ---------- 모달 ---------- */
+  #modalOverlay {
+    position:fixed; inset:0; z-index:50; display:none;
+    align-items:flex-end; justify-content:center;
+    background:rgba(0,0,0,.65);
+  }
+  #modalOverlay.show { display:flex; }
+  @media (min-width:480px){ #modalOverlay { align-items:center; } }
+
+  #modalPanel {
+    width:100%; max-width:420px;
+    background:var(--bg-surface);
+    border:1px solid var(--divider);
+    border-radius:18px 18px 0 0;
+    padding:22px 20px 28px;
+    animation:slideUp .18s ease;
+  }
+  @media (min-width:480px){ #modalPanel { border-radius:16px; } }
+  @keyframes slideUp { from{ transform:translateY(24px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+
+  .modalHead { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+  #modalClose {
+    width:32px; height:32px; border-radius:50%; border:none;
+    background:var(--bg-main); color:var(--text-secondary);
+    font-size:16px; font-weight:700; cursor:pointer;
+  }
+
+  .modalThumb {
+    width:88px; height:88px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:42px; margin-bottom:14px;
+    box-shadow:0 8px 20px rgba(0,0,0,.45);
+  }
+  #modalTitle { font-size:20px; font-weight:900; color:var(--text-primary); }
+  #modalDesc { font-size:12.5px; font-weight:500; color:var(--text-secondary); margin-top:8px; line-height:1.6; }
+
+  .modalStatRow { display:flex; gap:18px; margin-top:14px; padding:12px 0; border-top:1px solid var(--divider); border-bottom:1px solid var(--divider); }
+  .mpBox { margin-top:16px; padding:13px 14px; border-radius:12px; background:var(--bg-main); border:1px solid var(--divider); }
+  .mpBoxTitle { font-size:12px; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:6px; }
+  .mpRow { display:flex; gap:8px; margin-top:9px; }
+  .mpRow input {
+    flex:1; min-width:0; height:38px; border-radius:9px; border:1px solid var(--divider);
+    background:var(--bg-surface); color:var(--text-primary); font-weight:800; font-size:13px;
+    padding:0 12px; letter-spacing:.5px; outline:none;
+  }
+  .mpRow button {
+    flex:none; height:38px; padding:0 14px; border-radius:9px; border:none;
+    background:var(--bg-hover); color:var(--text-primary); font-size:11.5px; font-weight:800; cursor:pointer;
+  }
+  .mpRow button:active { background:#4a4d50; }
+  .mpHint { font-size:10.5px; color:var(--text-secondary); margin-top:7px; line-height:1.5; }
+  .modalStat { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
+  .modalStat .num { font-size:15px; font-weight:900; color:var(--text-primary); }
+  .modalStat .num.like { color:var(--accent-green); }
+  .modalStat .lbl { font-size:10.5px; font-weight:700; color:var(--text-secondary); }
+
+  #playBtn {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; margin-top:20px;
+    background:var(--accent-amber); color:#15130E;
+    border:none; border-radius:4px 14px 4px 14px; padding:18px 0;
+    font-family:var(--display-font); font-size:17px; text-align:center;
+    text-decoration:none; cursor:pointer;
+    letter-spacing:.02em;
+    box-shadow:3px 3px 0 rgba(0,0,0,.4);
+    transition:transform .08s ease;
+  }
+  #playBtn:active { transform:translate(2px,2px); box-shadow:1px 1px 0 rgba(0,0,0,.4); }
+  #inviteBtn { width:100%; margin-top:10px; padding:14px 0; border:1px solid var(--divider);
+    border-radius:4px 14px 4px 14px; background:var(--bg-surface); color:var(--text-primary);
+    font-family:inherit; font-size:13px; font-weight:800; cursor:pointer; }
+  #inviteBtn:active { background:var(--bg-hover); }
+
+  /* ---------- 하단 탭바 ---------- */
+  #tabbar {
+    position:fixed; left:0; right:0; bottom:0; z-index:20;
+    height:64px; background:var(--bg-surface);
+    border-top:2px solid var(--divider);
+    display:flex; align-items:center; justify-content:space-around;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabItem {
+    position:relative;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:var(--text-disabled); font-size:9.5px; font-weight:700;
+    background:none; border:none; cursor:pointer; padding:6px 14px;
+  }
+  .tabItem.active { color:var(--text-primary); }
+  .tabItem.active::before {
+    content:''; position:absolute; top:-2px; left:18px; right:18px; height:2px;
+    background:var(--accent-amber);
+  }
+  .tabItem svg { opacity:.9; }
+
+  /* ---------- 조작키 설정 ---------- */
+  .kbRow { display:flex; align-items:center; justify-content:space-between; padding:11px 2px; border-bottom:1px solid var(--divider); }
+  .kbLabel { font-size:13px; font-weight:700; color:var(--text-primary); }
+  .kbKeyBtn { min-width:88px; height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--divider);
+    background:var(--bg-main); color:var(--text-secondary); font-size:12px; font-weight:800; cursor:pointer; font-family:inherit; }
+  .kbKeyBtn.listening { background:var(--accent-blue); color:#fff; border-color:var(--accent-blue); animation:kbPulse 1s ease-in-out infinite; }
+  @keyframes kbPulse { 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
+
+  /* ---------- 사람 프로필 모달 (친구/검색결과 공용) ---------- */
+  .personBtn { flex:1; height:44px; border:none; border-radius:10px; background:var(--bg-hover); color:#fff;
+    font-weight:800; font-size:13px; cursor:pointer; font-family:inherit; }
+  .personBtn:disabled { opacity:.5; cursor:default; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">
+    <div class="brandMark">🕹</div>
+    <div class="brandName">플레이 허브</div>
+  </div>
+  <div id="searchBar">
+    <button id="searchBackBtn" title="닫기">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L11 6M5 12L11 18" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <input id="searchInput" type="text" placeholder="게임 이름으로 검색" autocomplete="off">
+    <button id="searchClearBtn" title="지우기">✕</button>
+  </div>
+
+  <div class="topIcons">
+    <button class="iconBtn searchTrigger" id="searchOpenBtn" title="검색">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="white" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="iconBtn" title="알림">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3C9 3 7 5.2 7 8.4V12.5L5 16H19L17 12.5V8.4C17 5.2 15 3 12 3Z" stroke="white" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 18.5C9.8 19.6 10.8 20.4 12 20.4C13.2 20.4 14.2 19.6 14.5 18.5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="iconBtn" id="settingsOpenBtn" title="설정">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="white" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.96 19a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.87l-.06-.06A2 2 0 1 1 7.03 4.2l.06.06A1.7 1.7 0 0 0 8.96 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 8.96a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="lvChip" id="lvChip" title="내 레벨"><b id="lvNum">1</b><span class="lvBar"><i id="lvFill"></i></span></div>
+    <div class="coinBadge" id="shardBadge" style="cursor:pointer;"><span>🔷</span><span id="shardAmountTop">1,240</span></div>
+    <div class="avatar" id="avatarBtn" style="cursor:pointer;">🙂</div>
+  </div>
+</div>
+
+<div id="acctOverlay" style="position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.65);">
+  <div style="width:100%;max-width:420px;background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px 18px 0 0;padding:22px 20px 28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:18px;font-weight:900;">계정</div>
+      <button id="acctClose" type="button" style="width:32px;height:32px;border-radius:50%;border:none;background:var(--bg-main);color:var(--text-secondary);font-size:16px;font-weight:700;cursor:pointer;">✕</button>
+    </div>
+    <div id="acctStatus" style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">연결 중...</div>
+
+    <div id="acctNicknameBlock">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">닉네임 (게스트)</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="nicknameInput" type="text" maxlength="12" placeholder="닉네임 입력" style="flex:1;height:40px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 10px;font-family:inherit;">
+        <button id="nicknameSaveBtn" type="button" style="border:none;border-radius:10px;background:var(--accent-blue);color:#fff;font-weight:800;padding:0 14px;cursor:pointer;">저장</button>
+      </div>
+    </div>
+
+    <div id="acctLoginBlock">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">이메일로 로그인 / 회원가입하면 어느 기기에서든 같은 계정으로 접속돼요</div>
+      <input id="emailInput" type="email" placeholder="이메일" style="width:100%;height:40px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 10px;margin-bottom:8px;font-family:inherit;">
+      <input id="passInput" type="password" placeholder="비밀번호 (6자 이상)" style="width:100%;height:40px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 10px;margin-bottom:12px;font-family:inherit;">
+      <div style="display:flex;gap:8px;">
+        <button id="signInBtn" type="button" style="flex:1;height:44px;border:none;border-radius:10px;background:var(--bg-hover);color:#fff;font-weight:800;cursor:pointer;">로그인</button>
+        <button id="signUpBtn" type="button" style="flex:1;height:44px;border:none;border-radius:10px;background:var(--accent-green);color:#0a0f0d;font-weight:800;cursor:pointer;">회원가입</button>
+      </div>
+      <div id="acctError" style="font-size:12px;color:#ff7a6b;margin-top:10px;"></div>
+    </div>
+
+    <div id="acctSwitchBlock" style="display:none;">
+      <button id="signOutBtn" type="button" style="width:100%;height:44px;border:none;border-radius:10px;background:var(--bg-hover);color:#fff;font-weight:800;cursor:pointer;margin-top:8px;">🚪 로그아웃</button>
+      <button id="switchAcctBtn" type="button" style="width:100%;height:44px;border:none;border-radius:10px;background:var(--accent-green);color:#0a0f0d;font-weight:800;cursor:pointer;margin-top:8px;">➕ 다른 계정 만들기 / 로그인</button>
+      <div style="font-size:11px;color:var(--text-disabled);margin-top:8px;line-height:1.6;">
+        로그아웃하면 게스트로 돌아가고, 아바타·닉네임은 계정에 저장돼 있어서 다시 로그인하면 그대로 돌아와요.
+      </div>
+    </div>
+  <button id="profileBtn" type="button" style="width:100%;height:44px;margin-top:10px;border:none;border-radius:10px;background:var(--accent-blue);color:#fff;font-weight:800;font-size:13px;cursor:pointer;">🙂 내 프로필 · 이름 바꾸기</button>
+  <button id="acctSettingsBtn" type="button" style="width:100%;height:40px;margin-top:10px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">🎮 조작키 설정</button>
+  </div>
+</div>
+
+<div id="shopOverlay" style="position:fixed;inset:0;z-index:62;display:none;flex-direction:column;background:var(--bg-main);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--divider);flex:none;">
+    <div style="font-size:17px;font-weight:900;color:#fff;">🔷 샤드 상점</div>
+    <button id="shopCloseBtn" type="button" style="width:34px;height:34px;border-radius:50%;border:none;background:var(--bg-surface);color:#fff;font-size:16px;font-weight:700;cursor:pointer;">✕</button>
+  </div>
+  <div style="padding:16px 18px 6px;flex:none;">
+    <div style="background:linear-gradient(135deg,#1a2540,#0f1830);border:1px solid rgba(0,162,255,.35);border-radius:16px;padding:16px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="color:var(--text-secondary);font-size:11px;font-weight:700;">보유 중</div>
+        <div style="color:#fff;font-size:24px;font-weight:900;margin-top:2px;">🔷 <span id="shardAmountShop">0</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div style="color:var(--text-secondary);font-size:10px;">누적 플레이 시간</div>
+        <div id="playTimeDisplay" style="color:#8fd0ff;font-size:13px;font-weight:800;">0분</div>
+      </div>
+    </div>
+    <div style="color:var(--text-disabled);font-size:10.5px;margin-top:10px;line-height:1.5;">
+      💡 샤드는 나중에 실제 결제로 구매할 수 있게 될 예정이에요. 지금은 플레이 시간이 쌓이면 아래 패키지를 하나씩 무료로 받을 수 있어요.
+    </div>
+  </div>
+  <div id="shopList" style="flex:1;overflow-y:auto;padding:14px 18px 24px;display:flex;flex-direction:column;gap:10px;"></div>
+</div>
+
+<div id="avatarOverlay" style="position:fixed;inset:0;z-index:61;display:none;flex-direction:column;background:var(--bg-main);">
+  <div id="avatarTopBar">
+    <button id="avatarCloseBtn" type="button">✕</button>
+    <div class="avTitle">아바타 꾸미기</div>
+    <div class="avTopActions">
+      <button id="avatarRandomBtn" type="button" title="랜덤">🎲</button>
+      <button id="avatarResetBtn" type="button" title="초기화">↺</button>
+    </div>
+  </div>
+  <div id="avatarBody">
+    <div id="avatarPreviewPane">
+      <canvas id="avatarCanvas"></canvas>
+      <div id="avatarNameTag">내 아바타</div>
+      <div id="avatarDragHint">← 드래그해서 돌려보기 →</div>
+      <div id="avatarWearing"></div>
+    </div>
+    <div id="avatarCatalogPane">
+      <div id="avatarTabs"></div>
+      <div id="avatarItemGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="profileOverlay" style="position:fixed;inset:0;z-index:71;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);">
+  <div style="width:min(90vw,360px);background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:22px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+      <div id="profAvatarDot" style="width:52px;height:52px;border-radius:50%;background:var(--accent-blue);display:flex;align-items:center;justify-content:center;font-size:24px;">🙂</div>
+      <div style="flex:1;min-width:0;">
+        <div id="profDisplayName" style="font-size:17px;font-weight:900;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">플레이어</div>
+        <div id="profAccountName" style="font-size:11px;color:var(--text-secondary);margin-top:3px;"></div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--text-secondary);margin-bottom:6px;">계정 이름 (변경 불가)</div>
+    <div id="profAccountLocked" style="width:100%;height:42px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:var(--text-disabled);display:flex;align-items:center;padding:0 12px;font-size:14px;margin-bottom:4px;">—</div>
+    <div style="font-size:10px;color:var(--text-disabled);margin-bottom:16px;line-height:1.5;">🔒 처음 만들 때 정한 이름이라 바꿀 수 없어요. 친구 검색에는 이 이름으로도 찾을 수 있어요.</div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--text-secondary);margin-bottom:6px;">표시 이름 (자유롭게 변경)</div>
+    <input id="profDisplayInput" type="text" maxlength="12" placeholder="표시 이름" style="width:100%;height:42px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 12px;font-family:inherit;font-size:14px;margin-bottom:6px;">
+    <div style="font-size:10px;color:var(--text-disabled);margin-bottom:14px;line-height:1.5;">게임과 친구 목록에서 다른 사람에게 보이는 이름이에요.</div>
+
+    <div id="profMsg" style="font-size:12px;margin-bottom:10px;min-height:16px;"></div>
+    <button id="profSaveBtn" type="button" style="width:100%;height:44px;border:none;border-radius:10px;background:var(--accent-blue);color:#fff;font-weight:800;font-size:14px;cursor:pointer;">표시 이름 저장</button>
+
+    <div style="height:1px;background:var(--divider);margin:18px 0;"></div>
+
+    <div id="profAcctState" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;"></div>
+
+    <div id="profLoginBlock">
+      <input id="profEmail" type="email" placeholder="이메일" autocomplete="email" style="width:100%;height:42px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 12px;font-family:inherit;font-size:14px;margin-bottom:8px;">
+      <input id="profPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" style="width:100%;height:42px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 12px;font-family:inherit;font-size:14px;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;">
+        <button id="profSignInBtn" type="button" style="flex:1;height:44px;border:none;border-radius:10px;background:var(--bg-hover);color:#fff;font-weight:800;cursor:pointer;">로그인</button>
+        <button id="profSignUpBtn" type="button" style="flex:1;height:44px;border:none;border-radius:10px;background:var(--accent-green);color:#0a0f0d;font-weight:800;cursor:pointer;">회원가입</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-disabled);margin-top:8px;line-height:1.5;">회원가입하면 지금 쓰는 이름이 <b>계정 이름</b>으로 고정돼요. 다른 기기에서도 같은 계정으로 이어서 할 수 있어요.</div>
+    </div>
+
+    <button id="profSignOutBtn" type="button" style="display:none;width:100%;height:44px;border:none;border-radius:10px;background:var(--bg-hover);color:#fff;font-weight:800;cursor:pointer;">로그아웃</button>
+    <div id="profAcctError" style="font-size:12px;color:#ff7a6b;margin-top:10px;min-height:16px;"></div>
+
+    <button id="profCloseBtn" type="button" style="width:100%;height:40px;margin-top:10px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">닫기</button>
+  </div>
+</div>
+
+<div id="lvPanel">
+  <div class="lvCard">
+    <div style="font-size:10px;font-weight:900;letter-spacing:.2em;color:var(--text-secondary);">MY LEVEL</div>
+    <div class="lvBig" id="lvPanelNum">1</div>
+    <div class="lvBigBar"><i id="lvPanelFill"></i></div>
+    <div id="lvPanelText" style="font-size:12px;color:var(--text-secondary);">0 / 500 XP</div>
+    <div style="font-size:11px;color:var(--text-disabled);margin-top:14px;line-height:1.6;">
+      모든 게임에서 얻은 경험치가 이 레벨 하나로 쌓여요.<br>친구 프로필에도 레벨이 보입니다.
+    </div>
+    <div id="lvRewardList" style="margin-top:16px;text-align:left;max-height:170px;overflow-y:auto;"></div>
+    <button id="lvCloseBtn" type="button" style="width:100%;height:44px;margin-top:18px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:800;font-size:12px;cursor:pointer;">닫기</button>
+  </div>
+</div>
+
+<div id="personOverlay" style="position:fixed;inset:0;z-index:72;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);">
+  <div style="width:min(90vw,340px);background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:26px 22px;text-align:center;">
+    <div id="personAvatar" style="width:84px;height:84px;border-radius:6px 20px 6px 20px;margin:0 auto 14px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:38px;border:2px solid var(--divider);">🙂</div>
+    <div id="personName" style="font-size:19px;font-weight:900;color:#fff;margin-bottom:4px;">이름</div>
+    <div id="personStatus" style="font-size:12px;color:var(--text-secondary);margin-bottom:20px;">오프라인</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button id="personFriendBtn" class="personBtn" type="button">친구추가</button>
+      <button id="personFollowBtn" class="personBtn" type="button">팔로우</button>
+    </div>
+    <button id="personJoinBtn" type="button" style="display:none;width:100%;height:46px;border:none;border-radius:10px;background:var(--accent-green);color:#0a0f0d;font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px;">▶ 같은 체험 참가</button>
+    <button id="personCloseBtn" type="button" style="width:100%;height:40px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">닫기</button>
+  </div>
+</div>
+
+<div id="keybindOverlay" style="position:fixed;inset:0;z-index:73;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);">
+  <div style="width:min(92vw,380px);max-height:82vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:22px;">
+    <div style="font-size:18px;font-weight:900;margin-bottom:6px;">🎮 조작키 설정</div>
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+      키를 누르면 원하는 키를 바로 입력받아요.<br>
+      이 설정은 <b style="color:var(--text-primary);">이 기기의 나에게만</b> 적용되고, 언제든 다시 바꿀 수 있어요.
+    </div>
+    <div id="keybindList"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button id="kbResetBtn" type="button" style="flex:1;height:42px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">기본값으로 초기화</button>
+      <button id="kbCloseBtn" type="button" style="flex:1;height:42px;border:none;border-radius:10px;background:var(--accent-blue);color:#fff;font-weight:800;font-size:12px;cursor:pointer;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="nicknamePromptOverlay" style="position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);">
+  <div style="width:min(88vw,340px);background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:22px;text-align:center;">
+    <div style="font-size:30px;margin-bottom:8px;">👋</div>
+    <div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:6px;">닉네임을 정해주세요</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">친구들에게 "플레이어6829" 대신<br>이 이름으로 보여요</div>
+    <input id="nicknamePromptInput" type="text" maxlength="12" placeholder="닉네임 입력" style="width:100%;height:44px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 12px;font-family:inherit;font-size:14px;text-align:center;margin-bottom:12px;">
+    <button id="nicknamePromptSaveBtn" type="button" style="width:100%;height:44px;border-radius:10px;border:none;background:var(--accent-blue);color:#fff;font-weight:800;font-size:14px;cursor:pointer;">확인</button>
+  </div>
+</div>
+
+<main>
+  <div id="friendsRow">
+    <div class="addFriendCircle" id="addFriendBtn" title="친구 검색">＋</div>
+  </div>
+
+  <div id="liveSection" style="display:none;">
+    <div class="sectionHead">
+      <div class="sectionTitle">지금 플레이 중</div>
+      <div class="sectionMore" id="liveTotal"></div>
+    </div>
+    <div id="liveRooms"></div>
+  </div>
+
+  <div class="sectionHead">
+    <div class="sectionTitle">추천 미니게임</div>
+    <div class="sectionMore">더보기 ›</div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card" data-game="gacha" data-search="아우라 배틀 aura battle 가챠 rpg 오픈월드">
+      <div class="thumb gacha">
+        <div class="liveBadge"><i></i><span>0</span></div>
+        <div class="ring"></div>
+        <div class="genreTag">RPG</div>
+        <div class="glyph">🎲</div>
+      </div>
+      <div class="cardBody">
+        <div class="cardTitle">아우라 배틀</div>
+        <div class="cardStats">
+          <span class="statItem like"><span class="statIcon">👍</span>92%</span>
+          <span class="statItem"><span class="statIcon">👥</span>1.2k</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-game="jump" data-search="스카이 점프맵 sky jump obby 점프 어드벤처">
+      <div class="thumb jump">
+        <div class="liveBadge"><i></i><span>0</span></div>
+        <div class="flagpole"></div>
+        <div class="genreTag">점프맵</div>
+        <div class="glyph">🚩</div>
+      </div>
+      <div class="cardBody">
+        <div class="cardTitle">스카이 점프맵</div>
+        <div class="cardStats">
+          <span class="statItem like"><span class="statIcon">👍</span>88%</span>
+          <span class="statItem"><span class="statIcon">👥</span>640</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-game="forest" data-search="포레스트 스트라이크 forest strike fps 총 슈팅 멀티">
+      <div class="thumb forest">
+        <div class="liveBadge"><i></i><span>0</span></div>
+        <div class="genreTag">FPS</div>
+        <div class="glyph">🎯</div>
+      </div>
+      <div class="cardBody">
+        <div class="cardTitle">포레스트 스트라이크</div>
+        <div class="cardStats">
+          <span class="statItem like"><span class="statIcon">👍</span>93%</span>
+          <span class="statItem"><span class="statIcon">👥</span>870</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-game="backrooms" data-search="백룸 backrooms 공포 호러 미로">
+      <div class="thumb backrooms">
+        <div class="liveBadge"><i></i><span>0</span></div>
+        <div class="genreTag">공포</div>
+        <div class="glyph">📼</div>
+      </div>
+      <div class="cardBody">
+        <div class="cardTitle">백룸</div>
+        <div class="cardStats">
+          <span class="statItem like"><span class="statIcon">👍</span>95%</span>
+          <span class="statItem"><span class="statIcon">👥</span>410</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card locked">
+      <div class="thumb soon">
+        <div class="glyph">🔒</div>
+      </div>
+      <div class="cardBody">
+        <div class="cardTitle">준비 중</div>
+        <div class="lockedLabel">Coming Soon</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="emptyState">
+    <div class="emoji">🔍</div>
+    <div class="msg">검색 결과가 없어요</div>
+    <div class="sub">다른 게임 이름으로 검색해보세요</div>
+  </div>
+</main>
+
+<div id="modalOverlay">
+  <div id="modalPanel">
+    <div class="modalHead">
+      <div id="modalThumb" class="modalThumb"></div>
+      <button id="modalClose" type="button">✕</button>
+    </div>
+    <div id="modalTitle"></div>
+    <div id="modalDesc"></div>
+    <div class="modalStatRow">
+      <div class="modalStat"><span class="num like" id="modalLike"></span><span class="lbl">👍 추천율</span></div>
+      <div class="modalStat"><span class="num" id="modalPlayers"></span><span class="lbl">👥 플레이 중</span></div>
+      <div class="modalStat"><span class="num" id="modalGenre"></span><span class="lbl">장르</span></div>
+    </div>
+    <div class="mpBox">
+      <div class="mpBoxTitle">👥 친구와 같이 플레이</div>
+      <div class="mpRow">
+        <input id="roomCodeInput" type="text" maxlength="12" spellcheck="false">
+        <button id="roomCopyBtn" type="button">코드 복사</button>
+        <button id="roomNewBtn" type="button">새 코드</button>
+      </div>
+      <div class="mpHint">같은 방 코드를 입력하면 같은 방에서 만나요. 코드를 친구에게 공유하고 똑같이 입력한 뒤 플레이하면 함께 플레이할 수 있어요.</div>
+    </div>
+    <a id="playBtn" href="#">▶ &nbsp;PLAY</a>
+    <button id="inviteBtn" type="button">🔗 &nbsp;친구 초대 링크 만들기</button>
+  </div>
+</div>
+
+<div id="tabbar">
+  <button class="tabItem active">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M4 11L12 4L20 11" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10V20H18V10" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>
+    <span>홈</span>
+  </button>
+  <button class="tabItem" id="tabExploreBtn">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#656B70" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="#656B70" stroke-width="2" stroke-linecap="round"/></svg>
+    <span>탐색</span>
+  </button>
+  <button class="tabItem" id="tabAvatarBtn">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#656B70" stroke-width="2"/><path d="M4 20C4 16 7.5 14 12 14C16.5 14 20 16 20 20" stroke="#656B70" stroke-width="2" stroke-linecap="round"/></svg>
+    <span>아바타</span>
+  </button>
+  <button class="tabItem">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="12" rx="2" stroke="#656B70" stroke-width="2"/><path d="M8 21L12 17L16 21" stroke="#656B70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>채팅</span>
+  </button>
+</div>
+
+<div id="friendSearchOverlay">
+  <div id="fsTopbar">
+    <button id="fsBackBtn" title="닫기">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L11 6M5 12L11 18" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <input id="fsSearchInput" type="text" placeholder="친구 닉네임으로 검색" autocomplete="off">
+  </div>
+  <div id="fsResults">
+    <div id="fsHint">닉네임을 입력해서 친구를 찾아보세요.<br>이메일로 가입한 유저만 검색돼요.</div>
+  </div>
+</div>
+
+<style>
+  #errorPanel { position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center;
+    background:rgba(10,10,15,.94); padding:24px; }
+  #errorPanel.show { display:flex; }
+  #errorBox { max-width:90vw; max-height:80vh; overflow:auto; background:#1a1015; border:1px solid #ff6b5c;
+    border-radius:14px; padding:18px; color:#ffb3a8; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-all; font-family:monospace; }
+  #errorBox b { color:#fff; display:block; margin-bottom:8px; font-size:14px; font-family:system-ui,sans-serif; }
+</style>
+<div id="errorPanel"><div id="errorBox"></div></div>
+<script>
+  function showError(title, detail){
+    const panel = document.getElementById('errorPanel');
+    const box = document.getElementById('errorBox');
+    box.innerHTML = '<b>⚠ ' + title + '</b>' + (detail||'');
+    panel.classList.add('show');
+  }
+  window.addEventListener('error', function(e){
+    const msg = e.message || 'Unknown error';
+    const loc = (e.filename ? (e.filename.split('/').pop() + ':' + e.lineno + ':' + e.colno) : '');
+    showError('오류 발생', msg + (loc ? ('\n(' + loc + ')') : '\n(외부 스크립트에서 발생 - crossorigin 문제일 수 있음)') + (e.error && e.error.stack ? ('\n\n' + e.error.stack) : ''));
+  });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous" onerror="showError('three.js 로딩 실패','CDN에서 three.js를 불러오지 못했어요.')"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true;"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous" onerror="window.__mpFail=true;"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous" onerror="window.__mpFail=true;"></script>
+<script src="multiplayer.js" onerror="window.__mpFail=true; showError('multiplayer.js 로딩 실패','같은 폴더에 multiplayer.js 파일이 있는지 확인해주세요.')"></script>
+<script>
+  const GAMES = {
+    gacha: {
+      title:'아우라 배틀',
+      desc:'뽑기로 희귀 아우라를 모으고 섬을 누비며 성장하는 오픈월드 배틀 게임입니다.',
+      like:'92%', players:'1.2k', genre:'RPG',
+      thumbBg:'radial-gradient(circle at 32% 26%, #6d4fd6, #3a2280 65%, #1c1245)',
+      glyph:'🎲',
+      href:'aura-battle-3.html'
+    },
+    jump: {
+      title:'스카이 점프맵',
+      desc:'하늘에 떠 있는 발판을 뛰어 넘어 정상 깃발까지 완주하는 타임어택 점프맵입니다.',
+      like:'88%', players:'640', genre:'점프맵',
+      thumbBg:'radial-gradient(circle at 32% 26%, #e08a1e, #a85608 65%, #5c2c02)',
+      glyph:'🚩',
+      href:'jumpmap.html'
+    },
+    backrooms: {
+      title:'백룸',
+      desc:'노란 형광등이 깜빡이는 끝없는 미로. 어딘가에서 무언가가 당신을 지켜보고 있습니다.',
+      like:'95%', players:'410', genre:'공포',
+      thumbBg:'radial-gradient(circle at 32% 26%, #6b5f1e, #3a3208 65%, #141006)',
+      glyph:'📼',
+      href:'backrooms.html'
+    },
+    forest: {
+      title:'포레스트 스트라이크',
+      desc:'숲 속 3D FPS. 다른 플레이어와 같은 방에서 대전하고, 꾸민 아바타가 그대로 적용됩니다.',
+      like:'93%', players:'870', genre:'FPS',
+      thumbBg:'radial-gradient(circle at 32% 26%, #4a7a3a, #24512a 65%, #0d1c10)',
+      glyph:'🎯',
+      href:'forest-strike.html'
+    }
+  };
+
+  const overlay = document.getElementById('modalOverlay');
+  const modalThumb = document.getElementById('modalThumb');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalDesc = document.getElementById('modalDesc');
+  const modalLike = document.getElementById('modalLike');
+  const modalPlayers = document.getElementById('modalPlayers');
+  const modalGenre = document.getElementById('modalGenre');
+  const playBtn = document.getElementById('playBtn');
+  const roomCodeInput = document.getElementById('roomCodeInput');
+  const roomCopyBtn = document.getElementById('roomCopyBtn');
+  const roomNewBtn = document.getElementById('roomNewBtn');
+
+  function randomRoomCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i=0;i<5;i++) s += chars[Math.floor(Math.random()*chars.length)];
+    return s;
+  }
+  function getSavedRoom(){
+    return localStorage.getItem('mp_room') || randomRoomCode();
+  }
+  function saveRoom(code){
+    localStorage.setItem('mp_room', code);
+  }
+  let currentGameHref = '';
+  let currentGameKey = '';
+  roomCodeInput.value = getSavedRoom();
+  saveRoom(roomCodeInput.value);
+
+  function applyRoomToPlayBtn(){
+    const code = (roomCodeInput.value || 'PUBLIC').trim().toUpperCase().slice(0,12) || 'PUBLIC';
+    roomCodeInput.value = code;
+    saveRoom(code);
+    if (currentGameHref){
+      playBtn.href = currentGameHref + '?room=' + encodeURIComponent(code);
+    }
+  }
+  roomCodeInput.addEventListener('input', applyRoomToPlayBtn);
+  roomNewBtn.addEventListener('click', ()=>{
+    roomCodeInput.value = randomRoomCode();
+    applyRoomToPlayBtn();
+  });
+  roomCopyBtn.addEventListener('click', ()=>{
+    roomCodeInput.select();
+    navigator.clipboard?.writeText(roomCodeInput.value).catch(()=>{});
+    roomCopyBtn.textContent = '복사됨!';
+    setTimeout(()=> roomCopyBtn.textContent = '코드 복사', 1200);
+  });
+
+  document.querySelectorAll('.card[data-game]').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const g = GAMES[card.dataset.game];
+      if (!g) return;
+      modalThumb.style.background = g.thumbBg;
+      modalThumb.textContent = g.glyph;
+      modalTitle.textContent = g.title;
+      modalDesc.textContent = g.desc;
+      modalLike.textContent = g.like;
+      modalPlayers.textContent = g.players;
+      modalGenre.textContent = g.genre;
+      currentGameHref = g.href;
+      currentGameKey = card.dataset.game;
+      applyRoomToPlayBtn();
+      overlay.classList.add('show');
+    });
+  });
+
+  document.getElementById('modalClose').addEventListener('click', ()=>{
+    overlay.classList.remove('show');
+  });
+  overlay.addEventListener('click', e=>{
+    if (e.target === overlay) overlay.classList.remove('show');
+  });
+
+  // ---------- 검색 기능 ----------
+  const topbar = document.getElementById('topbar');
+  const searchOpenBtn = document.getElementById('searchOpenBtn');
+  const searchBackBtn = document.getElementById('searchBackBtn');
+  const searchInput = document.getElementById('searchInput');
+  const searchClearBtn = document.getElementById('searchClearBtn');
+  const emptyState = document.getElementById('emptyState');
+  const allCards = Array.from(document.querySelectorAll('.grid .card'));
+
+  function openSearch(){
+    topbar.classList.add('searching');
+    searchInput.value = '';
+    filterCards('');
+    setTimeout(()=> searchInput.focus(), 50);
+  }
+  function closeSearch(){
+    topbar.classList.remove('searching');
+    searchInput.value = '';
+    filterCards('');
+  }
+  function filterCards(rawQuery){
+    const q = rawQuery.trim().toLowerCase();
+    let visibleCount = 0;
+    allCards.forEach(card=>{
+      if (!q){
+        card.classList.remove('filteredOut');
+        visibleCount++;
+        return;
+      }
+      const haystack = (
+        (card.dataset.search || '') + ' ' +
+        (card.querySelector('.cardTitle')?.textContent || '')
+      ).toLowerCase();
+      const match = haystack.includes(q);
+      card.classList.toggle('filteredOut', !match);
+      if (match) visibleCount++;
+    });
+    emptyState.classList.toggle('show', q.length > 0 && visibleCount === 0);
+  }
+
+  searchOpenBtn.addEventListener('click', openSearch);
+  searchBackBtn.addEventListener('click', closeSearch);
+  searchClearBtn.addEventListener('click', ()=>{
+    searchInput.value = '';
+    filterCards('');
+    searchInput.focus();
+  });
+  searchInput.addEventListener('input', e=> filterCards(e.target.value));
+  searchInput.addEventListener('keydown', e=>{
+    if (e.key === 'Escape') closeSearch();
+  });
+
+  // ---------- 계정 / 로그인 ----------
+  const avatarBtn = document.getElementById('avatarBtn');
+  const acctOverlay = document.getElementById('acctOverlay');
+  const acctClose = document.getElementById('acctClose');
+  const acctStatus = document.getElementById('acctStatus');
+  const acctNicknameBlock = document.getElementById('acctNicknameBlock');
+  const acctLoginBlock = document.getElementById('acctLoginBlock');
+  const nicknameInput = document.getElementById('nicknameInput');
+  const nicknameSaveBtn = document.getElementById('nicknameSaveBtn');
+  const emailInput = document.getElementById('emailInput');
+  const passInput = document.getElementById('passInput');
+  const signInBtn = document.getElementById('signInBtn');
+  const signUpBtn = document.getElementById('signUpBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+  const acctSwitchBlock = document.getElementById('acctSwitchBlock');
+  const acctError = document.getElementById('acctError');
+
+  function refreshAcctUI(){
+    if (!window.MP || !MP.isConfigured || !MP.isConfigured()){
+      acctStatus.textContent = '멀티플레이가 설정되지 않았어요.';
+      return;
+    }
+    if (MP.isLoggedIn && MP.isLoggedIn()){
+      const u = MP.currentUser();
+      acctStatus.textContent = `로그인됨: ${u.email || MP.getDisplayName()}`;
+      acctNicknameBlock.style.display = 'none';
+      acctLoginBlock.style.display = 'none';
+      acctSwitchBlock.style.display = 'block';
+    } else {
+      acctStatus.textContent = `게스트로 접속 중 (닉네임: ${MP.getDisplayName()})`;
+      acctNicknameBlock.style.display = 'block';
+      acctLoginBlock.style.display = 'block';
+      acctSwitchBlock.style.display = 'none';
+      nicknameInput.value = MP.getNickname();
+    }
+  }
+
+  // ---------- 내 프로필 (계정 이름 고정 / 표시 이름만 변경) ----------
+  const profileOverlay = document.getElementById('profileOverlay');
+  function openProfile(){
+    if (!window.MP){ return; }
+    const disp = MP.getDisplayName ? MP.getDisplayName() : '플레이어';
+    const acct = (MP.getAccountName && MP.getAccountName()) || null;
+    document.getElementById('profDisplayName').textContent = disp;
+    document.getElementById('profDisplayInput').value = disp;
+    document.getElementById('profAccountLocked').textContent = acct || '아직 정해지지 않음';
+    document.getElementById('profAccountName').textContent =
+      acct ? ('계정 이름 · ' + acct) : '접속하면 계정 이름이 만들어져요';
+    document.getElementById('profMsg').textContent = '';
+    refreshProfileAcct();
+    profileOverlay.style.display = 'flex';
+  }
+  // 로그인 상태에 따라 프로필 창의 계정 영역을 갱신
+  function refreshProfileAcct(){
+    const logged = !!(window.MP && MP.isLoggedIn && MP.isLoggedIn());
+    const u = logged && MP.currentUser ? MP.currentUser() : null;
+    const anon = u && u.isAnonymous;
+    document.getElementById('profAcctState').textContent = (logged && !anon)
+      ? ('로그인됨 · ' + (u.email || ''))
+      : '게스트로 접속 중 · 회원가입하면 다른 기기에서도 이어서 할 수 있어요';
+    document.getElementById('profLoginBlock').style.display = (logged && !anon) ? 'none' : 'block';
+    document.getElementById('profSignOutBtn').style.display = (logged && !anon) ? 'block' : 'none';
+    document.getElementById('profAcctError').textContent = '';
+  }
+  function profErr(e){
+    const box = document.getElementById('profAcctError');
+    const map = {
+      'auth/invalid-email':'이메일 형식이 올바르지 않아요.',
+      'auth/weak-password':'비밀번호는 6자 이상이어야 해요.',
+      'auth/email-already-in-use':'이미 가입된 이메일이에요. 로그인해 주세요.',
+      'auth/wrong-password':'비밀번호가 틀렸어요.',
+      'auth/user-not-found':'가입되지 않은 이메일이에요.',
+      'auth/invalid-credential':'이메일 또는 비밀번호가 올바르지 않아요.',
+      'auth/too-many-requests':'시도가 너무 많아요. 잠시 후 다시 해주세요.'
+    };
+    const code = e && (e.code || e.message);
+    box.textContent = map[code] || ('실패: ' + (code || '알 수 없는 오류'));
+  }
+  document.getElementById('profSignInBtn').addEventListener('click', ()=>{
+    const em=document.getElementById('profEmail').value.trim(), pw=document.getElementById('profPw').value;
+    if (!em||!pw){ document.getElementById('profAcctError').textContent='이메일과 비밀번호를 입력해주세요.'; return; }
+    document.getElementById('profAcctError').textContent='로그인 중...';
+    MP.signIn(em, pw, (user, err)=>{
+      if (err){ profErr(err); return; }
+      document.getElementById('profAcctError').textContent='';
+      refreshProfileAcct(); openProfile();
+      if (typeof refreshAcctUI==='function') refreshAcctUI();
+    });
+  });
+  document.getElementById('profSignUpBtn').addEventListener('click', ()=>{
+    const em=document.getElementById('profEmail').value.trim(), pw=document.getElementById('profPw').value;
+    if (!em||!pw){ document.getElementById('profAcctError').textContent='이메일과 비밀번호를 입력해주세요.'; return; }
+    document.getElementById('profAcctError').textContent='가입 중...';
+    // 지금 쓰고 있는 표시 이름을 계정 이름으로 고정한다
+    const nick = (document.getElementById('profDisplayInput').value || MP.getDisplayName()).trim().slice(0,12);
+    MP.signUp(em, pw, nick, (user, err)=>{
+      if (err){ profErr(err); return; }
+      document.getElementById('profAcctError').textContent='';
+      refreshProfileAcct(); openProfile();
+      if (typeof refreshAcctUI==='function') refreshAcctUI();
+    });
+  });
+  document.getElementById('profSignOutBtn').addEventListener('click', ()=>{
+    MP.signOutUser(()=>{ refreshProfileAcct(); openProfile(); if (typeof refreshAcctUI==='function') refreshAcctUI(); });
+  });
+  document.getElementById('profileBtn').addEventListener('click', openProfile);
+  document.getElementById('profCloseBtn').addEventListener('click', ()=>{ profileOverlay.style.display='none'; });
+  document.getElementById('profSaveBtn').addEventListener('click', ()=>{
+    const v = (document.getElementById('profDisplayInput').value || '').trim().slice(0,12);
+    const msg = document.getElementById('profMsg');
+    if (!v){ msg.style.color = '#ff7a6b'; msg.textContent = '이름을 입력해주세요.'; return; }
+    msg.style.color = 'var(--text-secondary)'; msg.textContent = '저장 중...';
+    MP.setNickname(v, (ok)=>{
+      msg.style.color = ok ? 'var(--accent-green)' : '#ff7a6b';
+      msg.textContent = ok ? '저장했어요! 다른 사람에게 이 이름으로 보여요.' : '저장에 실패했어요. 잠시 후 다시 시도해주세요.';
+      document.getElementById('profDisplayName').textContent = v;
+      if (typeof refreshAcctUI === 'function') refreshAcctUI();
+    });
+  });
+
+  avatarBtn.addEventListener('click', ()=>{ openAvatarCustomizer(); });
+  document.getElementById('tabAvatarBtn').addEventListener('click', ()=>{ openAvatarCustomizer(); });
+  document.getElementById('tabExploreBtn').addEventListener('click', ()=>{ openSearch(); });
+
+  // ================= 샤드(Shard) 화폐 시스템 =================
+  // 지금은 실제 결제 대신 "누적 플레이 시간"으로 패키지를 하나씩 무료로 받는 임시 방식.
+  const SHARD_PACKAGES = [80, 200, 400, 800, 1700, 3100, 4300, 5600, 8500, 11000, 15000, 22000];
+  // 각 패키지를 받을 수 있게 되는 누적 플레이 시간(분) 기준 - 뒤로 갈수록 더 오래 걸림
+  const SHARD_CLAIM_MINUTES = [5, 15, 30, 60, 120, 200, 280, 360, 520, 680, 900, 1200];
+
+  function loadShardBalance(){
+    const v = localStorage.getItem('shard_balance');
+    if (v === null){ localStorage.setItem('shard_balance', '1240'); return 1240; }
+    return parseInt(v, 10) || 0;
+  }
+  function saveShardBalance(v){
+    localStorage.setItem('shard_balance', String(v));
+  }
+  function loadPlaySeconds(){
+    return parseInt(localStorage.getItem('total_play_seconds') || '0', 10) || 0;
+  }
+  function loadClaimedSet(){
+    try { return JSON.parse(localStorage.getItem('shard_claimed') || '[]'); } catch(e){ return []; }
+  }
+  function saveClaimedSet(arr){
+    localStorage.setItem('shard_claimed', JSON.stringify(arr));
+  }
+
+  let shardBalance = loadShardBalance();
+  // 게임 탭에서 샤드를 벌거나 쓰면 허브 화면에도 바로 반영한다.
+  // (localStorage는 다른 탭에서 바뀌면 storage 이벤트가 오고,
+  //  같은 탭으로 돌아온 경우엔 focus 시점에 다시 읽는다)
+  function syncShardFromStorage(){
+    const v = loadShardBalance();
+    if (v !== shardBalance){ shardBalance = v; updateShardUI(); }
+  }
+  window.addEventListener('storage', e=>{ if (e.key === 'shard_balance') syncShardFromStorage(); });
+  window.addEventListener('focus', syncShardFromStorage);
+  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) syncShardFromStorage(); });
+  let totalPlaySeconds = loadPlaySeconds();
+  let claimedSet = loadClaimedSet();
+
+  function updateShardUI(){
+    const formatted = shardBalance.toLocaleString('ko-KR');
+    const topEl = document.getElementById('shardAmountTop');
+    const shopEl = document.getElementById('shardAmountShop');
+    if (topEl) topEl.textContent = formatted;
+    if (shopEl) shopEl.textContent = formatted;
+  }
+  updateShardUI();
+
+  // 1초마다 누적 플레이 시간 증가 + 저장 (탭을 보고 있을 때만 카운트)
+  setInterval(()=>{
+    if (document.visibilityState === 'visible'){
+      totalPlaySeconds++;
+      localStorage.setItem('total_play_seconds', String(totalPlaySeconds));
+      const playTimeDisplay = document.getElementById('playTimeDisplay');
+      if (playTimeDisplay && shopOverlay.style.display === 'flex'){
+        playTimeDisplay.textContent = Math.floor(totalPlaySeconds/60) + '분';
+        renderShopList(); // 새로 조건 충족된 패키지가 있으면 실시간으로 버튼 활성화
+      }
+    }
+  }, 1000);
+
+  function claimPackage(idx){
+    if (claimedSet.includes(idx)) return;
+    const minutesNeeded = SHARD_CLAIM_MINUTES[idx];
+    if (Math.floor(totalPlaySeconds/60) < minutesNeeded) return;
+    claimedSet.push(idx);
+    saveClaimedSet(claimedSet);
+    shardBalance += SHARD_PACKAGES[idx];
+    saveShardBalance(shardBalance);
+    updateShardUI();
+    renderShopList();
+  }
+
+  function renderShopList(){
+    const list = document.getElementById('shopList');
+    const curMinutes = Math.floor(totalPlaySeconds/60);
+    list.innerHTML = SHARD_PACKAGES.map((amount, idx)=>{
+      const need = SHARD_CLAIM_MINUTES[idx];
+      const claimed = claimedSet.includes(idx);
+      const ready = !claimed && curMinutes >= need;
+      const statusHtml = claimed
+        ? '<span style="color:var(--accent-green);font-size:11px;font-weight:800;">✓ 수령완료</span>'
+        : ready
+          ? '<span style="color:#8fd0ff;font-size:11px;font-weight:800;">지금 받을 수 있어요</span>'
+          : `<span style="color:var(--text-disabled);font-size:11px;">${need}분 플레이 필요 (${curMinutes}/${need})</span>`;
+      const btnHtml = claimed
+        ? '<button disabled style="padding:9px 16px;border-radius:20px;border:none;background:var(--bg-hover);color:var(--text-disabled);font-size:12px;font-weight:800;">완료</button>'
+        : ready
+          ? `<button type="button" class="claimBtn" data-idx="${idx}" style="padding:9px 16px;border-radius:20px;border:none;background:var(--accent-blue);color:#fff;font-size:12px;font-weight:800;cursor:pointer;">받기</button>`
+          : `<button disabled style="padding:9px 16px;border-radius:20px;border:1px solid var(--divider);background:transparent;color:var(--text-disabled);font-size:12px;font-weight:800;">잠김</button>`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-surface);border:1px solid var(--divider);border-radius:14px;padding:12px 14px;${claimed?'opacity:.55;':''}">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:radial-gradient(circle,#2a4a7a,#12203a);display:flex;align-items:center;justify-content:center;font-size:18px;">🔷</div>
+          <div>
+            <div style="color:#fff;font-size:14px;font-weight:800;">${amount.toLocaleString('ko-KR')} 샤드</div>
+            <div style="margin-top:2px;">${statusHtml}</div>
+          </div>
+        </div>
+        ${btnHtml}
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.claimBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ claimPackage(parseInt(btn.dataset.idx,10)); });
+    });
+  }
+
+  // ---------- 지금 플레이 중 (실시간 접속 현황) ----------
+  // "들어가 봐야 사람이 있는지 안다"는 게 이 게임이 안 도는 가장 큰 이유였다.
+  // 밖에서 인원과 방을 보여주고, 한 번에 그 방으로 들어가게 한다.
+  const GAME_ICON = { gacha:'🎲', jump:'🪂', forest:'🌲', backrooms:'🚪' };
+  function renderLivePresence(info){
+    const total = info.total || 0;
+    // 카드마다 실시간 인원 배지
+    document.querySelectorAll('.card[data-game]').forEach(card=>{
+      const g = card.dataset.game;
+      const badge = card.querySelector('.liveBadge');
+      if (!badge) return;
+      const n = (info.games && info.games[g]) || 0;
+      badge.classList.toggle('on', n > 0);
+      const sp = badge.querySelector('span');
+      if (sp) sp.textContent = n;
+    });
+    // 열려 있는 방 목록
+    const sec = document.getElementById('liveSection');
+    const box = document.getElementById('liveRooms');
+    const tot = document.getElementById('liveTotal');
+    if (!sec || !box) return;
+    const rooms = Object.values(info.rooms || {})
+      .filter(r => GAMES[r.game])
+      .sort((a,b)=> b.count - a.count)
+      .slice(0, 6);
+    tot.textContent = total > 0 ? ('전체 ' + total + '명 접속') : '';
+    if (!rooms.length){ sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+    box.innerHTML = '';
+    rooms.forEach(r=>{
+      const g = GAMES[r.game];
+      const row = document.createElement('div');
+      row.className = 'liveRoom';
+      const who = r.names.length ? r.names.join(', ') : '플레이어';
+      row.innerHTML =
+        '<div class="lrIcon">' + (GAME_ICON[r.game] || '🎮') + '</div>' +
+        '<div class="lrInfo"><div class="lrName">' + g.title + ' · ' + r.count + '명</div>' +
+        '<div class="lrWho">' + who + (r.room !== 'PUBLIC' ? (' · 방 ' + r.room) : '') + '</div></div>';
+      const join = document.createElement('button');
+      join.className = 'lrJoin'; join.type = 'button'; join.textContent = '참가';
+      join.addEventListener('click', ()=>{
+        window.location.href = g.href + '?room=' + encodeURIComponent(r.room);
+      });
+      row.appendChild(join);
+      box.appendChild(row);
+    });
+  }
+  if (window.MP && MP.onGamePresence) MP.onGamePresence(renderLivePresence);
+
+  // ---------- 같이 하기 초대 링크 ----------
+  // "같이 하자"고 부르는 게 한 번에 되게 한다. 방 코드가 박힌 링크를 만들어 복사한다.
+  function makeInviteLink(gameKey){
+    const g = GAMES[gameKey]; if (!g) return null;
+    let code = '';
+    const CH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let i=0;i<5;i++) code += CH[Math.floor(Math.random()*CH.length)];
+    const base = location.href.replace(/[^/]*$/, '');
+    return { url: base + g.href + '?room=' + code, code, title:g.title };
+  }
+  function shareInvite(gameKey){
+    const inv = makeInviteLink(gameKey);
+    if (!inv) return;
+    const text = inv.title + ' 같이 하자!\n' + inv.url;
+    if (navigator.share){
+      navigator.share({ title:inv.title, text:inv.title + ' 같이 하자!', url:inv.url })
+        .catch(()=>copyInvite(text, inv));
+    } else copyInvite(text, inv);
+  }
+  function copyInvite(text, inv){
+    const done = ()=> alert('초대 링크를 복사했어요!\n\n방 코드: ' + inv.code + '\n\n친구에게 붙여넣기 하면 같은 방으로 들어와요.');
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(()=>prompt('아래 링크를 복사하세요', text));
+    } else prompt('아래 링크를 복사하세요', text);
+  }
+
+  // ---------- 레벨 표시 ----------
+  function refreshLevelUI(){
+    if (!(window.MP && MP.getLevel)) return;
+    const L = MP.getLevel();
+    const pct = L.need ? Math.min(100, L.into / L.need * 100) : 0;
+    const n = document.getElementById('lvNum'), f = document.getElementById('lvFill');
+    if (n) n.textContent = L.level;
+    if (f) f.style.width = pct + '%';
+    const pn = document.getElementById('lvPanelNum'), pf = document.getElementById('lvPanelFill'),
+          pt = document.getElementById('lvPanelText');
+    if (pn) pn.textContent = L.level;
+    if (pf) pf.style.width = pct + '%';
+    if (pt) pt.textContent = L.into.toLocaleString() + ' / ' + L.need.toLocaleString() + ' XP'
+      + '   (누적 ' + L.total.toLocaleString() + ')';
+    // 보상 목록 — 받은 건 체크, 앞으로 받을 건 미리 보여줘서 목표가 되게 한다
+    const rl = document.getElementById('lvRewardList');
+    if (rl && MP.levelRewardTable){
+      const table = MP.levelRewardTable(), done = MP.claimedLevels();
+      rl.innerHTML = Object.keys(table).map(Number).sort((a,b)=>a-b).map(need=>{
+        const got = done.indexOf(need) >= 0;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:'
+          + (got ? 'rgba(108,191,106,.12)' : 'var(--bg-main)') + ';margin-bottom:5px;opacity:'
+          + (L.level >= need ? '1' : '.5') + ';">'
+          + '<b style="font-size:11px;font-weight:900;min-width:34px;color:'
+          + (got ? 'var(--accent-green)' : 'var(--accent-amber)') + ';">LV ' + need + '</b>'
+          + '<span style="flex:1;font-size:11px;color:var(--text-secondary);">' + table[need].label + '</span>'
+          + '<span style="font-size:11px;">' + (got ? '✓' : '🔒') + '</span></div>';
+      }).join('');
+    }
+  }
+  const _lvChip = document.getElementById('lvChip');
+  if (_lvChip) _lvChip.addEventListener('click', ()=>{
+    refreshLevelUI();
+    document.getElementById('lvPanel').classList.add('show');
+  });
+  const _lvClose = document.getElementById('lvCloseBtn');
+  if (_lvClose) _lvClose.addEventListener('click', ()=> document.getElementById('lvPanel').classList.remove('show'));
+  document.getElementById('lvPanel').addEventListener('click', e=>{
+    if (e.target.id === 'lvPanel') e.target.classList.remove('show');
+  });
+  // 레벨 보상 — 안 받은 게 있으면 들어오자마자 지급하고 알려준다
+  function claimAndShowRewards(){
+    if (!(window.MP && MP.claimLevelRewards)) return;
+    const got = MP.claimLevelRewards();
+    if (!got.length) return;
+    try { shardBalance = parseInt(localStorage.getItem('shard_balance')||'0',10)||0; updateShardUI(); } catch(e){}
+    const box = document.createElement('div');
+    box.style.cssText='position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.82);padding:24px;';
+    box.innerHTML = '<div style="width:min(90vw,330px);background:var(--bg-surface);border:1px solid var(--accent-amber);border-radius:18px;padding:24px;text-align:center;">'
+      + '<div style="font-size:44px;line-height:1;">🎁</div>'
+      + '<div style="font-size:11px;font-weight:900;letter-spacing:.2em;color:var(--accent-amber);margin-top:8px;">LEVEL REWARD</div>'
+      + '<div style="font-size:12px;color:var(--text-secondary);margin:12px 0 6px;">받지 않은 보상이 있었어요</div>'
+      + got.map(g=>'<div style="padding:8px 10px;margin-top:6px;border-radius:9px;background:var(--bg-main);font-size:12px;font-weight:800;color:#fff;">LV '+g.level+' · '+g.label+'</div>').join('')
+      + '<button type="button" style="width:100%;height:44px;margin-top:18px;border:none;border-radius:10px;background:var(--accent-amber);color:#15130E;font-weight:900;font-size:13px;cursor:pointer;">받기</button></div>';
+    box.querySelector('button').addEventListener('click', ()=>{ box.remove(); refreshLevelUI(); });
+    document.body.appendChild(box);
+  }
+  refreshLevelUI();
+  claimAndShowRewards();
+  if (window.MP && MP.fetchAccountXP) MP.fetchAccountXP(()=>{ refreshLevelUI(); claimAndShowRewards(); });
+
+  const _inviteBtn = document.getElementById('inviteBtn');
+  if (_inviteBtn) _inviteBtn.addEventListener('click', ()=> shareInvite(currentGameKey));
+
+  const shopOverlay = document.getElementById('shopOverlay');
+  const shardBadge = document.getElementById('shardBadge');
+  function openShop(){
+    shopOverlay.style.display = 'flex';
+    document.getElementById('playTimeDisplay').textContent = Math.floor(totalPlaySeconds/60) + '분';
+    updateShardUI();
+    renderShopList();
+  }
+  function closeShop(){ shopOverlay.style.display = 'none'; }
+  shardBadge.addEventListener('click', openShop);
+
+  // ---- 시크릿: 상점 안의 샤드 잔액 표시를 10번 두드리면 메타몽 스킨이 해금된다 ----
+  // 상단 뱃지는 누르면 바로 상점이 덮여서 연타가 안 되므로,
+  // 상점 안에 있는 "샤드 얼마 남았는지" 표시를 대상으로 삼는다.
+  let shardTapCount = 0, shardTapTimer = null;
+  const shardTapTarget = document.getElementById('shardAmountShop');
+  if (shardTapTarget){
+    shardTapTarget.style.cursor = 'pointer';
+    shardTapTarget.style.userSelect = 'none';
+    shardTapTarget.style.display = 'inline-block';
+    shardTapTarget.style.transition = 'transform .12s ease';
+    shardTapTarget.addEventListener('click', ()=>{
+      if (window.MP && MP.hasSecret && MP.hasSecret('ditto')) return;   // 이미 해금됨
+      shardTapCount++;
+      clearTimeout(shardTapTimer);
+      shardTapTimer = setTimeout(()=>{ shardTapCount = 0; }, 1500);   // 잠깐 쉬면 초기화
+      // 6번째부터 조금씩 반응해서 "뭔가 있다"는 느낌만 준다
+      if (shardTapCount >= 6 && shardTapCount < 10){
+        shardTapTarget.style.transform = 'scale(' + (1 + (shardTapCount-5)*0.07) + ')';
+        setTimeout(()=>{ shardTapTarget.style.transform = ''; }, 120);
+      }
+      if (shardTapCount >= 10){
+        shardTapCount = 0;
+        clearTimeout(shardTapTimer);
+        shardTapTarget.style.transform = '';
+        if (window.MP && MP.unlockSecret && MP.unlockSecret('ditto')) showDittoUnlock();
+      }
+    });
+  }
+  function showDittoUnlock(){
+    closeShop();
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;'
+      + 'background:rgba(0,0,0,.82);padding:24px;';
+    box.innerHTML = '<div style="text-align:center;max-width:320px;">'
+      + '<div style="font-size:74px;line-height:1;margin-bottom:14px;">🫠</div>'
+      + '<div style="font-size:12px;font-weight:900;letter-spacing:.2em;color:#B79CD4;">SECRET UNLOCKED</div>'
+      + '<div style="font-size:22px;font-weight:900;color:#fff;margin-top:6px;">메타몽 스킨</div>'
+      + '<div style="font-size:12px;color:var(--text-secondary);margin-top:10px;line-height:1.6;">'
+      + '아바타 꾸미기에서 <b style="color:#fff;">얼굴 · 피부색 · 모자</b>에<br>메타몽이 추가됐어요.</div>'
+      + '<button type="button" style="margin-top:20px;width:100%;height:46px;border:none;border-radius:12px;'
+      + 'background:#B79CD4;color:#1a1420;font-weight:900;font-size:14px;cursor:pointer;">확인</button></div>';
+    box.querySelector('button').addEventListener('click', ()=>{ box.remove(); });
+    box.addEventListener('click', e=>{ if (e.target===box) box.remove(); });
+    document.body.appendChild(box);
+  }
+  document.getElementById('shopCloseBtn').addEventListener('click', closeShop);
+
+  document.getElementById('settingsOpenBtn').addEventListener('click', ()=>{ acctOverlay.style.display = 'flex'; refreshAcctUI(); });
+  document.getElementById('acctSettingsBtn').addEventListener('click', ()=>{ acctOverlay.style.display='none'; openKeybindSettings(); });
+  acctClose.addEventListener('click', ()=> acctOverlay.style.display = 'none');
+  acctOverlay.addEventListener('click', e=>{ if (e.target === acctOverlay) acctOverlay.style.display = 'none'; });
+
+  nicknameSaveBtn.addEventListener('click', ()=>{
+    if (!window.MP) return;
+    MP.setNickname(nicknameInput.value);
+    localStorage.setItem('mp_nickname_set', '1');
+    refreshAcctUI();
+  });
+
+  signInBtn.addEventListener('click', ()=>{
+    acctError.textContent = '';
+    if (!window.MP){ acctError.textContent = '멀티플레이 모듈이 로드되지 않았어요 (multiplayer.js 확인).'; return; }
+    if (!emailInput.value.trim()){ acctError.textContent = '이메일을 입력해주세요.'; return; }
+    signInBtn.disabled = true;
+    signInBtn.textContent = '처리 중...';
+    MP.signIn(emailInput.value.trim(), passInput.value, (user, err)=>{
+      signInBtn.disabled = false;
+      signInBtn.textContent = '로그인';
+      if (err){
+        console.error('[로그인 실패]', err);
+        const code = err && err.code ? err.code : '';
+        acctError.textContent = '로그인 실패: 이메일/비밀번호를 확인해주세요.' + (code ? ` (${code})` : '');
+        return;
+      }
+      refreshAcctUI();
+    });
+  });
+  signUpBtn.addEventListener('click', ()=>{
+    acctError.textContent = '';
+    if (!window.MP){ acctError.textContent = '멀티플레이 모듈이 로드되지 않았어요 (multiplayer.js 확인).'; return; }
+    if (!emailInput.value.trim()){ acctError.textContent = '이메일을 입력해주세요.'; return; }
+    if (passInput.value.length < 6){ acctError.textContent = '비밀번호는 6자 이상이어야 해요.'; return; }
+    signUpBtn.disabled = true;
+    signUpBtn.textContent = '처리 중...';
+    MP.signUp(emailInput.value.trim(), passInput.value, nicknameInput.value.trim(), (user, err)=>{
+      signUpBtn.disabled = false;
+      signUpBtn.textContent = '회원가입';
+      if (err){
+        console.error('[회원가입 실패]', err);
+        const code = err && err.code ? err.code : '';
+        let msg = (err && err.message) ? err.message : String(err);
+        if (code === 'auth/unauthorized-domain') msg = '이 도메인은 Firebase에 등록되지 않았어요 (Authentication > Settings > 승인된 도메인 확인).';
+        if (code === 'auth/operation-not-allowed') msg = '이메일/비밀번호 로그인이 Firebase 콘솔에서 꺼져있어요.';
+        if (code === 'auth/weak-password') msg = '비밀번호가 너무 약해요. 6자 이상 입력해주세요.';
+        if (code === 'auth/invalid-email') msg = '이메일 형식이 올바르지 않아요.';
+        if (code === 'auth/email-already-in-use') msg = '이미 가입된 이메일이에요. 로그인해주세요.';
+        acctError.textContent = '회원가입 실패: ' + msg + (code ? ` (${code})` : '');
+        return;
+      }
+      refreshAcctUI();
+    });
+  });
+  // 로그아웃 후에는 화면 곳곳(친구 목록·아바타·샤드)이 이전 계정 상태로 남아 있으므로
+  // 다시 그려준다. multiplayer.js가 익명 로그인으로 되돌려주기 때문에 접속은 유지된다.
+  function afterAccountChange(){
+    refreshAcctUI();
+    if (typeof refreshLevelUI === 'function'){ refreshLevelUI(); if (MP.fetchAccountXP) MP.fetchAccountXP(refreshLevelUI); }
+    if (typeof refreshProfileAcct === 'function') refreshProfileAcct();
+    if (typeof renderFriendsRow === 'function') renderFriendsRow([]);
+    if (window.MP && MP.getLocalAvatarLoadout){
+      avatarLoadout = MP.getLocalAvatarLoadout();
+      if (typeof avatarScene !== 'undefined' && avatarScene)
+        avatarGroup = rebuildAvatarWithLoadout(avatarScene, avatarGroup, avatarLoadout);
+      if (typeof renderAvatarItemGrid === 'function') renderAvatarItemGrid();
+    }
+  }
+  signOutBtn.addEventListener('click', ()=>{
+    if (!window.MP) return;
+    if (!confirm('로그아웃할까요?\n게스트로 돌아가고, 다시 로그인하면 아바타와 닉네임이 그대로 복구돼요.')) return;
+    signOutBtn.disabled = true; signOutBtn.textContent = '로그아웃 중...';
+    MP.signOutUser(()=>{
+      signOutBtn.disabled = false; signOutBtn.textContent = '🚪 로그아웃';
+      afterAccountChange();
+    });
+  });
+  // "다른 계정 만들기 / 로그인" — 로그아웃한 뒤 곧바로 로그인 입력창을 열어준다
+  document.getElementById('switchAcctBtn').addEventListener('click', ()=>{
+    if (!window.MP) return;
+    const btn = document.getElementById('switchAcctBtn');
+    btn.disabled = true; btn.textContent = '전환 중...';
+    MP.signOutUser(()=>{
+      btn.disabled = false; btn.textContent = '➕ 다른 계정 만들기 / 로그인';
+      afterAccountChange();
+      acctError.textContent = '';
+      emailInput.value = ''; passInput.value = '';
+      acctLoginBlock.style.display = 'block';
+      emailInput.focus();
+    });
+  });
+
+  // ---------- 친구 목록 렌더 ----------
+  const friendsRow = document.getElementById('friendsRow');
+  const GAME_LABEL = { gacha:'아우라 배틀', jump:'스카이 점프맵', forest:'포레스트 스트라이크', backrooms:'백룸' };
+  let myFriendUids = {};
+  function renderFriendsRow(friends, err){
+    myFriendUids = {};
+    (friends||[]).forEach(f=> myFriendUids[f.uid] = true);
+    friendsRow.querySelectorAll('.friendItem, .friendsErr').forEach(el=> el.remove());
+    // 친구 목록을 못 불러온 경우 — 예전엔 그냥 조용히 아무도 안 뜨는 것처럼 보여서
+    // "친구가 안 보인다"는 게 실제로는 로딩 실패인지 그냥 친구가 없는 건지 구분이 안 갔다.
+    if (err){
+      const code = (err && (err.code || err.message)) || '알 수 없는 오류';
+      const box = document.createElement('div');
+      box.className = 'friendsErr';
+      box.style.cssText = 'flex:1;min-width:200px;font-size:11px;color:#ff9a8a;line-height:1.6;padding:8px 4px;';
+      box.innerHTML = '친구 목록을 불러오지 못했어요.<br><span style="color:var(--text-disabled);font-size:10px;">'+code+'</span>';
+      friendsRow.appendChild(box);
+      return;
+    }
+    (friends || []).sort((a,b)=> (b.online?1:0) - (a.online?1:0)).forEach(f=>{
+      const item = document.createElement('div');
+      item.className = 'friendItem';
+      const gameLabel = f.online && f.game ? (GAME_LABEL[f.game] || '플레이 중') : (f.online ? '온라인' : '오프라인');
+      item.innerHTML = `
+        <div class="friendCircleWrap">
+          <div class="friendCircle ${f.online?'online':''}">🙂</div>
+          <div class="onlineDot ${f.online?'on':''}"></div>
+        </div>
+        <div class="friendName">${f.nickname}</div>
+        ${f.level ? `<div class="friendGame" style="color:var(--accent-amber)">LV ${f.level}</div>` : ''}
+        <div class="friendGame" style="${f.online?'':'color:var(--text-disabled);'}">${gameLabel}</div>
+      `;
+      item.addEventListener('click', ()=> openPersonProfile({ uid:f.uid, name:f.nickname, online:!!f.online, game:f.game||null, room:f.room||null, level:f.level||null }));
+      friendsRow.appendChild(item);
+    });
+  }
+
+  if (window.MP && MP.isConfigured && MP.isConfigured()){
+    MP.initAuthOnly((user, err)=>{
+      if (!err){
+        refreshAcctUI();
+        MP.setPresence(null); // 허브 화면: 게임 없이 온라인 상태만
+        MP.onFriendsUpdate(renderFriendsRow);
+        maybeShowNicknamePrompt();
+      }
+    });
+  }
+
+  // ---------- 첫 방문 닉네임 설정 프롬프트 (플레이어0000 기본 이름 방지) ----------
+  function maybeShowNicknamePrompt(){
+    if (localStorage.getItem('mp_nickname_set') === '1') return; // 이미 한 번 정했으면 다시 안 띄움
+    if (window.MP && MP.isLoggedIn && MP.isLoggedIn()) { localStorage.setItem('mp_nickname_set','1'); return; } // 이메일 가입자는 가입할 때 이미 정함
+    document.getElementById('nicknamePromptOverlay').style.display = 'flex';
+  }
+  const nicknamePromptInput = document.getElementById('nicknamePromptInput');
+  nicknamePromptInput.value = (window.MP && MP.getNickname) ? MP.getNickname() : '';
+  document.getElementById('nicknamePromptSaveBtn').addEventListener('click', ()=>{
+    const v = nicknamePromptInput.value.trim();
+    if (v && window.MP && MP.setNickname) MP.setNickname(v);
+    localStorage.setItem('mp_nickname_set', '1');
+    document.getElementById('nicknamePromptOverlay').style.display = 'none';
+  });
+
+
+  // ---------- 친구 검색 ----------
+  const addFriendBtn = document.getElementById('addFriendBtn');
+  const friendSearchOverlay = document.getElementById('friendSearchOverlay');
+  const fsBackBtn = document.getElementById('fsBackBtn');
+  const fsSearchInput = document.getElementById('fsSearchInput');
+  const fsResults = document.getElementById('fsResults');
+
+  addFriendBtn.addEventListener('click', ()=>{
+    friendSearchOverlay.classList.add('show');
+    fsSearchInput.value = '';
+    fsResults.innerHTML = '<div id="fsHint">닉네임을 입력해서 친구를 찾아보세요.<br>이메일로 가입한 유저만 검색돼요.</div>';
+    setTimeout(()=> fsSearchInput.focus(), 50);
+  });
+  fsBackBtn.addEventListener('click', ()=> friendSearchOverlay.classList.remove('show'));
+
+  let searchDebounce = null;
+  fsSearchInput.addEventListener('input', ()=>{
+    clearTimeout(searchDebounce);
+    const q = fsSearchInput.value.trim();
+    if (!q){
+      fsResults.innerHTML = '<div id="fsHint">닉네임을 입력해서 친구를 찾아보세요.<br>이메일로 가입한 유저만 검색돼요.</div>';
+      return;
+    }
+    searchDebounce = setTimeout(()=>{
+      if (!window.MP || !MP.searchUsers) return;
+      MP.searchUsers(q, (users, err)=>{
+        if (!users.length){
+          if (err){
+            const code = (err && (err.code || err.message)) || '알 수 없는 오류';
+            fsResults.innerHTML = '<div id="fsHint" style="color:#ff9a8a;line-height:1.6;">검색에 실패했어요.<br><span style="font-size:11px;">'+code+'</span>'
+              + '<br><br><span style="font-size:11px;color:var(--text-disabled);">Firebase 규칙에서 <b>playhub_mp/users</b> 의 읽기 권한과 <b>.indexOn</b> 설정을 확인해주세요.</span></div>';
+          } else {
+            fsResults.innerHTML = '<div id="fsHint">검색 결과가 없어요.<br><span style="font-size:11px;color:var(--text-disabled);">상대가 한 번이라도 접속한 적이 있어야 검색돼요.</span></div>';
+          }
+          return;
+        }
+        fsResults.innerHTML = '';
+        users.forEach(u=>{
+          const row = document.createElement('div');
+          row.className = 'fsRow';
+          const already = !!myFriendUids[u.uid];
+          row.innerHTML = `
+            <div class="fsAvatar">🙂</div>
+            <div class="fsInfo"><div class="fsName">${u.displayName || u.nickname || '이름없음'}</div>${u.nickname && u.displayName && u.nickname!==u.displayName ? `<div style="font-size:11px;color:var(--text-disabled);">계정: ${u.nickname}</div>` : ''}</div>
+            <div class="fsBtns">
+              <button class="fsBtn ${already?'added':'friend'}" data-act="friend" ${already?'disabled':''}>${already?'추가됨':'친추'}</button>
+              <button class="fsBtn ${already?'added':'follow'}" data-act="follow" ${already?'disabled':''}>${already?'추가됨':'팔로우'}</button>
+            </div>
+          `;
+          row.querySelectorAll('.fsBtn').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+              if (btn.disabled) return;
+              const type = btn.dataset.act === 'friend' ? 'friend' : 'follow';
+              MP.addFriend(u.uid, u.displayName || u.nickname, type, (ok)=>{
+                if (ok){
+                  row.querySelectorAll('.fsBtn').forEach(b=>{
+                    b.disabled = true; b.textContent = '추가됨';
+                    b.classList.remove('friend','follow'); b.classList.add('added');
+                  });
+                }
+              });
+            });
+          });
+          const openThisPerson = ()=> openPersonProfile({ uid:u.uid, name:u.displayName||u.nickname||'이름없음', online:false, game:null, room:null });
+          row.querySelector('.fsAvatar').style.cursor = 'pointer';
+          row.querySelector('.fsInfo').style.cursor = 'pointer';
+          row.querySelector('.fsAvatar').addEventListener('click', openThisPerson);
+          row.querySelector('.fsInfo').addEventListener('click', openThisPerson);
+          fsResults.appendChild(row);
+        });
+      });
+    }, 300);
+  });
+
+  // ---------- 사람 프로필 모달 (친구 목록 / 검색결과에서 공용으로 사용) ----------
+  const personOverlay = document.getElementById('personOverlay');
+  let personCtx = null;   // 지금 열려 있는 프로필이 누구 것인지
+  function openPersonProfile(p){
+    personCtx = p;
+    document.getElementById('personName').textContent = (p.name || '이름없음') + (p.level ? '  ·  LV ' + p.level : '');
+    const statusEl = document.getElementById('personStatus');
+    const gameLabel = p.online && p.game ? (GAME_LABEL[p.game] || '플레이 중') : (p.online ? '온라인' : '오프라인');
+    statusEl.textContent = gameLabel;
+    statusEl.style.color = p.online ? 'var(--accent-green)' : 'var(--text-secondary)';
+
+    const already = !!myFriendUids[p.uid];
+    const fb = document.getElementById('personFriendBtn'), flb = document.getElementById('personFollowBtn');
+    fb.disabled = already; fb.textContent = already ? '추가됨' : '친구추가';
+    flb.disabled = already; flb.textContent = already ? '추가됨' : '팔로우';
+
+    // "같은 체험 참가"는 상대가 지금 온라인이고 어떤 게임을 하고 있는지 알 때만 보인다
+    const joinBtn = document.getElementById('personJoinBtn');
+    joinBtn.style.display = (p.online && p.game && GAMES[p.game]) ? 'block' : 'none';
+
+    personOverlay.style.display = 'flex';
+  }
+  function markPersonAdded(){
+    const fb = document.getElementById('personFriendBtn'), flb = document.getElementById('personFollowBtn');
+    fb.disabled = true; fb.textContent = '추가됨'; flb.disabled = true; flb.textContent = '추가됨';
+    if (personCtx) myFriendUids[personCtx.uid] = true;
+  }
+  document.getElementById('personFriendBtn').addEventListener('click', ()=>{
+    if (!personCtx || !window.MP || !MP.addFriend) return;
+    MP.addFriend(personCtx.uid, personCtx.name, 'friend', (ok)=>{ if (ok) markPersonAdded(); });
+  });
+  document.getElementById('personFollowBtn').addEventListener('click', ()=>{
+    if (!personCtx || !window.MP || !MP.addFriend) return;
+    MP.addFriend(personCtx.uid, personCtx.name, 'follow', (ok)=>{ if (ok) markPersonAdded(); });
+  });
+  document.getElementById('personJoinBtn').addEventListener('click', ()=>{
+    if (!personCtx) return;
+    const g = GAMES[personCtx.game]; if (!g) return;
+    // 정확한 방 코드를 모르면(프레즌스에 room이 없으면) 공개방으로 들어간다 — 대부분 같은 공개방에서 만난다
+    window.location.href = g.href + '?room=' + encodeURIComponent(personCtx.room || 'PUBLIC');
+  });
+  document.getElementById('personCloseBtn').addEventListener('click', ()=> personOverlay.style.display='none');
+  personOverlay.addEventListener('click', e=>{ if (e.target===personOverlay) personOverlay.style.display='none'; });
+
+  // ---------- 조작키 설정 ----------
+  // 게임에 필요한 모든 키를 여기서 다시 지정할 수 있다. 이 기기(브라우저)에만 저장되고
+  // 계정과는 무관하며(다른 사람에게 영향 없음), 언제든 다시 눌러서 바꿀 수 있다.
+  const KEYBIND_STORAGE_KEY = 'mp_keybinds';
+  const KEYBIND_DEFAULTS = [
+    { id:'moveForward', label:'앞으로 이동',     code:'KeyW' },
+    { id:'moveBack',    label:'뒤로 이동',       code:'KeyS' },
+    { id:'moveLeft',    label:'왼쪽 이동',       code:'KeyA' },
+    { id:'moveRight',   label:'오른쪽 이동',     code:'KeyD' },
+    { id:'jump',        label:'점프',           code:'Space' },
+    { id:'sprint',      label:'질주 (스프린트)', code:'ShiftLeft' },
+    { id:'slide',       label:'슬라이딩',       code:'ControlLeft' },
+    { id:'reload',      label:'재장전',         code:'KeyR' },
+    { id:'melee',       label:'근접무기',       code:'KeyV' },
+    { id:'slot1',       label:'무기 슬롯 1',    code:'Digit1' },
+    { id:'slot2',       label:'무기 슬롯 2',    code:'Digit2' },
+    { id:'slot3',       label:'무기 슬롯 3',    code:'Digit3' },
+    { id:'slot4',       label:'무기 슬롯 4',    code:'Digit4' },
+    { id:'slot5',       label:'무기 슬롯 5',    code:'Digit5' }
+  ];
+  function loadKeybinds(){
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEYBIND_STORAGE_KEY) || '{}') || {}; } catch(e){ saved = {}; }
+    const merged = {};
+    KEYBIND_DEFAULTS.forEach(d=> merged[d.id] = saved[d.id] || d.code);
+    return merged;
+  }
+  function saveKeybinds(binds){ localStorage.setItem(KEYBIND_STORAGE_KEY, JSON.stringify(binds)); }
+  let currentKeybinds = loadKeybinds();
+  let listeningFor = null;   // 지금 새 키 입력을 기다리고 있는 액션 id
+  const KEY_DISPLAY = { Space:'Space', ShiftLeft:'Shift', ShiftRight:'Shift', ControlLeft:'Ctrl', ControlRight:'Ctrl',
+    ArrowUp:'↑', ArrowDown:'↓', ArrowLeft:'←', ArrowRight:'→', AltLeft:'Alt', AltRight:'Alt' };
+  function keyLabel(code){
+    if (!code) return '—';
+    if (KEY_DISPLAY[code]) return KEY_DISPLAY[code];
+    if (code.indexOf('Key')===0) return code.slice(3);
+    if (code.indexOf('Digit')===0) return code.slice(5);
+    return code;
+  }
+  function renderKeybindList(){
+    const wrap = document.getElementById('keybindList'); wrap.innerHTML = '';
+    KEYBIND_DEFAULTS.forEach(d=>{
+      const row = document.createElement('div');
+      row.className = 'kbRow';
+      row.innerHTML = '<div class="kbLabel">'+d.label+'</div>'
+        + '<button class="kbKeyBtn" type="button" data-id="'+d.id+'">'+keyLabel(currentKeybinds[d.id])+'</button>';
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('.kbKeyBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if (listeningFor) return;   // 이미 다른 키 입력을 기다리는 중이면 무시
+        listeningFor = btn.dataset.id;
+        btn.textContent = '키 입력...';
+        btn.classList.add('listening');
+      });
+    });
+  }
+  window.addEventListener('keydown', (e)=>{
+    if (!listeningFor) return;
+    e.preventDefault();
+    if (e.code === 'Escape'){ listeningFor = null; renderKeybindList(); return; }   // Esc = 취소
+    currentKeybinds[listeningFor] = e.code;
+    saveKeybinds(currentKeybinds);
+    listeningFor = null;
+    renderKeybindList();
+  });
+  function openKeybindSettings(){
+    currentKeybinds = loadKeybinds();
+    listeningFor = null;
+    renderKeybindList();
+    document.getElementById('keybindOverlay').style.display = 'flex';
+  }
+  document.getElementById('kbResetBtn').addEventListener('click', ()=>{
+    currentKeybinds = {}; KEYBIND_DEFAULTS.forEach(d=> currentKeybinds[d.id] = d.code);
+    saveKeybinds(currentKeybinds);
+    renderKeybindList();
+  });
+  document.getElementById('kbCloseBtn').addEventListener('click', ()=>{
+    listeningFor = null;
+    document.getElementById('keybindOverlay').style.display = 'none';
+  });
+
+  // ================= 아바타 꾸미기 (multiplayer.js의 공용 카탈로그/빌더/저장소 사용) =================
+  // 카탈로그, 3D 빌더, 저장(로컬+계정)은 전부 multiplayer.js가 갖고 있어서
+  // 점프맵/아우라배틀에서도 완전히 동일한 아바타가 재현됩니다.
+  const HUB_AVATAR_CATALOG = (window.MP && MP.AVATAR_CATALOG) || [];
+  const SLOT_TABS = [
+    { id:'face',   label:'얼굴',   icon:'🙂' },
+    { id:'skin',   label:'피부색', icon:'🎨' },
+    { id:'head',   label:'모자',   icon:'🧢' },
+    { id:'acc',    label:'장신구', icon:'🕶' },
+    { id:'top',    label:'상의',   icon:'👕' },
+    { id:'shirt',  label:'상의색', icon:'🎨' },
+    { id:'bottom', label:'하의',   icon:'👖' },
+    { id:'pants',  label:'하의색', icon:'🎨' },
+    { id:'back',   label:'후면',   icon:'🎒' },
+  ];
+  const HUB_FACES   = (window.MP && MP.AVATAR_FACES) || [];
+  const HUB_PALETTE = (window.MP && MP.AVATAR_PALETTE) || { skin:[], shirt:[], pants:[] };
+
+  let avatarLoadout = (window.MP && MP.getLocalAvatarLoadout) ? MP.getLocalAvatarLoadout() : { head:null, acc:null, top:null, bottom:null, back:null, face:'face_smile', skin:'skin_classic', shirt:'shirt_blue', pants:'pants_green' };
+  function saveAvatarLoadoutViaMP(loadout){
+    if (window.MP && MP.setAvatarLoadout) MP.setAvatarLoadout(loadout);
+  }
+  function rebuildAvatarWithLoadout(scene, oldGroup, loadout){
+    if (oldGroup) scene.remove(oldGroup);
+    const group = (window.MP && MP.buildAvatar) ? MP.buildAvatar(loadout) : new THREE.Group();
+    scene.add(group);
+    return group;
+  }
+
+
+  // ---------- 미리보기 3D 씬 ----------
+  let avatarScene, avatarCamera, avatarRenderer, avatarGroup, avatarAnimId;
+  function initAvatarPreview(){
+    if (avatarRenderer) return; // 이미 초기화됨
+    const canvas = document.getElementById('avatarCanvas');
+    avatarScene = new THREE.Scene();
+    avatarCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
+    avatarCamera.position.set(0, 1.55, 5.8);
+    avatarCamera.lookAt(0, 1.5, 0);
+    avatarRenderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    avatarScene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.0));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    sun.position.set(3,6,4); avatarScene.add(sun);
+    avatarGroup = rebuildAvatarWithLoadout(avatarScene, null, avatarLoadout);
+    resizeAvatarCanvas();
+    (function loop(){
+      avatarAnimId = requestAnimationFrame(loop);
+      if (avatarGroup && !avatarDrag.active) avatarGroup.rotation.y += avatarDrag.spin;
+      avatarRenderer.render(avatarScene, avatarCamera);
+    })();
+    window.addEventListener('resize', resizeAvatarCanvas);
+  }
+  function resizeAvatarCanvas(){
+    if (!avatarRenderer) return;
+    const canvas = document.getElementById('avatarCanvas');
+    const w = canvas.clientWidth || 300, h = canvas.clientHeight || 400;
+    avatarRenderer.setSize(w, h, false);
+    avatarCamera.aspect = w/h; avatarCamera.updateProjectionMatrix();
+  }
+
+  // ---------- 카탈로그 UI ----------
+  let activeSlotTab = 'head';
+  function renderAvatarTabs(){
+    const wrap = document.getElementById('avatarTabs');
+    wrap.innerHTML = '';
+    SLOT_TABS.forEach(t=>{
+      const btn = document.createElement('button');
+      btn.className = 'avatarTabBtn' + (t.id===activeSlotTab ? ' active' : '');
+      btn.type = 'button';
+      btn.textContent = (t.icon ? t.icon + ' ' : '') + t.label;
+      btn.addEventListener('click', ()=>{ activeSlotTab = t.id; renderAvatarTabs(); renderAvatarItemGrid(); });
+      wrap.appendChild(btn);
+    });
+  }
+  // ---- 미리보기 드래그 회전 ----
+  // 자동으로 도는 건 그대로 두되, 손가락으로 끌면 그 방향으로 직접 돌릴 수 있게 한다.
+  const avatarDrag = { active:false, lastX:0, spin:0.012 };
+  (function bindAvatarDrag(){
+    const cv = document.getElementById('avatarCanvas');
+    if (!cv) return;
+    const start = x=>{ avatarDrag.active = true; avatarDrag.lastX = x; };
+    const move  = x=>{
+      if (!avatarDrag.active || !avatarGroup) return;
+      avatarGroup.rotation.y += (x - avatarDrag.lastX) * 0.012;
+      avatarDrag.lastX = x;
+    };
+    const end = ()=>{ avatarDrag.active = false; };
+    cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); start(e.clientX); });
+    cv.addEventListener('pointermove', e=>move(e.clientX));
+    cv.addEventListener('pointerup', end);
+    cv.addEventListener('pointercancel', end);
+  })();
+
+  // ---- 랜덤 꾸미기 ----
+  function randomizeAvatar(){
+    const pick = list => list.length ? list[Math.floor(Math.random()*list.length)] : null;
+    const vis = list => (window.MP && MP.visibleItems) ? MP.visibleItems(list) : list.filter(i=>!i.secret);
+    const f = pick(vis(HUB_FACES));            if (f) avatarLoadout.face = f.id;
+    ['skin','shirt','pants'].forEach(k=>{
+      const c = pick(vis(HUB_PALETTE[k] || [])); if (c) avatarLoadout[k] = c.id;
+    });
+    ['head','acc','top','bottom','back'].forEach(slot=>{
+      const items = vis(HUB_AVATAR_CATALOG.filter(i=>i.slot===slot));
+      // 슬롯마다 3분의 1 확률로는 비워둬서 과하게 치렁치렁해지지 않게 한다
+      avatarLoadout[slot] = (Math.random() < 0.34 || !items.length) ? null : pick(items).id;
+    });
+    applyAvatarChange();
+  }
+
+  const COLOR_TABS = ['skin','shirt','pants'];
+  function applyAvatarChange(){
+    saveAvatarLoadoutViaMP(avatarLoadout);
+    avatarGroup = rebuildAvatarWithLoadout(avatarScene, avatarGroup, avatarLoadout);
+    renderAvatarItemGrid();
+    renderWearingStrip();
+  }
+  // 지금 착용 중인 아이템을 미리보기 위에 칩으로 띄운다 — 탭을 옮겨다녀도 뭘 꼈는지 보이게
+  function renderWearingStrip(){
+    const box = document.getElementById('avatarWearing');
+    if (!box) return;
+    box.innerHTML = '';
+    ['head','acc','top','bottom','back'].forEach(slot=>{
+      const id = avatarLoadout[slot];
+      if (!id) return;
+      const it = HUB_AVATAR_CATALOG.find(x=>x.id===id);
+      if (!it) return;
+      const chip = document.createElement('div');
+      chip.className = 'avWearChip';
+      chip.innerHTML = '<i>' + it.icon + '</i>' + it.name;
+      box.appendChild(chip);
+    });
+  }
+  function makeAvatarCard(swatchHTML, name, chosen, onPick){
+    const card = document.createElement('div');
+    card.className = 'avatarItemCard' + (chosen ? ' equipped' : '');
+    card.innerHTML = `<div class="avatarItemSwatch">${swatchHTML}</div>
+      <div class="avatarItemName">${name}</div>
+      <div class="avatarItemEquippedTag">${chosen ? '✓ 적용중' : ''}</div>`;
+    card.addEventListener('click', onPick);
+    return card;
+  }
+  function renderAvatarItemGrid(){
+    const grid = document.getElementById('avatarItemGrid');
+    grid.innerHTML = '';
+    // 색상 탭 — 팔레트에서 하나를 고른다(해제 없음, 항상 하나는 적용된 상태)
+    if (COLOR_TABS.indexOf(activeSlotTab) >= 0){
+      const visibleColors = (window.MP && MP.visibleItems)
+        ? MP.visibleItems(HUB_PALETTE[activeSlotTab] || [])
+        : (HUB_PALETTE[activeSlotTab] || []).filter(c=>!c.secret);
+      visibleColors.forEach(c=>{
+        const hex = '#' + c.color.toString(16).padStart(6,'0');
+        const chosen = avatarLoadout[activeSlotTab] === c.id;
+        grid.appendChild(makeAvatarCard(
+          `<span style="display:block;width:100%;height:100%;border-radius:8px;background:${hex};"></span>`,
+          c.name, chosen,
+          ()=>{ avatarLoadout[activeSlotTab] = c.id; applyAvatarChange(); }
+        ));
+      });
+      return;
+    }
+    // 얼굴 탭
+    if (activeSlotTab === 'face'){
+      const visibleFaces = (window.MP && MP.visibleItems)
+        ? MP.visibleItems(HUB_FACES) : HUB_FACES.filter(f=>!f.secret);
+      visibleFaces.forEach(f=>{
+        const chosen = avatarLoadout.face === f.id;
+        grid.appendChild(makeAvatarCard(f.icon, f.name, chosen,
+          ()=>{ avatarLoadout.face = f.id; applyAvatarChange(); }));
+      });
+      return;
+    }
+    // 아이템 탭 — 같은 걸 다시 누르면 해제된다
+    const slotItems = HUB_AVATAR_CATALOG.filter(it=>it.slot===activeSlotTab);
+    const visibleItems = (window.MP && MP.visibleItems)
+      ? MP.visibleItems(slotItems) : slotItems.filter(it=>!it.secret);
+    // 아이템 탭 맨 앞에 "없음" 칸을 둔다 — 벗는 방법을 몰라 헤매지 않도록
+    grid.appendChild(makeAvatarCard('🚫', '없음', !avatarLoadout[activeSlotTab],
+      ()=>{ avatarLoadout[activeSlotTab] = null; applyAvatarChange(); }));
+    visibleItems.forEach(it=>{
+      const equipped = avatarLoadout[it.slot] === it.id;
+      const bg = '#' + it.color.toString(16).padStart(6,'0') + '22';
+      grid.appendChild(makeAvatarCard(
+        `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:8px;background:${bg};">${it.icon}</span>`,
+        it.name, equipped,
+        ()=>{ avatarLoadout[it.slot] = equipped ? null : it.id; applyAvatarChange(); }
+      ));
+    });
+  }
+
+  function openAvatarCustomizer(){
+    document.getElementById('avatarOverlay').style.display = 'flex';
+    document.getElementById('avatarNameTag').textContent = (window.MP && MP.getDisplayName) ? MP.getDisplayName() : '내 아바타';
+    renderAvatarTabs();
+    renderAvatarItemGrid();
+    renderWearingStrip();
+    initAvatarPreview();
+    resizeAvatarCanvas();
+    // 계정에 저장된 로드아웃이 있으면(다른 기기에서 꾸민 경우 등) 불러와서 최신화
+    if (window.MP && MP.fetchAccountAvatarLoadout){
+      MP.fetchAccountAvatarLoadout((loadout)=>{
+        avatarLoadout = loadout;
+        avatarGroup = rebuildAvatarWithLoadout(avatarScene, avatarGroup, avatarLoadout);
+        renderAvatarItemGrid();
+      });
+    }
+  }
+  document.getElementById('avatarCloseBtn').addEventListener('click', ()=>{
+    document.getElementById('avatarOverlay').style.display = 'none';
+  });
+  document.getElementById('avatarResetBtn').addEventListener('click', ()=>{
+    avatarLoadout = (window.MP && MP.defaultAvatarLoadout)
+      ? MP.defaultAvatarLoadout()
+      : { head:null, acc:null, top:null, bottom:null, back:null, face:'face_smile',
+          skin:'skin_classic', shirt:'shirt_blue', pants:'pants_green' };
+    applyAvatarChange();
+  });
+  document.getElementById('avatarRandomBtn').addEventListener('click', randomizeAvatar);
+</script>
+
+<script>
+  // PWA 설치/오프라인 지원 — 서비스 워커 등록.
+  // 등록 실패해도(예: file:// 로 직접 열었을 때) 허브 자체는 평소대로 동작해야 하므로 조용히 무시한다.
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=>{
+        console.warn('[PWA] 서비스 워커 등록 실패(오프라인 지원 없이 계속 진행):', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
