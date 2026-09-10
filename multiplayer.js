@@ -78,23 +78,213 @@ const AVATAR_CATALOG = [
   // ---- 후면 (back) ----
   { id:'wings',      slot:'back', name:'악마 날개',     icon:'😈', color:0x8B1A1A },
   { id:'backpack',   slot:'back', name:'검은 가방',     icon:'🎒', color:0x1E1E1E },
+  // ---- 추가 아이템 ----
+  { id:'cap',        slot:'head', name:'야구모자',      icon:'🧢', color:0x2E6DB4 },
+  { id:'beanie',     slot:'head', name:'비니',          icon:'🎿', color:0xB8433A },
+  { id:'horns',      slot:'head', name:'뿔',            icon:'🐐', color:0x3A2A22 },
+  { id:'halo',       slot:'head', name:'천사 고리',     icon:'😇', color:0xFFE680 },
+  { id:'tophat',     slot:'head', name:'실크햇',        icon:'🎩', color:0x161616 },
+  { id:'bandana',    slot:'acc',  name:'복면',          icon:'🥷', color:0x2B2B33 },
+  { id:'eyepatch',   slot:'acc',  name:'안대',          icon:'🏴‍☠️', color:0x18181A },
+  { id:'scarf',      slot:'acc',  name:'목도리',        icon:'🧣', color:0xD1495B },
+  { id:'vest',       slot:'top',  name:'전술 조끼',     icon:'🎽', color:0x4A5240 },
+  { id:'labcoat',    slot:'top',  name:'가운',          icon:'🥼', color:0xE4E9EC },
+  { id:'stripes',    slot:'top',  name:'줄무늬 티',     icon:'👔', color:0xE8E8E8 },
+  { id:'cargo',      slot:'bottom', name:'카고 바지',   icon:'🪖', color:0x6E6B45 },
+  { id:'skirt',      slot:'bottom', name:'치마',        icon:'👗', color:0x8E4B87 },
+  { id:'track',      slot:'bottom', name:'트랙 팬츠',   icon:'🏃', color:0x22252B },
+  { id:'jetpack',    slot:'back', name:'제트팩',        icon:'🚀', color:0x9AA3AA },
+  { id:'cape',       slot:'back', name:'망토',          icon:'🦸', color:0x8A1F3D },
+  { id:'katana',     slot:'back', name:'등에 멘 검',    icon:'⚔️', color:0x8E959B },
+  // ---- 시크릿 ----
+  { id:'dittonubs',  slot:'head', name:'메타몽 뿔',     icon:'🫠', color:0xB79CD4, secret:'ditto' },
 ];
-const AVATAR_SLOTS = ['head','acc','top','bottom','back'];
+const AVATAR_SLOTS = ['face','head','acc','top','bottom','back'];
+
+// ---- 몸 색상 팔레트 ----
+// 예전 아바타는 피부/상의/하의 색이 코드에 박혀 있어서 전부 똑같이 생겼었다.
+// 이제 색도 저장 항목으로 빼서 각자 다르게 꾸밀 수 있다.
+const AVATAR_PALETTE = {
+  skin:  [
+    { id:'skin_classic', name:'클래식',   color:0xF5CD30 },
+    { id:'skin_light',   name:'라이트',   color:0xF2C9A0 },
+    { id:'skin_tan',     name:'탠',       color:0xD79A63 },
+    { id:'skin_brown',   name:'브라운',   color:0x9C6340 },
+    { id:'skin_deep',    name:'딥',       color:0x6B4227 },
+    { id:'skin_mint',    name:'민트',     color:0x7FD6B5 },
+    { id:'skin_lilac',   name:'라일락',   color:0xB79CE0 },
+    { id:'skin_ash',     name:'애쉬',     color:0xB9BFC4 },
+    { id:'skin_ditto',   name:'메타몽',   color:0xB79CD4, secret:'ditto' }
+  ],
+  shirt: [
+    { id:'shirt_blue',   name:'블루',     color:0x0B62C4 },
+    { id:'shirt_red',    name:'레드',     color:0xC0392B },
+    { id:'shirt_green',  name:'그린',     color:0x2E8B57 },
+    { id:'shirt_purple', name:'퍼플',     color:0x7B4FC4 },
+    { id:'shirt_orange', name:'오렌지',   color:0xE07B29 },
+    { id:'shirt_black',  name:'블랙',     color:0x23262A },
+    { id:'shirt_white',  name:'화이트',   color:0xE8ECEF },
+    { id:'shirt_pink',   name:'핑크',     color:0xE884B0 },
+    { id:'shirt_ditto',  name:'메타몽',   color:0xB79CD4, secret:'ditto' }
+  ],
+  pants: [
+    { id:'pants_green',  name:'그린',     color:0x287F35 },
+    { id:'pants_navy',   name:'네이비',   color:0x27364F },
+    { id:'pants_grey',   name:'그레이',   color:0x5A5F63 },
+    { id:'pants_brown',  name:'브라운',   color:0x6B4A2E },
+    { id:'pants_black',  name:'블랙',     color:0x1E2124 },
+    { id:'pants_khaki',  name:'카키',     color:0x8A8759 },
+    { id:'pants_ditto',  name:'메타몽',   color:0xB79CD4, secret:'ditto' }
+  ]
+};
+const AVATAR_COLOR_SLOTS = ['skin','shirt','pants'];
+// ---- 시크릿 해금 ----
+// 특정 아이템/색상은 secret 키가 붙어 있고, 해금 전에는 꾸미기 목록에 아예 안 뜬다.
+// 해금 상태는 이 기기에 저장되고, 계정에도 같이 올려서 다른 기기에서도 유지된다.
+function mpGetSecrets(){
+  try { return JSON.parse(localStorage.getItem('mp_secret_unlocks') || '[]') || []; }
+  catch(e){ return []; }
+}
+function mpHasSecret(key){ return mpGetSecrets().indexOf(key) >= 0; }
+function mpUnlockSecret(key){
+  const list = mpGetSecrets();
+  if (list.indexOf(key) >= 0) return false;   // 이미 갖고 있음
+  list.push(key);
+  try { localStorage.setItem('mp_secret_unlocks', JSON.stringify(list)); } catch(e){}
+  return true;   // 이번에 새로 해금됨
+}
+// 잠긴 시크릿을 걸러낸 목록을 돌려준다 — 꾸미기 UI는 항상 이걸 쓴다
+function mpVisible(list){
+  const owned = mpGetSecrets();
+  return (list || []).filter(it => !it.secret || owned.indexOf(it.secret) >= 0);
+}
+
+function mpDefaultLoadout(){
+  return { head:null, acc:null, top:null, bottom:null, back:null,
+           face:'face_smile', skin:'skin_classic', shirt:'shirt_blue', pants:'pants_green' };
+}
+function mpPaletteColor(kind, id){
+  const list = AVATAR_PALETTE[kind] || [];
+  const found = list.find(c=>c.id===id);
+  return found ? found.color : list[0].color;
+}
+
+// ---- 얼굴 ----
+// 머리가 그냥 노란 상자였다. 얼굴을 캔버스로 그려 머리 앞면에만 붙인다.
+const AVATAR_FACES = [
+  { id:'face_smile',  name:'스마일',   icon:'🙂' },
+  { id:'face_grin',   name:'활짝',     icon:'😄' },
+  { id:'face_cool',   name:'시크',     icon:'😎' },
+  { id:'face_wink',   name:'윙크',     icon:'😉' },
+  { id:'face_angry',  name:'화남',     icon:'😠' },
+  { id:'face_sad',    name:'시무룩',   icon:'😢' },
+  { id:'face_shock',  name:'놀람',     icon:'😲' },
+  { id:'face_dead',   name:'해골',     icon:'💀' },
+  { id:'face_robot',  name:'로봇',     icon:'🤖' },
+  { id:'face_blank',  name:'무표정',   icon:'😐' },
+  { id:'face_ditto',  name:'메타몽',   icon:'🫠', secret:'ditto' }
+];
+const faceTexCache = {};
+function mpFaceTexture(faceId, skinHex){
+  const key = faceId + '|' + skinHex;
+  if (faceTexCache[key]) return faceTexCache[key];
+  const T = window.THREE;
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = '#' + skinHex.toString(16).padStart(6,'0');
+  x.fillRect(0,0,128,128);
+  x.fillStyle = '#1A1A1A';
+  x.strokeStyle = '#1A1A1A';
+  x.lineWidth = 6;
+  x.lineCap = 'round';
+  const eye = (cx,cy,r)=>{ x.beginPath(); x.arc(cx,cy,r,0,7); x.fill(); };
+  const arc = (cx,cy,r,a0,a1)=>{ x.beginPath(); x.arc(cx,cy,r,a0,a1); x.stroke(); };
+  switch(faceId){
+    case 'face_grin':
+      eye(44,52,9); eye(84,52,9);
+      x.beginPath(); x.arc(64,68,26,0.15*Math.PI,0.85*Math.PI); x.fill();
+      break;
+    case 'face_cool':
+      x.fillRect(26,44,76,16);
+      x.fillRect(20,46,10,6); x.fillRect(98,46,10,6);
+      arc(64,74,16,0.15*Math.PI,0.85*Math.PI);
+      break;
+    case 'face_wink':
+      eye(44,52,9);
+      x.beginPath(); x.moveTo(74,52); x.lineTo(94,52); x.stroke();
+      arc(64,72,16,0.15*Math.PI,0.85*Math.PI);
+      break;
+    case 'face_angry':
+      eye(44,56,9); eye(84,56,9);
+      x.beginPath(); x.moveTo(30,38); x.lineTo(56,48); x.stroke();
+      x.beginPath(); x.moveTo(98,38); x.lineTo(72,48); x.stroke();
+      arc(64,92,16,1.15*Math.PI,1.85*Math.PI);
+      break;
+    case 'face_sad':
+      eye(44,54,9); eye(84,54,9);
+      arc(64,92,16,1.15*Math.PI,1.85*Math.PI);
+      break;
+    case 'face_shock':
+      eye(44,50,11); eye(84,50,11);
+      x.beginPath(); x.ellipse(64,84,13,17,0,0,7); x.fill();
+      break;
+    case 'face_dead':
+      x.beginPath(); x.moveTo(32,42); x.lineTo(56,62); x.moveTo(56,42); x.lineTo(32,62); x.stroke();
+      x.beginPath(); x.moveTo(72,42); x.lineTo(96,62); x.moveTo(96,42); x.lineTo(72,62); x.stroke();
+      x.fillRect(40,84,48,10);
+      for (let i=0;i<4;i++) x.fillRect(46+i*12,78,5,22);
+      break;
+    case 'face_robot':
+      x.fillRect(30,44,28,14); x.fillRect(70,44,28,14);
+      x.fillStyle = '#5FE0FF'; x.fillRect(34,47,20,8); x.fillRect(74,47,20,8);
+      x.fillStyle = '#1A1A1A';
+      x.fillRect(40,80,48,8);
+      for (let i=0;i<5;i++) x.fillRect(42+i*10,76,4,16);
+      break;
+    case 'face_ditto':
+      // 원본 그대로 — 작고 동그란 점눈 두 개가 가까이 붙어 있고,
+      // 그 아래로 얇고 넓은 물결 입이 오른쪽 끝에서 살짝 올라간다.
+      eye(53,49,5.5); eye(77,49,5.5);
+      x.lineWidth = 5;
+      x.lineJoin = 'round';
+      x.beginPath();
+      x.moveTo(44,69);
+      x.quadraticCurveTo(54,74,65,70);   // 왼쪽: 얕게 처졌다가 되돌아옴
+      x.quadraticCurveTo(76,66,87,62);   // 오른쪽: 끝이 살짝 올라간 능글맞은 선
+      x.stroke();
+      break;
+    case 'face_blank':
+      eye(44,54,8); eye(84,54,8);
+      x.beginPath(); x.moveTo(48,86); x.lineTo(80,86); x.stroke();
+      break;
+    default: // face_smile
+      eye(44,52,9); eye(84,52,9);
+      arc(64,70,18,0.15*Math.PI,0.85*Math.PI);
+  }
+  const tex = new T.CanvasTexture(c);
+  if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+  faceTexCache[key] = tex;
+  return tex;
+}
 const AVATAR_STUD = 0.62;
 
-function mpBuildR6Avatar(){
+function mpBuildR6Avatar(colors){
   const T = window.THREE;
   const group = new T.Group();
+  const C = colors || {};
+  const skinHex  = mpPaletteColor('skin',  C.skin);
+  const shirtHex = mpPaletteColor('shirt', C.shirt);
+  const pantsHex = mpPaletteColor('pants', C.pants);
   const legW=1*AVATAR_STUD, legH=2*AVATAR_STUD, legD=1*AVATAR_STUD;
   const torsoW=2*AVATAR_STUD, torsoH=2*AVATAR_STUD, torsoD=1*AVATAR_STUD;
   const headW=2*AVATAR_STUD, headH=1*AVATAR_STUD, headD=1*AVATAR_STUD;
   const armW=1*AVATAR_STUD, armH=2*AVATAR_STUD, armD=1*AVATAR_STUD;
   const legTopY = legH, torsoCenterY = legTopY+torsoH/2, headCenterY = legTopY+torsoH+headH/2;
 
-  const legMat = new T.MeshStandardMaterial({ color:0x287F35 });
-  const torsoMat = new T.MeshStandardMaterial({ color:0x0B62C4 });
-  const armMat = new T.MeshStandardMaterial({ color:0xF5CD30 });
-  const headMat = new T.MeshStandardMaterial({ color:0xF5CD30 });
+  const legMat = new T.MeshStandardMaterial({ color:pantsHex });
+  const torsoMat = new T.MeshStandardMaterial({ color:shirtHex });
+  const armMat = new T.MeshStandardMaterial({ color:skinHex });
+  const headMat = new T.MeshStandardMaterial({ color:skinHex });
 
   const legL = new T.Mesh(new T.BoxGeometry(legW,legH,legD), legMat.clone());
   legL.position.set(-legW/2, legH/2, 0); group.add(legL);
@@ -111,8 +301,21 @@ function mpBuildR6Avatar(){
 
   const head = new T.Mesh(new T.BoxGeometry(headW,headH,headD), headMat.clone());
   head.position.set(0, headCenterY, 0); group.add(head);
+  // 얼굴은 머리 앞면에 얇은 판을 덧대는 방식으로 붙인다.
+  // (머리 재질을 6면 배열로 바꾸면 head.material.color 로 팀 색을 칠하던 다른 게임들이
+  //  전부 깨지므로, 머리 재질은 단일 재질 그대로 두는 게 안전하다)
+  if (C.face){
+    const faceMat = new T.MeshBasicMaterial({ map:mpFaceTexture(C.face, skinHex) });
+    const faceMesh = new T.Mesh(new T.PlaneGeometry(headW*0.98, headH*0.98), faceMat);
+    // 머리에 자식으로 붙인다 — 머리를 돌리면 얼굴도 같이 돌고,
+    // 그룹의 자식 순서(legL,legR,torso,armL,armR,head)도 그대로 유지된다.
+    faceMesh.position.set(0, 0, headD/2 + 0.006);
+    faceMesh.userData.isFace = true;
+    head.add(faceMesh);
+  }
 
-  group.userData = { legTopY, torsoCenterY, headCenterY, torsoW, torsoH, torsoD, headW, headH, headD, legW, legH };
+  group.userData = { legTopY, torsoCenterY, headCenterY, torsoW, torsoH, torsoD, headW, headH, headD, legW, legH,
+                     skinHex, shirtHex, pantsHex };
   return group;
 }
 
@@ -152,6 +355,49 @@ function mpAttachAvatarItem(avatarGroup, item){
       dome.position.y = baseY - 0.02; g.add(dome);
       const visor = new T.Mesh(new T.BoxGeometry(0.66,0.1,0.05), new T.MeshStandardMaterial({ color:0x2a3a4a, metalness:0.6, roughness:0.2 }));
       visor.position.set(0, baseY+0.1, u.headD/2+0.02); g.add(visor);
+    } else if (item.id === 'cap'){
+      const crown = new T.Mesh(new T.SphereGeometry(0.44,12,8,0,Math.PI*2,0,Math.PI*0.5), mat({roughness:0.85}));
+      crown.position.y = baseY - 0.01; g.add(crown);
+      const brim = new T.Mesh(new T.BoxGeometry(0.7,0.06,0.42), mat({roughness:0.85}));
+      brim.position.set(0, baseY+0.02, u.headD/2+0.14); g.add(brim);
+      const btn = new T.Mesh(new T.SphereGeometry(0.05,6,5), mat({roughness:0.7}));
+      btn.position.y = baseY + 0.42; g.add(btn);
+    } else if (item.id === 'beanie'){
+      const cap = new T.Mesh(new T.SphereGeometry(0.45,12,9,0,Math.PI*2,0,Math.PI*0.58), mat({roughness:0.95}));
+      cap.position.y = baseY - 0.06; g.add(cap);
+      const band = new T.Mesh(new T.CylinderGeometry(0.46,0.46,0.14,14), mat({roughness:0.95}));
+      band.position.y = baseY - 0.02; g.add(band);
+      const pom = new T.Mesh(new T.SphereGeometry(0.11,8,6), mat({roughness:0.95}));
+      pom.position.y = baseY + 0.4; g.add(pom);
+    } else if (item.id === 'horns'){
+      [-1,1].forEach(side=>{
+        const horn = new T.Mesh(new T.ConeGeometry(0.11,0.42,6), mat({roughness:0.6}));
+        horn.position.set(side*0.3, baseY+0.2, -0.02);
+        horn.rotation.z = -side*0.42; horn.rotation.x = -0.18;
+        g.add(horn);
+      });
+    } else if (item.id === 'halo'){
+      const ring = new T.Mesh(new T.TorusGeometry(0.3,0.055,8,20),
+        new T.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.9, roughness:0.4 }));
+      ring.rotation.x = Math.PI/2; ring.position.y = baseY + 0.46; g.add(ring);
+    } else if (item.id === 'dittonubs'){
+      // 머리 위 물컹한 돌기 두 개
+      [-1,1].forEach(side=>{
+        const nub = new T.Mesh(new T.SphereGeometry(0.15,10,8), mat({roughness:0.95}));
+        nub.scale.set(1,1.5,1);
+        nub.position.set(side*0.26, baseY+0.12, -0.04);
+        g.add(nub);
+      });
+      const bump = new T.Mesh(new T.SphereGeometry(0.42,12,9,0,Math.PI*2,0,Math.PI*0.5), mat({roughness:0.95}));
+      bump.scale.set(1,0.42,1); bump.position.y = baseY - 0.02; g.add(bump);
+    } else if (item.id === 'tophat'){
+      const brim = new T.Mesh(new T.CylinderGeometry(0.56,0.56,0.06,16), mat({roughness:0.7}));
+      brim.position.y = baseY + 0.03; g.add(brim);
+      const barrel = new T.Mesh(new T.CylinderGeometry(0.36,0.36,0.62,16), mat({roughness:0.7}));
+      barrel.position.y = baseY + 0.36; g.add(barrel);
+      const band = new T.Mesh(new T.CylinderGeometry(0.375,0.375,0.12,16),
+        new T.MeshStandardMaterial({ color:0x9B2335, roughness:0.7 }));
+      band.position.y = baseY + 0.14; g.add(band);
     }
   } else if (item.slot === 'acc'){
     const eyeY = u.headCenterY;
@@ -171,6 +417,23 @@ function mpAttachAvatarItem(avatarGroup, item){
       });
       const band = new T.Mesh(new T.TorusGeometry(0.34,0.03,6,12,Math.PI), mat({roughness:0.6}));
       band.rotation.z = Math.PI; band.position.y = u.headCenterY + u.headH/2 + 0.15; g.add(band);
+    } else if (item.id === 'bandana'){
+      const wrap = new T.Mesh(new T.BoxGeometry(u.headW+0.04,0.34,u.headD+0.04), mat({roughness:0.9}));
+      wrap.position.set(0, eyeY-0.16, 0); g.add(wrap);
+      const knot = new T.Mesh(new T.BoxGeometry(0.16,0.16,0.16), mat({roughness:0.9}));
+      knot.position.set(0, eyeY-0.16, -u.headD/2-0.08); g.add(knot);
+    } else if (item.id === 'eyepatch'){
+      const patch = new T.Mesh(new T.BoxGeometry(0.26,0.22,0.05), mat({roughness:0.85}));
+      patch.position.set(-0.16, eyeY+0.02, eyeZ); g.add(patch);
+      const strap = new T.Mesh(new T.BoxGeometry(u.headW+0.04,0.05,u.headD+0.04), mat({roughness:0.85}));
+      strap.position.set(0, eyeY+0.1, 0); strap.rotation.z = 0.16; g.add(strap);
+    } else if (item.id === 'scarf'){
+      const loop = new T.Mesh(new T.TorusGeometry(0.34,0.11,8,16), mat({roughness:0.95}));
+      loop.rotation.x = Math.PI/2;
+      loop.position.y = u.torsoCenterY + u.torsoH/2 + 0.04; g.add(loop);
+      const tail = new T.Mesh(new T.BoxGeometry(0.18,0.5,0.09), mat({roughness:0.95}));
+      tail.position.set(0.2, u.torsoCenterY + u.torsoH/2 - 0.22, u.torsoD/2+0.04);
+      tail.rotation.z = 0.12; g.add(tail);
     }
   } else if (item.slot === 'top'){
     const overlay = new T.Mesh(new T.BoxGeometry(u.torsoW+0.06,u.torsoH+0.04,u.torsoD+0.06), mat({roughness:0.85}));
@@ -187,14 +450,56 @@ function mpAttachAvatarItem(avatarGroup, item){
     } else if (item.id === 'leather'){
       const collar = new T.Mesh(new T.BoxGeometry(u.torsoW*0.7,0.12,u.torsoD+0.1), mat({roughness:0.6}));
       collar.position.y = u.torsoCenterY+u.torsoH/2+0.02; g.add(collar);
+    } else if (item.id === 'vest'){
+      // 전술 조끼 — 가슴 파우치와 어깨끈
+      [-1,1].forEach(side=>{
+        const strap = new T.Mesh(new T.BoxGeometry(0.16,u.torsoH+0.06,0.1),
+          new T.MeshStandardMaterial({ color:0x2C3327, roughness:0.9 }));
+        strap.position.set(side*0.3, u.torsoCenterY, u.torsoD/2+0.05); g.add(strap);
+      });
+      for (let i=0;i<2;i++){
+        const pouch = new T.Mesh(new T.BoxGeometry(0.3,0.24,0.14),
+          new T.MeshStandardMaterial({ color:0x3B4433, roughness:0.9 }));
+        pouch.position.set((i?0.34:-0.34), u.torsoCenterY-0.18, u.torsoD/2+0.09); g.add(pouch);
+      }
+    } else if (item.id === 'labcoat'){
+      const skirt = new T.Mesh(new T.BoxGeometry(u.torsoW+0.12,0.7,u.torsoD+0.12), mat({roughness:0.92}));
+      skirt.position.y = u.torsoCenterY - u.torsoH/2 - 0.28; g.add(skirt);
+      const split = new T.Mesh(new T.BoxGeometry(0.05,0.72,0.04),
+        new T.MeshStandardMaterial({ color:0xB9BEC2, roughness:0.9 }));
+      split.position.set(0, u.torsoCenterY-u.torsoH/2-0.28, u.torsoD/2+0.09); g.add(split);
+    } else if (item.id === 'stripes'){
+      for (let i=0;i<3;i++){
+        const band = new T.Mesh(new T.BoxGeometry(u.torsoW+0.09,0.17,u.torsoD+0.09),
+          new T.MeshStandardMaterial({ color:0x2C3E80, roughness:0.85 }));
+        band.position.y = u.torsoCenterY - 0.36 + i*0.36; g.add(band);
+      }
     }
   } else if (item.slot === 'bottom'){
-    const isShorts = item.id === 'shorts';
-    const h = isShorts ? u.legH*0.55 : u.legH+0.04;
-    [-1,1].forEach(side=>{
-      const leg = new T.Mesh(new T.BoxGeometry(u.legW+0.05,h,u.legW+0.05), mat({roughness:0.85}));
-      leg.position.set(side*u.legW/2, isShorts ? (u.legH-h/2) : u.legH/2, 0); g.add(leg);
-    });
+    if (item.id === 'skirt'){
+      const sk = new T.Mesh(new T.CylinderGeometry(u.legW*0.75, u.legW*1.5, u.legH*0.62, 12), mat({roughness:0.9}));
+      sk.position.y = u.legH - u.legH*0.31; g.add(sk);
+    } else {
+      const isShorts = item.id === 'shorts';
+      const h = isShorts ? u.legH*0.55 : u.legH+0.04;
+      [-1,1].forEach(side=>{
+        const leg = new T.Mesh(new T.BoxGeometry(u.legW+0.05,h,u.legW+0.05), mat({roughness:0.85}));
+        leg.position.set(side*u.legW/2, isShorts ? (u.legH-h/2) : u.legH/2, 0); g.add(leg);
+      });
+      if (item.id === 'cargo'){
+        [-1,1].forEach(side=>{
+          const pk = new T.Mesh(new T.BoxGeometry(0.16,0.24,0.1),
+            new T.MeshStandardMaterial({ color:0x585739, roughness:0.9 }));
+          pk.position.set(side*(u.legW+0.05), u.legH*0.5, 0); g.add(pk);
+        });
+      } else if (item.id === 'track'){
+        [-1,1].forEach(side=>{
+          const stripe = new T.Mesh(new T.BoxGeometry(0.05,h,0.05),
+            new T.MeshStandardMaterial({ color:0xE8E8E8, roughness:0.8 }));
+          stripe.position.set(side*(u.legW*0.5+u.legW*0.5+0.03), u.legH/2, 0); g.add(stripe);
+        });
+      }
+    }
   } else if (item.slot === 'back'){
     if (item.id === 'backpack'){
       const bp = new T.Mesh(new T.BoxGeometry(u.torsoW*0.7,u.torsoH*0.65,0.28), mat({roughness:0.8}));
@@ -206,6 +511,29 @@ function mpAttachAvatarItem(avatarGroup, item){
         wing.rotation.z = side*1.0; wing.rotation.x = 0.3;
         g.add(wing);
       });
+    } else if (item.id === 'jetpack'){
+      [-1,1].forEach(side=>{
+        const tank = new T.Mesh(new T.CylinderGeometry(0.16,0.16,u.torsoH*0.8,10), mat({metalness:0.55,roughness:0.35}));
+        tank.position.set(side*0.22, u.torsoCenterY, -u.torsoD/2-0.2); g.add(tank);
+        const nozzle = new T.Mesh(new T.ConeGeometry(0.13,0.18,8),
+          new T.MeshStandardMaterial({ color:0x3A3F44, metalness:0.6, roughness:0.3 }));
+        nozzle.rotation.x = Math.PI;
+        nozzle.position.set(side*0.22, u.torsoCenterY-u.torsoH*0.48, -u.torsoD/2-0.2); g.add(nozzle);
+      });
+    } else if (item.id === 'cape'){
+      const cape = new T.Mesh(new T.BoxGeometry(u.torsoW+0.14, u.torsoH+u.legH*0.7, 0.07), mat({roughness:0.95}));
+      cape.position.set(0, u.torsoCenterY-u.legH*0.3, -u.torsoD/2-0.1);
+      cape.rotation.x = -0.07; g.add(cape);
+      const collar = new T.Mesh(new T.BoxGeometry(u.torsoW*0.8,0.13,0.16), mat({roughness:0.9}));
+      collar.position.set(0, u.torsoCenterY+u.torsoH/2, -u.torsoD/2-0.06); g.add(collar);
+    } else if (item.id === 'katana'){
+      const sheath = new T.Mesh(new T.BoxGeometry(0.09,1.25,0.09),
+        new T.MeshStandardMaterial({ color:0x22262A, roughness:0.8 }));
+      sheath.position.set(0, u.torsoCenterY, -u.torsoD/2-0.14);
+      sheath.rotation.z = 0.5; g.add(sheath);
+      const hilt = new T.Mesh(new T.BoxGeometry(0.07,0.3,0.07), mat({metalness:0.5,roughness:0.4}));
+      hilt.position.set(-0.33, u.torsoCenterY+0.62, -u.torsoD/2-0.14);
+      hilt.rotation.z = 0.5; g.add(hilt);
     }
   }
   avatarGroup.add(g);
@@ -214,9 +542,11 @@ function mpAttachAvatarItem(avatarGroup, item){
 
 // loadout: { head, acc, top, bottom, back } (각 값은 AVATAR_CATALOG의 id 또는 null)
 function mpBuildAvatar(loadout){
-  const group = mpBuildR6Avatar();
   const lo = loadout || {};
+  // 색과 얼굴은 몸을 지을 때 바로 반영한다(부착물이 아니라 몸 자체의 성질이라서).
+  const group = mpBuildR6Avatar({ skin:lo.skin, shirt:lo.shirt, pants:lo.pants, face:lo.face });
   AVATAR_SLOTS.forEach(slot=>{
+    if (slot === 'face') return;   // 얼굴은 위에서 처리됨
     const equippedId = lo[slot];
     if (equippedId){
       const item = AVATAR_CATALOG.find(it=>it.id===equippedId);
@@ -324,9 +654,10 @@ const MP = (function () {
     if (myAvatarLoadout) return myAvatarLoadout;
     try {
       const raw = localStorage.getItem('mp_avatar_loadout');
-      if (raw) { myAvatarLoadout = JSON.parse(raw); return myAvatarLoadout; }
+      // 예전 저장본에는 face/색상 항목이 없다 — 기본값과 합쳐서 올려준다
+      if (raw) { myAvatarLoadout = Object.assign(mpDefaultLoadout(), JSON.parse(raw)); return myAvatarLoadout; }
     } catch (e) {}
-    myAvatarLoadout = { head:null, acc:null, top:null, bottom:null, back:null };
+    myAvatarLoadout = mpDefaultLoadout();
     return myAvatarLoadout;
   }
   function setAvatarLoadout(loadout, cb) {
@@ -346,9 +677,10 @@ const MP = (function () {
     db.ref(`${MP_ROOT}/users/${uid}/avatarLoadout`).once('value').then(snap => {
       const remote = snap.val();
       if (remote) {
-        myAvatarLoadout = remote;
-        try { localStorage.setItem('mp_avatar_loadout', JSON.stringify(remote)); } catch (e) {}
-        cb && cb(remote);
+        // 이 업데이트 이전에 저장된 계정에는 face/색상이 없다 — 기본값과 합쳐 올려준다
+        myAvatarLoadout = Object.assign(mpDefaultLoadout(), remote);
+        try { localStorage.setItem('mp_avatar_loadout', JSON.stringify(myAvatarLoadout)); } catch (e) {}
+        cb && cb(myAvatarLoadout);
       } else {
         cb && cb(getLocalAvatarLoadout());
       }
@@ -710,6 +1042,15 @@ const MP = (function () {
     attachAvatarItem: mpAttachAvatarItem,
     AVATAR_CATALOG,
     AVATAR_SLOTS,
+    AVATAR_PALETTE,
+    AVATAR_COLOR_SLOTS,
+    AVATAR_FACES,
+    faceTexture: mpFaceTexture,
+    defaultAvatarLoadout: mpDefaultLoadout,
+    getSecrets: mpGetSecrets,
+    hasSecret: mpHasSecret,
+    unlockSecret: mpUnlockSecret,
+    visibleItems: mpVisible,
     get uid() { return uid; },
     get room() { return currentRoom; }
   };
