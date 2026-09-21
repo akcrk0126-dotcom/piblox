@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>CROSSBEAT — 크로스비트</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05060d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#e8ecff;user-select:none;touch-action:none}
+  #wrap{position:fixed;inset:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 40%,rgba(30,20,70,.75),rgba(5,6,13,.96) 70%);
+    backdrop-filter:blur(3px);z-index:10;padding:24px;text-align:center}
+  .hidden{display:none!important}
+
+  .logo{font-size:clamp(38px,13vw,72px);font-weight:900;letter-spacing:.12em;line-height:1;
+    background:linear-gradient(100deg,#4df3ff,#a97bff 45%,#ff5fd2);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 22px rgba(120,90,255,.55))}
+  .sub{margin-top:10px;font-size:13px;letter-spacing:.34em;color:#7d86b8;font-weight:600}
+  .desc{margin-top:26px;font-size:14px;line-height:1.85;color:#aab3e0;max-width:330px}
+  .desc b{color:#4df3ff;font-weight:700}
+
+  .keys{margin-top:22px;display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(2,38px);gap:6px;justify-content:center}
+  .keys div{border:1px solid rgba(140,150,220,.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#8b94c8;background:rgba(255,255,255,.03)}
+  .k-u{grid-column:2;grid-row:1}.k-l{grid-column:1;grid-row:2}.k-d{grid-column:2;grid-row:2}.k-r{grid-column:3;grid-row:2}
+
+  .btn{margin-top:30px;padding:15px 52px;border:none;border-radius:40px;font-size:17px;font-weight:800;letter-spacing:.14em;
+    color:#04060f;background:linear-gradient(100deg,#4df3ff,#a97bff);box-shadow:0 0 34px rgba(110,120,255,.45);cursor:pointer;
+    font-family:inherit;transition:transform .12s}
+  .btn:active{transform:scale(.95)}
+  .btn.ghost{background:none;border:1px solid rgba(150,160,230,.4);color:#c3cbf5;box-shadow:none;padding:13px 38px;font-size:14px;margin-top:14px}
+
+  #hud{position:absolute;top:0;left:0;right:0;padding:calc(14px + env(safe-area-inset-top)) 18px 0;
+    display:flex;justify-content:space-between;align-items:flex-start;z-index:5;pointer-events:none}
+  #score{font-size:26px;font-weight:800;letter-spacing:.04em;text-shadow:0 0 16px rgba(120,160,255,.6);font-variant-numeric:tabular-nums}
+  #acc{font-size:12px;color:#7f88bb;letter-spacing:.1em;margin-top:2px;font-variant-numeric:tabular-nums}
+  #prog{position:absolute;top:0;left:0;height:3px;background:linear-gradient(90deg,#4df3ff,#ff5fd2);width:0%;z-index:6;box-shadow:0 0 10px rgba(120,200,255,.8)}
+  #rank-live{font-size:12px;color:#7f88bb;letter-spacing:.18em;text-align:right}
+  #rank-live b{display:block;font-size:22px;color:#e8ecff;letter-spacing:.06em;margin-top:2px}
+
+  /* 결과 */
+  .r-grade{font-size:clamp(64px,22vw,110px);font-weight:900;line-height:1;
+    background:linear-gradient(100deg,#4df3ff,#a97bff 50%,#ff5fd2);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 28px rgba(140,110,255,.6))}
+  .r-score{font-size:36px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+  .r-acc{font-size:14px;color:#8b94c8;letter-spacing:.1em;margin-top:4px}
+  .r-table{margin-top:24px;display:grid;grid-template-columns:auto auto;gap:7px 30px;font-size:14px}
+  .r-table span:nth-child(odd){color:#8b94c8;text-align:left;letter-spacing:.06em}
+  .r-table span:nth-child(even){text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .c-p{color:#4df3ff!important}.c-g{color:#8bff9e!important}.c-o{color:#ffd166!important}.c-m{color:#ff6b8a!important}
+  .r-new{margin-top:16px;font-size:12px;letter-spacing:.2em;color:#ffd166;font-weight:700}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="prog"></div>
+
+  <div id="hud" class="hidden">
+    <div>
+      <div id="score">0</div>
+      <div id="acc">100.00%</div>
+    </div>
+    <div id="rank-live">COMBO<b id="combo">0</b></div>
+  </div>
+
+  <!-- 타이틀 -->
+  <div class="screen" id="s-title">
+    <div class="logo">CROSSBEAT</div>
+    <div class="sub">순발력 리듬 액션</div>
+    <div class="desc">
+      사방에서 코어로 날아오는 노트를<br>
+      <b>도착하는 순간</b> 같은 방향으로 쳐내세요.<br>
+      화면의 <b>위·아래·좌·우 영역</b>을 탭하거나<br>방향키로 조작합니다.
+    </div>
+    <div class="keys">
+      <div class="k-u">↑</div><div class="k-l">←</div><div class="k-d">↓</div><div class="k-r">→</div>
+    </div>
+    <button class="btn" id="btn-start">START</button>
+  </div>
+
+  <!-- 결과 -->
+  <div class="screen hidden" id="s-result">
+    <div class="r-grade" id="r-grade">S</div>
+    <div class="r-score" id="r-score">0</div>
+    <div class="r-acc" id="r-acc">정확도 0.00%</div>
+    <div class="r-table">
+      <span class="c-p">PERFECT</span><span class="c-p" id="r-p">0</span>
+      <span class="c-g">GREAT</span><span class="c-g" id="r-g">0</span>
+      <span class="c-o">GOOD</span><span class="c-o" id="r-o">0</span>
+      <span class="c-m">MISS</span><span class="c-m" id="r-m">0</span>
+      <span>MAX COMBO</span><span id="r-c">0</span>
+    </div>
+    <div class="r-new hidden" id="r-new">NEW RECORD!</div>
+    <button class="btn" id="btn-retry">RETRY</button>
+    <button class="btn ghost" id="btn-home">타이틀로</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ==========================================================
+   CROSSBEAT — 단일 파일 순발력 리듬 게임
+   음악은 WebAudio로 실시간 합성 → 노트와 오차 없는 동기화
+   ========================================================== */
+
+/* ---------- 기본 상수 ---------- */
+const BPM  = 132;
+const SPB  = 60 / BPM;        // 1박
+const BAR  = SPB * 4;         // 1마디
+const STEP = SPB / 4;         // 16분음표
+const APPROACH = 1.05;        // 노트 이동 시간(초)
+
+const W_PERFECT = 0.048;
+const W_GREAT   = 0.090;
+const W_GOOD    = 0.130;
+const W_MISS    = 0.165;
+
+const DIRS = ['U','R','D','L'];
+const DIR_VEC = { U:[0,-1], R:[1,0], D:[0,1], L:[-1,0] };
+const DIR_COL = { U:'#4df3ff', R:'#ff5fd2', D:'#ffd166', L:'#8bff9e' };
+const DIR_RGB = { U:[77,243,255], R:[255,95,210], D:[255,209,102], L:[139,255,158] };
+
+/* ---------- 캔버스 ---------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, CX = 0, CY = 0, RH = 0, SPX = 0, SPY = 0;
+
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  CX = W/2; CY = H/2;
+  RH  = Math.min(W,H) * 0.155;          // 판정 링 반지름
+  SPX = W * 0.52 + 40;                  // 좌우 스폰 거리
+  SPY = H * 0.50 + 40;                  // 상하 스폰 거리
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ==========================================================
+   오디오 엔진
+   ========================================================== */
+let AC = null, master = null, noiseBuf = null;
+
+function initAudio(){
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain();
+  master.gain.value = 0.85;
+  const comp = AC.createDynamicsCompressor();
+  comp.threshold.value = -12; comp.ratio.value = 6; comp.attack.value = 0.003;
+  master.connect(comp); comp.connect(AC.destination);
+
+  const len = AC.sampleRate * 1.0;
+  noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i=0;i<len;i++) d[i] = Math.random()*2-1;
+}
+
+function env(node, t, a, d, peak){
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  node.connect(g);
+  return g;
+}
+
+function kick(t, amp=1){
+  const o = AC.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(170, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+  const g = env(o, t, 0.004, 0.24, 0.95*amp);
+  g.connect(master); o.start(t); o.stop(t + 0.32);
+}
+
+function snare(t, amp=1){
+  const s = AC.createBufferSource(); s.buffer = noiseBuf;
+  const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 1500;
+  s.connect(hp);
+  const g = env(hp, t, 0.003, 0.14, 0.34*amp);
+  g.connect(master); s.start(t); s.stop(t + 0.22);
+  const o = AC.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(190,t);
+  const g2 = env(o, t, 0.003, 0.09, 0.22*amp); g2.connect(master);
+  o.start(t); o.stop(t+0.16);
+}
+
+function hat(t, amp=1, open=false){
+  const s = AC.createBufferSource(); s.buffer = noiseBuf;
+  const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 7200;
+  s.connect(hp);
+  const g = env(hp, t, 0.002, open?0.16:0.035, 0.16*amp);
+  g.connect(master); s.start(t); s.stop(t + 0.28);
+}
+
+function bass(t, f, dur, amp=1){
+  const o = AC.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(f, t);
+  const lp = AC.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.setValueAtTime(260, t);
+  lp.frequency.exponentialRampToValueAtTime(900, t + 0.05);
+  lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+  lp.Q.value = 7;
+  o.connect(lp);
+  const g = env(lp, t, 0.008, dur, 0.30*amp);
+  g.connect(master); o.start(t); o.stop(t + dur + 0.1);
+}
+
+function pad(t, freqs, dur, amp=1){
+  freqs.forEach((f,i)=>{
+    const o = AC.createOscillator(); o.type='sawtooth';
+    o.frequency.setValueAtTime(f * (i===1?1.004:1), t);
+    const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 1500;
+    o.connect(lp);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.045*amp, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.1);
+  });
+}
+
+function arp(t, f, amp=1){
+  const o = AC.createOscillator(); o.type='square'; o.frequency.setValueAtTime(f,t);
+  const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
+  o.connect(lp);
+  const g = env(lp, t, 0.004, 0.12, 0.055*amp);
+  g.connect(master); o.start(t); o.stop(t+0.2);
+}
+
+/* 히트 사운드 (즉시 재생) */
+const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.5];
+function pluck(idx, strong){
+  if(!AC) return;
+  const t = AC.currentTime + 0.005;
+  const f = PENTA[idx % PENTA.length];
+  const o = AC.createOscillator(); o.type = strong ? 'triangle' : 'sine';
+  o.frequency.setValueAtTime(f, t);
+  const g = env(o, t, 0.003, strong?0.20:0.12, strong?0.20:0.12);
+  g.connect(master); o.start(t); o.stop(t+0.34);
+  if (strong){
+    const o2 = AC.createOscillator(); o2.type='sine'; o2.frequency.setValueAtTime(f*2,t);
+    const g2 = env(o2,t,0.002,0.09,0.06); g2.connect(master); o2.start(t); o2.stop(t+0.16);
+  }
+}
+function missSfx(){
+  if(!AC) return;
+  const t = AC.currentTime + 0.005;
+  const o = AC.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+  const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=700;
+  o.connect(lp);
+  const g = env(lp,t,0.004,0.16,0.14); g.connect(master);
+  o.start(t); o.stop(t+0.3);
+}
+
+/* ==========================================================
+   곡 & 채보 생성
+   ========================================================== */
+// 코드 진행 (Am - F - C - G)
+const CHORDS = [
+  { root: 110.00, notes:[220.00, 261.63, 329.63] },  // Am
+  { root:  87.31, notes:[174.61, 220.00, 261.63] },  // F
+  { root: 130.81, notes:[261.63, 329.63, 392.00] },  // C
+  { root:  98.00, notes:[196.00, 246.94, 293.66] },  // G
+];
+
+// 16스텝 패턴. '.'=쉼, U/R/D/L=단일, '1'=L+R 동시, '2'=U+D 동시
+const P1 = [ // 4분 — 입문
+  'U.......R.......', 'D.......L.......', 'U...R...D...L...', 'L...D...R...U...'
+];
+const P2 = [ // 8분
+  'U...R...D...L...', 'U.R.D.L.U.R.D.L.', 'D.D.U.U.L.L.R.R.', 'U.L.U.R.D.R.D.L.'
+];
+const P3 = [ // 8분 + 16분 살짝
+  'U.R.DDL.U.R.LL..', 'UURRDDLL.U.R.D.L', 'U.R.D.LLU.R.D.RR', 'D.LL.U.RRD.L.U.R'
+];
+const P4 = [ // 드롭 — 16분 다수
+  'UURRDDLLUURRDDLL', 'U.RRDDL.U.RRDDL.', 'UUDDLLRRUUDDLLRR', 'U.R.DDLLU.R.DDLL',
+  'ULURDRDLULURDRDL', 'UUR.DDL.UUR.DDL.'
+];
+const P5 = [ // 하드 — 동시노트 포함
+  '2...1...2...1...', '2.UURR1.DDLL2...', 'U.R.2...D.L.1...', '1.UU2.RR1.DD2.LL',
+  'UURRDDLL2.1.2.1.', 'ULDR2...RDLU1...'
+];
+const P6 = [ // 피날레
+  'UURRDDLLUURRDDLL', 'ULURDRDL2...1...', 'UUUURRRRDDDDLLLL', '1.2.1.2.ULDRULDR'
+];
+
+// 섹션 정의: [시작마디, 마디수, 패턴풀, 강도(0~3)]
+const SECTIONS = [
+  [ 0, 2, null, 0],
+  [ 2, 4, P1,   1],
+  [ 6, 4, P2,   1],
+  [10, 4, P3,   2],
+  [14, 8, P4,   3],
+  [22, 2, P2,   1],
+  [24, 8, P5,   3],
+  [32, 4, P6,   3],
+  [36, 2, null, 1],
+];
+const TOTAL_BARS = 38;
+const SONG_LEN = TOTAL_BARS * BAR;
+
+let chart = [];     // {t, dir, hit, judged}
+let audioEvents = []; // {t, fn}
+
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+
+function buildSong(){
+  chart = [];
+  audioEvents = [];
+  const ev = (t, fn) => audioEvents.push({t, fn});
+
+  for (let bar=0; bar<TOTAL_BARS; bar++){
+    const bt = bar * BAR;
+    const chord = CHORDS[bar % 4];
+    let sec = SECTIONS[0];
+    for (const s of SECTIONS) if (bar >= s[0] && bar < s[0]+s[1]) sec = s;
+    const inten = sec[3];
+
+    /* --- 드럼 --- */
+    ev(bt + 0*SPB, t=>kick(t));
+    ev(bt + 2*SPB, t=>kick(t, .95));
+    if (inten >= 2) ev(bt + 2.75*SPB, t=>kick(t, .7));
+    if (inten >= 1){
+      ev(bt + 1*SPB, t=>snare(t, inten>=2?1:.75));
+      ev(bt + 3*SPB, t=>snare(t, inten>=2?1:.75));
+    }
+    if (inten >= 1){
+      for (let i=0;i<8;i++){
+        const off = i * SPB/2;
+        const amp = (i%2===0) ? 1 : .6;
+        ev(bt+off, t=>hat(t, amp * (inten>=2?1:.7), i===7 && inten>=3));
+      }
+    }
+    if (inten >= 3){
+      ev(bt+3.5*SPB, t=>hat(t,.9));
+      ev(bt+3.75*SPB, t=>hat(t,.9));
+    }
+
+    /* --- 베이스 --- */
+    if (inten >= 1){
+      const pat = inten>=3 ? [0,0.75,1.5,2,2.75,3.5] : [0,1.5,2.5,3.5];
+      pat.forEach(b=> ev(bt+b*SPB, t=>bass(t, chord.root, SPB*0.45, inten>=3?1:.8)));
+    } else {
+      ev(bt, t=>bass(t, chord.root, SPB*1.6, .6));
+    }
+
+    /* --- 패드 & 아르페지오 --- */
+    ev(bt, t=>pad(t, chord.notes, BAR*0.95, inten>=2?1:.7));
+    if (inten >= 2){
+      for (let i=0;i<8;i++){
+        const f = chord.notes[i % 3] * 2;
+        ev(bt + i*SPB/2 + STEP, t=>arp(t, f, inten>=3?1:.6));
+      }
+    }
+
+    /* --- 채보 --- */
+    if (sec[2]){
+      const pattern = pick(sec[2]);
+      for (let i=0;i<16;i++){
+        const c = pattern[i];
+        if (c === '.') continue;
+        const t = bt + i*STEP;
+        if (c === '1'){ chart.push(mk(t,'L')); chart.push(mk(t,'R')); }
+        else if (c === '2'){ chart.push(mk(t,'U')); chart.push(mk(t,'D')); }
+        else chart.push(mk(t, c));
+      }
+    }
+  }
+  chart.sort((a,b)=>a.t-b.t);
+  audioEvents.sort((a,b)=>a.t-b.t);
+}
+function mk(t, dir){ return { t, dir, done:false, judged:false }; }
+
+/* ==========================================================
+   게임 상태
+   ========================================================== */
+let state = 'title';   // title | play | result
+let songT = 0, startAt = 0, audioPtr = 0;
+let score = 0, combo = 0, maxCombo = 0;
+let cnt = { P:0, G:0, O:0, M:0 };
+let totalNotes = 0;
+let shake = 0, beatPulse = 0, lastBeat = -1;
+let particles = [], ripples = [], judgeFx = null;
+let laneFlash = { U:0, R:0, D:0, L:0 };
+let best = +(localStorage.getItem('crossbeat_best') || 0);
+
+const $ = id => document.getElementById(id);
+const elScore=$('score'), elAcc=$('acc'), elCombo=$('combo'), elProg=$('prog');
+
+function startGame(){
+  initAudio();
+  if (AC.state === 'suspended') AC.resume();
+  buildSong();
+  totalNotes = chart.length;
+  score = 0; combo = 0; maxCombo = 0;
+  cnt = {P:0,G:0,O:0,M:0};
+  particles = []; ripples = []; judgeFx = null;
+  audioPtr = 0; shake = 0; lastBeat = -1;
+  startAt = AC.currentTime + 0.35;
+  state = 'play';
+  $('s-title').classList.add('hidden');
+  $('s-result').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  updateHud();
+}
+
+function endGame(){
+  state = 'result';
+  $('hud').classList.add('hidden');
+  const acc = accuracy();
+  const g = grade(acc);
+  $('r-grade').textContent = g;
+  $('r-score').textContent = score.toLocaleString();
+  $('r-acc').textContent = '정확도 ' + acc.toFixed(2) + '%';
+  $('r-p').textContent = cnt.P; $('r-g').textContent = cnt.G;
+  $('r-o').textContent = cnt.O; $('r-m').textContent = cnt.M;
+  $('r-c').textContent = maxCombo;
+  if (score > best){ best = score; localStorage.setItem('crossbeat_best', String(best)); $('r-new').classList.remove('hidden'); }
+  else $('r-new').classList.add('hidden');
+  $('s-result').classList.remove('hidden');
+}
+
+function accuracy(){
+  if (!totalNotes) return 100;
+  const earned = cnt.P*1 + cnt.G*0.7 + cnt.O*0.35;
+  return Math.max(0, earned / totalNotes * 100);
+}
+function grade(a){
+  if (a >= 98) return 'S+';
+  if (a >= 94) return 'S';
+  if (a >= 88) return 'A';
+  if (a >= 78) return 'B';
+  if (a >= 65) return 'C';
+  return 'D';
+}
+function updateHud(){
+  elScore.textContent = score.toLocaleString();
+  elAcc.textContent = accuracy().toFixed(2) + '%';
+  elCombo.textContent = combo;
+}
+
+/* ==========================================================
+   판정
+   ========================================================== */
+function judge(dir){
+  if (state !== 'play') return;
+  laneFlash[dir] = 1;
+
+  let best = null, bestDt = 1e9;
+  for (const n of chart){
+    if (n.done || n.dir !== dir) continue;
+    const dt = n.t - songT;
+    if (dt > W_GOOD) break;
+    if (Math.abs(dt) < Math.abs(bestDt)){ bestDt = dt; best = n; }
+  }
+  if (!best || Math.abs(bestDt) > W_GOOD){
+    // 허공 치기 — 감점 없음, 연출만
+    ripples.push({ dir, r:RH, life:1, col:'#5a6390', w:2 });
+    return;
+  }
+
+  best.done = true; best.judged = true;
+  const a = Math.abs(bestDt);
+  let type;
+  if (a <= W_PERFECT) type='P';
+  else if (a <= W_GREAT) type='G';
+  else type='O';
+
+  cnt[type]++;
+  combo++;
+  if (combo > maxCombo) maxCombo = combo;
+  const base = type==='P' ? 300 : type==='G' ? 200 : 100;
+  const mult = 1 + Math.min(combo, 100) * 0.01;
+  score += Math.round(base * mult);
+
+  const idx = DIRS.indexOf(dir) + (type==='P'?2:0);
+  pluck(idx, type==='P');
+  spawnHit(dir, type);
+  judgeFx = { type, life:1 };
+  if (type==='P') shake = Math.min(shake + 1.2, 6);
+  updateHud();
+}
+
+function missNote(n){
+  n.done = true; n.judged = true;
+  cnt.M++; combo = 0;
+  judgeFx = { type:'M', life:1 };
+  shake = Math.min(shake + 5, 12);
+  missSfx();
+  updateHud();
+}
+
+function spawnHit(dir, type){
+  const [dx,dy] = DIR_VEC[dir];
+  const x = CX + dx*RH, y = CY + dy*RH;
+  const col = DIR_COL[dir];
+  const n = type==='P' ? 14 : type==='G' ? 9 : 5;
+  for (let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const sp = (type==='P'?1:0.7) * (90 + Math.random()*230);
+    particles.push({ x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1,
+      dec: 1.6+Math.random()*1.4, col, size: 1.6+Math.random()*2.6 });
+  }
+  ripples.push({ dir, r:RH*0.55, life:1, col, w: type==='P'?3.5:2 });
+  if (type==='P') ripples.push({ dir, r:RH*0.2, life:1, col:'#ffffff', w:1.6 });
+}
+
+/* ==========================================================
+   입력
+   ========================================================== */
+const heldKeys = new Set();
+window.addEventListener('keydown', e=>{
+  const k = e.key;
+  let dir = null;
+  if (k==='ArrowUp'||k==='w'||k==='W') dir='U';
+  else if (k==='ArrowRight'||k==='d'||k==='D') dir='R';
+  else if (k==='ArrowDown'||k==='s'||k==='S') dir='D';
+  else if (k==='ArrowLeft'||k==='a'||k==='A') dir='L';
+  if (dir){
+    e.preventDefault();
+    if (!heldKeys.has(dir)){ heldKeys.add(dir); judge(dir); }
+    return;
+  }
+  if (k===' '||k==='Enter'){
+    e.preventDefault();
+    if (state==='title') startGame();
+    else if (state==='result') startGame();
+  }
+});
+window.addEventListener('keyup', e=>{
+  const k = e.key;
+  if (k==='ArrowUp'||k==='w'||k==='W') heldKeys.delete('U');
+  if (k==='ArrowRight'||k==='d'||k==='D') heldKeys.delete('R');
+  if (k==='ArrowDown'||k==='s'||k==='S') heldKeys.delete('D');
+  if (k==='ArrowLeft'||k==='a'||k==='A') heldKeys.delete('L');
+});
+
+// 화면을 중앙 기준 4개의 쐐기로 분할 — 탭한 방향으로 판정
+function dirFromPoint(x, y){
+  const dx = x - CX, dy = y - CY;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'R' : 'L';
+  return dy > 0 ? 'D' : 'U';
+}
+cv.addEventListener('touchstart', e=>{
+  if (state !== 'play') return;
+  e.preventDefault();
+  for (const t of e.changedTouches) judge(dirFromPoint(t.clientX, t.clientY));
+}, { passive:false });
+cv.addEventListener('mousedown', e=>{
+  if (state !== 'play') return;
+  judge(dirFromPoint(e.clientX, e.clientY));
+});
+
+$('btn-start').addEventListener('click', startGame);
+$('btn-retry').addEventListener('click', startGame);
+$('btn-home').addEventListener('click', ()=>{
+  state='title';
+  $('s-result').classList.add('hidden');
+  $('s-title').classList.remove('hidden');
+  elProg.style.width = '0%';
+});
+
+/* ==========================================================
+   렌더 루프
+   ========================================================== */
+let prevT = performance.now();
+
+function notePos(n){
+  const [dx,dy] = DIR_VEC[n.dir];
+  const prog = 1 - (n.t - songT) / APPROACH;   // 0=스폰, 1=판정선
+  const spawn = (n.dir==='L'||n.dir==='R') ? SPX : SPY;
+  const d = spawn + (RH - spawn) * prog;
+  return { x: CX + dx*d, y: CY + dy*d, prog, d };
+}
+
+function loop(now){
+  const dt = Math.min((now - prevT)/1000, 0.05);
+  prevT = now;
+
+  if (state === 'play'){
+    songT = AC.currentTime - startAt;
+
+    // 오디오 스케줄 (0.25초 선행)
+    while (audioPtr < audioEvents.length && audioEvents[audioPtr].t < songT + 0.25){
+      const e = audioEvents[audioPtr++];
+      const at = startAt + e.t;
+      if (at > AC.currentTime) e.fn(at);
+    }
+
+    // 미스 처리
+    for (const n of chart){
+      if (!n.done && songT - n.t > W_MISS) missNote(n);
+    }
+
+    // 비트 펄스
+    const b = Math.floor(songT / SPB);
+    if (b !== lastBeat && songT >= 0){ lastBeat = b; beatPulse = 1; }
+
+    elProg.style.width = Math.max(0, Math.min(100, songT/SONG_LEN*100)) + '%';
+    if (songT > SONG_LEN + 0.6) endGame();
+  }
+
+  // 감쇠
+  beatPulse = Math.max(0, beatPulse - dt*3.2);
+  shake = Math.max(0, shake - dt*26);
+  for (const k of DIRS) laneFlash[k] = Math.max(0, laneFlash[k] - dt*4.5);
+  if (judgeFx){ judgeFx.life -= dt*1.7; if (judgeFx.life<=0) judgeFx=null; }
+
+  draw(dt);
+  requestAnimationFrame(loop);
+}
+
+function draw(dt){
+  ctx.clearRect(0,0,W,H);
+
+  const sx = shake ? (Math.random()-0.5)*shake : 0;
+  const sy = shake ? (Math.random()-0.5)*shake : 0;
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  drawBackground();
+  drawWedges();
+  drawReceptors();
+  drawCore();
+
+  if (state === 'play'){
+    drawNotes();
+  }
+  drawRipples(dt);
+  drawParticles(dt);
+  drawJudge();
+  if (state === 'play') drawCombo();
+
+  ctx.restore();
+}
+
+function drawBackground(){
+  const g = ctx.createRadialGradient(CX,CY,0,CX,CY,Math.max(W,H)*0.75);
+  const e = 0.10 + beatPulse*0.10;
+  g.addColorStop(0, `rgba(48,34,96,${e+0.22})`);
+  g.addColorStop(0.45, 'rgba(14,14,38,0.55)');
+  g.addColorStop(1, 'rgba(5,6,13,1)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // 비트에 맞춰 퍼지는 링
+  ctx.save();
+  ctx.globalAlpha = beatPulse*0.22;
+  ctx.strokeStyle = '#8f7bff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(CX,CY, RH + (1-beatPulse)*Math.min(W,H)*0.55, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWedges(){
+  // 4분할 가이드 선
+  ctx.save();
+  ctx.lineWidth = 1;
+  const L = Math.max(W,H);
+  for (const [ax,ay] of [[1,1],[1,-1]]){
+    ctx.strokeStyle = 'rgba(120,132,210,0.085)';
+    ctx.beginPath();
+    ctx.moveTo(CX - ax*L, CY - ay*L);
+    ctx.lineTo(CX + ax*L, CY + ay*L);
+    ctx.stroke();
+  }
+  // 레인 축
+  for (const d of DIRS){
+    const [dx,dy] = DIR_VEC[d];
+    const f = laneFlash[d];
+    const grd = ctx.createLinearGradient(CX,CY, CX+dx*SPX, CY+dy*SPY);
+    grd.addColorStop(0, `rgba(${DIR_RGB[d].join(',')},${0.13 + f*0.5})`);
+    grd.addColorStop(1, `rgba(${DIR_RGB[d].join(',')},0)`);
+    ctx.strokeStyle = grd;
+    ctx.lineWidth = 2 + f*5;
+    ctx.beginPath();
+    ctx.moveTo(CX + dx*RH*0.9, CY + dy*RH*0.9);
+    ctx.lineTo(CX + dx*SPX, CY + dy*SPY);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawReceptors(){
+  for (const d of DIRS){
+    const [dx,dy] = DIR_VEC[d];
+    const x = CX + dx*RH, y = CY + dy*RH;
+    const f = laneFlash[d];
+    const s = RH*0.30 * (1 + f*0.30 + beatPulse*0.05);
+    ctx.save();
+    ctx.translate(x,y); ctx.rotate(Math.PI/4);
+    ctx.strokeStyle = DIR_COL[d];
+    ctx.lineWidth = 2 + f*2.5;
+    ctx.globalAlpha = 0.55 + f*0.45;
+    ctx.shadowColor = DIR_COL[d]; ctx.shadowBlur = 12 + f*26;
+    ctx.strokeRect(-s/2,-s/2,s,s);
+    if (f > 0.05){
+      ctx.globalAlpha = f*0.35;
+      ctx.fillStyle = DIR_COL[d];
+      ctx.fillRect(-s/2,-s/2,s,s);
+    }
+    ctx.restore();
+  }
+}
+
+function drawCore(){
+  const r = RH*0.34 * (1 + beatPulse*0.20);
+  ctx.save();
+  ctx.shadowColor = '#7d6bff'; ctx.shadowBlur = 26 + beatPulse*30;
+  const g = ctx.createRadialGradient(CX,CY,0,CX,CY,r);
+  g.addColorStop(0,'rgba(255,255,255,0.95)');
+  g.addColorStop(0.45,'rgba(150,130,255,0.75)');
+  g.addColorStop(1,'rgba(90,70,220,0.05)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(CX,CY,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // 판정 링
+  ctx.save();
+  ctx.strokeStyle = `rgba(160,172,255,${0.16 + beatPulse*0.16})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(CX,CY,RH,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawNotes(){
+  for (const n of chart){
+    if (n.done) continue;
+    const dt = n.t - songT;
+    if (dt > APPROACH || dt < -W_MISS) continue;
+    const p = notePos(n);
+    const col = DIR_COL[n.dir];
+    const near = Math.max(0, 1 - Math.abs(dt)/0.35);
+    const s = RH*0.26 * (0.72 + p.prog*0.34);
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(Math.PI/4 + p.prog*0.5);
+    ctx.shadowColor = col; ctx.shadowBlur = 10 + near*24;
+    ctx.globalAlpha = Math.min(1, 0.25 + p.prog*1.5);
+
+    ctx.fillStyle = col;
+    ctx.globalAlpha *= 0.30 + near*0.45;
+    ctx.fillRect(-s/2,-s/2,s,s);
+
+    ctx.globalAlpha = Math.min(1, 0.4 + p.prog*1.4);
+    ctx.strokeStyle = col; ctx.lineWidth = 2.4;
+    ctx.strokeRect(-s/2,-s/2,s,s);
+
+    if (near > 0.55){
+      ctx.globalAlpha = (near-0.55)*1.6;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2;
+      ctx.strokeRect(-s*0.3,-s*0.3,s*0.6,s*0.6);
+    }
+    ctx.restore();
+  }
+}
+
+function drawRipples(dt){
+  for (let i=ripples.length-1;i>=0;i--){
+    const r = ripples[i];
+    r.life -= dt*2.6;
+    r.r += dt*RH*3.4;
+    if (r.life <= 0){ ripples.splice(i,1); continue; }
+    const [dx,dy] = DIR_VEC[r.dir];
+    ctx.save();
+    ctx.globalAlpha = r.life*0.8;
+    ctx.strokeStyle = r.col; ctx.lineWidth = r.w;
+    ctx.shadowColor = r.col; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(CX+dx*RH, CY+dy*RH, r.r, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawParticles(dt){
+  for (let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= dt*p.dec;
+    if (p.life <= 0){ particles.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= 0.93; p.vy *= 0.93;
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.col;
+    ctx.shadowColor = p.col; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+const JTEXT = { P:'PERFECT', G:'GREAT', O:'GOOD', M:'MISS' };
+const JCOL  = { P:'#4df3ff', G:'#8bff9e', O:'#ffd166', M:'#ff6b8a' };
+function drawJudge(){
+  if (!judgeFx) return;
+  const l = judgeFx.life;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, l*1.5);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const sc = 1 + (1-l)*0.12;
+  ctx.font = `800 ${Math.round(Math.min(W,H)*0.058*sc)}px -apple-system,"Noto Sans KR",sans-serif`;
+  ctx.fillStyle = JCOL[judgeFx.type];
+  ctx.shadowColor = JCOL[judgeFx.type]; ctx.shadowBlur = 20;
+  ctx.fillText(JTEXT[judgeFx.type], CX, CY - RH*1.62 - (1-l)*10);
+  ctx.restore();
+}
+
+function drawCombo(){
+  if (combo < 3) return;
+  ctx.save();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const pop = 1 + beatPulse*0.04;
+  ctx.font = `900 ${Math.round(Math.min(W,H)*0.085*pop)}px -apple-system,sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.90)';
+  ctx.shadowColor = 'rgba(140,160,255,0.9)'; ctx.shadowBlur = 18;
+  ctx.fillText(combo, CX, CY + RH*1.60);
+  ctx.font = `700 ${Math.round(Math.min(W,H)*0.026)}px -apple-system,sans-serif`;
+  ctx.fillStyle = 'rgba(160,172,230,0.65)'; ctx.shadowBlur = 0;
+  ctx.fillText('COMBO', CX, CY + RH*1.60 + Math.min(W,H)*0.058);
+  ctx.restore();
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
