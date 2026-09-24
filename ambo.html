@@ -12,7 +12,8 @@
   .ol { text-shadow:-2px -2px 0 #111, 2px -2px 0 #111, -2px 2px 0 #111, 2px 2px 0 #111, 0 3px 0 #111; }
   .tb { position:absolute; top:10px; width:36px; height:36px; border-radius:9px; background:rgba(18,18,21,.6); border:none; color:#fff; display:flex; align-items:center; justify-content:center;
     pointer-events:auto; cursor:pointer; font-size:16px; text-decoration:none; }
-  #hubBtn { left:10px; } #muteBtn { left:52px; }
+  #hubBtn { left:10px; } #muteBtn { left:52px; } #fsBtn { left:94px; }
+  .mb.on { background:rgba(70,150,255,.65) !important; border-color:#fff !important; }
   #timer { position:absolute; top:6px; left:50%; transform:translateX(-50%); font-size:34px; font-weight:900; letter-spacing:.02em; font-variant-numeric:tabular-nums; text-align:center; }
   #timer small { display:block; font-size:12px; font-weight:800; opacity:.9; letter-spacing:.08em; margin-top:-2px; }
   #timer.dm { color:#ff3b30; animation:beat .45s infinite; }
@@ -104,6 +105,7 @@
 <div id="hud">
   <a id="hubBtn" class="tb" href="hub.html" title="허브">⌂</a>
   <button id="muteBtn" class="tb" type="button" title="소리">🔊</button>
+  <button id="fsBtn" class="tb" type="button" title="전체화면">⛶</button>
   <div id="timer" class="ol">0:20<small>로비</small></div>
   <div id="aliveTag">👥 0</div>
   <div id="board"><div class="hd"><span>플레이어</span><span>승리</span></div><div id="boardRows"></div></div>
@@ -1254,7 +1256,7 @@ addEventListener('mousemove', e=>{
   if (document.pointerLockElement === canvas){ rawYaw -= e.movementX*.0026; rawPitch = clamp(rawPitch + e.movementY*.0018, -0.9, 1.2); }
   else if (rDrag){ rawYaw -= (e.clientX - lastM.x)*.005; rawPitch = clamp(rawPitch + (e.clientY - lastM.y)*.0035, -0.9, 1.2); lastM = { x:e.clientX, y:e.clientY }; } });
 addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*1.2, 0.6, 20); }, { passive:true });
-function setShiftLock(v){ shiftLock = v; document.body.classList.toggle('aim', v || me.eq === 2);
+function setShiftLock(v){ shiftLock = v; const lb = document.getElementById('bLock'); if (lb) lb.classList.toggle('on', v); document.body.classList.toggle('aim', v || me.eq === 2);
   if (!isTouch){ try { if (v && document.pointerLockElement !== canvas){ const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } else if (!v && document.pointerLockElement === canvas) document.exitPointerLock(); } catch(e){} } }
 document.addEventListener('pointerlockchange', ()=>{ if (document.pointerLockElement !== canvas && shiftLock) setShiftLock(false); });
 // 모바일
@@ -1268,6 +1270,16 @@ addEventListener('touchend', e=>{ for (const t of e.changedTouches){ if (t.ident
 const tap = (id, fn)=>$(id).addEventListener('touchstart', e=>{ e.preventDefault(); audio.unlock(); fn(); }, { passive:false });
 tap('bJump', ()=>{ if (me.crouch) setCrouch(false); else me.jumpBuf = 0.15; }); tap('bCrouch', ()=>setCrouch(!me.crouch)); tap('bAct', ()=>primaryAction()); tap('bEq', ()=>toggleEquip()); tap('bThrow', ()=>throwKnife()); tap('bUse', ()=>useVent()); tap('bLock', ()=>setShiftLock(!shiftLock));
 $('muteBtn').addEventListener('click', ()=>audio.toggleMute());
+// 전체화면 (폰에서는 가로로 고정)
+(function(){ const btn = $('fsBtn'), de = document.documentElement, req = de.requestFullscreen || de.webkitRequestFullscreen;
+  if (!req){ btn.style.display = 'none'; return; }
+  const isFs = ()=> !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.addEventListener('click', ()=>{ if (!isFs()){ let r; try { r = req.call(de, { navigationUI:'hide' }); } catch(e){}
+      const lock = ()=>{ try { if (isTouch && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e){} };
+      if (r && r.then) r.then(lock).catch(()=>{}); else setTimeout(lock, 300); }
+    else { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch(e){} } });
+  const upd = ()=>{ btn.textContent = isFs() ? '🗗' : '⛶'; }; document.addEventListener('fullscreenchange', upd); document.addEventListener('webkitfullscreenchange', upd); })();
+
 $('slot1').addEventListener('click', e=>{ e.stopPropagation(); toggleEquip(); });
 $('slot1').addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); toggleEquip(); }, { passive:false });
 
@@ -1700,7 +1712,7 @@ $('specPrev').addEventListener('click', ()=>{ state.specIdx--; }); $('specNext')
 let sendT = 0, lastSend = '', lastSendAt = 0;
 function netSend(dt){
   if (!mpOn || !window.MP || !MP.update) return; sendT -= dt; if (sendT > 0) return; sendT = state.isHost ? 0.12 : 0.1;
-  const d = { x:+me.x.toFixed(2), y:+me.y.toFixed(2), z:+me.z.toFixed(2), ry:+me.facing.toFixed(2), an:(me.climbing ? 3 : !me.grounded ? 2 : me.moving ? 1 : 0), eq:me.eq, cr:me.crouch ? 1 : 0, jt:state.myJT, w:wins, vote:state.vote || null, ev:myEv.slice(-8), g:state.isHost ? H : null };
+  const d = { x:+me.x.toFixed(2), y:+me.y.toFixed(2), z:+me.z.toFixed(2), ry:+me.facing.toFixed(2), an:(me.climbing ? 3 : !me.grounded ? 2 : me.moving ? 1 : 0), eq:me.eq, cr:me.crouch ? 1 : 0, jt:state.myJT, w:wins, vote:state.vote || null, ev:myEv.slice(-8), g:state.isHost ? JSON.parse(JSON.stringify(H)) : null };
   const s = JSON.stringify(d), now = performance.now(); if (s === lastSend && now - lastSendAt < 2500) return; lastSend = s; lastSendAt = now; MP.update(d);
 }
 function electHost(){
