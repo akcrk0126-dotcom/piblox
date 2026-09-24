@@ -1279,10 +1279,10 @@ const audio = (function(){
   $('muteBtn').textContent = muted ? '🔇' : '🔊';
   function unlock(){ if (!ac){ try { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(ac.destination); musicG = ac.createGain(); musicG.gain.value = 0.35; musicG.connect(master); } catch(e){ return; } } if (ac.state === 'suspended') ac.resume(); }
   function toggleMute(){ muted = !muted; try { localStorage.setItem('ambo_mute', muted ? '1' : '0'); } catch(e){} $('muteBtn').textContent = muted ? '🔇' : '🔊'; if (master) master.gain.setTargetAtTime(muted ? 0 : 0.8, ac.currentTime, .05); }
-  function tone(type, f0, f1, dur, vol, when, dest){ if (!ac) return; const t = when || ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type;
+  function tone(type, f0, f1, dur, vol, when, dest){ if (!ac || !(vol > 0.0002) || !(dur > 0)) return; const t = when || ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = type;
     o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
     o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + dur + .03); }
-  let nb = null; function noise(dur, vol, type, freq, when, dest){ if (!ac) return; if (!nb){ nb = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = nb.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1; }
+  let nb = null; function noise(dur, vol, type, freq, when, dest){ if (!ac || !(vol > 0.0002) || !(dur > 0)) return; if (!nb){ nb = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = nb.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1; }
     const t = when || ac.currentTime, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = nb; f.type = type || 'highpass'; f.frequency.value = freq || 2000;
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(f); f.connect(g); g.connect(dest || master); s.start(t, Math.random()*0.5); s.stop(t + dur + .02); }
   const sfx = {
