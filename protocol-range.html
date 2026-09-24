@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>PROTOCOL: RANGE — 전술 FPS 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#ff4655; --teal:#2ee6c8; --ink:#0f1923; --ink2:#1b2733; --paper:#ece8e1; --gold:#ffd166;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);
+  font-family:'Noto Sans KR',system-ui,sans-serif;touch-action:none;overscroll-behavior:none}
+canvas#game{display:block;position:fixed;inset:0;width:100%;height:100%}
+.num{font-family:'Rajdhani','Noto Sans KR',sans-serif;font-weight:700;letter-spacing:.02em}
+
+/* ---------------- HUD ---------------- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#ultFx{position:absolute;inset:0;opacity:0;transition:opacity .3s;
+  box-shadow:inset 0 0 120px 20px rgba(46,230,200,.35)}
+body.overdrive #ultFx{opacity:1;animation:odPulse 1s ease-in-out infinite alternate}
+@keyframes odPulse{to{box-shadow:inset 0 0 160px 30px rgba(46,230,200,.5)}}
+
+#crosshair{position:absolute;left:50%;top:50%;width:0;height:0}
+#crosshair .ln{position:absolute;background:var(--teal);box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+#crosshair .t,#crosshair .b{width:2px;height:7px;left:-1px}
+#crosshair .l,#crosshair .r{height:2px;width:7px;top:-1px}
+#crosshair .dot{position:absolute;width:2px;height:2px;left:-1px;top:-1px;background:var(--teal);box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+body.overdrive #crosshair .ln,body.overdrive #crosshair .dot{background:#fff}
+
+#hitmarker{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0}
+#hitmarker i{position:absolute;width:2px;height:9px;background:#fff;left:-1px;top:-4.5px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+#hitmarker i:nth-child(1){transform:rotate(45deg) translateY(-11px)}
+#hitmarker i:nth-child(2){transform:rotate(135deg) translateY(-11px)}
+#hitmarker i:nth-child(3){transform:rotate(225deg) translateY(-11px)}
+#hitmarker i:nth-child(4){transform:rotate(315deg) translateY(-11px)}
+#hitmarker.show{animation:hm .22s ease-out}
+#hitmarker.head i{background:var(--gold)}
+#hitmarker.kill i{background:var(--red);height:12px}
+#hitmarker.kill.show{animation:hm .4s ease-out}
+@keyframes hm{0%{opacity:1;transform:scale(1.35)}100%{opacity:0;transform:scale(1)}}
+
+#reloadBar{position:absolute;left:50%;top:calc(50% + 34px);width:64px;height:3px;margin-left:-32px;
+  background:rgba(15,25,35,.6);opacity:0;transition:opacity .15s}
+#reloadBar.on{opacity:1}
+#reloadBar div{height:100%;width:0;background:var(--paper)}
+
+#dmg{position:absolute;inset:0}
+.dn{position:absolute;left:0;top:0;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;
+  color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.6);will-change:transform,opacity}
+.dn.hs{color:var(--gold);font-size:26px}
+
+#stats{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:2px}
+#stats .s{background:rgba(15,25,35,.72);padding:6px 14px;text-align:center;min-width:72px;border-bottom:2px solid transparent}
+#stats .s:first-child{border-bottom-color:var(--red)}
+#stats .k{font-size:10px;letter-spacing:.14em;color:#9aa6b2;font-weight:700}
+#stats .v{font-size:22px;line-height:1.05}
+
+#killfeed{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.kf{background:rgba(15,25,35,.75);padding:5px 10px;font-size:13px;display:flex;gap:8px;align-items:center;
+  border-right:3px solid var(--teal);transition:opacity .4s,transform .4s;animation:kfIn .2s ease-out}
+.kf.out{opacity:0;transform:translateX(20px)}
+.kf .me{color:var(--teal);font-weight:700}
+.kf .en{color:var(--red);font-weight:700}
+.kf .w{font-family:'Rajdhani';color:#c7cfd6;font-size:12px}
+.kf .hs{color:var(--gold)}
+@keyframes kfIn{from{opacity:0;transform:translateX(24px)}}
+
+#hpBox{position:absolute;left:18px;bottom:18px;display:flex;align-items:flex-end;gap:10px}
+#hpBox .card{background:rgba(15,25,35,.72);padding:6px 14px 8px;min-width:150px}
+#hpBox .row{display:flex;align-items:baseline;gap:10px}
+#hpBox .hp{font-size:44px;line-height:.95}
+#hpBox .ar{font-size:18px;color:#9ecbff;display:flex;align-items:center;gap:4px}
+#hpBox .ar::before{content:'';width:10px;height:12px;background:#9ecbff;clip-path:polygon(50% 0,100% 20%,100% 60%,50% 100%,0 60%,0 20%)}
+#hpBox .bar{height:4px;background:rgba(255,255,255,.12);margin-top:5px}
+#hpBox .bar div{height:100%;width:100%;background:var(--paper)}
+#moveMode{font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:.16em;background:rgba(15,25,35,.72);
+  padding:4px 8px;color:#9aa6b2}
+#moveMode.walk{color:var(--teal)}
+#moveMode.air{color:var(--gold)}
+
+#ammoBox{position:absolute;right:18px;bottom:18px;background:rgba(15,25,35,.72);padding:6px 16px 8px;text-align:right;min-width:150px}
+#ammoBox .wn{font-family:'Rajdhani';font-weight:700;font-size:12px;letter-spacing:.2em;color:#9aa6b2}
+#ammoBox .mag{font-size:48px;line-height:.95}
+#ammoBox .res{font-size:20px;color:#9aa6b2}
+#ammoBox.low .mag{color:var(--red)}
+body.overdrive #ammoBox .mag{color:var(--teal)}
+
+#abilities{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:8px}
+.ab{position:relative;width:62px;height:62px;background:rgba(15,25,35,.78);border:1px solid rgba(236,232,225,.18);
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ab .ic{font-size:24px;color:var(--paper);z-index:2;transition:color .2s,transform .2s}
+.ab .cd{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.55);z-index:3}
+.ab .key{position:absolute;top:2px;left:4px;font-family:'Rajdhani';font-weight:700;font-size:12px;color:#9aa6b2;z-index:4}
+.ab .pips{position:absolute;bottom:4px;left:0;right:0;display:flex;gap:3px;justify-content:center;z-index:4}
+.ab .pips i{width:6px;height:6px;background:rgba(255,255,255,.2);transform:rotate(45deg)}
+.ab .pips i.f{background:var(--paper)}
+.ab .nm{position:absolute;bottom:-18px;left:-10px;right:-10px;text-align:center;font-size:10px;color:#c7cfd6;white-space:nowrap}
+.ab .tm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;
+  font-family:'Rajdhani';font-weight:700;font-size:18px;color:#fff;opacity:0}
+.ab.ready{border-color:rgba(236,232,225,.45)}
+.ab.empty .ic{color:#5d6975}
+.ab.on{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal),0 0 18px rgba(46,230,200,.45)}
+.ab.on .ic{color:var(--teal);transform:scale(1.1)}
+.ab.on .tm{opacity:1}
+.ab.ult{width:70px;height:70px;border-color:rgba(255,209,102,.3)}
+.ab.ult.ready{border-color:var(--gold);box-shadow:0 0 16px rgba(255,209,102,.4)}
+.ab.ult.ready .ic{color:var(--gold)}
+.ab.ult .pips i.f{background:var(--gold)}
+#abilities{padding-bottom:16px}
+
+#toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-weight:900;font-size:18px;letter-spacing:.04em;
+  background:rgba(15,25,35,.8);padding:8px 18px;border-left:3px solid var(--teal);opacity:0;transition:opacity .25s;white-space:nowrap}
+#toast.on{opacity:1}
+
+/* ---------------- 터치 UI ---------------- */
+#touch{position:fixed;inset:0;z-index:4;display:none}
+body.touch-on #touch{display:block}
+#joyZone{position:absolute;left:0;top:0;bottom:0;width:42%}
+#lookZone{position:absolute;right:0;top:0;bottom:0;width:58%}
+#joyBase{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
+  border:2px solid rgba(236,232,225,.35);background:rgba(15,25,35,.25);opacity:0;pointer-events:none;left:110px;top:70%}
+#joyBase.on{opacity:1}
+#joyKnob{position:absolute;left:50%;top:50%;width:50px;height:50px;border-radius:50%;background:rgba(236,232,225,.75);
+  transform:translate(-50%,-50%)}
+.tbtn{position:absolute;border:1px solid rgba(236,232,225,.4);background:rgba(15,25,35,.55);color:var(--paper);
+  font-family:'Rajdhani','Noto Sans KR';font-weight:700;letter-spacing:.08em;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.tbtn:active,.tbtn.on{background:rgba(46,230,200,.35);border-color:var(--teal)}
+#bFire{right:max(28px,env(safe-area-inset-right));bottom:96px;width:86px;height:86px;font-size:16px;border-color:var(--red);background:rgba(255,70,85,.28)}
+#bJump{right:max(128px,calc(env(safe-area-inset-right) + 100px));bottom:40px;width:62px;height:62px;font-size:13px}
+#bReload{right:max(36px,env(safe-area-inset-right));bottom:200px;width:52px;height:52px;font-size:16px}
+#bWalk{right:max(128px,calc(env(safe-area-inset-right) + 100px));bottom:118px;width:52px;height:52px;font-size:12px}
+#bPause{left:50%;top:10px;transform:translateX(-50%);width:36px;height:36px;border-radius:6px;font-size:14px;top:auto;bottom:auto}
+
+body.touch-on #abilities{pointer-events:auto;bottom:10px}
+body.touch-on .ab{width:52px;height:52px}
+body.touch-on .ab.ult{width:58px;height:58px}
+body.touch-on #hpBox{top:10px;left:max(10px,env(safe-area-inset-left));bottom:auto;transform:scale(.72);transform-origin:top left}
+body.touch-on #ammoBox{top:74px;left:max(10px,env(safe-area-inset-left));right:auto;bottom:auto;transform:scale(.72);transform-origin:top left;text-align:left}
+body.touch-on #stats{left:auto;right:10px;transform:scale(.72);transform-origin:top right}
+body.touch-on #killfeed{top:60px;transform:scale(.85);transform-origin:top right}
+body.touch-on #bPause{top:auto;bottom:auto;left:50%;top:8px}
+
+/* ---------------- 오버레이 ---------------- */
+#overlay{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 30% 20%,rgba(255,70,85,.18),transparent 55%),rgba(15,25,35,.86);padding:16px}
+#overlay.show{display:flex}
+.card{max-width:560px;width:100%}
+.brand{font-family:'Rajdhani';font-weight:700;font-size:13px;letter-spacing:.35em;color:var(--red)}
+.title{font-family:'Rajdhani';font-weight:700;font-size:clamp(40px,9vw,68px);line-height:.9;letter-spacing:.02em;margin:6px 0 4px}
+.title span{color:var(--red)}
+.sub{color:#9aa6b2;font-size:14px;margin-bottom:22px}
+.keys{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 18px;margin-bottom:22px;font-size:13px}
+.keys div{display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(236,232,225,.08);padding:5px 0}
+.keys b{font-family:'Rajdhani';min-width:64px;background:rgba(236,232,225,.1);padding:2px 8px;text-align:center;font-size:13px}
+body.touch-on .keys{display:none}
+.touchhint{display:none;color:#c7cfd6;font-size:13px;margin-bottom:22px;line-height:1.7}
+body.touch-on .touchhint{display:block}
+#startBtn{pointer-events:auto;font-family:'Rajdhani','Noto Sans KR';font-weight:700;font-size:18px;letter-spacing:.14em;
+  background:var(--red);color:#fff;border:none;padding:14px 38px;cursor:pointer;
+  clip-path:polygon(0 0,100% 0,100% 70%,94% 100%,0 100%)}
+#startBtn:hover{filter:brightness(1.1)}
+</style>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15130E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="ultFx"></div>
+  <div id="crosshair"><div class="ln t"></div><div class="ln b"></div><div class="ln l"></div><div class="ln r"></div><div class="dot"></div></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="reloadBar"><div></div></div>
+  <div id="dmg"></div>
+
+  <div id="stats">
+    <div class="s"><div class="k">KILLS</div><div class="v num" id="stKills">0</div></div>
+    <div class="s"><div class="k">HS%</div><div class="v num" id="stHs">0</div></div>
+    <div class="s"><div class="k">ACC%</div><div class="v num" id="stAcc">0</div></div>
+    <div class="s"><div class="k">FPS</div><div class="v num" id="stFps">0</div></div>
+  </div>
+  <div id="killfeed"></div>
+
+  <div id="hpBox">
+    <div class="card">
+      <div class="row"><div class="hp num" id="hp">100</div><div class="ar num" id="armor">50</div></div>
+      <div class="bar"><div id="hpFill"></div></div>
+    </div>
+    <div id="moveMode">RUN</div>
+  </div>
+
+  <div id="ammoBox">
+    <div class="wn" id="wname">VX-9 RIFLE</div>
+    <div><span class="mag num" id="mag">25</span><span class="res num"> / <span id="res">75</span></span></div>
+  </div>
+
+  <div id="abilities"></div>
+  <div id="toast"></div>
+</div>
+
+<div id="touch">
+  <div id="joyZone"></div>
+  <div id="lookZone"></div>
+  <div id="joyBase"><div id="joyKnob"></div></div>
+  <button class="tbtn" id="bFire">FIRE</button>
+  <button class="tbtn" id="bJump">JUMP</button>
+  <button class="tbtn" id="bReload">R</button>
+  <button class="tbtn" id="bWalk">걷기</button>
+  <button class="tbtn" id="bPause">II</button>
+</div>
+
+<div id="overlay" class="show">
+  <div class="card">
+    <div class="brand">TACTICAL FPS · PROTOTYPE 0.1</div>
+    <div class="title">PROTOCOL<span>:</span> RANGE</div>
+    <div class="sub" id="ovSub">사격장 훈련 모드 — 봇을 처치하고 궁극기를 충전하세요</div>
+    <div class="keys">
+      <div><b>WASD</b>이동</div>
+      <div><b>MOUSE</b>시점 / 좌클릭 사격</div>
+      <div><b>SPACE</b>점프</div>
+      <div><b>SHIFT</b>걷기 (무음 · 정확도↑)</div>
+      <div><b>R</b>재장전</div>
+      <div><b>C</b>대시 (2회)</div>
+      <div><b>Q</b>리콘 펄스 (적 투시)</div>
+      <div><b>E</b>연막 구체 (2회)</div>
+      <div><b>X</b>궁극기: 오버드라이브</div>
+      <div><b>ESC</b>일시정지</div>
+    </div>
+    <div class="touchhint">왼쪽 드래그: 이동 · 오른쪽 드래그: 시점<br>FIRE 버튼을 누른 채 드래그하면 쏘면서 조준할 수 있어요<br>하단 C Q E X 아이콘을 탭해서 스킬 사용 · 가로 모드 권장</div>
+    <button id="startBtn">클릭하여 시작</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* =====================================================================
+   0. CONFIG — 게임 밸런스 상수는 전부 여기서 조절
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+if (IS_TOUCH) document.body.classList.add('touch-on');
+
+const CFG = {
+  fov: 78, sens: 0.0021, touchSens: 0.0055,
+  runSpeed: 5.4, walkSpeed: 2.9,          // 발로란트: 달리기 5.4m/s, 걷기 약 2.9m/s
+  groundAccel: 16, airAccel: 2.5,
+  gravity: 22, jumpVel: 7.0,
+  height: 1.8, eye: 1.62, radius: 0.33, stepHeight: 0.42,
+  dashSpeed: 19, dashTime: 0.18,
+  spawn: new THREE.Vector3(0, 0, 34),
+};
+
+const GUN = {
+  name: 'VX-9 RIFLE', magSize: 25, reserveMax: 75, rpm: 585, reloadTime: 2.0, range: 150,
+  damage: { head: 160, body: 40, leg: 34 },      // 헤드 원탭, 바디 4발
+  spread: { base: 0.0, run: 0.05, walk: 0.02, air: 0.13, sprayPerShot: 0.0035, sprayMax: 0.035 },
+};
+
+// 스프레이 패턴: i번째 탄의 (상승 pitch, 좌우 yaw) 오프셋 (라디안)
+// 1발째는 완벽 정확 → 3발까지 수직 상승 → 이후 좌우로 흔들림
+function recoilAt(i) {
+  if (i <= 0) return { p: 0, y: 0 };
+  const climb = Math.min(i, 9) * 0.0055 + Math.max(0, i - 9) * 0.0007;
+  let yaw = 0;
+  if (i >= 3) yaw += Math.sin(i * 0.9) * 0.0035;
+  if (i > 9) yaw += Math.sin((i - 9) * 0.45) * 0.014;
+  return { p: climb, y: yaw };
+}
+
+/* =====================================================================
+   1. AUDIO — WebAudio 실시간 합성 (외부 파일 없음)
+   ===================================================================== */
+class Sfx {
+  init() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.45;
+    this.master.connect(this.ctx.destination);
+    const len = this.ctx.sampleRate * 0.6;
+    this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = this.noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  _noise(dur, freq, q, gain, type = 'bandpass', delay = 0) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime + delay;
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = c.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f).connect(g).connect(this.master); s.start(t); s.stop(t + dur + 0.05);
+  }
+  _tone(f0, f1, dur, gain, type = 'sine', delay = 0) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  shot()   { this._noise(0.10, 2200, 0.7, 0.5); this._noise(0.28, 380, 0.7, 0.55, 'lowpass'); this._tone(170, 45, 0.15, 0.55, 'triangle'); }
+  step()   { this._noise(0.07, 260 + Math.random() * 160, 1.1, 0.22, 'lowpass'); }
+  land()   { this._noise(0.12, 200, 1, 0.35, 'lowpass'); }
+  hit(head){ if (head) { this._tone(1900, 1500, 0.12, 0.22, 'square'); this._tone(2700, 2300, 0.12, 0.1, 'sine', 0.02); }
+             else this._tone(900, 650, 0.06, 0.14, 'triangle'); }
+  kill()   { this._tone(660, 1320, 0.16, 0.18, 'triangle'); this._tone(1320, 1320, 0.22, 0.1, 'sine', 0.09); }
+  empty()  { this._tone(3000, 2600, 0.025, 0.12, 'square'); }
+  reload() { this._tone(2400, 1800, 0.03, 0.12, 'square');
+             this._noise(0.08, 900, 2, 0.3, 'bandpass', 0.55);
+             this._noise(0.1, 1500, 2, 0.35, 'bandpass', 1.3);
+             this._tone(2600, 2000, 0.04, 0.15, 'square', 1.75); }
+  ability(){ this._tone(280, 900, 0.25, 0.16, 'sawtooth'); this._noise(0.25, 1200, 0.6, 0.15); }
+  whoosh() { this._noise(0.22, 700, 0.5, 0.35); }
+  ult()    { this._tone(200, 1200, 0.6, 0.2, 'sawtooth'); this._tone(400, 1600, 0.6, 0.12, 'square', 0.1); }
+}
+const sfx = new Sfx();
+
+/* =====================================================================
+   2. RENDERER / SCENE / CAMERA  (월드 씬 + 뷰모델 씬 2-pass)
+   ===================================================================== */
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.autoClear = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xc4d3dd);
+scene.fog = new THREE.Fog(0xc4d3dd, 70, 150);
+
+const camera = new THREE.PerspectiveCamera(CFG.fov, innerWidth / innerHeight, 0.05, 300);
+camera.rotation.order = 'YXZ';
+
+const vmScene = new THREE.Scene();
+const vmCamera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.01, 10);
+
+// 조명
+scene.add(new THREE.HemisphereLight(0xeef4ff, 0x9a8f80, 1.15));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
+sun.position.set(26, 42, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(IS_TOUCH ? 1024 : 2048, IS_TOUCH ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -50, right: 50, top: 55, bottom: -55, near: 1, far: 130 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+scene.add(sun);
+const muzzleLight = new THREE.PointLight(0xffc27a, 0, 7, 2);
+scene.add(muzzleLight);
+
+vmScene.add(new THREE.HemisphereLight(0xffffff, 0x6a707a, 2.2));
+const vmSun = new THREE.DirectionalLight(0xffffff, 1.6); vmSun.position.set(1, 2, 1.5); vmScene.add(vmSun);
+const vmFlashLight = new THREE.PointLight(0xffb35c, 0, 1.5, 2); vmScene.add(vmFlashLight);
+
+/* =====================================================================
+   3. WORLD — 로우폴리 사격장 맵 + AABB 충돌체
+   ===================================================================== */
+const colliders = [];   // THREE.Box3 목록 (플레이어 충돌)
+const hittables = [];   // 레이캐스트 대상 메쉬 (벽 + 봇 파츠)
+const worldMeshes = []; // 봇 제외 월드 메쉬 (스킬 조준용)
+
+const matCache = new Map();
+function mat(color, opts = {}) {
+  const k = color + JSON.stringify(opts);
+  if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...opts }));
+  return matCache.get(k);
+}
+/** 바닥면 기준(y=bottom)으로 박스 배치 */
+function box(x, y, z, w, h, d, color, { collide = true, shadow = true, material = null } = {}) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material || mat(color));
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = shadow; m.receiveShadow = true;
+  scene.add(m);
+  if (collide) {
+    m.updateMatrixWorld(true);
+    colliders.push(new THREE.Box3().setFromObject(m));
+    hittables.push(m); worldMeshes.push(m);
+  }
+  return m;
+}
+function gridTexture(bg, line, cells = 8, size = 512) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, size, size);
+  g.strokeStyle = line; g.lineWidth = 2;
+  const s = size / cells;
+  for (let i = 0; i <= cells; i++) {
+    g.beginPath(); g.moveTo(i * s, 0); g.lineTo(i * s, size); g.stroke();
+    g.beginPath(); g.moveTo(0, i * s); g.lineTo(size, i * s); g.stroke();
+  }
+  g.lineWidth = 5; g.strokeRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+const PAL = {
+  wallA: 0xdad3c6, wallB: 0xb8c1c9, wallC: 0x93a0ab, crate: 0x6f7c88, crateB: 0xc98a4b,
+  teal: 0x2ee6c8, red: 0xff4655, dark: 0x2a3440,
+};
+const accentMat = (c) => mat(c, { emissive: c, emissiveIntensity: 0.55, roughness: 0.4 });
+
+function buildMap() {
+  // 바닥 (70 x 90)
+  const ft = gridTexture('#cfc8bb', '#b9b1a3', 8); ft.repeat.set(70 / 8, 90 / 8);
+  const floor = box(0, -1, 0, 70, 1, 90, 0, { shadow: false, material: new THREE.MeshStandardMaterial({ map: ft, roughness: 0.95 }) });
+  floor.castShadow = false;
+
+  // 외곽 벽
+  box(0, 0, -45.5, 72, 7, 1, PAL.wallA);
+  box(0, 0, 45.5, 72, 7, 1, PAL.wallA);
+  box(-35.5, 0, 0, 1, 7, 92, PAL.wallB);
+  box(35.5, 0, 0, 1, 7, 92, PAL.wallB);
+  // 벽 포인트 라인
+  box(0, 1.2, -44.98, 70, 0.14, 0.04, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+  box(-34.98, 1.2, 0, 0.04, 0.14, 90, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+  box(34.98, 1.2, 0, 0.04, 0.14, 90, 0, { collide: false, shadow: false, material: accentMat(PAL.red) });
+
+  // 스폰 구역 사선(射線) 바리케이드 — 중앙 2m 통로
+  box(-6, 0, 22, 10, 1.0, 0.4, PAL.wallC);
+  box(6, 0, 22, 10, 1.0, 0.4, PAL.wallC);
+  box(-6, 1.0, 22, 10, 0.06, 0.42, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+  box(6, 1.0, 22, 10, 0.06, 0.42, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+
+  // 거리 표시 바닥 라인 (10m / 30m / 50m)
+  for (const z of [12, -6, -24]) box(0, 0.001, z + 2.5, 60, 0.01, 0.12, 0, { collide: false, shadow: false, material: mat(PAL.dark, { transparent: true, opacity: 0.35 }) });
+
+  // 중앙 창문 벽 (좌측)
+  box(-14, 0, 0, 8, 1.1, 0.6, PAL.wallB);          // 창 아래
+  box(-14, 2.3, 0, 8, 1.7, 0.6, PAL.wallB);        // 창 위
+  box(-19, 0, 0, 2, 4, 0.6, PAL.wallA);
+  box(-9, 0, 0, 2, 4, 0.6, PAL.wallA);
+  box(-14, 1.1, 0.31, 8, 0.05, 0.02, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+  // 중앙 벽 (우측, 붉은 패널)
+  box(15, 0, 0, 10, 3, 0.6, PAL.wallA);
+  box(15, 0.6, 0.31, 6, 1.6, 0.02, 0, { collide: false, shadow: false, material: mat(PAL.red, { roughness: 0.6 }) });
+
+  // 박스 엄폐물
+  box(-4, 0, -4, 1.6, 1.6, 1.6, PAL.crate);
+  box(-4.1, 1.6, -4.1, 1.1, 1.1, 1.1, PAL.crateB);
+  box(5, 0, -8, 2.2, 1.2, 2.2, PAL.crate);
+  box(22, 0, 8, 1.6, 1.6, 1.6, PAL.crateB);
+  box(-24, 0, 12, 1.6, 1.6, 1.6, PAL.crate);
+  box(-26, 0, -12, 3, 2.2, 1.5, PAL.wallC);
+  box(26, 0, -14, 1.5, 2.2, 3, PAL.wallC);
+  box(-3, 0, 28, 1.4, 1.4, 1.4, PAL.crate);        // 스폰 옆 계단용 상자
+  box(-3, 0, 29.4, 1.4, 0.4, 1.4, PAL.crateB);
+
+  // 기둥
+  box(-10, 0, -18, 1.4, 7, 1.4, PAL.wallA);
+  box(10, 0, -18, 1.4, 7, 1.4, PAL.wallA);
+
+  // 후방 고지대 + 계단 (단차 0.4m → 자동 스텝업)
+  box(0, 0, -38.5, 44, 2, 13, PAL.wallB);
+  for (let i = 1; i <= 4; i++) box(0, 0, -31.5 + (4 - i) * 0.6 + 0.3, 6, 0.4 * i, 0.6, PAL.wallC);
+  for (let i = 1; i <= 4; i++) box(-18, 0, -31.5 + (4 - i) * 0.6 + 0.3, 4, 0.4 * i, 0.6, PAL.wallC);
+  box(-11.5, 2, -32.2, 10, 0.9, 0.3, PAL.wallA);
+  box(11.5, 2, -32.2, 15, 0.9, 0.3, PAL.wallA);
+  box(0, 2, -32.05, 44, 0.05, 0.02, 0, { collide: false, shadow: false, material: accentMat(PAL.teal) });
+}
+buildMap();
+
+/* =====================================================================
+   4. BOTS — 헤드/바디/레그 개별 히트박스를 가진 사격 더미
+   ===================================================================== */
+const XRAY_MAT = new THREE.MeshBasicMaterial({ color: 0xff4655, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false });
+const BAR_BG = new THREE.MeshBasicMaterial({ color: 0x0f1923, transparent: true, opacity: 0.6, depthWrite: false });
+const PAD_MAT = mat(PAL.dark, { transparent: true, opacity: 0.5 });
+let time = 0;
+
+class Bot {
+  constructor(id, x, y, z, opts = {}) {
+    this.name = `BOT-${String(id).padStart(2, '0')}`;
+    this.home = new THREE.Vector3(x, y, z);
+    this.strafe = opts.strafe || 0; this.speed = opts.speed || 1.5; this.phase = Math.random() * 6.28;
+    this.maxHp = 150; this.hp = 150; this.alive = true;
+    this.deadT = 0; this.flash = 0; this.lastHit = -99; this.spawnT = 1; this.revealed = false;
+
+    this.group = new THREE.Group(); this.group.rotation.order = 'YXZ';
+    this.group.position.copy(this.home); scene.add(this.group);
+    this.parts = []; this.xray = []; this.mats = [];
+
+    const mk = (w, h, d, px, py, pz, color, part) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: 0xffffff, emissiveIntensity: 0 }));
+      this.mats.push(m.material);
+      m.position.set(px, py, pz); m.castShadow = true;
+      m.userData.bot = this; m.userData.part = part;
+      this.group.add(m); this.parts.push(m); hittables.push(m);
+      const xr = new THREE.Mesh(m.geometry, XRAY_MAT);
+      xr.position.copy(m.position); xr.renderOrder = 20; xr.visible = false;
+      this.group.add(xr); this.xray.push(xr);
+      return m;
+    };
+    mk(0.21, 0.84, 0.26, -0.12, 0.42, 0, 0x7c3a24, 'leg');
+    mk(0.21, 0.84, 0.26, 0.12, 0.42, 0, 0x7c3a24, 'leg');
+    mk(0.6, 0.72, 0.34, 0, 1.2, 0, 0xe8743b, 'body');
+    mk(0.14, 0.62, 0.16, -0.39, 1.19, 0, 0xcf6230, 'body');
+    mk(0.14, 0.62, 0.16, 0.39, 1.19, 0, 0xcf6230, 'body');
+    mk(0.3, 0.3, 0.3, 0, 1.74, 0, 0xf2a25c, 'head');
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.07, 0.02), accentMat(PAL.teal));
+    visor.position.set(0, 1.77, 0.16); this.group.add(visor);
+
+    // HP 바 (빌보드)
+    this.bar = new THREE.Group(); this.bar.position.y = 2.12; this.group.add(this.bar);
+    this.bar.add(new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.09), BAR_BG));
+    const fg = new THREE.PlaneGeometry(0.68, 0.05); fg.translate(0.34, 0, 0);
+    this.barMat = new THREE.MeshBasicMaterial({ color: 0xece8e1, depthWrite: false });
+    this.barFill = new THREE.Mesh(fg, this.barMat); this.barFill.position.set(-0.34, 0, 0.002);
+    this.bar.add(this.barFill);
+
+    // 받침대 / 스트레이프 레일
+    const pad = new THREE.Mesh(
+      this.strafe ? new THREE.BoxGeometry(this.strafe * 2 + 1, 0.03, 0.6) : new THREE.CylinderGeometry(0.45, 0.45, 0.03, 20),
+      PAD_MAT);
+    pad.position.set(x, y + 0.015, z); pad.receiveShadow = true; scene.add(pad);
+  }
+  damage(part, amount) {
+    if (!this.alive) return null;
+    this.hp -= amount; this.flash = 1; this.lastHit = time;
+    if (this.hp <= 0) { this.hp = 0; this.die(); return { killed: true }; }
+    return { killed: false };
+  }
+  die() { this.alive = false; this.deadT = 0; this.bar.visible = false; this.xray.forEach(x => x.visible = false); }
+  respawn() {
+    this.alive = true; this.hp = this.maxHp; this.spawnT = 0; this.bar.visible = true;
+    this.group.rotation.x = 0; this.group.position.copy(this.home);
+    this.setReveal(this.revealed);
+  }
+  setReveal(on) { this.revealed = on; this.xray.forEach(x => x.visible = on && this.alive); }
+  update(dt) {
+    const g = this.group;
+    if (this.alive) {
+      if (this.strafe) g.position.x = this.home.x + Math.sin(time * this.speed + this.phase) * this.strafe;
+      g.rotation.y = Math.atan2(player.pos.x - g.position.x, player.pos.z - g.position.z);
+      if (time - this.lastHit > 3 && this.hp < this.maxHp) this.hp = this.maxHp; // 3초간 무피격 시 체력 리셋
+      if (this.spawnT < 1) {
+        this.spawnT = Math.min(1, this.spawnT + dt * 3);
+        const s = this.spawnT, k = 1 + 2.2 * Math.pow(s - 1, 3) + 1.2 * Math.pow(s - 1, 2); // easeOutBack
+        g.scale.setScalar(Math.max(0.01, k));
+      }
+    } else {
+      this.deadT += dt;
+      const k = Math.min(1, this.deadT / 0.35);
+      g.rotation.x = -k * k * Math.PI / 2;
+      if (this.deadT > 2.6) this.respawn();
+    }
+    if (this.flash > 0) { this.flash = Math.max(0, this.flash - dt * 7); this.mats.forEach(m => m.emissiveIntensity = this.flash * 0.7); }
+    const r = this.hp / this.maxHp;
+    this.barFill.scale.x = Math.max(0.001, r);
+    this.barMat.color.setHex(r > 0.5 ? 0xece8e1 : r > 0.25 ? 0xffd166 : 0xff4655);
+    this.bar.quaternion.copy(g.quaternion).invert().multiply(camera.quaternion);
+  }
+}
+
+const BOT_DEFS = [
+  [-6, 0, 12], [0, 0, 12], [6, 0, 12],                                  // 10m 정지
+  [-14, 0, -3, { strafe: 2.5, speed: 1.5 }], [4, 0, -13, { strafe: 4, speed: 2.2 }],
+  [18, 0, -6, { strafe: 2.5, speed: 1.2 }],                             // 30m 이동
+  [-22, 0, -21], [0, 0, -23, { strafe: 5, speed: 2.6 }], [22, 0, -24],  // 50m
+  [-12, 2, -37], [0, 2, -39, { strafe: 3, speed: 1.8 }], [12, 2, -37],  // 고지대
+];
+const bots = BOT_DEFS.map((d, i) => new Bot(i + 1, d[0], d[1], d[2], d[3]));
+
+/* =====================================================================
+   5. PLAYER CONTROLLER — 가속/마찰, 중력, AABB 충돌, 자동 스텝업
+   ===================================================================== */
+const player = {
+  pos: CFG.spawn.clone(), vel: new THREE.Vector3(),
+  yaw: 0, pitch: 0, grounded: true, walking: false,
+  stepDist: 0, dashT: 0, dashDir: new THREE.Vector3(), hp: 100, armor: 50,
+};
+const _pb = new THREE.Box3();
+function setPlayerBox() {
+  const p = player.pos, r = CFG.radius;
+  _pb.min.set(p.x - r, p.y, p.z - r); _pb.max.set(p.x + r, p.y + CFG.height, p.z + r);
+}
+function overlaps(a, b) {
+  const e = 1e-5;
+  return a.min.x < b.max.x - e && a.max.x > b.min.x + e &&
+         a.min.y < b.max.y - e && a.max.y > b.min.y + e &&
+         a.min.z < b.max.z - e && a.max.z > b.min.z + e;
+}
+function moveAxis(axis, delta, wasGrounded) {
+  if (delta === 0) return;
+  player.pos[axis] += delta; setPlayerBox();
+  for (const b of colliders) {
+    if (!overlaps(_pb, b)) continue;
+    if (axis === 'y') {
+      if (delta < 0) { player.pos.y = b.max.y; player.grounded = true; }
+      else player.pos.y = b.min.y - CFG.height - 0.001;
+      player.vel.y = 0;
+    } else {
+      const rise = b.max.y - player.pos.y;
+      if (wasGrounded && rise > 0 && rise <= CFG.stepHeight) player.pos.y = b.max.y;   // 스텝업
+      else if (delta > 0) player.pos[axis] = b.min[axis] - CFG.radius - 0.001;
+      else player.pos[axis] = b.max[axis] + CFG.radius + 0.001;
+    }
+    setPlayerBox();
+  }
+}
+
+const _wish = new THREE.Vector3();
+function getWishDir() {
+  const f = input.moveY, s = input.moveX, sy = Math.sin(player.yaw), cy = Math.cos(player.yaw);
+  _wish.set(-sy * f + cy * s, 0, -cy * f - sy * s);
+  if (_wish.lengthSq() > 1) _wish.normalize();
+  return _wish.clone();
+}
+
+function updatePlayer(dt) {
+  player.walking = input.walk;
+  const wish = getWishDir();
+  const wasGrounded = player.grounded;
+  const speed = player.walking ? CFG.walkSpeed : CFG.runSpeed;
+
+  if (player.dashT > 0) {
+    player.dashT -= dt;
+    player.vel.x = player.dashDir.x * CFG.dashSpeed;
+    player.vel.z = player.dashDir.z * CFG.dashSpeed;
+  } else {
+    const k = 1 - Math.exp(-(player.grounded ? CFG.groundAccel : CFG.airAccel) * dt);
+    player.vel.x += (wish.x * speed - player.vel.x) * k;
+    player.vel.z += (wish.z * speed - player.vel.z) * k;
+  }
+  if (input.jumpQueued && player.grounded) { player.vel.y = CFG.jumpVel; player.grounded = false; }
+  input.jumpQueued = false;
+  player.vel.y -= CFG.gravity * dt;
+
+  // 터널링 방지 서브스텝
+  const dx = player.vel.x * dt, dy = player.vel.y * dt, dz = player.vel.z * dt;
+  const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)) / 0.2));
+  const fallSpeed = player.vel.y;
+  player.grounded = false;
+  for (let i = 0; i < n; i++) {
+    moveAxis('x', dx / n, wasGrounded);
+    moveAxis('z', dz / n, wasGrounded);
+    moveAxis('y', dy / n, wasGrounded);
+  }
+  if (player.grounded && !wasGrounded && fallSpeed < -6) { sfx.land(); cam.landDip = Math.min(0.12, -fallSpeed * 0.012); }
+  if (player.pos.y < -20) { player.pos.copy(CFG.spawn); player.vel.set(0, 0, 0); }
+
+  // 발소리: 걷기(Shift)면 무음
+  const hs = Math.hypot(player.vel.x, player.vel.z);
+  if (player.grounded && hs > 1 && !player.walking) {
+    player.stepDist += hs * dt;
+    if (player.stepDist > 2.1) { player.stepDist = 0; sfx.step(); }
+  }
+}
+
+/* =====================================================================
+   6. CAMERA — 반동 펀치 / 착지 흔들림 / FOV 킥
+   ===================================================================== */
+const cam = { punchP: 0, punchY: 0, fovKick: 0, landDip: 0, bob: 0 };
+function updateCamera(dt) {
+  cam.punchP *= Math.exp(-9 * dt); cam.punchY *= Math.exp(-9 * dt);
+  cam.fovKick *= Math.exp(-6 * dt); cam.landDip *= Math.exp(-10 * dt);
+  const hs = Math.hypot(player.vel.x, player.vel.z);
+  if (player.grounded) cam.bob += dt * hs * 1.9;
+  const bobY = player.grounded ? Math.sin(cam.bob * 2) * 0.025 * Math.min(1, hs / CFG.runSpeed) : 0;
+  camera.position.set(player.pos.x, player.pos.y + CFG.eye + bobY - cam.landDip, player.pos.z);
+  camera.rotation.set(player.pitch + cam.punchP, player.yaw + cam.punchY, 0);
+  const f = CFG.fov + cam.fovKick;
+  if (Math.abs(camera.fov - f) > 0.01) { camera.fov = f; camera.updateProjectionMatrix(); }
+}
+
+/* =====================================================================
+   7. FX — 트레이서, 탄흔 데칼, 파편, 머즐 플래시, 연막, 펄스
+   ===================================================================== */
+const _tmpV = new THREE.Vector3();
+const TR_GEO = new THREE.BoxGeometry(1, 1, 1);
+const SP_GEO = new THREE.BoxGeometry(0.04, 0.04, 0.04);
+const SMOKE_GEO = new THREE.SphereGeometry(1, 24, 16);
+const decalTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(10,12,16,1)'); gr.addColorStop(0.35, 'rgba(20,22,28,.9)'); gr.addColorStop(1, 'rgba(20,22,28,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const DECAL_MAT = new THREE.MeshBasicMaterial({ map: decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+const DECAL_GEO = new THREE.PlaneGeometry(0.1, 0.1);
+
+const fx = {
+  tracers: [], sparks: [], decals: [], decalIdx: 0, smokes: [], pulses: [],
+  tracer(a, b) {
+    const m = new THREE.Mesh(TR_GEO, new THREE.MeshBasicMaterial({ color: 0xfff1bf, transparent: true, opacity: 0.85, depthWrite: false }));
+    const len = a.distanceTo(b);
+    m.position.copy(a).lerp(b, 0.5); m.lookAt(b); m.scale.set(0.016, 0.016, len);
+    scene.add(m); this.tracers.push({ m, t: 0.07 });
+  },
+  decal(p, n) {
+    let m = this.decals[this.decalIdx];
+    if (!m) { m = new THREE.Mesh(DECAL_GEO, DECAL_MAT); scene.add(m); this.decals[this.decalIdx] = m; }
+    this.decalIdx = (this.decalIdx + 1) % 100;
+    m.position.copy(p).addScaledVector(n, 0.004);
+    m.lookAt(_tmpV.copy(p).add(n));
+    m.rotateZ(Math.random() * 6.28);
+    m.scale.setScalar(0.7 + Math.random() * 0.5);
+  },
+  spark(p, n, color, count) {
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(SP_GEO, new THREE.MeshBasicMaterial({ color }));
+      m.position.copy(p);
+      const v = n.clone().multiplyScalar(1.5 + Math.random() * 3)
+        .add(new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3));
+      scene.add(m); this.sparks.push({ m, v, t: 0.3 + Math.random() * 0.2 });
+    }
+  },
+  smoke(p) {
+    const m = new THREE.MeshStandardMaterial({ color: 0x7d8ba5, roughness: 1, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const inner = new THREE.MeshStandardMaterial({ color: 0x9aa7bd, roughness: 1, transparent: true, opacity: 0, depthWrite: false, side: THREE.BackSide });
+    const g = new THREE.Group();
+    const a = new THREE.Mesh(SMOKE_GEO, m), b = new THREE.Mesh(SMOKE_GEO, inner); b.scale.setScalar(0.85);
+    g.add(a, b); g.position.copy(p); g.scale.setScalar(0.01); scene.add(g);
+    this.smokes.push({ g, mats: [m, inner], t: 0, life: 10 });
+  },
+  pulse(p) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16),
+      new THREE.MeshBasicMaterial({ color: PAL.teal, wireframe: true, transparent: true, opacity: 0.8, depthWrite: false }));
+    m.position.copy(p).setY(p.y + 1); scene.add(m); this.pulses.push({ m, t: 0 });
+  },
+  update(dt) {
+    for (let i = this.tracers.length - 1; i >= 0; i--) {
+      const o = this.tracers[i]; o.t -= dt;
+      if (o.t <= 0) { scene.remove(o.m); o.m.material.dispose(); this.tracers.splice(i, 1); }
+      else o.m.material.opacity = (o.t / 0.07) * 0.85;
+    }
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const o = this.sparks[i]; o.t -= dt;
+      if (o.t <= 0) { scene.remove(o.m); o.m.material.dispose(); this.sparks.splice(i, 1); continue; }
+      o.v.y -= 14 * dt; o.m.position.addScaledVector(o.v, dt); o.m.scale.setScalar(Math.max(0.1, o.t * 3));
+    }
+    for (let i = this.smokes.length - 1; i >= 0; i--) {
+      const o = this.smokes[i]; o.t += dt;
+      const grow = 1 - Math.pow(1 - Math.min(1, o.t / 0.5), 3);
+      o.g.scale.setScalar(Math.max(0.01, 3.4 * grow));
+      o.g.rotation.y += dt * 0.1;
+      const fade = o.t > o.life - 1 ? Math.max(0, o.life - o.t) : 1;
+      o.mats[0].opacity = 0.94 * Math.min(1, o.t * 3) * fade;
+      o.mats[1].opacity = 0.5 * Math.min(1, o.t * 3) * fade;
+      if (o.t >= o.life) { scene.remove(o.g); o.mats.forEach(m => m.dispose()); this.smokes.splice(i, 1); }
+    }
+    for (let i = this.pulses.length - 1; i >= 0; i--) {
+      const o = this.pulses[i]; o.t += dt;
+      o.m.scale.setScalar(1 + o.t * 60); o.m.material.opacity = Math.max(0, 0.8 - o.t);
+      if (o.t > 0.8) { scene.remove(o.m); o.m.geometry.dispose(); o.m.material.dispose(); this.pulses.splice(i, 1); }
+    }
+    muzzleLight.intensity *= Math.exp(-40 * dt);
+    vmFlashLight.intensity *= Math.exp(-40 * dt);
+  },
+};
+
+/* =====================================================================
+   8. VIEWMODEL — 1인칭 총기 모델 (별도 씬 → 벽 관통 클리핑 없음)
+   ===================================================================== */
+const vm = new THREE.Group(); vmScene.add(vm);
+const VM_BASE = new THREE.Vector3(0.15, -0.16, -0.5);
+vm.scale.setScalar(0.7);
+let vmMag, vmFlash, vmAccent;
+(function buildGun() {
+  const add = (w, h, d, x, y, z, color, rx = 0, opts = {}) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, { roughness: 0.55, metalness: 0.25, ...opts }));
+    m.position.set(x, y, z); m.rotation.x = rx; vm.add(m); return m;
+  };
+  add(0.08, 0.1, 0.42, 0, 0, 0, 0x4a5561);                 // 리시버
+  add(0.07, 0.078, 0.24, 0, 0.004, -0.3, 0x5e6a77);        // 핸드가드
+  add(0.034, 0.034, 0.2, 0, 0.022, -0.5, 0x15191e);        // 총열
+  add(0.05, 0.05, 0.05, 0, 0.022, -0.6, 0x15191e);         // 소염기
+  add(0.062, 0.09, 0.22, 0, -0.012, 0.3, 0x4a5561);        // 개머리판
+  add(0.046, 0.12, 0.06, 0, -0.1, 0.12, 0x1d2228, -0.35);  // 그립
+  add(0.04, 0.04, 0.1, 0, 0.074, -0.02, 0x1d2228);         // 조준경
+  add(0.03, 0.03, 0.005, 0, 0.074, -0.072, 0, 0, { color: PAL.teal, emissive: PAL.teal, emissiveIntensity: 1 });
+  vmMag = add(0.05, 0.17, 0.085, 0, -0.12, -0.07, 0x353d46, 0.2);
+  vmAccent = add(0.082, 0.014, 0.22, 0, 0.022, -0.06, 0, 0, { color: PAL.red, emissive: PAL.red, emissiveIntensity: 0.6 });
+  // 장갑 낀 손
+  add(0.07, 0.07, 0.1, -0.01, -0.06, -0.3, 0x39424d);
+  add(0.075, 0.08, 0.1, 0.01, -0.07, 0.1, 0x39424d, -0.35);
+  add(0.09, 0.1, 0.3, 0.03, -0.12, 0.3, 0x505c69, 0.25);   // 오른팔
+
+  const fc = document.createElement('canvas'); fc.width = fc.height = 64; const g = fc.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,230,1)'); gr.addColorStop(0.3, 'rgba(255,200,90,.9)'); gr.addColorStop(1, 'rgba(255,120,30,0)');
+  g.fillStyle = gr; g.beginPath();
+  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, r = i % 2 ? 12 : 32; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+  g.fill();
+  const ft = new THREE.CanvasTexture(fc); ft.colorSpace = THREE.SRGBColorSpace;
+  const fm = new THREE.MeshBasicMaterial({ map: ft, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  vmFlash = new THREE.Group();
+  const p1 = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), fm);
+  const p2 = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.28), fm); p2.rotation.y = Math.PI / 2; p2.position.z = -0.06;
+  vmFlash.add(p1, p2); vmFlash.position.set(0, 0.022, -0.66); vmFlash.visible = false; vm.add(vmFlash);
+  vmFlashLight.position.set(0.2, -0.18, -1.0);
+})();
+const VM_MAG_Y = vmMag.position.y;
+const vmState = { swayX: 0, swayY: 0, tSwayX: 0, tSwayY: 0, kick: 0, kickRot: 0, flashT: 0, bob: 0 };
+
+function updateViewmodel(dt) {
+  const hs = Math.hypot(player.vel.x, player.vel.z);
+  const moving = player.grounded ? Math.min(1, hs / CFG.runSpeed) : 0;
+  vmState.bob += dt * hs * 1.9;
+  vmState.tSwayX *= Math.exp(-8 * dt); vmState.tSwayY *= Math.exp(-8 * dt);
+  vmState.swayX += (vmState.tSwayX - vmState.swayX) * Math.min(1, dt * 12);
+  vmState.swayY += (vmState.tSwayY - vmState.swayY) * Math.min(1, dt * 12);
+  vmState.kick *= Math.exp(-16 * dt); vmState.kickRot *= Math.exp(-13 * dt);
+
+  const rp = weapon.reloading ? 1 - weapon.reloadT / GUN.reloadTime : 0;
+  const dip = Math.sin(rp * Math.PI);
+  const bx = Math.cos(vmState.bob) * 0.012 * moving;
+  const by = -Math.abs(Math.sin(vmState.bob)) * 0.014 * moving;
+  const air = player.grounded ? 0 : clamp(-player.vel.y * 0.004, -0.03, 0.03);
+  const walkLower = player.walking ? 0.008 : 0;
+  vm.position.set(VM_BASE.x + bx + vmState.swayX, VM_BASE.y + by + vmState.swayY - dip * 0.09 + air - walkLower, VM_BASE.z + vmState.kick);
+  vm.rotation.set(vmState.kickRot + dip * 0.3, vmState.swayX * 1.5, dip * 0.5 - vmState.swayX * 2);
+
+  let md = 0;
+  if (rp > 0.2 && rp < 0.45) md = (rp - 0.2) / 0.25; else if (rp >= 0.45 && rp < 0.72) md = 1 - (rp - 0.45) / 0.27;
+  vmMag.position.y = VM_MAG_Y - md * 0.3;
+
+  if (vmState.flashT > 0) { vmState.flashT -= dt; vmFlash.visible = true; }
+  else vmFlash.visible = false;
+}
+
+/* =====================================================================
+   9. WEAPON — 히트스캔, 스프레이 패턴, 탄 퍼짐, 재장전
+   ===================================================================== */
+const weapon = { mag: GUN.magSize, reserve: GUN.reserveMax, cd: 0, reloading: false, reloadT: 0, spray: 0, lastShot: -9 };
+const stats = { shots: 0, hits: 0, heads: 0, kills: 0 };
+const ray = new THREE.Raycaster();
+const _dir = new THREE.Vector3(), _eul = new THREE.Euler(0, 0, 0, 'YXZ');
+
+function currentSpread() {
+  const s = GUN.spread;
+  const hs = Math.hypot(player.vel.x, player.vel.z);
+  let v = s.base;
+  if (!player.grounded) v += s.air;
+  else if (hs > 0.5) v += (player.walking ? s.walk : s.run) * Math.min(1, hs / CFG.runSpeed);
+  if (weapon.spray >= 3) v += Math.min((weapon.spray - 2) * s.sprayPerShot, s.sprayMax);
+  return v;
+}
+function muzzleWorld() { return camera.localToWorld(new THREE.Vector3(0.17, -0.13, -0.8)); }
+
+function startReload() {
+  if (weapon.reloading || weapon.mag >= GUN.magSize || weapon.reserve <= 0) return;
+  if (abilities.byKey.X.active) return;
+  weapon.reloading = true; weapon.reloadT = GUN.reloadTime; sfx.reload();
+}
+
+function shoot() {
+  const od = abilities.byKey.X.active;
+  if (!od) weapon.mag--;
+  stats.shots++;
+  const rec = recoilAt(Math.floor(weapon.spray));
+  const rm = od ? 0.3 : 1;
+  const spread = od ? 0 : currentSpread();
+  const ang = Math.random() * Math.PI * 2, rad = spread * Math.sqrt(Math.random());
+  _eul.set(player.pitch + cam.punchP + rec.p * rm + Math.sin(ang) * rad,
+           player.yaw + cam.punchY + rec.y * rm + Math.cos(ang) * rad, 0);
+  _dir.set(0, 0, -1).applyEuler(_eul);
+
+  ray.set(camera.position, _dir); ray.far = GUN.range;
+  const hits = ray.intersectObjects(hittables, false);
+  let hit = null;
+  for (const h of hits) { const b = h.object.userData.bot; if (b && !b.alive) continue; hit = h; break; }
+  const end = hit ? hit.point.clone() : camera.position.clone().addScaledVector(_dir, GUN.range);
+  fx.tracer(muzzleWorld(), end);
+
+  if (hit) {
+    const bot = hit.object.userData.bot;
+    if (bot) {
+      const part = hit.object.userData.part, head = part === 'head';
+      const dmg = GUN.damage[part];
+      const r = bot.damage(part, dmg);
+      stats.hits++; if (head) stats.heads++;
+      fx.spark(hit.point, _dir.clone().negate(), head ? 0xffe066 : 0xff7a45, head ? 10 : 6);
+      hud.damageNumber(hit.point, dmg, head);
+      hud.hitmarker(r.killed, head);
+      sfx.hit(head);
+      if (r.killed) onKill(bot, head);
+    } else {
+      const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+      fx.decal(hit.point, n);
+      fx.spark(hit.point, n, 0xfff0c8, 5);
+    }
+  }
+  // 피드백
+  sfx.shot();
+  vmState.kick = 0.045; vmState.kickRot = 0.07 * rm; vmState.flashT = 0.045;
+  vmFlash.rotation.z = Math.random() * 6.28; vmFlash.scale.setScalar(0.8 + Math.random() * 0.5);
+  muzzleLight.position.copy(muzzleWorld()); muzzleLight.intensity = 6; vmFlashLight.intensity = 3;
+  cam.punchP = Math.min(cam.punchP + 0.0045 * rm, 0.03);
+  cam.punchY += (Math.random() - 0.5) * 0.004 * rm;
+  weapon.spray = Math.min(weapon.spray + 1, 40); weapon.lastShot = time;
+}
+
+function updateWeapon(dt) {
+  const od = abilities.byKey.X.active;
+  const interval = 60 / GUN.rpm * (od ? 0.75 : 1);
+  weapon.cd = Math.max(0, weapon.cd - dt);
+  if (time - weapon.lastShot > interval * 1.3) weapon.spray = Math.max(0, weapon.spray - dt * 14);
+
+  if (weapon.reloading) {
+    weapon.reloadT -= dt;
+    if (weapon.reloadT <= 0) {
+      const take = Math.min(GUN.magSize - weapon.mag, weapon.reserve);
+      weapon.mag += take; weapon.reserve -= take; weapon.reloading = false;
+    }
+    return;
+  }
+  if (input.fire && weapon.cd <= 0) {
+    if (weapon.mag <= 0) {
+      if (weapon.reserve > 0) startReload();
+      else { sfx.empty(); weapon.cd = 0.3; weapon.reserve = GUN.reserveMax; hud.toast('훈련장 보급 — 탄약 재지급'); }
+      return;
+    }
+    while (input.fire && weapon.cd <= 0 && (weapon.mag > 0 || od)) { shoot(); weapon.cd += interval; }
+  }
+}
+
+function onKill(bot, head) {
+  stats.kills++;
+  hud.feed(bot.name, head);
+  sfx.kill();
+  abilities.addUltPoint();
+}
+
+/* =====================================================================
+   10. ABILITY SYSTEM — C / Q / E / X 확장형 상태 머신
+       상태: READY → ACTIVE → COOLDOWN (충전식) / LOCKED (궁극기 포인트)
+   ===================================================================== */
+class Ability {
+  constructor(key, name, { maxCharges = 1, cooldown = 10, duration = 0, ultPoints = 0, icon = '•' } = {}) {
+    Object.assign(this, { key, name, maxCharges, cooldown, duration, ultPoints, icon });
+    this.charges = ultPoints ? 0 : maxCharges;
+    this.cdT = 0; this.activeT = 0; this.points = 0;
+  }
+  get active() { return this.activeT > 0; }
+  get state() {
+    if (this.active) return 'ACTIVE';
+    if (this.ultPoints) return this.points >= this.ultPoints ? 'READY' : 'LOCKED';
+    return this.charges > 0 ? 'READY' : 'COOLDOWN';
+  }
+  canUse() { return this.state === 'READY'; }
+  use(game) {
+    if (!this.canUse(game)) return false;
+    if (this.ultPoints) this.points = 0; else this.charges--;
+    this.activeT = this.duration;
+    this.onActivate(game);
+    return true;
+  }
+  update(game, dt) {
+    if (!this.ultPoints && this.charges < this.maxCharges) {
+      this.cdT += dt;
+      if (this.cdT >= this.cooldown) { this.charges++; this.cdT = 0; }
+    }
+    if (this.activeT > 0) {
+      this.activeT -= dt; this.onTick(game, dt);
+      if (this.activeT <= 0) { this.activeT = 0; this.onEnd(game); }
+    }
+  }
+  // ↓ 서브클래스에서 오버라이드
+  onActivate(game) {}
+  onTick(game, dt) {}
+  onEnd(game) {}
+}
+
+class Dash extends Ability {
+  constructor() { super('C', '대시', { maxCharges: 2, cooldown: 6, icon: '➤' }); }
+  onActivate(g) {
+    const d = g.getWishDir();
+    if (d.lengthSq() < 0.01) d.set(-Math.sin(g.player.yaw), 0, -Math.cos(g.player.yaw));
+    g.player.dashDir.copy(d.normalize()); g.player.dashT = CFG.dashTime;
+    g.player.vel.y = Math.max(g.player.vel.y, 1.2);
+    g.cam.fovKick = 10; g.sfx.whoosh();
+  }
+}
+class ReconPulse extends Ability {
+  constructor() { super('Q', '리콘 펄스', { maxCharges: 1, cooldown: 18, duration: 4, icon: '◎' }); }
+  onActivate(g) { g.bots.forEach(b => b.setReveal(true)); g.fx.pulse(g.player.pos); g.sfx.ability(); }
+  onEnd(g) { g.bots.forEach(b => b.setReveal(false)); }
+}
+class SmokeOrb extends Ability {
+  constructor() { super('E', '연막 구체', { maxCharges: 2, cooldown: 14, icon: '●' }); }
+  onActivate(g) { g.fx.smoke(g.aimGroundPoint(30)); g.sfx.ability(); }
+}
+class Overdrive extends Ability {
+  constructor() { super('X', '오버드라이브', { ultPoints: 5, duration: 8, icon: '✦' }); }
+  onActivate(g) {
+    g.weapon.mag = GUN.magSize; g.weapon.reloading = false;
+    document.body.classList.add('overdrive');
+    g.hud.toast('오버드라이브 — 무한 탄창 · 반동 감소 · 연사↑'); g.sfx.ult();
+  }
+  onEnd() { document.body.classList.remove('overdrive'); }
+}
+
+class AbilityKit {
+  constructor(list) { this.list = list; this.byKey = {}; list.forEach(a => this.byKey[a.key] = a); }
+  use(key) { const a = this.byKey[key]; if (a && !a.use(game)) sfx.empty(); }
+  update(dt) { this.list.forEach(a => a.update(game, dt)); }
+  addUltPoint() {
+    const u = this.list.find(a => a.ultPoints);
+    if (u && !u.active && u.points < u.ultPoints) {
+      u.points++;
+      if (u.points === u.ultPoints) hud.toast('궁극기 준비 완료 — [X]');
+    }
+  }
+}
+const abilities = new AbilityKit([new Dash(), new ReconPulse(), new SmokeOrb(), new Overdrive()]);
+
+function aimGroundPoint(maxDist) {
+  _dir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  ray.set(camera.position, _dir); ray.far = maxDist;
+  const h = ray.intersectObjects(worldMeshes, false)[0];
+  const p = h ? h.point.clone().addScaledVector(h.face.normal.clone().transformDirection(h.object.matrixWorld), 0.4)
+              : camera.position.clone().addScaledVector(_dir, maxDist);
+  ray.set(p.clone().setY(p.y + 0.1), new THREE.Vector3(0, -1, 0)); ray.far = 50;
+  const g = ray.intersectObjects(worldMeshes, false)[0];
+  p.y = g ? g.point.y : 0;
+  return p;
+}
+
+/* =====================================================================
+   11. HUD — 크로스헤어, 히트마커, 데미지 숫자, 킬피드, 스킬 바
+   ===================================================================== */
+const els = {
+  ch: { t: document.querySelector('#crosshair .t'), b: document.querySelector('#crosshair .b'),
+        l: document.querySelector('#crosshair .l'), r: document.querySelector('#crosshair .r') },
+  hm: $('hitmarker'), rb: $('reloadBar'), rbf: document.querySelector('#reloadBar div'),
+  mag: $('mag'), res: $('res'), ammo: $('ammoBox'), mode: $('moveMode'),
+  kills: $('stKills'), hs: $('stHs'), acc: $('stAcc'), fps: $('stFps'),
+  feed: $('killfeed'), dmg: $('dmg'), toast: $('toast'),
+};
+const _txt = new Map();
+function setText(el, v) { if (_txt.get(el) !== v) { _txt.set(el, v); el.textContent = v; } }
+
+const hud = {
+  dispSpread: 0, nums: [], toastT: 0,
+  hitmarker(kill, head) {
+    const h = els.hm; h.className = ''; void h.offsetWidth;
+    h.className = 'show' + (kill ? ' kill' : '') + (head ? ' head' : '');
+  },
+  damageNumber(pos, val, head) {
+    const el = document.createElement('div'); el.className = 'dn' + (head ? ' hs' : ''); el.textContent = val;
+    els.dmg.appendChild(el);
+    this.nums.push({ el, pos: pos.clone(), t: 0, dx: (Math.random() - 0.5) * 30 });
+  },
+  feed(name, head) {
+    const el = document.createElement('div'); el.className = 'kf';
+    el.innerHTML = `<span class="me">YOU</span><span class="w">${GUN.name.split(' ')[0]}</span>${head ? '<span class="hs">◆</span>' : ''}<span class="en">${name}</span>`;
+    els.feed.prepend(el);
+    setTimeout(() => el.classList.add('out'), 3600); setTimeout(() => el.remove(), 4100);
+    while (els.feed.children.length > 5) els.feed.lastChild.remove();
+  },
+  toast(msg) { els.toast.textContent = msg; els.toast.classList.add('on'); this.toastT = 2.2; },
+  buildAbilities() {
+    const wrap = $('abilities');
+    for (const a of abilities.list) {
+      const el = document.createElement('div');
+      el.className = 'ab' + (a.ultPoints ? ' ult' : '');
+      el.innerHTML = `<div class="cd"></div><div class="ic">${a.icon}</div><div class="tm"></div><div class="pips"></div><div class="key">${a.key}</div><div class="nm">${a.name}</div>`;
+      wrap.appendChild(el);
+      a.ui = { el, cd: el.querySelector('.cd'), pips: el.querySelector('.pips'), tm: el.querySelector('.tm'), last: '' };
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); if (state === 'play') abilities.use(a.key); }, { passive: false });
+    }
+  },
+  update(dt) {
+    // 크로스헤어: 실제 탄 퍼짐 원뿔을 화면 픽셀로 투영
+    const target = abilities.byKey.X.active ? 0 : currentSpread();
+    this.dispSpread += (target - this.dispSpread) * Math.min(1, dt * 18);
+    const pxPerRad = (innerHeight / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const gap = 4 + this.dispSpread * pxPerRad + cam.punchP * 60;
+    const L = 7;
+    els.ch.t.style.top = (-gap - L) + 'px'; els.ch.b.style.top = gap + 'px';
+    els.ch.l.style.left = (-gap - L) + 'px'; els.ch.r.style.left = gap + 'px';
+
+    els.rb.classList.toggle('on', weapon.reloading);
+    if (weapon.reloading) els.rbf.style.width = ((1 - weapon.reloadT / GUN.reloadTime) * 100) + '%';
+
+    const od = abilities.byKey.X.active;
+    setText(els.mag, od ? '∞' : String(weapon.mag));
+    setText(els.res, String(weapon.reserve));
+    els.ammo.classList.toggle('low', !od && weapon.mag <= 5);
+
+    const mode = !player.grounded ? 'AIR' : player.walking ? 'WALK · 무음' : 'RUN';
+    if (_txt.get(els.mode) !== mode) { els.mode.className = mode === 'AIR' ? 'air' : mode === 'RUN' ? '' : 'walk'; }
+    setText(els.mode, mode);
+
+    setText(els.kills, String(stats.kills));
+    setText(els.hs, String(stats.hits ? Math.round(stats.heads / stats.hits * 100) : 0));
+    setText(els.acc, String(stats.shots ? Math.round(stats.hits / stats.shots * 100) : 0));
+
+    for (const a of abilities.list) {
+      const st = a.state, u = a.ui;
+      u.el.classList.toggle('on', st === 'ACTIVE');
+      u.el.classList.toggle('ready', st === 'READY');
+      u.el.classList.toggle('empty', st === 'COOLDOWN' || st === 'LOCKED');
+      let frac = 0;
+      if (a.ultPoints) frac = st === 'LOCKED' ? 1 - a.points / a.ultPoints : 0;
+      else if (a.charges < a.maxCharges) frac = (1 - a.cdT / a.cooldown) * (a.charges === 0 ? 1 : 0.35);
+      u.cd.style.height = (frac * 100) + '%';
+      setText(u.tm, st === 'ACTIVE' && a.duration ? a.activeT.toFixed(1) : '');
+      const filled = a.ultPoints ? a.points : a.charges, total = a.ultPoints || a.maxCharges;
+      const key = filled + '/' + total;
+      if (u.last !== key) { u.last = key; u.pips.innerHTML = Array.from({ length: total }, (_, i) => `<i class="${i < filled ? 'f' : ''}"></i>`).join(''); }
+    }
+
+    // 데미지 숫자 (월드 → 스크린 투영)
+    for (let i = this.nums.length - 1; i >= 0; i--) {
+      const n = this.nums[i]; n.t += dt;
+      if (n.t > 0.8) { n.el.remove(); this.nums.splice(i, 1); continue; }
+      _tmpV.copy(n.pos); _tmpV.y += n.t * 0.9; _tmpV.project(camera);
+      if (_tmpV.z > 1) { n.el.style.opacity = 0; continue; }
+      const x = (_tmpV.x * 0.5 + 0.5) * innerWidth + n.dx * n.t, y = (-_tmpV.y * 0.5 + 0.5) * innerHeight;
+      n.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%) scale(${1 + Math.max(0, 0.15 - n.t) * 3})`;
+      n.el.style.opacity = String(1 - Math.max(0, n.t - 0.4) / 0.4);
+    }
+    if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) els.toast.classList.remove('on'); }
+  },
+};
+hud.buildAbilities();
+
+/* =====================================================================
+   12. INPUT — 키보드/마우스(Pointer Lock) + 터치 (모바일)
+   ===================================================================== */
+const input = { keys: new Set(), moveX: 0, moveY: 0, fire: false, jumpQueued: false, walk: false, walkToggle: false };
+const touch = { joyId: null, jx: 0, jy: 0, ox: 0, oy: 0, looks: new Map() };
+let state = 'menu';
+
+function applyLook(dx, dy, s) {
+  dx = clamp(dx, -300, 300); dy = clamp(dy, -300, 300);
+  player.yaw -= dx * s;
+  player.pitch = clamp(player.pitch - dy * s, -1.55, 1.55);
+  vmState.tSwayX = clamp(vmState.tSwayX - dx * 0.00012, -0.035, 0.035);
+  vmState.tSwayY = clamp(vmState.tSwayY + dy * 0.00012, -0.025, 0.025);
+}
+function readMoveInput() {
+  const k = input.keys;
+  let x = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+  let y = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+  if (touch.joyId !== null) { x = touch.jx; y = -touch.jy; }
+  input.moveX = x; input.moveY = y;
+  input.walk = k.has('ShiftLeft') || k.has('ShiftRight') || input.walkToggle;
+}
+
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  input.keys.add(e.code);
+  if (state !== 'play' || e.repeat) return;
+  switch (e.code) {
+    case 'Space': input.jumpQueued = true; break;
+    case 'KeyR': startReload(); break;
+    case 'KeyC': case 'KeyQ': case 'KeyE': case 'KeyX': abilities.use(e.code.slice(3)); break;
+  }
+});
+addEventListener('keyup', (e) => input.keys.delete(e.code));
+addEventListener('blur', () => { input.keys.clear(); input.fire = false; });
+addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) applyLook(e.movementX, e.movementY, CFG.sens); });
+addEventListener('mousedown', (e) => { if (document.pointerLockElement === canvas && e.button === 0) input.fire = true; });
+addEventListener('mouseup', (e) => { if (e.button === 0) input.fire = false; });
+addEventListener('contextmenu', (e) => e.preventDefault());
+
+function beginPlay() { state = 'play'; $('overlay').classList.remove('show'); }
+function pauseGame() {
+  state = 'pause'; input.fire = false; input.keys.clear();
+  $('ovSub').textContent = '일시정지됨'; $('startBtn').textContent = IS_TOUCH ? '계속하기' : '클릭하여 계속';
+  $('overlay').classList.add('show');
+}
+$('startBtn').addEventListener('click', () => {
+  sfx.init();
+  if (IS_TOUCH) { beginPlay(); return; }
+  const p = canvas.requestPointerLock();
+  if (p && p.catch) p.catch(() => {});
+});
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === canvas) beginPlay();
+  else if (state === 'play') pauseGame();
+});
+
+// ---- 터치 ----
+(function bindTouch() {
+  if (!IS_TOUCH) return;
+  const base = $('joyBase'), knob = $('joyKnob');
+  $('joyZone').addEventListener('touchstart', (e) => {
+    e.preventDefault(); if (touch.joyId !== null) return;
+    const t = e.changedTouches[0];
+    touch.joyId = t.identifier; touch.ox = t.clientX; touch.oy = t.clientY;
+    base.style.left = t.clientX + 'px'; base.style.top = t.clientY + 'px'; base.classList.add('on');
+    knob.style.transform = 'translate(-50%,-50%)';
+  }, { passive: false });
+  $('lookZone').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) touch.looks.set(t.identifier, { x: t.clientX, y: t.clientY });
+  }, { passive: false });
+  $('bFire').addEventListener('touchstart', (e) => {
+    e.preventDefault(); input.fire = true;
+    for (const t of e.changedTouches) touch.looks.set(t.identifier, { x: t.clientX, y: t.clientY, fire: true });
+  }, { passive: false });
+  addEventListener('touchmove', (e) => {
+    if (state !== 'play') return;
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === touch.joyId) {
+        let dx = t.clientX - touch.ox, dy = t.clientY - touch.oy;
+        const R = 55, L = Math.hypot(dx, dy);
+        if (L > R) { dx *= R / L; dy *= R / L; }
+        touch.jx = dx / R; touch.jy = dy / R;
+        knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      }
+      const lk = touch.looks.get(t.identifier);
+      if (lk) { applyLook(t.clientX - lk.x, t.clientY - lk.y, CFG.touchSens); lk.x = t.clientX; lk.y = t.clientY; }
+    }
+  }, { passive: false });
+  const end = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === touch.joyId) { touch.joyId = null; touch.jx = touch.jy = 0; base.classList.remove('on'); }
+      const lk = touch.looks.get(t.identifier);
+      if (lk) { if (lk.fire) input.fire = false; touch.looks.delete(t.identifier); }
+    }
+  };
+  addEventListener('touchend', end); addEventListener('touchcancel', end);
+  const tap = (id, fn) => $(id).addEventListener('touchstart', (e) => { e.preventDefault(); if (state === 'play') fn(); }, { passive: false });
+  tap('bJump', () => input.jumpQueued = true);
+  tap('bReload', startReload);
+  tap('bWalk', () => { input.walkToggle = !input.walkToggle; $('bWalk').classList.toggle('on', input.walkToggle); });
+  tap('bPause', pauseGame);
+})();
+
+/* =====================================================================
+   13. GAME CONTEXT — 스킬/확장 모듈이 참조하는 공용 핸들
+   ===================================================================== */
+const game = { player, weapon, bots, sfx, fx, hud, cam, getWishDir, aimGroundPoint };
+
+/* =====================================================================
+   14. MAIN LOOP
+   ===================================================================== */
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = vmCamera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix(); vmCamera.updateProjectionMatrix();
+});
+
+let last = performance.now(), fpsT = 0, fpsN = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  fpsT += dt; fpsN++;
+  if (fpsT >= 0.5) { setText(els.fps, String(Math.round(fpsN / fpsT))); fpsT = 0; fpsN = 0; }
+
+  if (state === 'play') {
+    time += dt;
+    readMoveInput();
+    updatePlayer(dt);
+    updateCamera(dt);
+    updateWeapon(dt);
+    abilities.update(dt);
+  } else {
+    updateCamera(0);
+  }
+  for (const b of bots) b.update(state === 'play' ? dt : 0);
+  fx.update(dt);
+  updateViewmodel(dt);
+  hud.update(dt);
+
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.clearDepth();
+  renderer.render(vmScene, vmCamera);
+}
+updateCamera(0);
+requestAnimationFrame(loop);
+</script>
+<script>
+  (function(){ // PWA: 서비스 워커 (미리보기/iframe/file:// 에서는 건너뜀)
+    let inFrame = true; try { inFrame = window.self !== window.top; } catch(e){}
+    const okHost = /^https?:$/.test(location.protocol) && !/claudeusercontent|claude\.ai/.test(location.hostname);
+    if (!('serviceWorker' in navigator) || inFrame || !okHost) return;
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js', { updateViaCache:'none' }).catch(()=>{}); });
+  })();
+</script>
+</body>
+</html>
