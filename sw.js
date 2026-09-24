@@ -7,7 +7,7 @@ const VERSION = 'playhub-v1';
 const CORE = [
   './', 'hub.html', 'multiplayer.js', 'manifest.json',
   'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png',
-  'ambo.html', 'tech-obby.html', 'pro-tower.html', 'backrooms.html', 'jumpmap.html',
+  'ambo.html', 'jamboree.html', 'tech-obby.html', 'pro-tower.html', 'backrooms.html', 'jumpmap.html',
   'aura-battle-3.html', 'forest-strike.html', 'nightfall.html', 'protocol-range.html',
 ];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|www\.gstatic\.com\/firebasejs|fonts\.googleapis\.com|fonts\.gstatic\.com)/;
