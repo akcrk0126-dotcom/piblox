@@ -726,7 +726,8 @@ function collide(ent,isOwnerOf){
 // ======================================================================
 //  레드카펫 — 등장 순서는 (방 이름 + 번호)로 정해져서 모두 같은 캐릭터를 본다
 // ======================================================================
-const ROOM_SEED=()=>(NET.on&&MP.room)||"SOLO";
+const SI_ROOM=(()=>{ try { return ((new URLSearchParams(location.search).get("room"))||"PUBLIC").trim().toUpperCase().slice(0,12)||"PUBLIC"; } catch(e){ return "PUBLIC"; } })();
+const ROOM_SEED=()=>NET.on?SI_ROOM:"SOLO";
 function spawnInfo(k){
   const t=k*TICK, E=eventAt(t), live=E.live?E.ev.id:null;
   if (k%2 && live!=="party") return null;
@@ -1029,17 +1030,17 @@ function startNet(){
       reconcileBases();
       NET.synced=true;
     });
-    MP.init(null,(uid,err)=>{
+    MP.init("stealit_"+SI_ROOM,(uid,err)=>{   // 게임 전용 방 (다른 게임 사람이 섞여 보이지 않게)
       if (err || !uid){ setNet("연결 실패 · 봇들과 플레이"); return; }
       NET.on=true; NET.uid=uid; NET.jt=MP.serverNow?MP.serverNow():Date.now(); NET.name=(MP.getDisplayName&&MP.getDisplayName())||"플레이어";
       NET.avatar=(MP.getLocalAvatarLoadout&&MP.getLocalAvatarLoadout())||null;
       applyPlayerAvatar(NET.avatar);
       if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l){ NET.avatar=l; applyPlayerAvatar(l); NET.avKey=""; } });
-      try { MP.setPresence && MP.setPresence("stealit",MP.room); } catch(e){}
+      try { MP.setPresence && MP.setPresence("stealit",SI_ROOM); } catch(e){}
       world.bases[ME.base].owner.name=NET.name; refreshSign(ME.base);
       // 방 이름이 정해졌으니 레드카펫을 새 씨앗으로 다시 깐다
       for (const [k,e] of carpet){ if (e) scene.remove(e.mesh); } carpet.clear(); takenK.clear();
-      setNet("온라인 · 방 "+(MP.room||"PUBLIC"),true);
+      setNet("온라인 · 방 "+SI_ROOM,true);
     });
     setNet("서버 연결 중…");
   } catch(e){ setNet("오프라인 · 봇들과 플레이"); }
@@ -1395,7 +1396,7 @@ function updateHUD(dt){
   rows.sort((a,b)=>b.c-a.c);
   const html=rows.slice(0,8).map((r,i)=>"<div class='r"+(r.me?" me":"")+"'><span>"+(i+1)+"</span><span class='dot' style='background:"+r.col+"'></span><span class='nm'>"+esc(r.n)+(r.bot?"<span class='bot'>봇</span>":"")+"</span><span class='cp'>$"+fmt(r.c)+"</span></div>").join("");
   const rl=$("#rank-l"); if (rl._h!==html){ rl.innerHTML=html; rl._h=html; }
-  if (NET.on){ const n=Object.keys(NET.players).filter(fresh).length+1; const tx="온라인 · 방 "+(MP.room||"PUBLIC")+" · "+n+"명"; if ($("#net").textContent!==tx) setNet(tx,true); }
+  if (NET.on){ const n=Object.keys(NET.players).filter(fresh).length+1; const tx="온라인 · 방 "+SI_ROOM+" · "+n+"명"; if ($("#net").textContent!==tx) setNet(tx,true); }
 }
 const anyPanel=()=>!!document.querySelector(".panel.show");
 function closePanels(){ document.querySelectorAll(".panel.show").forEach(p=>{ if (p.id!=="p-welcome") p.classList.remove("show"); }); }

@@ -107,6 +107,7 @@
   <div id="door">DOOR 000</div>
   <div id="obj"></div>
   <div id="gold">🪙 0</div>
+  <div id="mates" style="position:absolute;top:36px;right:14px;font-weight:800;font-size:13px;color:#ffe6b0;text-shadow:0 0 6px #000"></div>
   <div id="dot"></div>
   <div id="prompt"></div>
   <div id="msg"></div>
@@ -124,6 +125,7 @@
 <div id="lobby" class="scr show"><div class="wrap">
   <div class="title">심야 호텔<small>MIDNIGHT HOTEL</small></div>
   <div class="rec" id="rec"></div>
+  <div class="rec" id="lobbyNet" style="opacity:.75;font-size:12px"></div>
   <div class="shop" id="shop"></div>
   <button class="big" id="start" type="button">체크인</button>
   <a class="small" href="hub.html">⌂ 허브로</a>
@@ -178,7 +180,10 @@
 const $ = id => document.getElementById(id);
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 if (isTouch) document.body.classList.add('touch');
-const clamp = (v,a,b)=>v<a?a:v>b?b:v, lerp = (a,b,t)=>a+(b-a)*t, rnd = (a,b)=>a+Math.random()*(b-a), rint = (a,b)=>Math.floor(rnd(a, b + 1)), pick = a=>a[Math.floor(Math.random()*a.length)];
+// 방 생성은 _rng를 쓴다 — 같은 런 씨앗이면 같은 방 사람 모두에게 똑같은 호텔이 만들어진다
+let _rng = Math.random;
+function seeded(n){ let a = n >>> 0; return ()=>{ a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const clamp = (v,a,b)=>v<a?a:v>b?b:v, lerp = (a,b,t)=>a+(b-a)*t, rnd = (a,b)=>a+_rng()*(b-a), rint = (a,b)=>Math.floor(rnd(a, b + 1)), pick = a=>a[Math.floor(_rng()*a.length)];
 const LS = { get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : v; } catch(e){ return d; } }, set(k, v){ try { localStorage.setItem(k, String(v)); } catch(e){} } };
 const LOW = isTouch;
 
@@ -280,7 +285,7 @@ const audio = (function(){
 // =====================================================================
 //  텍스처 (캔버스로 그림)
 // =====================================================================
-const R = Math.random;
+const R = ()=>_rng();
 function ctex(w, h, fn, srgb){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = LOW ? 2 : 8; if (srgb !== false) t.encoding = THREE.sRGBEncoding; return t; }
 function grime(g, w, h, a){ for (let i=0;i<w*h/90;i++){ g.fillStyle = 'rgba(0,0,0,' + R()*a + ')'; g.fillRect(R()*w, R()*h, 1 + R()*2, 1 + R()*2); } const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(0,0,0,.12)'); gr.addColorStop(.6, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,10,0,.28)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
 function damask(g, w, h, base, ink, bump){ g.fillStyle = base; g.fillRect(0, 0, w, h);
@@ -377,7 +382,8 @@ function addCol(room, cx, cz, w, d, y0, y1, extra){ const [x, z] = L2W(room, cx,
 function roomType(i){ if (i === 0) return 'lobby'; if (i === libRoom) return 'library'; if (i === FINAL) return 'final';
   for (const s of seekRooms){ if (i >= s - 3 && i < s) return 'eyes'; if (i >= s && i < s + 3) return 'chase'; if (i === s + 3) return 'chaseEnd'; }
   return R() < .28 ? 'hall' : 'room'; }
-function makeRoom(i, prev){
+function makeRoom(i, prev){ const old = _rng; _rng = seeded(Math.imul(runSeed, 2654435761) ^ (i * 40503 + 7)); try { return makeRoom0(i, prev); } finally { _rng = old; } }
+function makeRoom0(i, prev){
   const type = roomType(i);
   let W, L, H = H0;
   if (type === 'lobby'){ W = 14; L = 13; } else if (type === 'hall'){ W = 4.6; L = rnd(16, 24); } else if (type === 'library'){ W = 26; L = 30; H = 6.4; } else if (type === 'chase'){ W = 5.2; L = rnd(30, 38); } else if (type === 'chaseEnd'){ W = 11; L = 12; } else if (type === 'final'){ W = 16; L = 18; H = 7; } else { W = rnd(8.5, 12.5); L = rnd(9, 14); }
@@ -1023,7 +1029,7 @@ function clearWorld(){ for (const r of rooms) if (r && !r.disposed) disposeRoom(
   if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); if (entity.screech){ scene.remove(entity.screech.sp); entity.screech = null; } if (entity.seek) endSeek(false); if (entity.giant){ scene.remove(entity.giant.m.g); entity.giant = null; } for (const d of drips) scene.remove(d.m); drips.length = 0; }
 function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; rooms.push(makeRoom(rooms.length, prev)); } }
 function startRun(){ audio.unlock(); clearWorld(); winShown = false;
-  seekRooms = [rint(30, 38), rint(78, 88)]; lastRush = -99; screechT = 8; giantAt = 0;
+  runSeed = NET.pickSeed(); { const old = _rng; _rng = seeded(runSeed ^ 0x5eed); seekRooms = [rint(30, 38), rint(78, 88)]; _rng = old; } lastRush = -99; screechT = 8; giantAt = 0;
   Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, revive:false, noise:0, chaseBoost:false, shake:0, invT:0 });
   if (kit.flash){ P.light = { type:'flash', on:true, battery:100 }; } if (kit.band) P.bandage += 2; if (kit.vit) P.vitamin += 1; if (kit.rev) P.revive = true; kit = {}; LS.set('hotel_kit', '{}');
   ensureRooms(2); $('door').textContent = 'DOOR 000'; renderSlots(); setObj();
@@ -1033,7 +1039,101 @@ function toLobby(){ running = false; paused = false; clearWorld(); $('pause').cl
 function setPause(v){ if (!running || P.dead) return; paused = v; $('pause').classList.toggle('show', v); if (!v) wantLock(); }
 $('start').addEventListener('click', startRun); $('dAgain').addEventListener('click', startRun); $('wAgain').addEventListener('click', startRun); $('dLobby').addEventListener('click', toLobby); $('pLobby').addEventListener('click', ()=>{ submitBest(); toLobby(); }); $('pResume').addEventListener('click', ()=>setPause(false)); $('dRevive').addEventListener('click', revive);
 document.addEventListener('visibilitychange', ()=>{ if (document.hidden && running && !P.dead) setPause(true); });
-try { if (window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && MP.initAuthOnly) MP.initAuthOnly(()=>{}); } catch(e){}
+// =====================================================================
+//  멀티플레이 — 같은 방 사람들은 같은 호텔을 걷고, 서로 보인다
+//  (문·괴물은 각자 화면에서 따로 움직인다. 먼저 들어간 친구가 있으면 그 호텔로 합류)
+// =====================================================================
+const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
+const NET = { on:false, uid:null, name:'', avatar:null, players:{}, seen:{}, ghosts:{}, sendT:0, fullT:0,
+  // 같은 방에서 지금 달리고 있는 런이 있으면 그 씨앗, 없으면 새로
+  // 가장 먼저 시작한 런(서버 시간 기준)으로 모인다 — 동시에 시작해도 결국 한 호텔로 합쳐진다
+  pickSeed(){ const best = earliestRun(); NET.runT = best ? best.st : sNow(); return best ? best.seed : ((Math.random()*0x7fffffff) | 1); } };
+const sNow = ()=>(window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
+function earliestRun(){ let best = null, bu = '';
+  for (const u in NET.players){ const p = NET.players[u]; if (!freshP(u) || !p.run || !p.seed || !p.st) continue;
+    if (!best || p.st < best.st || (p.st === best.st && u < bu)){ best = p; bu = u; } }
+  return best; }
+// 같이 눌렀는데 각자 다른 호텔이 만들어졌으면, 시작 30초 안에는 먼저 시작한 쪽 호텔로 조용히 옮긴다(가진 물건은 그대로)
+function mergeRun(){
+  if (!NET.on || !running || P.dead || P.room > 1 || sNow() - NET.runT > 30000) return;
+  const e = earliestRun(); if (!e || e.seed === runSeed || (e.room || 0) > 1) return;
+  if (!(e.st < NET.runT || (e.st === NET.runT && e.seed < runSeed))) return;
+  clearWorld(); runSeed = e.seed; NET.runT = e.st;
+  { const old = _rng; _rng = seeded(runSeed ^ 0x5eed); seekRooms = [rint(30, 38), rint(78, 88)]; _rng = old; } lastRush = -99; screechT = 8; giantAt = 0;
+  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, hidden:null, room:0, maxRoom:0 });
+  ensureRooms(2); $('door').textContent = 'DOOR 000'; setObj(); $('hide').classList.remove('on');
+  msg('👥 ' + (e.name || '친구') + ' 의 호텔로 합류했어', 3000);
+}
+const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
+function buildAv(loadout){
+  let a = null; try { if (MP.buildAvatar) a = MP.buildAvatar(loadout || null); } catch(e){ a = null; }
+  if (!a || !a.isObject3D){ a = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, .6), new THREE.MeshStandardMaterial({ color:0x6a8aff })); b.position.y = 1.5; a.add(b); }
+  const ms = a.children.filter(o=>o.isMesh), parts = {};
+  if (ms.length >= 6) ['legL','legR','torso','armL','armR','head'].forEach((k, i)=>{ const m = ms[i]; if (k === 'torso' || k === 'head') return;
+    m.geometry.computeBoundingBox(); const h = (m.geometry.boundingBox.max.y - m.geometry.boundingBox.min.y) * m.scale.y;
+    const piv = new THREE.Group(); piv.position.set(m.position.x, m.position.y + h/2, m.position.z); a.add(piv); m.position.set(0, -h/2, 0); piv.add(m); parts[k] = piv; });
+  const root = new THREE.Group(); a.scale.setScalar(.56); root.add(a); root.userData.parts = parts.legL ? parts : null; return root;
+}
+function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; c.height = 48; const g = c.getContext('2d'); g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(String(t).slice(0, 12), 128, 24); g.fillStyle = '#ffe6b0'; g.fillText(String(t).slice(0, 12), 128, 24);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false, fog:false })); sp.scale.set(1.3, .25, 1); sp.position.y = 2.05; return sp; }
+(function startNet(){
+  if (!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase)) return;
+  try {
+    MP.onPlayersUpdate(val=>{ const t = performance.now();
+      for (const u in val){ const p = val[u]; if (!p || u === NET.uid) continue; const old = NET.players[u]; if (!old || old.ts !== p.ts) NET.seen[u] = t;
+        if (old && running && p.seed === runSeed && old.room < FINAL && p.room >= FINAL && p.run) msg('🎉 ' + (p.name || '누군가') + ' 이(가) 호텔을 탈출했다!', 3000);
+        if (old && running && p.seed === runSeed && !old.dead && p.dead) msg('💀 ' + (p.name || '누군가') + ' 이(가) DOOR ' + String(p.room || 0).padStart(3, '0') + ' 에서 당했다', 2600);
+        NET.players[u] = p; }
+      for (const u in NET.players) if (!val[u]) delete NET.players[u]; });
+    MP.init('hotel_' + URL_ROOM, (uid, err)=>{
+      if (err || !uid) return;
+      NET.on = true; NET.uid = uid; NET.name = (MP.getDisplayName && MP.getDisplayName()) || '투숙객';
+      NET.avatar = (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null;
+      if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l){ NET.avatar = l; NET.fullT = 0; } });
+      try { MP.setPresence('hotel', URL_ROOM); } catch(e){}
+    });
+  } catch(e){}
+})();
+function netSend(dt){
+  if (!NET.on) return; NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .15; NET.fullT -= .15;
+  const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? (NET.runT || 0) : 0,
+    room:P.room || 0, dead:P.dead ? 1 : 0, hid:P.hidden ? 1 : 0, cr:P.crouch > .5 ? 1 : 0, lt:(P.light && P.light.type && P.light.on) ? 1 : 0 };
+  if (NET.fullT <= 0){ s.avatarLoadout = NET.avatar || null; NET.fullT = 3; }
+  try { MP.update(s); } catch(e){}
+}
+function updateGhosts(dt){
+  if (!NET.on) return;
+  NET.mergeT = (NET.mergeT || 0) - dt; if (NET.mergeT <= 0){ NET.mergeT = 1; mergeRun(); }
+  let same = 0, lobby = 0;
+  for (const u in NET.players){
+    const p = NET.players[u]; let gh = NET.ghosts[u];
+    if (!gh){ gh = { root:new THREE.Group(), av:null, key:'', tag:null, tagName:'', ry:0, walk:0, light:new THREE.PointLight(0xffc880, 0, 6, 2) };
+      gh.light.position.set(.3, 1.2, .3); gh.root.add(gh.light); gh.root.position.set(p.x || 0, 0, p.z || 0); scene.add(gh.root); NET.ghosts[u] = gh; }
+    const alive = freshP(u); if (alive && !p.run) lobby++;
+    const sameRun = alive && running && p.run && p.seed === runSeed;
+    if (sameRun) same++;
+    const vis = sameRun && !p.dead && !p.hid && Math.abs((p.room || 0) - P.room) <= 2;
+    gh.root.visible = vis; gh.light.intensity = vis && p.lt ? .9 : 0;
+    if (!vis) continue;
+    const key = JSON.stringify(p.avatarLoadout || null);
+    if (key !== gh.key && (p.avatarLoadout || !gh.av)){ if (gh.av) gh.root.remove(gh.av); gh.av = buildAv(p.avatarLoadout); gh.root.add(gh.av); gh.key = key; }
+    const nm = p.name || '투숙객'; if (nm !== gh.tagName){ if (gh.tag) gh.root.remove(gh.tag); gh.tag = nameTag(nm); gh.root.add(gh.tag); gh.tagName = nm; }
+    const bx = gh.root.position.x, bz = gh.root.position.z, tx = p.x || 0, tz = p.z || 0;
+    if (Math.hypot(tx - bx, tz - bz) > 10) gh.root.position.set(tx, 0, tz); else { const k = 1 - Math.exp(-10*dt); gh.root.position.x += (tx - bx)*k; gh.root.position.z += (tz - bz)*k; }
+    gh.root.scale.y = p.cr ? .7 : 1;
+    const want = (p.ry || 0) + Math.PI; let dr = want - gh.ry; while (dr > Math.PI) dr -= Math.PI*2; while (dr < -Math.PI) dr += Math.PI*2; gh.ry += dr*Math.min(1, dt*10); gh.root.rotation.y = gh.ry;
+    const sp = Math.hypot(gh.root.position.x - bx, gh.root.position.z - bz) / Math.max(dt, 1e-3);
+    gh.walk += dt*(sp > .3 ? sp*2.6 : 0);
+    const Pp = gh.av && gh.av.userData.parts; if (Pp){ const sw = sp > .3 ? Math.sin(gh.walk)*.7 : 0; Pp.legL.rotation.x = sw; Pp.legR.rotation.x = -sw; Pp.armL.rotation.x = -sw*.8; Pp.armR.rotation.x = p.lt ? -1.3 : sw*.8; }
+  }
+  for (const u in NET.ghosts) if (!NET.players[u]){ scene.remove(NET.ghosts[u].root); delete NET.ghosts[u]; }
+  const t = running ? (same ? '👥 같은 호텔 ' + (same + 1) + '명' : '') : '';
+  const e = $('mates'); if (e && e.textContent !== t) e.textContent = t;
+  const lb = $('lobbyNet'); if (lb){ const inRun = Object.keys(NET.players).filter(u=>freshP(u) && NET.players[u].run).length;
+    const lt = '🌐 방 ' + (URL_ROOM === 'PUBLIC' ? '공개' : URL_ROOM) + (inRun ? ' · ' + inRun + '명이 호텔 안에 있어요 — 시작하면 같은 호텔로 합류!' : lobby ? ' · 로비에 ' + (lobby + 1) + '명' : ' · 시작하면 친구들이 같은 호텔로 따라올 수 있어요');
+    if (lb.textContent !== lt) lb.textContent = lt; }
+}
 
 function updateRoom(){ let cur = P.room; for (let i = Math.max(0, P.room - 1); i <= P.room + 1 && i < rooms.length; i++){ const r = rooms[i]; if (r && inRoom(r, P.x, P.z, -.1)){ cur = i; if (i > P.room) break; } }
   if (cur !== P.room){ P.room = cur; if (cur > P.maxRoom) onEnterRoom(cur); ensureRooms(cur + 2); for (let i=0;i<cur - 2;i++){ const r = rooms[i]; if (r && !r.disposed) disposeRoom(r); } setObj(); } }
@@ -1054,13 +1154,14 @@ function frame(dt){
   } else if (!running){ // 로비 배경: 천천히 도는 카메라
     camera.position.set(Math.sin(T*.05)*1.5, 1.6, 6 + Math.cos(T*.05)); camera.rotation.set(0, Math.PI + Math.sin(T*.1)*.3, 0); updateLights(dt); }
   else if (P.dead){ tickFx(dt); }
+  updateGhosts(dt); netSend(dt);
   if (!noRender) renderer.render(scene, camera); }
 let noRender = false;
 let lastT = performance.now();
 function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.max(0, (now - lastT)/1000)); lastT = now; frame(dt); }
 // 로비 배경용 방
 ensureRooms(1); renderLobby(); requestAnimationFrame(loop);
-window.__H = { P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; } };
+window.__H = { NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; } };
 })();
 </script>
 <script>
