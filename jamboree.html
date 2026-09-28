@@ -84,7 +84,7 @@
   <div id="big" class="ol"><div id="bigA"></div><div id="bigB"></div></div>
   <div id="intro"><div id="introN">GAME 1 / 5</div><div id="introI">🎨</div><div id="introT">색깔 블록</div><div id="introD"></div><div id="introC">3</div></div>
   <div id="toast" class="ol"></div>
-  <div id="keys">WASD 이동 · Space 점프 · 오른쪽 드래그 시점 · 휠 줌 · Shift 시점고정 · 클릭 펀치(스모)</div>
+  <div id="keys">WASD 이동 · Space 점프 · 오른쪽 드래그 시점 · 휠 줌 · Shift 시점고정 · 클릭 펀치(스모·왕관 언덕)</div>
   <div id="joy"><div id="joyB"><div id="joyS"></div></div></div>
   <div id="look"></div>
   <div id="bJump" class="mb">⬆</div>
@@ -111,7 +111,7 @@
 (function(){
 'use strict';
 /* =====================================================================
-   미니 잼버리 — 방에 있는 모두가 미니게임 5판을 연달아! 점수 합계 1등이 챔피언
+   미니 잼버리 — 방에 있는 모두가 미니게임 5판을 연달아! (미니게임 11종 중 무작위) 점수 합계 1등이 챔피언
    · 방에서 가장 먼저 들어온 사람이 진행(호스트). 나가면 다음 사람이 이어받음
    · 사람이 6명보다 적으면 봇이 채움
    ===================================================================== */
@@ -452,7 +452,7 @@ function circleSpawns(n, r, y){ const out = []; for (let i=0;i<n;i++){ const a =
 function gridSpawns(n, half, y){ const out = []; const k = Math.ceil(Math.sqrt(n)); for (let i=0;i<n;i++){ const c = i % k, r = Math.floor(i / k); out.push({ x:AX + (c - (k-1)/2)*(half*2/(k+1)), y:(y||0) + 0.1, z:AZ + (r - (k-1)/2)*(half*2/(k+1)) }); } return out; }
 
 // =====================================================================
-//  미니게임 7종
+//  미니게임 11종
 //   각 게임: build(seed) → 경기장 객체 { grp, voidY, spawns(n), update(dt, el), bot(b, el, dt) → {mx,mz,jump}, host(dt, el), banner(el) }
 // =====================================================================
 const MG = {};
@@ -700,6 +700,226 @@ MG.sumo = { name:'밀어내기 스모', icon:'🥊', desc:'클릭(또는 👊 �
         return seek(b, best.x, best.z, 1.6); },
     };
     return A; } };
+// 벽에 막혀 제자리걸음이면 잠깐 옆으로 비켜 간다 (봇 공통)
+function unstick(b, s, dt){ const moved = Math.hypot(b.x - (b.lx ?? b.x), b.z - (b.lz ?? b.z)); b.lx = b.x; b.lz = b.z;
+  if (b.side > 0){ b.side -= dt; return { mx:b.sx, mz:b.sz, jump:s.jump }; }
+  if ((s.mx || s.mz) && moved < dt*2){ b.stuck = (b.stuck || 0) + dt; if (b.stuck > 0.5){ b.stuck = 0; b.side = rnd(0.4, 0.8); const k = Math.random() < 0.5 ? 1 : -1; b.sx = -s.mz*k; b.sz = s.mx*k; } } else b.stuck = 0;
+  return s; }
+// 레이스: 결승선 통과 기록 (호스트)
+function hostFin(id, el){ if (!H || H.ph !== 'play' || !H.alive[id]) return; H.x.fin = H.x.fin || {}; if (H.x.fin[id] != null) return; H.x.fin[id] = Math.round(el*1000); if (H.x.ff == null) H.x.ff = H.x.fin[id]; }
+const finOf = id => { const f = state.G && state.G.x && state.G.x.fin; return f ? f[id] : undefined; };
+function finMsg(){ const f = (state.G && state.G.x && state.G.x.fin) || {}; const n = Object.keys(f).length + 1; bigMsg('🏁 골인! ' + n + '등', '결승 지점에서 기다려요', '#ffd84a', 2200); audio.sfx.win(); if (myActor) myActor.cheer = 2; }
+
+// ---------- 8. 유리 징검다리 ----------
+MG.glass = { name:'유리 징검다리', icon:'🪟', desc:'칸마다 두 장 중 한 장은 가짜 유리! 밟으면 깨져요.<br>남이 어디로 건넜는지 잘 보고, 점프로 건너편까지!', dur:80, elim:true, race:true, unit:'⏱',
+  build(seed){
+    const grp = new THREE.Group(), R = rng(seed), ROWS = 7, GAP = 4.8, PW = 3.0, SX = 1.9, X0 = AX - 20, JG = 1.8;
+    const rowX = i=> X0 + i*GAP, laneZ = s=> AZ + (s ? SX : -SX);
+    const START_EDGE = X0 - PW/2 - JG, FIN0 = rowX(ROWS - 1) + PW/2 + JG, FINX = FIN0 + 0.3;
+    box(grp, 'arena', (AX - 36 + START_EDGE)/2, -1, AZ, START_EDGE - (AX - 36), 2, 13, mat(0x6ab8ff, 'stud', 6));
+    box(grp, 'arena', (FIN0 + AX + 36)/2, -1, AZ, AX + 36 - FIN0, 2, 13, mat(0xffd84a, 'stud', 6));
+    const arch = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.8), new THREE.MeshBasicMaterial({ map:signTex('🏁 GOAL', '#ff4a4a'), side:THREE.DoubleSide })); arch.position.set(FIN0 + 1, 5.4, AZ); arch.rotation.y = -Math.PI/2; grp.add(arch);
+    for (const s of [-1, 1]) box(grp, 'arena', FIN0 + 1, 2.6, AZ + s*6.2, 0.6, 5.2, 0.6, mat(0xffffff, 'stripe', 1), { nocollide:true, shadow:true });
+    // 옆 철골 (밟을 수 없음)
+    for (const s of [-1, 1]){ const r = new THREE.Mesh(new THREE.BoxGeometry(FIN0 - START_EDGE, 0.35, 0.3), mat(0x555a66)); r.position.set((FIN0 + START_EDGE)/2, -0.35, AZ + s*(SX + PW/2 + 0.35)); grp.add(r); }
+    const glassM = new THREE.MeshLambertMaterial({ color:0xbfe8ff, emissive:0x3a7aa0, emissiveIntensity:.25, transparent:true, opacity:.55 });
+    const rows = [];
+    for (let i=0;i<ROWS;i++){ const fake = R() < 0.5 ? 0 : 1, p = [];
+      for (const s of [0, 1]){ const m = box(grp, 'arena', rowX(i), -0.15, laneZ(s), PW, 0.3, PW, glassM, { nocollide:s === fake }); const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color:0xffffff })); m.add(e); p.push(m); }
+      const n = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), new THREE.MeshBasicMaterial({ map:signTex(String(i + 1), '#22262e'), transparent:true })); n.position.set(rowX(i), 0.02, AZ); n.rotation.x = -Math.PI/2; n.rotation.z = Math.PI/2; grp.add(n);
+      rows.push({ fake, p, broken:false, rev:undefined }); }
+    const shards = [];
+    function breakRow(i){ const r = rows[i]; if (r.broken) return; r.broken = true; r.rev = 1 - r.fake; const m = r.p[r.fake]; m.visible = false; audio.sfx.hit();
+      for (let k=0;k<14;k++){ const s = new THREE.Mesh(new THREE.BoxGeometry(rnd(.2, .5), .05, rnd(.2, .5)), glassM); s.position.set(m.position.x + rnd(-1.3, 1.3), -0.1, m.position.z + rnd(-1.3, 1.3)); grp.add(s); shards.push({ s, v:[rnd(-2, 2), rnd(-1, 3), rnd(-2, 2)], t:0 }); } }
+    const rowOf = x=> x < X0 - PW/2 - 0.2 ? -1 : clamp(Math.round((x - X0)/GAP), 0, ROWS - 1);
+    let done = false;
+    const A = { grp, voidY:-22, FINX, rows,
+      spawns:n=>{ const out = []; for (let i=0;i<n;i++) out.push({ x:AX - 33 + (i % 3)*3.2, y:0.1, z:AZ - 4.5 + Math.floor(i/3)*2.2 }); return out; },
+      update(dt, el){
+        // 누가 밟았는지 보고 진짜/가짜를 알아낸다 (모두 각자 계산)
+        const ps = [me]; for (const [id, a] of actors) if (id !== MY_ID) ps.push(a);
+        for (const p of ps){ const i = Math.round((p.x - X0)/GAP); if (i < 0 || i >= ROWS || Math.abs(p.x - rowX(i)) > PW/2) continue; const r = rows[i];
+          for (const s of [0, 1]){ if (Math.abs(p.z - laneZ(s)) > PW/2) continue;
+            if (s === r.fake){ if (p.y < -0.4 && p.y > -5) breakRow(i); }
+            else if (p.y > -0.1 && p.y < 0.4 && r.rev === undefined) r.rev = s; } }
+        for (let k=shards.length-1;k>=0;k--){ const q = shards[k]; q.t += dt; q.v[1] -= 30*dt; q.s.position.x += q.v[0]*dt; q.s.position.y += q.v[1]*dt; q.s.position.z += q.v[2]*dt; q.s.rotation.x += dt*6; if (q.t > 2){ grp.remove(q.s); shards.splice(k, 1); } }
+        if (el > 0 && !done && isAlive(MY_ID) && me.x > FINX && me.y > -1){ done = true; emit({ k:'fin' }); finMsg(); } },
+      host(dt, el){ if (el <= 0) return; for (const b of BS.values()) if (isAlive(b.id) && b.x > FINX && b.y > -1) hostFin(b.id, el); },
+      banner(el){ if (el < 0) return null; if (finOf(MY_ID) != null) return { html:'🏁 골인! 다른 사람을 응원해요' }; const r = rowOf(me.x); return { html:'🪟 ' + (r < 0 ? '출발 전' : (r + 1) + ' / ' + ROWS + '번째 칸') + ' · 점프로 건너요!' }; },
+      bot(b, el, dt){ if (el < 0 || finOf(b.id) != null) return { mx:0, mz:0 };
+        if (b.x > FINX) return seek(b, FINX + 4, AZ + ((b.id.charCodeAt(3) || 0) % 5 - 2)*1.5, 0.5);
+        if (b.grounded || b.cur === undefined) b.cur = rowOf(b.x);   // 공중에서는 지금 칸을 바꾸지 않는다(다음 칸을 지나쳐 버림)
+        const cur = b.cur, n = cur + 1, edge = cur < 0 ? START_EDGE : rowX(cur) + PW/2;
+        const curZ = cur < 0 ? null : (b.z > AZ ? laneZ(1) : laneZ(0));
+        if (n >= ROWS){ const s = seek(b, FINX + 3, b.z, 0); if (b.x > edge - 0.7 && b.grounded) s.jump = true; return s; }
+        let side = rows[n].rev;
+        if (side === undefined){ const r = rows[n]; b.gw = b.gw || {}; if (!b.gw[n]) b.gw[n] = { t:rnd(0.6, 2.5), s:Math.random() < 0.7 ? 1 - r.fake : r.fake }; const g = b.gw[n]; g.t -= dt;
+          // 한 칸에 한 명씩만 모험한다 — 나머지는 결과를 보고 따라간다
+          if (!g.go){ if (g.t > 0 || (r.busy || 0) > el) return seek(b, edge - 0.9, curZ === null ? laneZ(g.s) : clamp(laneZ(g.s), curZ - 1.1, curZ + 1.1), 0.25); g.go = true; r.busy = el + 1.6; }
+          side = g.s; }
+        const tz = laneZ(side);
+        if (b.x < edge - 0.55) return seek(b, edge - 0.3, curZ === null ? tz : clamp(tz, curZ - 1.1, curZ + 1.1), 0.1);
+        const s = seek(b, rowX(n), tz, 0.2); if (b.grounded) s.jump = true; return s; },
+    };
+    return A; } };
+
+// ---------- 9. 왕관 언덕 ----------
+MG.koth = { name:'왕관 언덕', icon:'👑', desc:'빛나는 원 안에 서 있으면 1초마다 1점, 혼자 차지하면 2점!<br>원은 10초마다 옮겨가요. 클릭(👊)으로 밀어내세요!', dur:50, elim:false, punch:true, unit:'👑',
+  build(seed){
+    const grp = new THREE.Group(), HALF = 20, PER = 10, ZR = 4.2, R = rng(seed);
+    box(grp, 'arena', AX, -1, AZ, HALF*2, 2, HALF*2, mat(0xffe6a8, 'stud', 12)); fence(grp, HALF, 3);
+    for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) box(grp, 'arena', AX + sx*13, 1.2, AZ + sz*13, 4, 2.4, 4, mat(0x8a6aff, 'stud', 2), { shadow:true });
+    const spots = []; for (let i=0;i<8;i++){ let a = R()*Math.PI*2, r = 3 + R()*7; const p = { x:AX + Math.cos(a)*r, z:AZ + Math.sin(a)*r }; if (i && Math.hypot(p.x - spots[i-1].x, p.z - spots[i-1].z) < 6){ p.x = 2*AX - p.x; p.z = 2*AZ - p.z; } spots.push(p); }
+    const zoneAt = el=> spots[Math.min(spots.length - 1, Math.floor(Math.max(0, el)/PER))];
+    const inZone = (p, el)=>{ const z = zoneAt(el); return Math.hypot(p.x - z.x, p.z - z.z) < ZR && p.y < 3; };
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(ZR, 40), new THREE.MeshBasicMaterial({ color:0xffd23a, transparent:true, opacity:.35, depthWrite:false })); disc.rotation.x = -Math.PI/2; disc.position.y = 0.04; grp.add(disc);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(ZR, 0.18, 8, 48), matB(0xffd23a)); ring.rotation.x = Math.PI/2; ring.position.y = 0.1; grp.add(ring);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(ZR, ZR, 14, 32, 1, true), new THREE.MeshBasicMaterial({ color:0xffe27a, transparent:true, opacity:.14, side:THREE.DoubleSide, depthWrite:false })); beam.position.y = 7; grp.add(beam);
+    const crown = new THREE.Group(); const gold = mat(0xffc629, null, 1, { emissive:0x8a5a00 });
+    crown.add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.6, 16), gold)); for (let i=0;i<5;i++){ const c = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.7, 6), gold); c.position.set(Math.cos(i*1.257)*0.85, 0.6, Math.sin(i*1.257)*0.85); crown.add(c); } grp.add(crown);
+    const next = new THREE.Mesh(new THREE.TorusGeometry(ZR, 0.12, 6, 48), matB(0xffffff, { transparent:true, opacity:.7 })); next.rotation.x = Math.PI/2; next.position.y = 0.1; next.visible = false; grp.add(next);
+    let lastI = -1;
+    const A = { grp, voidY:-30,
+      spawns:n=>circleSpawns(n, 15),
+      update(dt, el){ const e = Math.max(0, el), z = zoneAt(e);
+        for (const o of [disc, ring, beam]){ o.position.x = z.x; o.position.z = z.z; } crown.position.set(z.x, 5.2 + Math.sin(el*2)*0.4, z.z); crown.rotation.y += dt*1.5;
+        ring.scale.setScalar(1 + Math.sin(el*6)*0.03);
+        const nz = zoneAt(e + PER); next.visible = el > 0 && e % PER > PER - 3 && nz !== z; if (next.visible){ next.position.x = nz.x; next.position.z = nz.z; }
+        const i = Math.floor(e/PER); if (el > 0 && i !== lastI){ if (lastI >= 0) { audio.sfx.whistle(); toast('👑 원이 옮겨갔어요!', '#ffd23a'); } lastI = i; } },
+      host(dt, el){ if (el <= 0) return; const X = H.x; if (X.nt === undefined) X.nt = 1; if (el < X.nt) return; X.nt += 1; X.cc = X.cc || {};
+        const inside = H.parts.filter(id=>{ if (!isAlive(id)) return false; const p = posOf(id); return p && inZone(p, el); }); const pts = inside.length === 1 ? 2 : 1; inside.forEach(id=>{ X.cc[id] = (X.cc[id] || 0) + pts; }); },
+      banner(el){ if (el < 0) return null; const cc = (state.G.x && state.G.x.cc) || {}; const inside = inZone(me, el);
+        return { html:'👑 내 점수 <b>' + (cc[MY_ID] || 0) + '</b> · ' + (inside ? '<span style="color:#ffd23a">원 안!</span>' : '빛나는 원으로 가요!') }; },
+      bot(b, el, dt){ if (el < 0) return { mx:0, mz:0 }; const z = zoneAt(el);
+        if (!b.off || Math.random() < 0.006) b.off = { x:rnd(-2.2, 2.2), z:rnd(-2.2, 2.2) };
+        b.cd = (b.cd || 0) - dt;
+        if (b.cd <= 0 && Math.hypot(b.x - z.x, b.z - z.z) < ZR + 1.5){ let best = null, bd = 1e9, bid = null;
+          for (const id of H.parts){ if (id === b.id || !isAlive(id)) continue; const p = posOf(id); if (!p) continue; const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < bd){ bd = d; best = p; bid = id; } }
+          if (best && bd < 3.1 && Math.random() < 0.4){ b.cd = rnd(0.9, 1.6); const dx = (best.x - b.x)/bd, dz = (best.z - b.z)/bd; b.ry = Math.atan2(dx, dz); emit({ k:'punch', by:b.id, t:bid, d:[+dx.toFixed(3), +dz.toFixed(3)] }); } }
+        return unstick(b, seek(b, z.x + b.off.x, z.z + b.off.z, 0.6), dt); },
+    };
+    return A; } };
+
+// ---------- 10. 좀비 술래잡기 ----------
+MG.zombie = { name:'좀비 술래잡기', icon:'🧟', desc:'곧 누군가 좀비가 돼요! 좀비에게 닿으면 나도 좀비.<br>끝까지 사람으로 버티면 1등! 막 물린 좀비는 3초 동안 못 움직여요.', dur:60, elim:false, unit:'⏱',
+  build(seed){
+    const grp = new THREE.Group(), HALF = 22, R = rng(seed);
+    box(grp, 'arena', AX, -1, AZ, HALF*2, 2, HALF*2, mat(0x6a9a52, 'grass', 8)); fence(grp, HALF, 3);
+    const wm = [mat(0x8a7a6a, 'stud', 2), mat(0x5a6a7a, 'stud', 2)];
+    for (let i=0;i<12;i++){ let x, z; do { x = AX + (R()*2 - 1)*(HALF - 4); z = AZ + (R()*2 - 1)*(HALF - 4); } while (Math.hypot(x - AX, z - AZ) < 5);
+      const horiz = R() < 0.5, L = 4 + R()*4; box(grp, 'arena', x, 1.5, z, horiz ? L : 1.2, 3, horiz ? 1.2 : L, wm[i % 2], { shadow:true }); }
+    const zmap = ()=> (state.G && state.G.x && state.G.x.z) || {};
+    const isZ = id=> zmap()[id] != null;
+    const tagTex = signTex('🧟', 'rgba(0,0,0,0)', '#7dff6a', 128, 128);
+    const tags = new Map();
+    let wasZ = false;
+    const A = { grp, voidY:-30,
+      spawns:n=>circleSpawns(n, 15),
+      speedMul:id=>{ const t = zmap()[id]; if (t == null) return 1; return gameEl()*1000 - t < 3000 ? 0 : 1.04; },   // 막 물린 좀비는 3초간 못 움직인다
+      dispose(){ for (const [id, t] of tags){ const a = actors.get(id); if (a) a.g.remove(t); } tags.clear(); },
+      update(dt, el){
+        for (const [id, a] of actors){ const z = isZ(id); let t = tags.get(id);
+          if (z && (!t || t.parent !== a.g)){ t = new THREE.Group(); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tagTex, transparent:true, depthWrite:false })); sp.scale.set(1.6, 1.6, 1); sp.position.y = CHAR_H + 1.4; t.add(sp);
+            const rg = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.2, 24), new THREE.MeshBasicMaterial({ color:0x6aff4a, transparent:true, opacity:.7, side:THREE.DoubleSide, depthWrite:false })); rg.rotation.x = -Math.PI/2; rg.position.y = 0.08; t.add(rg); a.g.add(t); tags.set(id, t); }
+          else if (!z && t){ a.g.remove(t); tags.delete(id); } }
+        for (const [id, t] of tags) if (!actors.has(id)) tags.delete(id);
+        const mz = isZ(MY_ID); if (mz && !wasZ && el > 0){ bigMsg('🧟 좀비가 됐어요!', '사람들을 쫓아가서 닿으세요', '#7dff6a', 2200); audio.sfx.hit(); } wasZ = mz; },
+      host(dt, el){ const X = H.x; X.z = X.z || {}; X.cc = X.cc || {}; if (el <= 0) return;
+        const alive = H.parts.filter(id=>isAlive(id));
+        if (!X.st && el >= 2.5){ X.st = 1; const pool = alive.slice().sort(()=>Math.random() - 0.5), n = alive.length >= 8 ? 2 : 1; for (let i=0;i<n && i<pool.length;i++) X.z[pool[i]] = Math.round(el*1000); }
+        if (X.st) for (const zid of alive){ if (X.z[zid] == null) continue; const zp = posOf(zid); if (!zp) continue;
+          for (const hid of alive){ if (X.z[hid] != null) continue; const hp = posOf(hid); if (hp && el*1000 - X.z[zid] > 3000 && Math.hypot(hp.x - zp.x, hp.z - zp.z) < 1.5 && Math.abs(hp.y - zp.y) < 2.5) X.z[hid] = Math.round(el*1000); } }
+        for (const id of H.parts) X.cc[id] = X.z[id] != null ? Math.round(X.z[id]/1000) : Math.round(el); },
+      over(el){ const X = H.x; if (!X.st) return false; const alive = H.parts.filter(id=>isAlive(id)); return alive.length > 1 && alive.every(id=>X.z[id] != null); },
+      banner(el){ if (el < 0) return null; const zm = zmap(); if (!Object.keys(zm).length) return { html:'🧟 곧 좀비가 정해져요… 흩어지세요!' };
+        const humans = (state.G.parts || []).filter(id=>isAlive(id) && zm[id] == null).length;
+        return zm[MY_ID] != null ? { html:'🧟 좀비! 사람을 잡아요 · 남은 사람 ' + humans, col:'#7dff6a' } : { html:'🏃 도망쳐요! · 남은 사람 ' + humans }; },
+      bot(b, el, dt){ if (el < 0) return { mx:0, mz:0 }; const zm = H.x.z || {};
+        if (zm[b.id] != null){ // 봇 좀비는 5초 쫓고 1.5초 숨을 고른다 (사람이 도망칠 틈)
+          b.chT = (b.chT || 0) + dt; if (b.chT > 5){ b.chT = 0; b.rest = 1.5; } if (b.rest > 0){ b.rest -= dt; return { mx:0, mz:0 }; }
+          let best = null, bd = 1e9; for (const id of H.parts){ if (id === b.id || zm[id] != null || !isAlive(id)) continue; const p = posOf(id); if (!p) continue; const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < bd){ bd = d; best = p; } }
+          return best ? unstick(b, seek(b, best.x, best.z, 0), dt) : { mx:0, mz:0 }; }
+        let fx = 0, fz = 0, near = false;
+        for (const id in zm){ const p = posOf(id); if (!p) continue; const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz) || 1; if (d < 16){ near = true; fx += dx/d*(16 - d); fz += dz/d*(16 - d); } }
+        if (near){ fx += (AX - b.x)*0.08; fz += (AZ - b.z)*0.08; const l = Math.hypot(fx, fz) || 1; return unstick(b, { mx:fx/l, mz:fz/l }, dt); }
+        b.wt = (b.wt || 0) - dt; if (b.wt <= 0 || !b.goal){ b.wt = rnd(1.5, 3); b.goal = { x:AX + rnd(-15, 15), z:AZ + rnd(-15, 15) }; }
+        const s = seek(b, b.goal.x, b.goal.z, 0.6); s.mx *= 0.5; s.mz *= 0.5; return unstick(b, s, dt); },
+    };
+    return A; } };
+
+// ---------- 11. 장애물 달리기 ----------
+MG.race = { name:'장애물 달리기', icon:'🏁', desc:'결승선까지 제일 먼저! 문 중 몇 개는 가짜라 막혀 있어요.<br>밀어내는 벽·회전 막대를 피해 점프로 건너세요!', dur:90, elim:true, race:true, unit:'⏱',
+  build(seed){
+    const grp = new THREE.Group(), R = rng(seed), W = 12, X = v=>AX + v;
+    const fl = (x0, x1, top, col, z0, z1)=> box(grp, 'arena', (X(x0) + X(x1))/2, top - 1, AZ + ((z0 ?? -6) + (z1 ?? 6))/2, x1 - x0, 2, (z1 ?? 6) - (z0 ?? -6), mat(col, 'stud', 4));
+    fl(-62, -48, 0, 0x6ab8ff); fl(-48, -26, 0, 0xffd8a8);
+    // 문 벽 두 줄
+    const doors = [], walls = [];
+    const DC = [0xff5a6a, 0x3a8bff, 0xffd83a, 0x3bd16f, 0xa65bff, 0xff9a2e];
+    for (const [wx, nf] of [[-44, 2], [-37, 3], [-30, 3]]){ const n = 6, dw = W/n, fakes = new Set(); while (fakes.size < nf) fakes.add(Math.floor(R()*n));
+      const row = [];
+      for (let i=0;i<n;i++){ const z = AZ - W/2 + dw*(i + 0.5), fake = fakes.has(i);
+        const m = box(grp, 'arena', X(wx), 1.5, z, 0.5, 3, dw - 0.4, mat(DC[i], 'stud', 1), { nocollide:!fake, shadow:true }); row.push({ z, fake, m, open:false }); }
+      for (let i=0;i<=n;i++) box(grp, 'arena', X(wx), 1.9, AZ - W/2 + dw*i, 0.8, 3.8, 0.4, mat(0xffffff, 'stripe', 1));
+      box(grp, 'arena', X(wx), 4, AZ, 0.9, 0.4, W + 0.4, mat(0xffffff, 'stripe', 1), { nocollide:true });
+      walls.push({ x:X(wx), row }); }
+    // 밀어내는 벽 구간 (난간 없음)
+    fl(-26, 6, 0, 0xc8e8ff);
+    const pushers = [-21, -15, -9, -3, 3].map((x, i)=>{ const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 3.2), mat([0xff5a4a, 0xffa23a][i % 2], 'stripe', 1)); m.castShadow = true; grp.add(m); return { x:X(x), m, ph:R()*6.28, sp:1.5 + R()*0.8, hitCd:0 }; });
+    const pz = (p, el)=> AZ + Math.sin(el*p.sp + p.ph)*4.3, pv = (p, el)=> Math.cos(el*p.sp + p.ph);
+    // 점프 발판
+    const plats = []; let x = 7.8; const tops = [0, 0.8, 1.6, 2.4, 1.6, 0.8, 0];
+    for (let i=0;i<7;i++){ const zc = (R()*2 - 1)*2.8; fl(x, x + 3, tops[i], [0x3bd16f, 0x3a8bff, 0xa65bff, 0xff9ac8, 0xffd83a][i % 5], zc - 2.5, zc + 2.5); plats.push({ x0:X(x), x1:X(x + 3), z:AZ + zc, top:tops[i] }); x += 4.8; }
+    // 회전 막대 원판
+    const SC = X(47.4), SR = 6.2;   // 마지막 발판(39.6) + 틈 1.6 const disk = cyl(grp, SC, -0.5, AZ, SR, SR, 1, mat(0xffffff, 'stud', 6), 40); disk.castShadow = false;
+    const bar = new THREE.Group(); bar.position.set(SC, 0, AZ); grp.add(bar); const bm = new THREE.Mesh(new THREE.BoxGeometry(SR + 0.4, 1.0, 0.9), mat(0xff3b3b, 'stripe', 1)); bm.position.set((SR + 0.4)/2, 0.7, 0); bm.castShadow = true; bar.add(bm);
+    cyl(grp, SC, 1.2, AZ, 0.8, 0.9, 2.4, mat(0x444a55)); addCollider({ minX:SC - 0.7, maxX:SC + 0.7, minY:0, maxY:2.4, minZ:AZ - 0.7, maxZ:AZ + 0.7, zone:'arena' });
+    const bang = el=> el*2.3;
+    // 결승
+    fl(55, 67, 0, 0xffd84a); const FINX = X(55.4);
+    const arch = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.8), new THREE.MeshBasicMaterial({ map:signTex('🏁 GOAL', '#ff4a4a'), side:THREE.DoubleSide })); arch.position.set(FINX, 5.4, AZ); arch.rotation.y = -Math.PI/2; grp.add(arch);
+    for (const s of [-1, 1]) box(grp, 'arena', FINX, 2.6, AZ + s*6.2, 0.6, 5.2, 0.6, mat(0xffffff, 'stripe', 1), { nocollide:true, shadow:true });
+    function hits(p, el, isMe){ if ((p.hitCd || 0) > 0) return;
+      for (const q of pushers){ const z = pz(q, el); if (Math.abs(p.x - q.x) < 0.7 + RAD && Math.abs(p.z - z) < 1.6 + RAD && p.y < 2.2){ knock(p, Math.sign(p.x - q.x)*0.35, Math.sign(pv(q, el)) || 1, 15, 10); p.hitCd = 0.6; if (isMe) audio.sfx.hit(); return; } }
+      const rx = p.x - SC, rz = p.z - AZ, d = Math.hypot(rx, rz); if (d < SR + 1 && d > 0.9 && p.y < 1.2){ const th = bang(el), dx = Math.cos(th), dz = -Math.sin(th), along = rx*dx + rz*dz, perp = Math.abs(rx*dz - rz*dx);
+        if (along > 0.8 && along < SR + 0.6 && perp < 0.45 + RAD){ knock(p, -Math.sin(th) + rx/d*0.3, -Math.cos(th) + rz/d*0.3, 20, 14); p.hitCd = 0.6; if (isMe) audio.sfx.hit(); } } }
+    let done = false;
+    // 봇 경로
+    function route(b){ const wp = [];
+      for (const w of walls){ const real = w.row.filter(d=>!d.fake), know = Math.random() < 0.6; const d = know ? real[Math.floor(Math.random()*real.length)] : w.row[Math.floor(Math.random()*w.row.length)]; wp.push({ x:w.x - 1.4, z:d.z, door:w }); wp.push({ x:w.x + 1.4, z:d.z }); }
+      wp.push({ x:X(-24.5), z:AZ + rnd(-1, 1) }); wp.push({ x:X(5.4), z:AZ + rnd(-1, 1) });
+      let prev = X(6); for (const p of plats){ wp.push({ x:(p.x0 + p.x1)/2, z:p.z, jumpAt:prev - 0.9 }); prev = p.x1; }
+      wp.push({ x:SC - 2.5, z:AZ + 2.5, jumpAt:prev - 0.9, spin:true }); wp.push({ x:SC + 3.5, z:AZ + 2.5, spin:true }); wp.push({ x:X(61), z:AZ + rnd(-3, 3), jumpAt:SC + SR - 0.9 });
+      return wp; }
+    const A = { grp, voidY:-20, FINX,
+      ground(x, z, y){ return (Math.hypot(x - SC, z - AZ) <= SR + 0.1 && y > -1.2) ? 0 : -1e9; },
+      spawns:n=>{ const out = []; for (let i=0;i<n;i++) out.push({ x:AX - 58 + (i % 3)*3, y:0.1, z:AZ - 4.5 + Math.floor(i/3)*2.2 }); return out; },
+      update(dt, el){ const e = Math.max(0, el);
+        for (const q of pushers) q.m.position.set(q.x, 1.1, pz(q, e)); bar.rotation.y = bang(e);
+        // 누가 진짜 문을 지나가면 문이 부서진 것처럼 사라진다
+        const ps = [me]; for (const [id, a] of actors) if (id !== MY_ID) ps.push(a);
+        for (const w of walls) for (const d of w.row) if (!d.fake && !d.open) for (const p of ps) if (Math.abs(p.x - w.x) < 0.8 && Math.abs(p.z - d.z) < 0.9 && p.y < 3){ d.open = true; d.m.visible = false; audio.sfx.pop(); break; }
+        if (el > 0 && isAlive(MY_ID)) hits(me, el, true);
+        if (el > 0 && !done && isAlive(MY_ID) && me.x > FINX && me.y > -1){ done = true; emit({ k:'fin' }); finMsg(); } },
+      host(dt, el){ if (el <= 0) return; for (const b of BS.values()){ if (!isAlive(b.id)) continue; hits(b, el, false); if (b.x > FINX && b.y > -1) hostFin(b.id, el); } },
+      banner(el){ if (el < 0) return null; if (finOf(MY_ID) != null) return { html:'🏁 골인! 다른 사람을 응원해요' }; const f = (state.G.x && state.G.x.fin) || {}, n = Object.keys(f).length;
+        return { html:'🏁 결승까지 ' + Math.max(0, Math.round(FINX - me.x)) + 'm' + (n ? ' · 골인 ' + n + '명' : '') }; },
+      bot(b, el, dt){ if (el < 0 || finOf(b.id) != null) return { mx:0, mz:0 };
+        if (!b.wp){ b.wp = route(b); b.wi = 0; }
+        let w = b.wp[b.wi]; while (w && b.grounded && b.x > w.x - 0.3 && b.wi < b.wp.length - 1){ b.wi++; w = b.wp[b.wi]; }   // 공중에서는 다음 목표로 안 넘어간다(발판 지나침 방지)
+        if (!w) return { mx:0, mz:0 };
+        // 가짜 문에 막히면 다른 문으로
+        const next = w;
+        if (b.wi > 0 && b.wp[b.wi - 1].door && Math.abs(b.x - b.wp[b.wi - 1].door.x) < 1.3){ b.dw = (b.dw || 0) + dt; if (b.dw > 0.9){ b.dw = 0; const W2 = b.wp[b.wi - 1].door, cand = W2.row.filter(d=>Math.abs(d.z - next.z) > 0.2); const d = cand.find(d=>!d.fake && Math.random() < 0.7) || cand[Math.floor(Math.random()*cand.length)]; b.wp[b.wi - 1].z = d.z; next.z = d.z; b.wi--; } } else b.dw = 0;
+        // 밀어내는 벽이 가까우면 지나갈 때까지 기다린다
+        for (const q of pushers){ if (b.x > q.x - 3 && b.x < q.x - 1.1 && Math.abs(pz(q, el) - b.z) < 3.6) return { mx:0, mz:0 }; }
+        let s = seek(b, next.x, next.z, 0.2);
+        if (next.jumpAt != null && b.x > next.jumpAt && b.grounded) s.jump = true;
+        if (next.spin){ const rx = b.x - SC, rz = b.z - AZ, my = Math.atan2(-rz, rx), th = bang(el); let diff = ((my - th) % (Math.PI*2) + Math.PI*2) % (Math.PI*2); if (diff/2.3 < 0.18 + (b.skill || 0.05) && diff/2.3 > 0.02 && Math.hypot(rx, rz) > 1) s.jump = true; }
+        return s; },
+    };
+    return A; } };
+
 const GAME_IDS = Object.keys(MG).filter(id=>!MG[id].finale);
 function seek(b, x, z, stop){ const dx = x - b.x, dz = z - b.z, d = Math.hypot(dx, dz); if (d < (stop || 0.3)) return { mx:0, mz:0 }; return { mx:dx/d, mz:dz/d }; }
 let myCoins = 0;
@@ -750,7 +970,10 @@ function hostOut(id){ if (!H || H.ph !== 'play' || !H.alive[id]) return; delete 
 function hostCoin(id, i){ const c = arena && arena.list ? arena.list[i] : null; if (!c) return; H.x.cg = H.x.cg || {}; H.x.cc = H.x.cc || {}; if (H.x.cg[i] != null) return; H.x.cg[i] = id; H.x.cc[id] = (H.x.cc[id] || 0) + c.v; }
 function hostFinishGame(){
   const def = MG[H.game], groups = [];
-  if (!def.elim){ const cc = H.x.cc || {}; const sorted = H.parts.slice().sort((a,b)=>(cc[b]||0) - (cc[a]||0)); let last = null; sorted.forEach(id=>{ const v = cc[id] || 0; if (last && last.v === v) last.ids.push(id); else { last = { v, ids:[id] }; groups.push(last); } }); }
+  if (def.race){ const fin = H.x.fin || {}; H.parts.filter(id=>fin[id] != null).sort((a,b)=>fin[a] - fin[b]).forEach(id=>groups.push({ ids:[id], v:(fin[id]/1000).toFixed(1) + '초' }));
+    const rest = H.parts.filter(id=>H.alive[id] && fin[id] == null); if (rest.length) groups.push({ ids:rest }); H.out.slice().reverse().forEach(id=>{ if (fin[id] == null) groups.push({ ids:[id] }); });
+    H.parts.forEach(id=>{ if (!groups.some(g=>g.ids.includes(id))) groups.push({ ids:[id] }); }); }
+  else if (!def.elim){ const cc = H.x.cc || {}; const sorted = H.parts.slice().sort((a,b)=>(cc[b]||0) - (cc[a]||0)); let last = null; sorted.forEach(id=>{ const v = cc[id] || 0; if (last && last.v === v) last.ids.push(id); else { last = { v, ids:[id] }; groups.push(last); } }); }
   else { const surv = H.parts.filter(id=>H.alive[id]); if (surv.length) groups.push({ ids:surv }); H.out.slice().reverse().forEach(id=>groups.push({ ids:[id] })); H.parts.forEach(id=>{ if (!groups.some(g=>g.ids.includes(id))) groups.push({ ids:[id] }); }); }
   H.rank = []; let place = 1; const mul = (H.gi === H.list.length - 1) ? 2 : 1; groups.forEach(g=>{ const pts = (PTS[place - 1] || 1)*mul; g.ids.forEach(id=>{ H.rank.push([id, place, pts, g.v === undefined ? null : g.v]); H.scores[id] = (H.scores[id] || 0) + pts; }); place += g.ids.length; });
   setPh('result');
@@ -767,7 +990,10 @@ function hostTick(dt){
     if (arena && arena.host) arena.host(dt, el);
     botsTick(dt, el);
     const alive = H.parts.filter(id=>H.alive[id]).length;
-    if (el > def.dur || (def.elim && (H.parts.length > 1 ? alive <= 1 : alive === 0))) hostFinishGame();
+    let end = el > def.dur || (arena && arena.over && arena.over(el));
+    if (def.race){ const fin = H.x.fin || {}, left = H.parts.filter(id=>H.alive[id] && fin[id] == null).length; if (!left || (H.x.ff != null && el*1000 > H.x.ff + 25000)) end = true; }
+    else if (def.elim && (H.parts.length > 1 ? alive <= 1 : alive === 0)) end = true;
+    if (end) hostFinishGame();
   } else if (H.ph === 'result'){ if (el*1000 > RESULT_MS){ if (H.gi + 1 < H.list.length) hostStartGame(); else { const s = H.parts.slice().sort((a,b)=>(H.scores[b]||0) - (H.scores[a]||0)); H.top = s.slice(0, 3); setPh('podium'); } } }
   else if (H.ph === 'podium'){ if (el*1000 > PODIUM_MS){ const k = H.k; const keepBi = H.bi; H = newLobbyState(k); BS.clear(); } }
   const bots = {}; for (const b of BS.values()) bots[b.id] = [+b.x.toFixed(2), +b.y.toFixed(2), +b.z.toFixed(2), +(b.ry||0).toFixed(2), b.an|0]; H.bots = bots;
@@ -793,6 +1019,7 @@ function hostEvent(ev){ const by = ev.by;
   if (ev.k === 'out') hostOut(by);
   else if (ev.k === 'tf' && H && H.ph === 'play' && H.game === 'hexfall'){ const el = Math.round((sNow() - H.t0)); H.x.tf = H.x.tf || {}; (ev.l || []).forEach(i=>{ if (H.x.tf[i] == null) H.x.tf[i] = el; }); }
   else if (ev.k === 'coin' && H && H.ph === 'play' && H.game === 'coins') hostCoin(by, ev.i);
+  else if (ev.k === 'fin' && H && H.ph === 'play' && MG[H.game].race){ const p = posOf(by); if (p && arena && p.x > arena.FINX - 2) hostFin(by, (sNow() - H.t0)/1000); }
   else if (ev.k === 'punch' && H && H.ph === 'play'){ const b = BS.get(ev.t); if (b && H.alive[ev.t]) knock(b, ev.d[0], ev.d[1], 29, 14); }
 }
 // 봇 편치 → 사람 / 사람 펀치 → 나
@@ -852,7 +1079,7 @@ let toastT = null; function toast(t, col){ const e = $('toast'); e.textContent =
 function showRoundResult(G){
   const def = MG[G.game]; $('resT').textContent = def.icon + ' ' + def.name + ' 결과'; $('resS').textContent = 'GAME ' + (G.gi + 1) + ' / ' + G.list.length;
   const esc = s=>String(s).replace(/[<>&]/g,'');
-  $('resL').innerHTML = G.rank.slice(0, 8).map(([id, place, pts, v])=>'<div class="r' + (id === MY_ID ? ' me' : '') + '"><span><b>' + (place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : place + '위') + '</b> ' + esc(nameOf(id)) + (v != null ? ' · 🪙' + v : '') + '</span><span class="pt">+' + pts + '</span></div>').join('');
+  $('resL').innerHTML = G.rank.slice(0, 8).map(([id, place, pts, v])=>'<div class="r' + (id === MY_ID ? ' me' : '') + '"><span><b>' + (place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : place + '위') + '</b> ' + esc(nameOf(id)) + (v != null ? ' · ' + (def.unit || '🪙') + v : '') + '</span><span class="pt">+' + pts + '</span></div>').join('');
   $('result').classList.add('show');
   const mine = G.rank.find(r=>r[0] === MY_ID); if (mine && mine[1] === 1){ audio.sfx.win(); confetti(40); if (myActor) myActor.cheer = 2; }
 }
