@@ -755,8 +755,24 @@ document.addEventListener('visibilitychange', ()=>{ if (document.hidden && runni
 const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
 const NET = { on:false, uid:null, name:'', avatar:null, players:{}, seen:{}, ghosts:{}, sendT:0, fullT:0,
   // 같은 방에서 지금 달리고 있는 런이 있으면 그 씨앗, 없으면 새로
-  pickRun(){ let best = null; for (const u in NET.players){ const p = NET.players[u]; if (!freshP(u) || !p.run || !p.seed) continue; if (!best || (p.st || 0) > (best.st || 0)) best = p; }
+  // 가장 먼저 시작한 런(서버 시간 기준)으로 모인다 — 동시에 시작해도 결국 한 백화점으로 합쳐진다
+  pickRun(){ const best = earliestRun(); NET.runT = best ? best.st : sNow();
     return best ? { seed:best.seed, night:best.night, join:best.name || '친구' } : { seed:((Math.random()*0x7fffffff) | 1) }; } };
+const sNow = ()=>(window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
+function earliestRun(){ let best = null, bu = '';
+  for (const u in NET.players){ const p = NET.players[u]; if (!freshP(u) || !p.run || !p.seed || !p.st) continue;
+    if (!best || p.st < best.st || (p.st === best.st && u < bu)){ best = p; bu = u; } }
+  return best; }
+// 같이 눌렀는데 각자 다른 백화점이 만들어졌으면, 시작 30초 안에는 먼저 시작한 쪽으로 조용히 옮긴다(가진 물건은 그대로)
+function mergeRun(){
+  if (!NET.on || !running || P.dead || transit || !floor || floor.level !== 4 || sNow() - NET.runT > 30000) return;
+  const e = earliestRun(); if (!e || e.seed === runSeed || (e.lv && e.lv !== 4)) return;
+  if (!(e.st < NET.runT || (e.st === NET.runT && e.seed < runSeed))) return;
+  runSeed = e.seed; NET.runT = e.st;
+  if (e.night && NIGHTS[e.night] && e.night !== night){ night = e.night; nightSpeed = NIGHTS[night].spd; drain = NIGHTS[night].drain; }
+  const keep = { spare:P.spare, flares:P.flares, bat:P.bat }; loadFloor(4); Object.assign(P, keep); renderSlots();
+  msg('👥 ' + (e.name || '친구') + ' 의 백화점으로 합류했어 (NIGHT ' + night + ')', 3000);
+}
 const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
 function buildAv(loadout){
   let a = null; try { if (MP.buildAvatar) a = MP.buildAvatar(loadout || null); } catch(e){ a = null; }
@@ -790,13 +806,14 @@ function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; 
 })();
 function netSend(dt){
   if (!NET.on) return; NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .15; NET.fullT -= .15;
-  const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? Math.round(runStart) : 0,
+  const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? (NET.runT || 0) : 0,
     night, lv:floor ? floor.level : 0, dead:P.dead ? 1 : 0, won:winShown ? 1 : 0, lt:(P.lightOn && P.bat > 0) ? 1 : 0 };
   if (NET.fullT <= 0){ s.avatarLoadout = NET.avatar || null; NET.fullT = 3; }
   try { MP.update(s); } catch(e){}
 }
 function updateGhosts(dt){
   if (!NET.on) return;
+  NET.mergeT = (NET.mergeT || 0) - dt; if (NET.mergeT <= 0){ NET.mergeT = 1; mergeRun(); }
   let same = 0, lobby = 0;
   for (const u in NET.players){
     const p = NET.players[u]; let gh = NET.ghosts[u];

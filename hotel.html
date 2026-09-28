@@ -1046,8 +1046,24 @@ document.addEventListener('visibilitychange', ()=>{ if (document.hidden && runni
 const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
 const NET = { on:false, uid:null, name:'', avatar:null, players:{}, seen:{}, ghosts:{}, sendT:0, fullT:0,
   // 같은 방에서 지금 달리고 있는 런이 있으면 그 씨앗, 없으면 새로
-  pickSeed(){ let best = null; for (const u in NET.players){ const p = NET.players[u]; if (!freshP(u) || !p.run || !p.seed) continue; if (!best || (p.st || 0) > (best.st || 0)) best = p; }
-    return best ? best.seed : ((Math.random()*0x7fffffff) | 1); } };
+  // 가장 먼저 시작한 런(서버 시간 기준)으로 모인다 — 동시에 시작해도 결국 한 호텔로 합쳐진다
+  pickSeed(){ const best = earliestRun(); NET.runT = best ? best.st : sNow(); return best ? best.seed : ((Math.random()*0x7fffffff) | 1); } };
+const sNow = ()=>(window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
+function earliestRun(){ let best = null, bu = '';
+  for (const u in NET.players){ const p = NET.players[u]; if (!freshP(u) || !p.run || !p.seed || !p.st) continue;
+    if (!best || p.st < best.st || (p.st === best.st && u < bu)){ best = p; bu = u; } }
+  return best; }
+// 같이 눌렀는데 각자 다른 호텔이 만들어졌으면, 시작 30초 안에는 먼저 시작한 쪽 호텔로 조용히 옮긴다(가진 물건은 그대로)
+function mergeRun(){
+  if (!NET.on || !running || P.dead || P.room > 1 || sNow() - NET.runT > 30000) return;
+  const e = earliestRun(); if (!e || e.seed === runSeed || (e.room || 0) > 1) return;
+  if (!(e.st < NET.runT || (e.st === NET.runT && e.seed < runSeed))) return;
+  clearWorld(); runSeed = e.seed; NET.runT = e.st;
+  { const old = _rng; _rng = seeded(runSeed ^ 0x5eed); seekRooms = [rint(30, 38), rint(78, 88)]; _rng = old; } lastRush = -99; screechT = 8; giantAt = 0;
+  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, hidden:null, room:0, maxRoom:0 });
+  ensureRooms(2); $('door').textContent = 'DOOR 000'; setObj(); $('hide').classList.remove('on');
+  msg('👥 ' + (e.name || '친구') + ' 의 호텔로 합류했어', 3000);
+}
 const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
 function buildAv(loadout){
   let a = null; try { if (MP.buildAvatar) a = MP.buildAvatar(loadout || null); } catch(e){ a = null; }
@@ -1081,13 +1097,14 @@ function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; 
 })();
 function netSend(dt){
   if (!NET.on) return; NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .15; NET.fullT -= .15;
-  const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? Math.round(runStart) : 0,
+  const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? (NET.runT || 0) : 0,
     room:P.room || 0, dead:P.dead ? 1 : 0, hid:P.hidden ? 1 : 0, cr:P.crouch > .5 ? 1 : 0, lt:(P.light && P.light.type && P.light.on) ? 1 : 0 };
   if (NET.fullT <= 0){ s.avatarLoadout = NET.avatar || null; NET.fullT = 3; }
   try { MP.update(s); } catch(e){}
 }
 function updateGhosts(dt){
   if (!NET.on) return;
+  NET.mergeT = (NET.mergeT || 0) - dt; if (NET.mergeT <= 0){ NET.mergeT = 1; mergeRun(); }
   let same = 0, lobby = 0;
   for (const u in NET.players){
     const p = NET.players[u]; let gh = NET.ghosts[u];
