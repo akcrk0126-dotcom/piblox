@@ -92,7 +92,7 @@
   <button id="bUse" class="mb" type="button">✋</button>
 </div>
 <div id="startOv" class="ov show"><h1 class="vt">백룸</h1><p class="vt" id="startSub">화면을 눌러 들어가기</p>
-  <p class="vt" style="font-size:15px;opacity:.55;margin-top:18px">WASD 이동 · Shift 달리기 · F 손전등 · E 줍기/문 열기<br>출구를 찾아라. 그것이 보이면 눈을 떼지 마라.</p></div>
+  <p class="vt" style="font-size:15px;opacity:.55;margin-top:18px">WASD 이동 · Shift 달리기 · F 손전등 · E 줍기/문 열기<br>같은 방 사람들과 같은 미로에 떨어진다 · 출구를 찾아라. 그것이 보이면 눈을 떼지 마라.</p></div>
 <div id="pauseOv" class="ov"><h1 class="vt" style="font-size:40px">일시정지</h1><p class="vt">클릭해서 계속</p></div>
 <div id="deadOv" class="ov"><h1 class="vt">잡혔다</h1><p class="vt" id="deadSub"></p>
   <div class="row"><button class="btn" id="retryBtn" type="button">다시 들어가기</button><a class="btn ghost" href="hub.html">허브로</a></div></div>
@@ -132,7 +132,9 @@
       openZone:.04, dens:[.28,.55], doorP:.62, pillarP:0, hum:48, humVol:.04, exitD:16, stalk:2.9, chase:5.3, spawnT:[12,22], items:[.03,.045] },
   ];
   let L = LEVELS[0], lvIdx = 0, seed = 1;
-  const runSeed = (Date.now() & 0xffff) | 1;
+  // 같은 방 사람끼리 같은 미로를 걷도록, 미로 씨앗은 방 이름 + 날짜로 정한다(매일 바뀜)
+  const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
+  const runSeed = (()=>{ const k = URL_ROOM + ':' + Math.floor(Date.now() / 86400000); let h = 2166136261; for (let i=0;i<k.length;i++){ h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); } return (h & 0xffff) | 1; })();
 
   // 결정적 해시 → [0,1)
   function h3(a, b, c){
@@ -650,6 +652,7 @@
     let ds = 0;
     if (litHere < .2 && !player.flashOn) ds -= .55; else if (litHere > .45) ds += .5;
     if (watched) ds -= 3.2; if (ent.state === 'chase') ds -= 1.2;
+    if (nearMates > 0 && ds < 0) ds *= .5;   // 옆에 동료가 있으면 덜 무섭다
     player.sanity = clamp(player.sanity + ds*dt, 0, 100);
     // 엔티티
     updateEntity(dt); poseEntity(dt);
@@ -691,11 +694,81 @@
     canvas.style.filter = player.sanity < 40 ? `contrast(${1 + (40 - player.sanity)/80}) saturate(${1 - (40 - player.sanity)/80})` : '';
     setMeters();
     $('recT').textContent = fmtT(recT);
+    updateGhosts(dt); netSend(dt);
   }
   function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta(), .05); frame(dt); renderer.render(scene, camera); }
   // 로그인(익명 포함) + 허브 접속 표시 + 랭킹용
   const mpOn = !!(window.MP && MP.isConfigured && MP.isConfigured() && !window.__mpFail && window.firebase);
-  if (mpOn){ try { MP.initAuthOnly((user, err)=>{ if (!err && user) try { MP.setPresence('backrooms', null); } catch(e){} }); } catch(e){} }
+  // =====================================================================
+  //  멀티플레이 — 같은 방·같은 레벨에 있는 사람이 꾸민 아바타로 보인다
+  // =====================================================================
+  const NET = { on:false, uid:null, name:'', avatar:null, players:{}, seen:{}, ghosts:{}, sendT:0, fullT:0, lastLv:{} };
+  const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
+  function buildAv(loadout){
+    let a = null; try { if (MP.buildAvatar) a = MP.buildAvatar(loadout || null); } catch(e){ a = null; }
+    if (!a || !a.isObject3D){ a = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, .6), new THREE.MeshStandardMaterial({ color:0x6a8aff })); b.position.y = 1.5; a.add(b); }
+    const ms = a.children.filter(o=>o.isMesh), parts = {};
+    if (ms.length >= 6) ['legL','legR','torso','armL','armR','head'].forEach((k, i)=>{ const m = ms[i]; if (k === 'torso' || k === 'head') return;
+      m.geometry.computeBoundingBox(); const h = (m.geometry.boundingBox.max.y - m.geometry.boundingBox.min.y) * m.scale.y;
+      const piv = new THREE.Group(); piv.position.set(m.position.x, m.position.y + h/2, m.position.z); a.add(piv); m.position.set(0, -h/2, 0); piv.add(m); parts[k] = piv; });
+    const root = new THREE.Group(); a.scale.setScalar(.56); root.add(a); root.userData.parts = parts.legL ? parts : null; return root;
+  }
+  function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; c.height = 48; const g = c.getContext('2d'); g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.85)'; g.strokeText(String(t).slice(0, 12), 128, 24); g.fillStyle = '#fff3c8'; g.fillText(String(t).slice(0, 12), 128, 24);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(c), transparent:true, depthWrite:false, fog:false })); s.scale.set(1.3, .25, 1); s.position.y = 2.05; return s; }
+  function startNet(){
+    if (!mpOn) return;
+    try {
+      MP.onPlayersUpdate(val=>{
+        const t = performance.now();
+        for (const u in val){ const p = val[u]; if (!p || u === NET.uid) continue; const old = NET.players[u]; if (!old || old.ts !== p.ts) NET.seen[u] = t;
+          // 같은 레벨 사람이 다음 레벨로 넘어가면 알려준다
+          if (old && old.lv === lvIdx && p.lv > lvIdx && state === 'play') say((p.name || '누군가') + ' 이(가) 출구를 찾아 나갔다', 2.6);
+          NET.players[u] = p; }
+        for (const u in NET.players) if (!val[u]) delete NET.players[u];
+      });
+      MP.init('backrooms_' + URL_ROOM, (uid, err)=>{
+        if (err || !uid) return;
+        NET.on = true; NET.uid = uid; NET.name = (MP.getDisplayName && MP.getDisplayName()) || '방랑자';
+        NET.avatar = (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null;
+        if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l){ NET.avatar = l; NET.fullT = 0; } });
+        try { MP.setPresence('backrooms', URL_ROOM); } catch(e){}
+      });
+    } catch(e){}
+  }
+  function netSend(dt){
+    if (!NET.on) return; NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .15; NET.fullT -= .15;
+    const s = { name:NET.name, x:+player.x.toFixed(2), y:0, z:+player.z.toFixed(2), ry:+player.yaw.toFixed(2), lv:lvIdx, fl:player.flashOn ? 1 : 0, dead:(state === 'dead' || state === 'dying') ? 1 : 0 };
+    if (NET.fullT <= 0){ s.avatarLoadout = NET.avatar || null; NET.fullT = 3; }
+    try { MP.update(s); } catch(e){}
+  }
+  let nearMates = 0;
+  function updateGhosts(dt){
+    if (!NET.on) return;
+    let here = 0, total = 0; nearMates = 0;
+    for (const u in NET.players){
+      const p = NET.players[u]; let gh = NET.ghosts[u];
+      if (!gh){ gh = { root:new THREE.Group(), av:null, key:'', tag:null, tagName:'', ry:0, walk:0, light:new THREE.SpotLight(0xfff1d0, 0, 18, .5, .5, 1.4), tgt:new THREE.Object3D() };
+        gh.light.position.set(.25, 1.45, .2); gh.tgt.position.set(.2, 1.1, 5); gh.root.add(gh.light); gh.root.add(gh.tgt); gh.light.target = gh.tgt;
+        gh.root.position.set(p.x || 0, 0, p.z || 0); scene.add(gh.root); NET.ghosts[u] = gh; }
+      const alive = freshP(u); if (alive) total++;
+      const vis = alive && p.lv === lvIdx && !p.dead; gh.root.visible = vis; gh.light.intensity = vis && p.fl ? 1.8 : 0;
+      if (!vis) continue; here++;
+      const key = JSON.stringify(p.avatarLoadout || null);
+      if (key !== gh.key && (p.avatarLoadout || !gh.av)){ if (gh.av) gh.root.remove(gh.av); gh.av = buildAv(p.avatarLoadout); gh.root.add(gh.av); gh.key = key; }
+      const nm = p.name || '방랑자'; if (nm !== gh.tagName){ if (gh.tag) gh.root.remove(gh.tag); gh.tag = nameTag(nm); gh.root.add(gh.tag); gh.tagName = nm; }
+      const bx = gh.root.position.x, bz = gh.root.position.z, tx = p.x || 0, tz = p.z || 0;
+      if (Math.hypot(tx - bx, tz - bz) > 12) gh.root.position.set(tx, 0, tz); else { const k = 1 - Math.exp(-10*dt); gh.root.position.x += (tx - bx)*k; gh.root.position.z += (tz - bz)*k; }
+      const want = (p.ry || 0) + Math.PI; let dr = want - gh.ry; while (dr > Math.PI) dr -= Math.PI*2; while (dr < -Math.PI) dr += Math.PI*2; gh.ry += dr*Math.min(1, dt*10); gh.root.rotation.y = gh.ry;
+      const sp = Math.hypot(gh.root.position.x - bx, gh.root.position.z - bz) / Math.max(dt, 1e-3);
+      gh.walk += dt * (sp > .3 ? sp * 2.4 : 0);
+      const P = gh.av && gh.av.userData.parts; if (P){ const sw = sp > .3 ? Math.sin(gh.walk) * .7 : 0; P.legL.rotation.x = sw; P.legR.rotation.x = -sw; P.armL.rotation.x = -sw*.8; P.armR.rotation.x = p.fl ? -1.3 : sw*.8; }
+      if (Math.hypot(gh.root.position.x - player.x, gh.root.position.z - player.z) < 7) nearMates++;
+    }
+    for (const u in NET.ghosts) if (!NET.players[u]){ scene.remove(NET.ghosts[u].root); delete NET.ghosts[u]; }
+    $('recD').textContent = 'MP ' + (here + 1) + '/' + (total + 1);
+  }
+  startNet();
   // 저장된 레벨부터 이어하기
   let startN = 0; try { startN = clamp(parseInt(localStorage.getItem(SAVE)||'0',10)||0, 0, LEVELS.length-1); } catch(e){}
   if (startN > 0) $('startSub').textContent = LEVELS[startN].name + ' 부터 이어서 · 화면을 눌러 들어가기';
@@ -703,7 +776,7 @@
   $('msg').style.opacity = 0;
   loop();
   // 테스트용
-  window.__BR = { player, ent, get state(){ return state; }, set state(v){ state = v; }, frame, edge, bfs, get exitCell(){ return exitCell; }, get field(){ return field; }, cellWalls, startLevel, chunks, tryExit, caught, los, get lvIdx(){ return lvIdx; }, get exitObj(){ return exitObj; } };
+  window.__BR = { NET, player, ent, get state(){ return state; }, set state(v){ state = v; }, frame, edge, bfs, get exitCell(){ return exitCell; }, get field(){ return field; }, cellWalls, startLevel, chunks, tryExit, caught, los, get lvIdx(){ return lvIdx; }, get exitObj(){ return exitObj; } };
 })();
 </script>
 <script>
