@@ -205,11 +205,20 @@ const AVATAR_FACES = [
   { id:'face_blank',  name:'무표정',   icon:'😐' },
   { id:'face_ditto',  name:'메타몽',   icon:'🫠', secret:'ditto' }
 ];
-const faceTexCache = {};
+const faceTexCache = {}, faceCanvasCache = {};
 function mpFaceTexture(faceId, skinHex){
   const key = faceId + '|' + skinHex;
   if (faceTexCache[key]) return faceTexCache[key];
   const T = window.THREE;
+  const tex = new T.CanvasTexture(mpFaceCanvas(faceId, skinHex));
+  if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
+  faceTexCache[key] = tex;
+  return tex;
+}
+// 얼굴 그림(캔버스) — 3D 머리 텍스처와 프로필 얼굴 사진이 같은 그림을 쓴다
+function mpFaceCanvas(faceId, skinHex){
+  const key = faceId + '|' + skinHex;
+  if (faceCanvasCache[key]) return faceCanvasCache[key];
   const c = document.createElement('canvas'); c.width = 128; c.height = 128;
   const x = c.getContext('2d');
   x.fillStyle = '#' + skinHex.toString(16).padStart(6,'0');
@@ -282,10 +291,45 @@ function mpFaceTexture(faceId, skinHex){
       eye(44,52,9); eye(84,52,9);
       arc(64,70,18,0.15*Math.PI,0.85*Math.PI);
   }
-  const tex = new T.CanvasTexture(c);
-  if (T.SRGBColorSpace) tex.colorSpace = T.SRGBColorSpace;
-  faceTexCache[key] = tex;
-  return tex;
+  faceCanvasCache[key] = c;
+  return c;
+}
+// 프로필용 아바타 얼굴 사진 (이모지 대신) — 로드아웃으로 머리+얼굴+모자+장신구+어깨를 그려 dataURL로 돌려준다
+const headshotCache = {};
+function mpHeadshot(loadout){
+  const lo = Object.assign(mpDefaultLoadout(), loadout || {});
+  const key = [lo.face, lo.skin, lo.shirt, lo.head, lo.acc].join('|');
+  if (headshotCache[key]) return headshotCache[key];
+  const hex = n => '#' + (n >>> 0).toString(16).padStart(6, '0');
+  const skin = mpPaletteColor('skin', lo.skin), shirt = mpPaletteColor('shirt', lo.shirt);
+  const item = id => id ? AVATAR_CATALOG.find(i => i.id === id) : null;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  const rr = (X, Y, W, H, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + W, Y, X + W, Y + H, r); x.arcTo(X + W, Y + H, X, Y + H, r); x.arcTo(X, Y + H, X, Y, r); x.arcTo(X, Y, X + W, Y, r); x.closePath(); };
+  // 배경
+  const bg = x.createLinearGradient(0, 0, 0, 128); bg.addColorStop(0, '#3a4046'); bg.addColorStop(1, '#1f2327'); x.fillStyle = bg; x.fillRect(0, 0, 128, 128);
+  // 어깨(셔츠) + 목
+  x.fillStyle = hex(shirt); rr(8, 104, 112, 40, 16); x.fill();
+  x.fillStyle = hex(skin); x.fillRect(54, 94, 20, 14);
+  // 머리 + 얼굴
+  x.save(); rr(26, 24, 76, 74, 16); x.clip(); x.drawImage(mpFaceCanvas(lo.face, skin), 26, 22, 76, 78);
+  const g = x.createLinearGradient(0, 24, 0, 98); g.addColorStop(0, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(0,0,0,.18)'); x.fillStyle = g; x.fillRect(26, 24, 76, 74); x.restore();
+  x.strokeStyle = 'rgba(0,0,0,.35)'; x.lineWidth = 2; rr(26, 24, 76, 74, 16); x.stroke();
+  // 장신구
+  const acc = item(lo.acc);
+  if (acc){ const col = hex(acc.color || 0x222222);
+    if (acc.id === 'sunglasses'){ x.fillStyle = '#111'; rr(32, 46, 28, 16, 5); x.fill(); rr(68, 46, 28, 16, 5); x.fill(); x.fillRect(58, 50, 12, 4); }
+    else if (acc.id === 'glasses'){ x.strokeStyle = '#222'; x.lineWidth = 3; rr(33, 45, 26, 18, 6); x.stroke(); rr(69, 45, 26, 18, 6); x.stroke(); x.beginPath(); x.moveTo(59, 52); x.lineTo(69, 52); x.stroke(); }
+    else if (acc.id === 'mask'){ x.fillStyle = '#eee'; rr(36, 66, 56, 26, 8); x.fill(); x.strokeStyle = '#ccc'; x.lineWidth = 2; x.beginPath(); x.moveTo(40, 76); x.lineTo(88, 76); x.stroke(); }
+    else if (acc.id === 'headphones'){ x.strokeStyle = '#333'; x.lineWidth = 6; x.beginPath(); x.arc(64, 60, 44, Math.PI*1.05, Math.PI*1.95); x.stroke(); x.fillStyle = col; rr(14, 50, 16, 26, 6); x.fill(); rr(98, 50, 16, 26, 6); x.fill(); }
+    else { x.font = '26px serif'; x.textAlign = 'center'; x.fillText(acc.icon || '', 100, 40); } }
+  // 모자
+  const hat = item(lo.head);
+  if (hat){ const col = hex(hat.color || 0x888888);
+    if (hat.id === 'crown'){ x.fillStyle = col; x.beginPath(); x.moveTo(34, 30); x.lineTo(34, 8); x.lineTo(47, 20); x.lineTo(64, 4); x.lineTo(81, 20); x.lineTo(94, 8); x.lineTo(94, 30); x.closePath(); x.fill(); x.fillStyle = '#e0303a'; x.beginPath(); x.arc(64, 22, 4, 0, 7); x.fill(); }
+    else if (hat.id === 'wizardhat'){ x.fillStyle = col; x.beginPath(); x.moveTo(22, 32); x.lineTo(106, 32); x.lineTo(72, 0); x.closePath(); x.fill(); x.fillStyle = '#ffd84a'; x.font = '14px serif'; x.fillText('★', 62, 24); }
+    else if (hat.id === 'catears'){ x.fillStyle = col; for (const sx of [-1, 1]){ x.beginPath(); x.moveTo(64 + sx*14, 28); x.lineTo(64 + sx*36, 28); x.lineTo(64 + sx*32, 4); x.closePath(); x.fill(); } }
+    else { x.fillStyle = col; x.beginPath(); x.ellipse(64, 30, 42, 20, 0, Math.PI, 0); x.fill(); x.fillRect(22, 28, 84, 8); } }
+  const url = c.toDataURL('image/png'); headshotCache[key] = url; return url;
 }
 const AVATAR_STUD = 0.62;
 
@@ -755,6 +799,7 @@ const MP = (function () {
     if (!n) { cb && cb(false); return; }
     n = n.trim().slice(0, 12);
     if (!n) { cb && cb(false); return; }
+    const prevName = getDisplayName();
     localStorage.setItem('mp_nickname', n);
     // 로그인 프로필에도 반영(다른 기기에서도 같은 표시 이름이 보이도록)
     if (auth && auth.currentUser) { try { auth.currentUser.updateProfile({ displayName: n }); } catch (e) {} }
@@ -762,8 +807,12 @@ const MP = (function () {
     if (myRef) { try { myRef.update({ name: n }); } catch (e) {} }
     // DB의 검색용 필드까지 갱신해야 바뀐 이름으로도 친구 검색이 된다
     if (isConfigured() && db && uid) {
-      db.ref(`${MP_ROOT}/users/${uid}`).update({
-        displayName: n, displayNameLower: n.toLowerCase()
+      const uref = db.ref(`${MP_ROOT}/users/${uid}`);
+      // 바꾸기 전 이름은 프로필에 "이전 이름"으로 남긴다 (최근 5개)
+      uref.child('nameHistory').once('value').then(hs => {
+        let h = hs.val(); h = Array.isArray(h) ? h : [];
+        if (prevName && prevName !== n) h = [prevName].concat(h.filter(v => v !== prevName && v !== n)).slice(0, 5);
+        return uref.update({ displayName: n, displayNameLower: n.toLowerCase(), nameHistory: h });
       }).then(() => cb && cb(true)).catch(() => cb && cb(false));
     } else cb && cb(true);
   }
@@ -1261,6 +1310,10 @@ const MP = (function () {
     });
     // 허브는 50초 넘게 갱신 없는 접속을 지운다 → 게임 안에 있는 동안 계속 살아있다고 알린다 (숨겨진 탭은 안 보냄)
     presenceGame = game || null; presenceRoom = room || null;
+    if (game && !playCounted[game]) {
+      playCounted[game] = true;
+      try { db.ref(`${MP_ROOT}/users/${uid}/plays/${game}`).transaction(v => (typeof v === 'number' ? v : 0) + 1); } catch (e) {}
+    }
     if (!presenceBeat) {
       presenceBeat = setInterval(() => {
         if (!presenceRef || document.hidden) return;
@@ -1271,7 +1324,7 @@ const MP = (function () {
       });
     }
   }
-  let presenceBeat = null, presenceGame = null, presenceRoom = null;
+  let presenceBeat = null, presenceGame = null, presenceRoom = null; const playCounted = {};
 
   // ---------- 유저 검색 (닉네임/아이디로 친구 찾기) ----------
   // 계정 이름(nicknameLower)과 표시 이름(displayNameLower) 양쪽으로 검색해서 합친다.
@@ -1291,18 +1344,123 @@ const MP = (function () {
     }).catch(err => { console.error('[MP] 유저 검색 실패', err); cb && cb([]); });
   }
 
-  // ---------- 친구 / 팔로우 ----------
-  function addFriend(targetUid, targetName, type, cb) {
-    if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
-    db.ref(`${MP_ROOT}/friends/${uid}/${targetUid}`).set({
-      name: targetName || '친구', type: type || 'friend',
-      ts: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => cb && cb(true)).catch(() => cb && cb(false));
+  // ---------- 친구 (요청 → 상대가 수락해야 친구) ----------
+  // friends/{uid} 는 본인만 쓸 수 있어서 상대 목록에 직접 넣을 수 없다.
+  // 그래서 사람마다 "우편함"(rooms/fr_{uid}/players)을 두고, 보내는 사람은 그 우편함의 자기 칸에만 쓴다.
+  //   k: 'req' 요청 · 'acc' 수락 · 'dec' 거절 · 'unf' 친구 끊기   (칸 하나라 마지막 상태만 남는다)
+  // 내 friends/{uid}/{상대} 의 type: 'pending'(보냄) · 'friend' · 'declined'(거절함)
+  const TS = () => firebase.database.ServerValue.TIMESTAMP;
+  const mpOn = () => isConfigured() && db && uid;
+  function mail(target, k) {
+    return db.ref(`${MP_ROOT}/rooms/fr_${target}/players/${uid}`).set({ k, name: getDisplayName(), ts: TS() });
   }
-  function removeFriend(targetUid, cb) {
-    if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
-    db.ref(`${MP_ROOT}/friends/${uid}/${targetUid}`).remove()
+  function setFriendEntry(fid, name, type) {
+    return db.ref(`${MP_ROOT}/friends/${uid}/${fid}`).set({ name: name || '친구', type, ts: TS() });
+  }
+  let myFriendsCache = {}, inboxCache = {}, inboxRef = null, onReqCb = null, inboxReady = false;
+  const ackSent = {};
+  function friendState(fid) {
+    const mine = myFriendsCache[fid];
+    if (mine && (mine.type === 'friend' || mine.type === 'follow')) return 'friend';
+    if (mine && mine.type === 'pending') return 'pending';
+    if (incomingList().some(r => r.uid === fid)) return 'incoming';
+    return null;
+  }
+  function incomingList() {
+    const out = [];
+    Object.keys(inboxCache).forEach(from => {
+      const m = inboxCache[from], mine = myFriendsCache[from];
+      if (!m || m.k !== 'req' || from === uid) return;
+      if (mine && (mine.type === 'friend' || mine.type === 'follow' || mine.type === 'pending')) return;
+      if (mine && mine.type === 'declined' && (mine.ts || 0) >= (m.ts || 0)) return;
+      out.push({ uid: from, name: m.name || '누군가', ts: m.ts || 0 });
+    });
+    return out.sort((a, b) => b.ts - a.ts);
+  }
+  // 우편함과 내 친구 목록을 맞춰 본다 (수락/거절/끊기 반영, 서로 동시에 요청하면 바로 친구)
+  function processInbox() {
+    if (!mpOn() || !inboxReady) return;
+    Object.keys(inboxCache).forEach(from => {
+      const m = inboxCache[from], mine = myFriendsCache[from]; if (!m || from === uid) return;
+      const newer = !mine || (mine.ts || 0) < (m.ts || 0);
+      if (m.k === 'req') {
+        if (mine && mine.type === 'pending') { setFriendEntry(from, m.name || mine.name, 'friend').catch(() => {}); mail(from, 'acc').catch(() => {}); }
+        // 예전 방식(한쪽만 추가)으로 이미 친구로 넣어둔 사람이 요청하면 수락으로 답해 준다
+        else if (mine && (mine.type === 'friend' || mine.type === 'follow') && newer && !ackSent[from]) { ackSent[from] = true; mail(from, 'acc').catch(() => {}); }
+      } else if (m.k === 'acc') {
+        if (mine && mine.type === 'pending') setFriendEntry(from, m.name || mine.name, 'friend').catch(() => {});
+      } else if (m.k === 'dec' || m.k === 'unf') {
+        if (mine && mine.type !== 'declined' && newer) db.ref(`${MP_ROOT}/friends/${uid}/${from}`).remove().catch(() => {});
+      }
+    });
+    if (onReqCb) onReqCb(incomingList());
+  }
+  function startInbox() {
+    if (!mpOn() || (inboxRef && inboxRef.key === 'players' && inboxRef.__uid === uid)) return;
+    if (inboxRef) inboxRef.off();
+    inboxRef = db.ref(`${MP_ROOT}/rooms/fr_${uid}/players`); inboxRef.__uid = uid;
+    inboxRef.on('value', snap => { inboxCache = snap.val() || {}; inboxReady = true; processInbox(); },
+      err => console.error('[MP] 친구 요청함 조회 실패:', err && err.code || err));
+  }
+  function onFriendRequests(cb) { onReqCb = cb; startInbox(); cb && cb(incomingList()); }
+  function sendFriendRequest(target, name, cb) {
+    if (!mpOn() || !target || target === uid) { cb && cb(false); return; }
+    if (friendState(target) === 'incoming') { acceptFriend(target, name, cb); return; }
+    Promise.all([setFriendEntry(target, name, 'pending'), mail(target, 'req')])
       .then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+  function acceptFriend(from, name, cb) {
+    if (!mpOn()) { cb && cb(false); return; }
+    const m = inboxCache[from];
+    Promise.all([setFriendEntry(from, name || (m && m.name), 'friend'), mail(from, 'acc')])
+      .then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+  function declineFriend(from, cb) {
+    if (!mpOn()) { cb && cb(false); return; }
+    const m = inboxCache[from];
+    Promise.all([setFriendEntry(from, m && m.name, 'declined'), mail(from, 'dec')])
+      .then(() => { if (onReqCb) onReqCb(incomingList()); cb && cb(true); }).catch(() => cb && cb(false));
+  }
+  // 예전 코드 호환: 이제 "추가"는 곧 "요청 보내기"
+  function addFriend(targetUid, targetName, type, cb) { sendFriendRequest(targetUid, targetName, cb); }
+  function removeFriend(targetUid, cb) {
+    if (!mpOn()) { cb && cb(false); return; }
+    Promise.all([db.ref(`${MP_ROOT}/friends/${uid}/${targetUid}`).remove(), mail(targetUid, 'unf')])
+      .then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+
+  // ---------- 프로필 (아바타 · 이름 · 이전 이름 · 좋아하는 게임 · 많이 한 게임) ----------
+  function getFavGames() { try { const a = JSON.parse(localStorage.getItem('mp_fav_games') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function setFavGames(list, cb) {
+    list = (list || []).filter(x => typeof x === 'string').slice(0, 5);
+    try { localStorage.setItem('mp_fav_games', JSON.stringify(list)); } catch (e) {}
+    if (!mpOn()) { cb && cb(false); return; }
+    db.ref(`${MP_ROOT}/users/${uid}/favGames`).set(list).then(() => cb && cb(true)).catch(() => cb && cb(false));
+  }
+  function fetchFavGames(cb) {
+    if (!mpOn()) { cb && cb(getFavGames()); return; }
+    db.ref(`${MP_ROOT}/users/${uid}/favGames`).once('value').then(s => {
+      const v = s.val(); if (Array.isArray(v)) { try { localStorage.setItem('mp_fav_games', JSON.stringify(v)); } catch (e) {} cb && cb(v); }
+      else { const loc = getFavGames(); if (loc.length) setFavGames(loc); cb && cb(loc); }
+    }).catch(() => cb && cb(getFavGames()));
+  }
+  function fetchProfile(pid, cb) {
+    if (!isConfigured() || !db || !pid) { cb && cb(null); return; }
+    db.ref(`${MP_ROOT}/users/${pid}`).once('value').then(s => {
+      const u = s.val() || {};
+      const plays = u.plays || {};
+      cb && cb({
+        uid: pid,
+        displayName: u.displayName || u.nickname || '이름없음',
+        accountName: u.nickname || null,
+        nameHistory: Array.isArray(u.nameHistory) ? u.nameHistory : [],
+        avatarLoadout: u.avatarLoadout || null,
+        favGames: Array.isArray(u.favGames) ? u.favGames : [],
+        topPlayed: Object.keys(plays).sort((a, b) => plays[b] - plays[a]).slice(0, 3).map(g => ({ game: g, count: plays[g] })),
+        level: (typeof u.level === 'number') ? u.level : (typeof u.xp === 'number' ? levelFromXP(u.xp).level : null),
+        createdAt: u.createdAt || null
+      });
+    }).catch(err => { console.error('[MP] 프로필 조회 실패', err && err.code || err); cb && cb(null); });
   }
 
   let friendsListRef = null;
@@ -1313,8 +1471,12 @@ const MP = (function () {
     if (!isConfigured() || !db || !uid) { cb && cb([]); return; }
     if (friendsListRef) friendsListRef.off();
     friendsListRef = db.ref(`${MP_ROOT}/friends/${uid}`);
+    startInbox();
     friendsListRef.on('value', snap => {
-      const friends = snap.val() || {};
+      const all = snap.val() || {};
+      myFriendsCache = all; processInbox();
+      // 목록에는 서로 수락한 친구만 (보낸 요청·거절은 안 보임)
+      const friends = {}; Object.keys(all).forEach(k => { const t = all[k] && all[k].type; if (t === 'friend' || t === 'follow') friends[k] = all[k]; });
       const fUids = Object.keys(friends);
       Object.keys(friendPresenceRefs).forEach(fid => {
         if (!fUids.includes(fid)) { friendPresenceRefs[fid].off(); delete friendPresenceRefs[fid]; }
@@ -1338,6 +1500,7 @@ const MP = (function () {
           if (result[fid]) {
             result[fid].nickname = uData.displayName || uData.nickname || friends[fid].name || '친구';
             result[fid].accountName = uData.nickname || null;
+            result[fid].avatar = uData.avatarLoadout || null;
             result[fid].level = (typeof uData.level === 'number') ? uData.level
                               : (typeof uData.xp === 'number' ? levelFromXP(uData.xp).level : null);
           }
@@ -1404,6 +1567,16 @@ const MP = (function () {
     searchUsers,
     addFriend,
     removeFriend,
+    sendFriendRequest,
+    acceptFriend,
+    declineFriend,
+    onFriendRequests,
+    friendState,
+    fetchProfile,
+    getFavGames,
+    setFavGames,
+    fetchFavGames,
+    headshot: mpHeadshot,
     onFriendsUpdate,
     setAvatarLoadout,
     getLocalAvatarLoadout,
