@@ -520,6 +520,28 @@
   .personBtn { flex:1; height:44px; border:none; border-radius:10px; background:var(--bg-hover); color:#fff;
     font-weight:800; font-size:13px; cursor:pointer; font-family:inherit; }
   .personBtn:disabled { opacity:.5; cursor:default; }
+  .personBtn.go { background:var(--accent-green); color:#0a0f0d; }
+  .personBtn.warn { background:transparent; border:1px solid var(--divider); color:var(--text-secondary); }
+  /* 아바타 얼굴 사진 */
+  .hs { width:100%; height:100%; display:block; object-fit:cover; border-radius:inherit; image-rendering:auto; }
+  .friendCircle, .fsAvatar, #personAvatar, #profAvatarDot, #avatarBtn { overflow:hidden; padding:0; }
+  /* 친구 요청 */
+  .reqCircle { width:56px; height:56px; border-radius:6px 14px 6px 14px; background:rgba(255,196,60,.12); border:2px solid var(--accent-amber);
+    display:flex; align-items:center; justify-content:center; font-size:22px; position:relative; }
+  .reqBadge { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; border-radius:9px; background:#ff4d4d; color:#fff; font-size:10px; font-weight:900;
+    display:flex; align-items:center; justify-content:center; padding:0 4px; }
+  #bellBtn { position:relative; } #bellDot { position:absolute; top:4px; right:4px; min-width:14px; height:14px; border-radius:7px; background:#ff4d4d; color:#fff; font-size:9px; font-weight:900; display:none; align-items:center; justify-content:center; padding:0 3px; }
+  #reqOverlay { position:fixed; inset:0; z-index:74; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.78); }
+  .reqRow { display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid var(--divider); }
+  .reqRow .fsAvatar { width:44px; height:44px; border-radius:6px 12px 6px 12px; }
+  /* 프로필 정보 */
+  .pSec { text-align:left; margin:0 0 12px; }
+  .pSec h4 { font-size:10.5px; font-weight:900; letter-spacing:.08em; color:var(--text-secondary); margin:0 0 6px; }
+  .pChips { display:flex; flex-wrap:wrap; gap:6px; }
+  .pChip { font-size:11.5px; font-weight:800; padding:6px 10px; border-radius:14px; background:var(--bg-elevated); border:1px solid var(--divider); color:var(--text-primary); }
+  .pChip.dim { color:var(--text-disabled); font-weight:600; }
+  .pChip.pick { cursor:pointer; user-select:none; }
+  .pChip.pick.on { background:rgba(80,200,120,.16); border-color:var(--accent-green); color:var(--accent-green); }
 </style>
 </head>
 <body>
@@ -541,7 +563,7 @@
     <button class="iconBtn searchTrigger" id="searchOpenBtn" title="검색">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="white" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
-    <button class="iconBtn" title="알림">
+    <button class="iconBtn" id="bellBtn" title="친구 요청"><span id="bellDot"></span>
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3C9 3 7 5.2 7 8.4V12.5L5 16H19L17 12.5V8.4C17 5.2 15 3 12 3Z" stroke="white" stroke-width="2" stroke-linejoin="round"/><path d="M9.5 18.5C9.8 19.6 10.8 20.4 12 20.4C13.2 20.4 14.2 19.6 14.5 18.5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <button class="iconBtn" id="settingsOpenBtn" title="설정">
@@ -676,7 +698,9 @@
 
     <div style="font-size:11px;font-weight:800;color:var(--text-secondary);margin-bottom:6px;">표시 이름 (자유롭게 변경)</div>
     <input id="profDisplayInput" type="text" maxlength="12" placeholder="표시 이름" style="width:100%;height:42px;border-radius:10px;border:1px solid var(--divider);background:var(--bg-main);color:#fff;padding:0 12px;font-family:inherit;font-size:14px;margin-bottom:6px;">
-    <div style="font-size:10px;color:var(--text-disabled);margin-bottom:14px;line-height:1.5;">게임과 친구 목록에서 다른 사람에게 보이는 이름이에요.</div>
+    <div style="font-size:10px;color:var(--text-disabled);margin-bottom:14px;line-height:1.5;">게임과 친구 목록에서 다른 사람에게 보이는 이름이에요. 바꾸기 전 이름은 프로필에 "이전 이름"으로 남아요.</div>
+    <div style="font-size:11px;font-weight:800;color:var(--text-secondary);margin-bottom:6px;">⭐ 좋아하는 게임 (최대 5개 · 누르면 바로 저장)</div>
+    <div id="profFavPick" class="pChips" style="margin-bottom:16px;"></div>
 
     <div id="profMsg" style="font-size:12px;margin-bottom:10px;min-height:16px;"></div>
     <button id="profSaveBtn" type="button" style="width:100%;height:44px;border:none;border-radius:10px;background:var(--accent-blue);color:#fff;font-weight:800;font-size:14px;cursor:pointer;">표시 이름 저장</button>
@@ -716,14 +740,25 @@
   </div>
 </div>
 
+<div id="reqOverlay">
+  <div style="width:min(92vw,360px);max-height:80vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:20px;">
+    <div style="font-size:17px;font-weight:900;margin-bottom:4px;">📨 친구 요청</div>
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">수락하면 서로의 친구 목록에 생겨요.</div>
+    <div id="reqList"></div>
+    <button id="reqCloseBtn" type="button" style="width:100%;height:40px;margin-top:14px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">닫기</button>
+  </div>
+</div>
+
 <div id="personOverlay" style="position:fixed;inset:0;z-index:72;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);">
-  <div style="width:min(90vw,340px);background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:26px 22px;text-align:center;">
-    <div id="personAvatar" style="width:84px;height:84px;border-radius:6px 20px 6px 20px;margin:0 auto 14px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:38px;border:2px solid var(--divider);">🙂</div>
-    <div id="personName" style="font-size:19px;font-weight:900;color:#fff;margin-bottom:4px;">이름</div>
-    <div id="personStatus" style="font-size:12px;color:var(--text-secondary);margin-bottom:20px;">오프라인</div>
+  <div style="width:min(90vw,340px);max-height:88vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--divider);border-radius:18px;padding:26px 22px;text-align:center;">
+    <div id="personAvatar" style="width:96px;height:96px;border-radius:6px 20px 6px 20px;margin:0 auto 12px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:38px;border:2px solid var(--divider);">🙂</div>
+    <div id="personName" style="font-size:19px;font-weight:900;color:#fff;margin-bottom:2px;">이름</div>
+    <div id="personAcct" style="font-size:11px;color:var(--text-disabled);margin-bottom:4px;"></div>
+    <div id="personStatus" style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">오프라인</div>
+    <div id="personInfo"></div>
     <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button id="personFriendBtn" class="personBtn" type="button">친구추가</button>
-      <button id="personFollowBtn" class="personBtn" type="button">팔로우</button>
+      <button id="personFriendBtn" class="personBtn" type="button">친구 요청</button>
+      <button id="personFollowBtn" class="personBtn warn" type="button" style="display:none">거절</button>
     </div>
     <button id="personJoinBtn" type="button" style="display:none;width:100%;height:46px;border:none;border-radius:10px;background:var(--accent-green);color:#0a0f0d;font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px;">▶ 같은 체험 참가</button>
     <button id="personCloseBtn" type="button" style="width:100%;height:40px;border:none;border-radius:10px;background:var(--bg-hover);color:var(--text-secondary);font-weight:700;font-size:12px;cursor:pointer;">닫기</button>
@@ -1063,6 +1098,7 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L11 6M5 12L11 18" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <input id="fsSearchInput" type="text" placeholder="친구 닉네임으로 검색" autocomplete="off">
+    <button id="fsReqBtn" type="button" style="display:none;flex:none;height:34px;border:none;border-radius:17px;padding:0 12px;background:rgba(255,196,60,.15);color:var(--accent-amber);font-weight:900;font-size:12px;cursor:pointer;">📨 요청 <b id="fsReqN">0</b></button>
   </div>
   <div id="fsResults">
     <div id="fsHint">닉네임을 입력해서 친구를 찾아보세요.<br>이메일로 가입한 유저만 검색돼요.</div>
@@ -1705,8 +1741,23 @@
     document.getElementById('profAccountName').textContent =
       acct ? ('계정 이름 · ' + acct) : '접속하면 계정 이름이 만들어져요';
     document.getElementById('profMsg').textContent = '';
+    try { if (MP.getLocalAvatarLoadout) document.getElementById('profAvatarDot').innerHTML = headImg(MP.getLocalAvatarLoadout()); } catch(e){}
+    renderFavPick(MP.getFavGames ? MP.getFavGames() : []);
+    if (MP.fetchFavGames) MP.fetchFavGames(renderFavPick);
     refreshProfileAcct();
     profileOverlay.style.display = 'flex';
+  }
+  function renderFavPick(fav){
+    fav = (fav || []).slice(); const box = document.getElementById('profFavPick'); box.innerHTML = '';
+    Object.keys(GAMES).forEach(k=>{
+      const b = document.createElement('span'); b.className = 'pChip pick' + (fav.includes(k) ? ' on' : ''); b.textContent = (fav.includes(k) ? '⭐ ' : '') + GAMES[k].title;
+      b.addEventListener('click', ()=>{
+        const i = fav.indexOf(k);
+        if (i >= 0) fav.splice(i, 1); else { if (fav.length >= 5){ const m = document.getElementById('profMsg'); m.style.color = '#ff7a6b'; m.textContent = '좋아하는 게임은 5개까지 고를 수 있어요.'; return; } fav.push(k); }
+        MP.setFavGames(fav); renderFavPick(fav);
+      });
+      box.appendChild(b);
+    });
   }
   // 로그인 상태에 따라 프로필 창의 계정 영역을 갱신
   function refreshProfileAcct(){
@@ -2185,10 +2236,21 @@
   const friendsRow = document.getElementById('friendsRow');
   const GAME_LABEL = { stealit:'몽땅 훔쳐라!', hotel:'심야 호텔', gacha:'아우라 배틀', jump:'스카이 점프맵', forest:'포레스트 스트라이크', backrooms:'백룸', nightfall:'나이트폴', techobby:'레인보우 100 오비', protower:'고인물도 못깨는 타워', ambo:'암살자와 보안관', jamboree:'미니 잼버리', mannequin:'마네킹 백화점', fruit:'프루티 팝', isle:'바람의 섬' };
   let myFriendUids = {};
+  // 아바타 얼굴 사진 (이모지 대신)
+  function headImg(loadout){ try { if (window.MP && MP.headshot) return '<img class="hs" alt="" src="' + MP.headshot(loadout) + '">'; } catch(e){} return '🙂'; }
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  let lastFriends = [], lastFriendsErr = null, incomingReqs = [];
   function renderFriendsRow(friends, err){
+    lastFriends = friends || []; lastFriendsErr = err || null;
     myFriendUids = {};
     (friends||[]).forEach(f=> myFriendUids[f.uid] = true);
     friendsRow.querySelectorAll('.friendItem, .friendsErr').forEach(el=> el.remove());
+    // 받은 친구 요청 — 목록 맨 앞에
+    if (incomingReqs.length){
+      const it = document.createElement('div'); it.className = 'friendItem';
+      it.innerHTML = '<div class="friendCircleWrap"><div class="reqCircle">📨<span class="reqBadge">' + incomingReqs.length + '</span></div></div><div class="friendName" style="color:var(--accent-amber)">친구 요청</div>';
+      it.addEventListener('click', openRequests); friendsRow.appendChild(it);
+    }
     // 친구 목록을 못 불러온 경우 — 예전엔 그냥 조용히 아무도 안 뜨는 것처럼 보여서
     // "친구가 안 보인다"는 게 실제로는 로딩 실패인지 그냥 친구가 없는 건지 구분이 안 갔다.
     if (err){
@@ -2206,14 +2268,14 @@
       const gameLabel = f.online && f.game ? (GAME_LABEL[f.game] || '플레이 중') : (f.online ? '온라인' : '오프라인');
       item.innerHTML = `
         <div class="friendCircleWrap">
-          <div class="friendCircle ${f.online?'online':''}">🙂</div>
+          <div class="friendCircle ${f.online?'online':''}">${headImg(f.avatar)}</div>
           <div class="onlineDot ${f.online?'on':''}"></div>
         </div>
-        <div class="friendName">${f.nickname}</div>
+        <div class="friendName">${esc(f.nickname)}</div>
         ${f.level ? `<div class="friendGame" style="color:var(--accent-amber)">LV ${f.level}</div>` : ''}
         <div class="friendGame" style="${f.online?'':'color:var(--text-disabled);'}">${gameLabel}</div>
       `;
-      item.addEventListener('click', ()=> openPersonProfile({ uid:f.uid, name:f.nickname, online:!!f.online, game:f.game||null, room:f.room||null, level:f.level||null }));
+      item.addEventListener('click', ()=> openPersonProfile({ uid:f.uid, name:f.nickname, online:!!f.online, game:f.game||null, room:f.room||null, level:f.level||null, avatar:f.avatar||null }));
       friendsRow.appendChild(item);
     });
   }
@@ -2224,11 +2286,44 @@
         refreshAcctUI();
         MP.setPresence(null); // 허브 화면: 게임 없이 온라인 상태만
         MP.onFriendsUpdate(renderFriendsRow);
+        if (MP.onFriendRequests) MP.onFriendRequests(renderRequests);
+        refreshMyHead();
         if (!livePresenceOn && MP.onGamePresence){ livePresenceOn = true; MP.onGamePresence(renderLivePresence); }
         maybeShowNicknamePrompt();
       }
     });
   }
+
+  // ---------- 받은 친구 요청 ----------
+  const reqOverlay = document.getElementById('reqOverlay');
+  function renderRequests(list){
+    incomingReqs = list || [];
+    const n = incomingReqs.length, dot = document.getElementById('bellDot');
+    dot.style.display = n ? 'flex' : 'none'; dot.textContent = n > 9 ? '9+' : n;
+    const fb = document.getElementById('fsReqBtn'); fb.style.display = n ? 'block' : 'none'; document.getElementById('fsReqN').textContent = n;
+    renderFriendsRow(lastFriends, lastFriendsErr);
+    const box = document.getElementById('reqList');
+    if (!n){ box.innerHTML = '<div style="padding:24px 0;text-align:center;font-size:12px;color:var(--text-disabled);">받은 친구 요청이 없어요.</div>'; return; }
+    box.innerHTML = '';
+    incomingReqs.forEach(r=>{
+      const row = document.createElement('div'); row.className = 'reqRow';
+      row.innerHTML = '<div class="fsAvatar">🙂</div><div class="fsInfo" style="cursor:pointer"><div class="fsName">' + esc(r.name) + '</div><div style="font-size:10.5px;color:var(--text-disabled);">친구가 되고 싶어해요</div></div>'
+        + '<div class="fsBtns"><button class="fsBtn friend" data-a="acc">수락</button><button class="fsBtn added" data-a="dec">거절</button></div>';
+      if (window.MP && MP.fetchProfile) MP.fetchProfile(r.uid, pr=>{ if (pr) row.querySelector('.fsAvatar').innerHTML = headImg(pr.avatarLoadout); });
+      row.querySelector('.fsInfo').addEventListener('click', ()=> openPersonProfile({ uid:r.uid, name:r.name }));
+      row.querySelector('[data-a="acc"]').addEventListener('click', e=>{ e.target.disabled = true; MP.acceptFriend(r.uid, r.name, ok=>{ if (ok) row.querySelector('.fsBtns').innerHTML = '<span style="font-size:12px;font-weight:800;color:var(--accent-green)">친구가 됐어요!</span>'; }); });
+      row.querySelector('[data-a="dec"]').addEventListener('click', e=>{ e.target.disabled = true; MP.declineFriend(r.uid); });
+      box.appendChild(row);
+    });
+  }
+  function openRequests(){ renderRequests(incomingReqs); reqOverlay.style.display = 'flex'; }
+  document.getElementById('bellBtn').addEventListener('click', openRequests);
+  document.getElementById('fsReqBtn').addEventListener('click', openRequests);
+  document.getElementById('reqCloseBtn').addEventListener('click', ()=> reqOverlay.style.display = 'none');
+  reqOverlay.addEventListener('click', e=>{ if (e.target === reqOverlay) reqOverlay.style.display = 'none'; });
+  // 상단 내 아바타 버튼도 얼굴 사진으로
+  function refreshMyHead(){ try { if (window.MP && MP.getLocalAvatarLoadout) document.getElementById('avatarBtn').innerHTML = headImg(MP.getLocalAvatarLoadout()); } catch(e){} }
+  refreshMyHead();
 
   // ---------- 첫 방문 닉네임 설정 프롬프트 (플레이어0000 기본 이름 방지) ----------
   function maybeShowNicknamePrompt(){
@@ -2286,30 +2381,26 @@
         users.forEach(u=>{
           const row = document.createElement('div');
           row.className = 'fsRow';
-          const already = !!myFriendUids[u.uid];
+          const st = (MP.friendState && MP.friendState(u.uid)) || (myFriendUids[u.uid] ? 'friend' : null);
+          const lbl = { friend:'친구', pending:'요청 보냄', incoming:'수락' }[st] || '친구 요청';
+          const done = st === 'friend' || st === 'pending';
           row.innerHTML = `
-            <div class="fsAvatar">🙂</div>
-            <div class="fsInfo"><div class="fsName">${u.displayName || u.nickname || '이름없음'}</div>${u.nickname && u.displayName && u.nickname!==u.displayName ? `<div style="font-size:11px;color:var(--text-disabled);">계정: ${u.nickname}</div>` : ''}</div>
+            <div class="fsAvatar">${headImg(u.avatarLoadout)}</div>
+            <div class="fsInfo"><div class="fsName">${esc(u.displayName || u.nickname || '이름없음')}</div>${u.nickname && u.displayName && u.nickname!==u.displayName ? `<div style="font-size:11px;color:var(--text-disabled);">계정: ${esc(u.nickname)}</div>` : ''}</div>
             <div class="fsBtns">
-              <button class="fsBtn ${already?'added':'friend'}" data-act="friend" ${already?'disabled':''}>${already?'추가됨':'친추'}</button>
-              <button class="fsBtn ${already?'added':'follow'}" data-act="follow" ${already?'disabled':''}>${already?'추가됨':'팔로우'}</button>
+              <button class="fsBtn ${done?'added':'friend'}" ${done?'disabled':''}>${lbl}</button>
             </div>
           `;
-          row.querySelectorAll('.fsBtn').forEach(btn=>{
-            btn.addEventListener('click', ()=>{
-              if (btn.disabled) return;
-              const type = btn.dataset.act === 'friend' ? 'friend' : 'follow';
-              MP.addFriend(u.uid, u.displayName || u.nickname, type, (ok)=>{
-                if (ok){
-                  row.querySelectorAll('.fsBtn').forEach(b=>{
-                    b.disabled = true; b.textContent = '추가됨';
-                    b.classList.remove('friend','follow'); b.classList.add('added');
-                  });
-                }
-              });
+          const btn = row.querySelector('.fsBtn');
+          btn.addEventListener('click', ()=>{
+            if (btn.disabled) return; btn.disabled = true;
+            MP.sendFriendRequest(u.uid, u.displayName || u.nickname, (ok)=>{
+              btn.classList.remove('friend'); btn.classList.add('added');
+              btn.textContent = ok ? (st === 'incoming' ? '친구' : '요청 보냄') : '실패';
+              if (!ok) btn.disabled = false;
             });
           });
-          const openThisPerson = ()=> openPersonProfile({ uid:u.uid, name:u.displayName||u.nickname||'이름없음', online:false, game:null, room:null });
+          const openThisPerson = ()=> openPersonProfile({ uid:u.uid, name:u.displayName||u.nickname||'이름없음', online:false, game:null, room:null, avatar:u.avatarLoadout||null });
           row.querySelector('.fsAvatar').style.cursor = 'pointer';
           row.querySelector('.fsInfo').style.cursor = 'pointer';
           row.querySelector('.fsAvatar').addEventListener('click', openThisPerson);
@@ -2323,18 +2414,41 @@
   // ---------- 사람 프로필 모달 (친구 목록 / 검색결과에서 공용으로 사용) ----------
   const personOverlay = document.getElementById('personOverlay');
   let personCtx = null;   // 지금 열려 있는 프로필이 누구 것인지
+  const gameName = g => (GAMES[g] && GAMES[g].title) || GAME_LABEL[g] || g;
+  function personButtons(){
+    const p = personCtx; if (!p) return;
+    const st = (window.MP && MP.friendState) ? MP.friendState(p.uid) : (myFriendUids[p.uid] ? 'friend' : null);
+    const fb = document.getElementById('personFriendBtn'), sb = document.getElementById('personFollowBtn');
+    const self = window.MP && MP.uid === p.uid;
+    fb.style.display = self ? 'none' : ''; fb.disabled = st === 'pending'; fb.className = 'personBtn' + (st === 'incoming' ? ' go' : st === 'friend' ? ' warn' : '');
+    fb.textContent = { friend:'친구 끊기', pending:'요청 보냄 · 대기 중', incoming:'✔ 수락' }[st] || '친구 요청';
+    fb.dataset.st = st || '';
+    sb.style.display = (!self && st === 'incoming') ? '' : 'none';
+  }
+  function renderPersonInfo(pr){
+    const box = document.getElementById('personInfo'); if (!pr){ box.innerHTML = ''; return; }
+    if (pr.avatarLoadout) document.getElementById('personAvatar').innerHTML = headImg(pr.avatarLoadout);
+    document.getElementById('personName').textContent = pr.displayName + (pr.level ? '  ·  LV ' + pr.level : '');
+    document.getElementById('personAcct').textContent = pr.accountName && pr.accountName !== pr.displayName ? '계정 이름 · ' + pr.accountName : (pr.accountName ? '계정 이름 · ' + pr.accountName : '');
+    let h = '';
+    const prev = (pr.nameHistory || []).filter(n=> n !== pr.displayName);
+    if (prev.length) h += '<div class="pSec"><h4>이전 이름</h4><div class="pChips">' + prev.map(n=>'<span class="pChip dim">' + esc(n) + '</span>').join('') + '</div></div>';
+    h += '<div class="pSec"><h4>⭐ 좋아하는 게임</h4><div class="pChips">' + ((pr.favGames || []).length ? pr.favGames.map(g=>'<span class="pChip">' + esc(gameName(g)) + '</span>').join('') : '<span class="pChip dim">아직 안 골랐어요</span>') + '</div></div>';
+    if ((pr.topPlayed || []).length) h += '<div class="pSec"><h4>🎮 많이 한 게임</h4><div class="pChips">' + pr.topPlayed.map(t=>'<span class="pChip">' + esc(gameName(t.game)) + ' <span style="color:var(--text-disabled)">' + t.count + '회</span></span>').join('') + '</div></div>';
+    box.innerHTML = h;
+  }
   function openPersonProfile(p){
     personCtx = p;
+    document.getElementById('personAvatar').innerHTML = p.avatar ? headImg(p.avatar) : '🙂';
+    document.getElementById('personAcct').textContent = ''; document.getElementById('personInfo').innerHTML = '<div style="font-size:11px;color:var(--text-disabled);margin-bottom:12px;">프로필 불러오는 중…</div>';
+    if (window.MP && MP.fetchProfile) MP.fetchProfile(p.uid, pr=>{ if (personCtx === p) renderPersonInfo(pr); });
     document.getElementById('personName').textContent = (p.name || '이름없음') + (p.level ? '  ·  LV ' + p.level : '');
     const statusEl = document.getElementById('personStatus');
     const gameLabel = p.online && p.game ? (GAME_LABEL[p.game] || '플레이 중') : (p.online ? '온라인' : '오프라인');
     statusEl.textContent = gameLabel;
     statusEl.style.color = p.online ? 'var(--accent-green)' : 'var(--text-secondary)';
 
-    const already = !!myFriendUids[p.uid];
-    const fb = document.getElementById('personFriendBtn'), flb = document.getElementById('personFollowBtn');
-    fb.disabled = already; fb.textContent = already ? '추가됨' : '친구추가';
-    flb.disabled = already; flb.textContent = already ? '추가됨' : '팔로우';
+    personButtons();
 
     // "같은 체험 참가"는 상대가 지금 온라인이고 어떤 게임을 하고 있는지 알 때만 보인다
     const joinBtn = document.getElementById('personJoinBtn');
@@ -2342,18 +2456,17 @@
 
     personOverlay.style.display = 'flex';
   }
-  function markPersonAdded(){
-    const fb = document.getElementById('personFriendBtn'), flb = document.getElementById('personFollowBtn');
-    fb.disabled = true; fb.textContent = '추가됨'; flb.disabled = true; flb.textContent = '추가됨';
-    if (personCtx) myFriendUids[personCtx.uid] = true;
-  }
   document.getElementById('personFriendBtn').addEventListener('click', ()=>{
-    if (!personCtx || !window.MP || !MP.addFriend) return;
-    MP.addFriend(personCtx.uid, personCtx.name, 'friend', (ok)=>{ if (ok) markPersonAdded(); });
+    if (!personCtx || !window.MP || !MP.sendFriendRequest) return;
+    const fb = document.getElementById('personFriendBtn'), st = fb.dataset.st, p = personCtx;
+    const after = ()=> setTimeout(personButtons, 400);
+    if (st === 'friend'){ if (!confirm((p.name || '이 친구') + ' 님과 친구를 끊을까요?')) return; fb.disabled = true; MP.removeFriend(p.uid, after); }
+    else if (st === 'incoming'){ fb.disabled = true; MP.acceptFriend(p.uid, p.name, after); }
+    else { fb.disabled = true; MP.sendFriendRequest(p.uid, p.name, after); }
   });
   document.getElementById('personFollowBtn').addEventListener('click', ()=>{
-    if (!personCtx || !window.MP || !MP.addFriend) return;
-    MP.addFriend(personCtx.uid, personCtx.name, 'follow', (ok)=>{ if (ok) markPersonAdded(); });
+    if (!personCtx || !window.MP || !MP.declineFriend) return;
+    MP.declineFriend(personCtx.uid, ()=> setTimeout(personButtons, 300));
   });
   document.getElementById('personJoinBtn').addEventListener('click', ()=>{
     if (!personCtx) return;
@@ -2467,6 +2580,7 @@
   let avatarLoadout = (window.MP && MP.getLocalAvatarLoadout) ? MP.getLocalAvatarLoadout() : { head:null, acc:null, top:null, bottom:null, back:null, face:'face_smile', skin:'skin_classic', shirt:'shirt_blue', pants:'pants_green' };
   function saveAvatarLoadoutViaMP(loadout){
     if (window.MP && MP.setAvatarLoadout) MP.setAvatarLoadout(loadout);
+    if (typeof refreshMyHead === 'function') refreshMyHead();
   }
   function rebuildAvatarWithLoadout(scene, oldGroup, loadout){
     if (oldGroup) scene.remove(oldGroup);
