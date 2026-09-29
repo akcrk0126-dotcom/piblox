@@ -89,12 +89,19 @@
   #errorPanel { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:99; }
   #errorPanel.show { display:flex; }
   #errorBox { background:#fff; color:#900; padding:16px; border-radius:12px; max-width:90vw; max-height:70vh; overflow:auto; white-space:pre-wrap; font:12px monospace; }
+  #rivals { position:absolute; right:calc(12px + env(safe-area-inset-right)); top:50%; transform:translateY(-50%); width:190px; background:rgba(40,24,14,.55); border-radius:14px; padding:8px 10px; pointer-events:none; font-family:'Jua',sans-serif; }
+  #rivals .rvH { font-size:13px; opacity:.85; margin-bottom:4px; }
+  #rivals .rv { display:flex; align-items:center; gap:6px; font-size:14px; height:26px; }
+  #rivals .rv b { width:14px; opacity:.7; } #rivals .rv img { width:22px; height:22px; } #rivals .rv span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } #rivals .rv i { font-style:normal; color:#ffe066; }
+  #rivals .rv.me { color:#9dffb0; } #rivals .rv.out { opacity:.5; }
+  @media (max-width:700px){ #rivals { top:auto; bottom:120px; transform:none; width:160px; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="danger"></div>
 <div id="hud">
+  <div id="rivals" style="display:none"></div>
   <div id="scoreBox" class="out"><div id="score">0</div><div id="bestL">최고 0</div></div>
   <div id="topR">
     <div id="next"><b>다음</b><img id="nextImg" alt=""></div>
@@ -526,7 +533,7 @@ function merge(a, b){ const pa = a.body.position, pb = b.body.position; const x 
   juice(x, y, z, TT.juice, 10 + tier*3, 4 + tier*.7, .05 + tier*.012); sprite(ringTex, TT.juice, x, y, z, TT.r*1.2, TT.r*4.2, .38); for (let i = 0; i < 2 + (tier >> 1); i++) sprite(starTex, 0xffffff, x + rnd(-.3, .3), y + rnd(-.2, .3), z + rnd(-.3, .3), .5, rnd(.2, .5), rnd(.5, .8), rnd(1.5, 3.5));
   if (tier >= MAXT){ // 수박 + 수박 = 대폭발
     juice(x, y, z, 0xff2d55, 70, 12, .12); juice(x, y, z, 0x2f8a3a, 30, 10, .1); sprite(ringTex, 0xfff0a0, x, y, z, 2, 9, .7); CAM.shake = 1; flashT = .5;
-    if (live){ const pts = Math.round(500*mult); addScore(pts, x, y, z, '#ffe066', 44); toast('🍉 수박 대폭발! +' + pts); shakes = Math.min(3, shakes + 1); updateShakeUI(); melons++; }
+    if (live){ const pts = Math.round(500*mult); addScore(pts, x, y, z, '#ffe066', 44); toast('🍉 수박 대폭발! +' + pts); shakes = Math.min(3, shakes + 1); updateShakeUI(); melons++; attack(3); }
     if (live){ audio.sfx.melon(); vib(60); } return; }
   const nt = tier + 1; const nf = spawnFruit(nt, x, y, z, vx*.5, vy*.5 + 1.5, vz*.5, true); nf.popT = 0; nf.landed = true;
   // 주변 과일을 살짝 밀어내기
@@ -534,6 +541,7 @@ function merge(a, b){ const pa = a.body.position, pb = b.body.position; const x 
     if (d < R && d > .01){ const k = (1 - d/R)*2.2*o.body.mass; o.body.applyImpulse(new CANNON.Vec3(dx/d*k, Math.abs(dy/d)*k*.5 + k*.3, dz/d*k)); } }
   if (live){ const pts = Math.round(TIERS[nt].pts*10*mult); addScore(pts, x, y + TIERS[nt].r, z, combo >= 3 ? '#ffe066' : '#fff', 22 + nt*1.6);
     if (combo >= 2){ const c = $('combo'); c.textContent = '콤보 ×' + combo + '!'; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); }
+    if (combo >= 3) attack(1); if (nt >= 7) attack(1);
     if (nt > maxTier){ maxTier = nt; updateEvoUI(); if (nt >= 5){ toast(TIERS[nt].name + ' 탄생!'); audio.sfx.fanfare(); } if (nt >= 8){ shakes = Math.min(3, shakes + 1); updateShakeUI(); } }
     if (nt >= 7){ CAM.shake = Math.max(CAM.shake, .35 + (nt - 7)*.1); } }
   if (live){ audio.sfx.pop(tier, combo); if (nt >= 6) audio.sfx.big(); vib(12 + tier*3); } }
@@ -655,6 +663,7 @@ function frame(dt){ T += dt;
   jarWob = Math.max(0, jarWob - dt*1.4); jarGroup.rotation.z = Math.sin(T*28)*jarWob*.035; jarGroup.rotation.x = Math.cos(T*23)*jarWob*.03;
   flashT = Math.max(0, flashT - dt*1.6); if (finalPass) finalPass.uniforms.flash.value = flashT;
   updateCamera(dt);
+  netTick(dt);
   if (!noRender){ if (composer) composer.render(dt); else renderer.render(scene, camera); } }
 function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.max(0, (now - lastT)/1000)); lastT = now; frame(dt); }
 
@@ -666,8 +675,47 @@ loadAssets(p=>{ $('barI').style.width = Math.round(p*100) + '%'; }, ()=>{
   scene.remove(kitchen); scene.remove(jarGroup); scene.remove(sun); scene.remove(sun.target); scene.children.filter(o=>o.isLight).forEach(l=>scene.remove(l)); glassMats = [];
   applyEnv(); buildFruitTemplates(); buildKitchen(); renderThumbs(); buildUI(); updateNextUI();
   $('bar').style.display = 'none'; $('start').disabled = false; $('start').textContent = '시작하기'; gameState = 'title'; });
-try { if (window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && MP.initAuthOnly) MP.initAuthOnly(()=>{}); } catch(e){}
-window.__F = { frame, get state(){ return gameState; }, set noRender(v){ noRender = v; }, startGame, drop, fruits, world, TIERS, CAM, spawnFruit, doShake, gameOver, merge,
+// =====================================================================
+//  멀티플레이 — 같은 방 사람들과 점수 경쟁 + 과일 선물(공격)
+//  콤보 3번 이상 · 큰 과일 · 수박 대폭발을 만들면 다른 사람 병에 작은 과일이 떨어진다
+// =====================================================================
+const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
+const NET = { on:false, uid:null, name:'', players:{}, seen:{}, handled:{}, sendT:0, pend:0, atkN:0, queue:[], qT:0, rowsKey:'' };
+const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
+function attack(k){ if (!NET.on || gameState !== 'play' || k <= 0) return; NET.pend += k; }
+(function startNet(){
+  if (!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase)) return;
+  try {
+    MP.onPlayersUpdate(val=>{ const t = performance.now();
+      for (const u in val){ const p = val[u]; if (!p || u === NET.uid) continue; const old = NET.players[u]; if (!old || old.ts !== p.ts) NET.seen[u] = t;
+        if (!old){ if (p.atk) NET.handled[u] = p.atk.n; }
+        else if (p.atk && NET.handled[u] !== p.atk.n){ NET.handled[u] = p.atk.n;
+          if (gameState === 'play'){ const k = Math.min(4, p.atk.k || 1); for (let i=0;i<k;i++) NET.queue.push(i*.35); toast('🎁 ' + (p.name || '누군가') + ' 님이 과일 ' + k + '개를 보냈어요!'); } }
+        NET.players[u] = p; }
+      for (const u in NET.players) if (!val[u]) delete NET.players[u]; });
+    MP.init('fruit_' + URL_ROOM, (uid, err)=>{ if (err || !uid) return; NET.on = true; NET.uid = uid; NET.name = (MP.getDisplayName && MP.getDisplayName()) || '나'; try { MP.setPresence('fruit', URL_ROOM); } catch(e){} });
+  } catch(e){}
+})();
+function netTick(dt){
+  if (!NET.on) return;
+  // 받은 과일 떨어뜨리기
+  if (NET.queue.length && gameState === 'play' && !paused){ NET.qT += dt; while (NET.queue.length && NET.queue[0] <= NET.qT){ NET.queue.shift(); const a = Math.random()*Math.PI*2, r = Math.random()*(JAR_R - .6);
+      const f = spawnFruit(Math.random() < .6 ? 0 : 1, Math.cos(a)*r, DROP_Y, Math.sin(a)*r, 0, -2, 0, false); f.dropped = true; audio.sfx.drop(); } if (!NET.queue.length) NET.qT = 0; }
+  else if (gameState !== 'play'){ NET.queue.length = 0; NET.qT = 0; }
+  NET.sendT -= dt; if (NET.sendT <= 0){ NET.sendT = .6;
+    const s = { name:NET.name, sc:score, mt:maxTier, st:gameState === 'play' ? 1 : (gameState === 'over' || gameState === 'overScreen') ? 2 : 0 };
+    if (NET.pend > 0){ s.atk = { n:++NET.atkN, k:Math.min(4, NET.pend) }; NET.pend = 0; }
+    try { MP.update(s); } catch(e){} }
+  // 방 순위판
+  const rows = [{ me:true, n:NET.name, sc:score, mt:maxTier, st:gameState === 'play' ? 1 : 2 }];
+  for (const u in NET.players){ const p = NET.players[u]; if (freshP(u) && p.st) rows.push({ n:p.name || '?', sc:p.sc || 0, mt:p.mt || 0, st:p.st }); }
+  const box = $('rivals'); if (!box) return; if (rows.length < 2){ box.style.display = 'none'; return; }
+  rows.sort((a, b)=>b.sc - a.sc);
+  const key = JSON.stringify(rows); if (key === NET.rowsKey) return; NET.rowsKey = key; box.style.display = '';
+  const esc = t=>String(t).replace(/[<>&"]/g, '');
+  box.innerHTML = '<div class="rvH">🏆 같은 방 ' + rows.length + '명</div>' + rows.slice(0, 6).map((r, i)=>'<div class="rv' + (r.me ? ' me' : '') + (r.st === 2 ? ' out' : '') + '"><b>' + (i + 1) + '</b><img src="' + (THUMB[r.mt] || '') + '"><span>' + esc(r.n) + (r.st === 2 ? ' 💥' : '') + '</span><i>' + r.sc.toLocaleString() + '</i></div>').join('');
+}
+window.__F = { NET, frame, get state(){ return gameState; }, set noRender(v){ noRender = v; }, startGame, drop, fruits, world, TIERS, CAM, spawnFruit, doShake, gameOver, merge,
   aim(x, z){ aimTX = aimX = x; aimTZ = aimZ = z; }, get score(){ return score; }, get maxTier(){ return maxTier; }, get dangerT(){ return dangerT; }, get held(){ return held; }, get dropCD(){ return dropCD; }, ASSET, camera, toTitle };
 })();
 </script>
