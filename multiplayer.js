@@ -718,6 +718,71 @@ function mpBuildAvatar(loadout){
   return group;
 }
 
+// ---- 진짜 3D 아바타 사진 ----
+// 게임 속과 똑같은 3D 아바타를 화면 밖에서 한 번 찍어서 사진(dataURL)으로 쓴다.
+//   'head' 얼굴 사진(어깨~모자) · 'full' 전신 · 'item:<id>' 아이템만
+let snapR = null, snapScene = null, snapCam = null, snapFail = false;
+const snapCache = {}; let snapKeys = [];
+function mpSnapSetup(){
+  const T = window.THREE; if (!T || snapFail) return false; if (snapR) return true;
+  try {
+    const c = document.createElement('canvas');
+    snapR = new T.WebGLRenderer({ canvas:c, antialias:true, alpha:true, preserveDrawingBuffer:true });
+    snapR.setPixelRatio(1); if (T.sRGBEncoding !== undefined && 'outputEncoding' in snapR) snapR.outputEncoding = T.sRGBEncoding;
+    snapScene = new T.Scene();
+    snapScene.add(new T.HemisphereLight(0xffffff, 0x5a5a66, 0.95));
+    const key = new T.DirectionalLight(0xffffff, 0.9); key.position.set(3, 6, 6); snapScene.add(key);
+    const rim = new T.DirectionalLight(0xcfe0ff, 0.45); rim.position.set(-5, 3, -4); snapScene.add(rim);
+    snapCam = new T.PerspectiveCamera(30, 1, 0.1, 60);
+    return true;
+  } catch (e) { snapFail = true; snapR = null; return false; }
+}
+function mpDisposeGroup(g){ g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material){ (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map && !m.map.image) m.map.dispose(); m.dispose(); }); } }); }
+function mpFrame(box, W, H, pad, yaw){
+  const T = window.THREE; const c = new T.Vector3(), sz = new T.Vector3(); box.getCenter(c); box.getSize(sz);
+  const fov = T.MathUtils.degToRad(snapCam.fov), aspect = W / H;
+  const needH = sz.y * pad, needW = Math.max(sz.x, sz.z) * pad;
+  const dist = Math.max(needH / 2 / Math.tan(fov / 2), needW / 2 / (Math.tan(fov / 2) * aspect)) + Math.max(sz.x, sz.z) / 2;
+  snapCam.position.set(c.x + Math.sin(yaw) * dist, c.y + sz.y * 0.06, c.z + Math.cos(yaw) * dist); snapCam.lookAt(c);
+}
+function mpAvatarShot(loadout, mode){
+  const lo = Object.assign(mpDefaultLoadout(), loadout || {});
+  mode = mode || 'head';
+  const key = mode + '|' + JSON.stringify(lo);
+  if (snapCache[key]) return snapCache[key];
+  if (!mpSnapSetup()) return mode === 'head' ? mpHeadshot(lo) : null;
+  const T = window.THREE;
+  let url = null, g = null;
+  try {
+    const isItem = mode.indexOf('item:') === 0;
+    const W = mode === 'full' ? 360 : 200, H = mode === 'full' ? 440 : 200;
+    snapR.setSize(W, H, false); snapCam.aspect = W / H; snapCam.updateProjectionMatrix();
+    if (isItem){
+      const item = AVATAR_CATALOG.find(i => i.id === mode.slice(5)); if (!item) return null;
+      g = mpBuildR6Avatar({ skin:lo.skin, shirt:lo.shirt, pants:lo.pants });
+      const n = g.children.length; mpAttachAvatarItem(g, item);
+      g.updateMatrixWorld(true);
+      const box = new T.Box3(); g.children.slice(n).forEach(ch => box.expandByObject(ch));
+      if (box.isEmpty()) { g.children.slice(0, n).forEach(ch => box.expandByObject(ch)); }
+      else g.children.slice(0, n).forEach(ch => { ch.visible = false; });
+      snapScene.add(g); mpFrame(box, W, H, 1.25, item.slot === 'back' ? Math.PI + 0.5 : 0.5);
+    } else {
+      g = mpBuildAvatar(lo); snapScene.add(g); g.updateMatrixWorld(true);
+      const box = new T.Box3().setFromObject(g); const u = g.userData;
+      if (mode === 'head'){
+        const bottom = u.legTopY + u.torsoH * 0.45, top = Math.min(box.max.y, u.headCenterY + u.headH * 2.4);
+        const hb = new T.Box3(new T.Vector3(-u.torsoW * 0.62, bottom, -u.headD), new T.Vector3(u.torsoW * 0.62, top, u.headD));
+        mpFrame(hb, W, H, 1.08, -0.28);
+      } else mpFrame(box, W, H, 1.1, -0.38);
+    }
+    snapR.render(snapScene, snapCam);
+    url = snapR.domElement.toDataURL('image/png');
+  } catch (e) { url = mode === 'head' ? mpHeadshot(lo) : null; }
+  if (g){ snapScene.remove(g); mpDisposeGroup(g); }
+  if (url){ snapCache[key] = url; snapKeys.push(key); if (snapKeys.length > 80){ delete snapCache[snapKeys.shift()]; } }
+  return url;
+}
+
 const MP = (function () {
   let app = null, auth = null, db = null;
   let uid = null;
@@ -1576,7 +1641,9 @@ const MP = (function () {
     getFavGames,
     setFavGames,
     fetchFavGames,
-    headshot: mpHeadshot,
+    headshot: (lo) => mpAvatarShot(lo, 'head'),
+    headshot2D: mpHeadshot,
+    avatarShot: mpAvatarShot,
     onFriendsUpdate,
     setAvatarLoadout,
     getLocalAvatarLoadout,
