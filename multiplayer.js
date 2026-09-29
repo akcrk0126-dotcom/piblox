@@ -700,6 +700,32 @@ const MP = (function () {
     db = firebase.database();
     // 기기 시계가 틀려도(몇 분씩 어긋난 PC/폰 흔함) 모두 같은 시간을 보게 서버 시계 기준으로 맞춘다
     try { db.ref('.info/serverTimeOffset').on('value', snap => { serverOffset = snap.val() || 0; }); } catch (e) {}
+    // 연결이 잠깐 끊겼다 붙으면(폰에서 흔함) 서버가 onDisconnect를 이미 써버려서, 그 뒤로는
+    // 진짜로 나가도 아무것도 안 지워진다 → "나갔는데 들어와 있다" 유령이 생김.
+    // 다시 연결될 때마다 onDisconnect를 새로 걸고, 내 상태도 다시 써 준다.
+    try {
+      db.ref('.info/connected').on('value', snap => {
+        if (snap.val() !== true) return;
+        if (myRef) { try { myRef.onDisconnect().remove(); } catch (e) {} }
+        if (presenceRef) {
+          try {
+            presenceRef.onDisconnect().update({ online:false, game:null, room:null, ts: firebase.database.ServerValue.TIMESTAMP });
+            if (!document.hidden) presenceRef.update({ online:true, game: presenceGame, room: presenceRoom, ts: firebase.database.ServerValue.TIMESTAMP });
+          } catch (e) {}
+        }
+      });
+    } catch (e) {}
+    // 탭 닫기/뒤로가기/다른 게임으로 이동: 서버가 끊김을 알아챌 때까지 기다리지 말고 바로 지운다
+    const leaveNow = () => {
+      try { if (myRef) myRef.remove(); } catch (e) {}
+      try { if (presenceRef) presenceRef.update({ online:false, game:null, room:null, ts: firebase.database.ServerValue.TIMESTAMP }); } catch (e) {}
+    };
+    window.addEventListener('pagehide', leaveNow);
+    // 뒤로가기 캐시에서 되살아나면 다시 들어온 것으로
+    window.addEventListener('pageshow', e => {
+      if (!e.persisted) return;
+      try { if (presenceRef) presenceRef.update({ online:true, game: presenceGame, room: presenceRoom, ts: firebase.database.ServerValue.TIMESTAMP }); } catch (e2) {}
+    });
   }
   let serverOffset = 0;
   function serverNow() { return Date.now() + serverOffset; }
@@ -1086,16 +1112,20 @@ const MP = (function () {
     if (!isConfigured() || !db) { cb && cb({ total:0, games:{}, rooms:{} }); return; }
     if (allPresenceRef) allPresenceRef.off();
     allPresenceRef = db.ref(`${MP_ROOT}/presence`);
-    allPresenceRef.on('value', snap => {
-      const all = snap.val() || {};
+    let lastAll = {};
+    // 아무도 새로 안 쓰면 'value'가 다시 안 불려서, 나간 사람이 계속 남아 보였다 → 10초마다 다시 계산
+    if (presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = setInterval(() => emit(lastAll), 10000);
+    allPresenceRef.on('value', snap => { lastAll = snap.val() || {}; emit(lastAll); }, () => cb && cb({ total:0, games:{}, rooms:{} }));
+    function emit(all) {
       const now = serverNow();
       const games = {}, rooms = {};
       let total = 0;
       Object.keys(all).forEach(id => {
         const p = all[id];
         if (!p || !p.online) return;
-        // 브라우저가 그냥 죽으면 online이 true로 남을 수 있다 — 3분 넘은 건 뺀다
-        if (p.ts && now - p.ts > 180000) return;
+        // 브라우저가 그냥 죽으면 online이 true로 남을 수 있다 — 하트비트(15초)를 3번 놓치면 뺀다
+        if (!p.ts || now - p.ts > PRESENCE_TTL) return;
         total++;
         const g = p.game || 'hub';
         games[g] = (games[g] || 0) + 1;
@@ -1107,8 +1137,10 @@ const MP = (function () {
         }
       });
       cb && cb({ total, games, rooms });
-    }, () => cb && cb({ total:0, games:{}, rooms:{} }));
+    }
   }
+  let presenceTimer = null;
+  const PRESENCE_TTL = 50000;
 
   // ---- 계정 통합 레벨 ----
   // 지금까지 레벨은 포레스트 스트라이크 안에만 있었고, 그 기기 localStorage에만 저장돼서
@@ -1227,13 +1259,13 @@ const MP = (function () {
       online:true, game: game || null, room: room || null, name: getDisplayName(),
       ts: firebase.database.ServerValue.TIMESTAMP
     });
-    // 허브는 3분 넘게 갱신 없는 접속을 지운다 → 게임 안에 있는 동안 계속 살아있다고 알린다
+    // 허브는 50초 넘게 갱신 없는 접속을 지운다 → 게임 안에 있는 동안 계속 살아있다고 알린다 (숨겨진 탭은 안 보냄)
     presenceGame = game || null; presenceRoom = room || null;
     if (!presenceBeat) {
       presenceBeat = setInterval(() => {
         if (!presenceRef || document.hidden) return;
         presenceRef.update({ online:true, game: presenceGame, room: presenceRoom, ts: firebase.database.ServerValue.TIMESTAMP });
-      }, 45000);
+      }, 15000);
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden && presenceRef) presenceRef.update({ online:true, game: presenceGame, room: presenceRoom, ts: firebase.database.ServerValue.TIMESTAMP });
       });
