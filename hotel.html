@@ -135,7 +135,7 @@
     <b>보랏빛이 도는 방</b> — 그것과 눈을 마주치지 마세요. 바닥을 보고 걸으세요.<br>
     <b>어두운 방에서 "쉿" 소리</b> — 뒤를 돌아 그것을 똑바로 쳐다보세요.<br>
     <b>벽에 눈이 생기기 시작하면</b> — 곧 달려야 해요. 붉은 불빛의 문으로는 가지 마세요.<br>
-    <b>50번 도서관</b> — 앞을 못 보는 거인이 소리를 들어요. 웅크리고(C) 조용히 책 3권을 찾으세요.
+    <b>50번 도서관</b> — 앞을 못 보는 거인이 소리를 들어요. 웅크리고(C) 조용히 빛나는 책 5권을 찾으세요.
   </div>
 </div></div>
 <div id="dead" class="scr"><div class="wrap" style="margin:auto">
@@ -375,6 +375,7 @@ function B(parent, mat, x, y, z, w, h, d, opt){ return mesh(parent, uvBox(w, h, 
 //  방 만들기
 // =====================================================================
 const H0 = 4.2, DW = 1.7, DH = 2.9;
+const BOOKS_NEED = 5;   // 도서관 문을 여는 데 필요한 책
 const rooms = []; let runSeed = 1, seekRooms = [], libRoom = 50, FINAL = 100;
 const interacts = [];                 // { mesh, room, kind, label, act }
 function L2W(room, lx, lz){ const c = room.cos, s = room.sin; return [room.ox + lx*c + lz*s, room.oz - lx*s + lz*c]; }
@@ -592,8 +593,8 @@ function buildLibrary(room, g){ const { xl, xr, L, H } = room;
   // 높은 천장 등 (어둡게)
   for (const z of [8, 17, 26]) addLamp(room, g, 0, H - .5, z, 'ceil', 3.5);
   for (const z of [4, 14, 24]){ addLamp(room, g, xl + .2, 2.6, z, 'sconce', 1.4); addLamp(room, g, xr - .2, 2.6, z, 'sconce', 1.4); }
-  // 책 3권 (빛나는)
-  room.books = 0; const spots = shelves.slice().sort(()=>R() - .5).slice(0, 3);
+  // 책 5권 (빛나는) — 서로 다른 책장에
+  room.books = 0; const spots = shelves.slice().sort(()=>R() - .5).slice(0, BOOKS_NEED);
   spots.forEach((s, k)=>{ const side = k % 2 ? 1 : -1, bx = s.x + rnd(-s.len/2 + .4, s.len/2 - .4), bz = s.z + side*.62; const m = itemMesh('book'); m.position.set(bx, rnd(.6, 1.6), bz); m.rotation.y = side > 0 ? 0 : Math.PI; g.add(m);
     regItem(room, m, 'book'); const wp = L2W(room, bx, bz); room.lamps.push({ x:wp[0], y:m.position.y, z:wp[1], base:1.2, dist:3, col:0xffd070, on:true, broken:false, flick:0, bulbMat:new THREE.MeshBasicMaterial(), shadeMat:MAT.shade.clone(), spr:new THREE.Sprite(), room, kind:'book', item:m }); });
   sign(g, 0, 4.2, L - .14, '도서관 · 조용히', '#c8a878', Math.PI);
@@ -637,7 +638,9 @@ function itemMesh(kind){ const gr = new THREE.Group();
   else if (kind === 'vitamin'){ const b = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, .11, 10), new THREE.MeshStandardMaterial({ color:0xffa020, roughness:.3, transparent:true, opacity:.85 })); b.position.y = .055; gr.add(b); B(gr, MAT.white, 0, .12, 0, .07, .03, .07); }
   else if (kind === 'lighter'){ B(gr, MAT.red, 0, .04, 0, .04, .08, .025); B(gr, MAT.iron, 0, .09, 0, .04, .02, .025); }
   else if (kind === 'key'){ const r = new THREE.Mesh(new THREE.TorusGeometry(.035, .01, 6, 14), MAT.keyG); r.rotation.x = Math.PI/2; r.position.set(-.07, .01, 0); gr.add(r); B(gr, MAT.keyG, .03, .01, 0, .14, .015, .015); B(gr, MAT.keyG, .08, .01, .015, .015, .015, .03);  gr.scale.setScalar(1.7); }
-  else if (kind === 'book'){ const bm = new THREE.MeshStandardMaterial({ color:0x8a5a1a, emissive:0xffa030, emissiveIntensity:.9, roughness:.6 }); B(gr, bm, 0, 0, 0, .2, .28, .06); const s = new THREE.Sprite(MAT.glow); s.scale.set(.9, .9, 1); gr.add(s); }
+  else if (kind === 'book'){ const bm = new THREE.MeshStandardMaterial({ color:0xc07a20, emissive:0xffb040, emissiveIntensity:2.2, roughness:.5 }); B(gr, bm, 0, 0, 0, .3, .42, .09); const s = new THREE.Sprite(MAT.glow); s.scale.set(1.8, 1.8, 1); gr.add(s); gr.userData.glow = s;
+    // 책장 위로 솟는 빛기둥 — 도서관 어디서든 보이게
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(.14, .3, 5, 12, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.28, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 2.3; gr.add(beam); gr.userData.beam = beam; }
   gr.traverse(o=>{ if (o.isMesh) o.castShadow = false; }); return gr; }
 function regItem(room, m, kind){ const hit = new THREE.Mesh(new THREE.SphereGeometry(kind === 'book' ? .3 : .18, 8, 6), new THREE.MeshBasicMaterial({ visible:false })); m.add(hit);
   const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기' };
@@ -658,7 +661,8 @@ const extraLights = [];   // { x,y,z, col, base, dist } 괴물 빛 등
 function updateLights(dt){ const cand = [];
   for (let i = Math.max(0, P.room - 1); i <= P.room + 2 && i < rooms.length; i++){ const r = rooms[i]; if (!r) continue;
     for (const l of r.lamps){ if (l.broken || !l.on) continue; let k = 1; if (l.flick > 0){ l.flick -= dt; k = Math.random() < .5 ? .05 : 1; if (l.flick <= 0) k = 1; } else if (l.room.flicker) k = Math.random() < .3 ? .15 : 1; if (l.kind === 'green' || l.kind === 'book') k *= .9 + Math.sin(T*3 + l.x)*.1;
-      l.k = k; if (l.kind !== 'book' && l.kind !== 'red' && l.kind !== 'exit') setLampVis(l, k); const d = Math.hypot(l.x - P.x, l.z - P.z); cand.push({ l, d:d - (l.kind === 'ceil' ? 2 : 0), k }); } }
+      l.k = k; if (l.kind === 'book' && l.item && l.item.userData.glow){ const q = 1.5 + .45*Math.sin(T*4 + l.x); l.item.userData.glow.scale.set(q, q, 1); }
+      if (l.kind !== 'book' && l.kind !== 'red' && l.kind !== 'exit') setLampVis(l, k); const d = Math.hypot(l.x - P.x, l.z - P.z); cand.push({ l, d:d - (l.kind === 'ceil' ? 2 : 0), k }); } }
   for (const e of extraLights){ cand.push({ l:e, d:Math.hypot(e.x - P.x, e.z - P.z) - 8, k:e.k === undefined ? 1 : e.k }); }
   cand.sort((a, b)=>a.d - b.d);
   for (let k=0;k<POOL.length;k++){ const pl = POOL[k], c = cand[k]; if (!c || c.d > 26){ pl.intensity = 0; continue; } const l = c.l; pl.position.set(l.x, l.y, l.z); pl.color.setHex(l.col); pl.distance = l.dist; pl.intensity = l.base*c.k*.18; }
@@ -783,7 +787,7 @@ function interact(){ if (!running || P.dead || paused) return; if (P.hidden){ un
   else if (a.kind === 'exit') winGame(); }
 function tryDoor(door, manual){ if (door.open > 0 || door.target > 0) return;
   const room = door.room;
-  if (door.locked){ if (room.type === 'library'){ if (manual) msg('잠겨 있다… 책 ' + (room.books || 0) + '/3'); audio.sfx.lock(); return; }
+  if (door.locked){ if (room.type === 'library'){ if (manual) msg('잠겨 있다… 책 ' + (room.books || 0) + '/' + BOOKS_NEED); audio.sfx.lock(); return; }
     if (P.key){ P.key = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); renderSlots(); msg('열쇠로 문을 열었다'); }
     else { if (manual){ msg('잠겨 있다. 열쇠가 필요해'); audio.sfx.lock(); } return; } }
   openDoor(door); }
@@ -804,7 +808,7 @@ function pickItem(a){ const k = a.item, m = a.mesh; if (m.parent) m.parent.remov
   else if (k === 'battery'){ P.light.battery = Math.min(100, P.light.battery + 50); msg('🔋 배터리 +50%'); }
   else if (k === 'lighter'){ if (!P.light.type){ P.light.type = 'lighter'; P.light.on = true; msg('🔥 라이터를 얻었다 (F로 켜고 끄기)'); } else { P.gold += 5; addGold(5); } }
   else if (k === 'key'){ P.key = true; msg('🗝 열쇠를 얻었다'); }
-  else if (k === 'book'){ const r = rooms[libRoom]; r.books = (r.books || 0) + 1; r.lamps = r.lamps.filter(l=>l.item !== m); msg('📕 책 ' + r.books + '/3'); if (r.books >= 3){ r.door.locked = false; msg('📕 책 3권! 출구 문이 열렸다', 3000); audio.sfx.unlock(); } setObj(); }
+  else if (k === 'book'){ const r = rooms[libRoom]; r.books = (r.books || 0) + 1; r.lamps = r.lamps.filter(l=>l.item !== m); msg('📕 책 ' + r.books + '/' + BOOKS_NEED); if (r.books >= BOOKS_NEED){ r.door.locked = false; msg('📕 책 ' + BOOKS_NEED + '권! 출구 문이 열렸다', 3000); audio.sfx.unlock(); } setObj(); }
   else if (k === 'gold'){ const n = rint(5, 15); P.gold += n; addGold(n); }
   renderSlots(); }
 function hideIn(h){ if (P.hidden) return; if (entity.giant && entity.giant.checking === h){ return; } P.hidden = h; h.target = 1; audio.sfx.wardrobe(); P.yaw = h.yaw + Math.PI; P.pitch = 0; setTimeout(()=>{ if (P.hidden === h) h.target = 0; $('hide').classList.add('on'); }, 350); P.hideT = 0; }
@@ -963,7 +967,7 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   const nx = rooms[i + 1]; if (!entity.eyes && nx && i >= 8 && (nx.type === 'room' || nx.type === 'hall') && Math.random() < .08) spawnEyes(nx);
   setObj(); }
 function roomType_(i){ if (i === libRoom) return 'library'; if (i >= FINAL) return 'final'; for (const s of seekRooms){ if (i >= s - 3 && i <= s + 3) return 'chase'; } return null; }
-function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'library') e.textContent = '📕 책을 찾아라 ' + (r.books || 0) + '/3 · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
+function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'library') e.textContent = '📕 빛나는 책을 찾아라 ' + (r.books || 0) + '/' + BOOKS_NEED + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
 
 // =====================================================================
 //  작은 효과
