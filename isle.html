@@ -109,6 +109,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud">
+  <div id="mpInfo" class="sh" style="position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));font-weight:700;font-size:13px;opacity:.85"></div>
   <div id="hudL"><div id="hearts"></div><div id="rupee" class="sh"><i></i><span id="rupN">0</span></div><div id="potion" class="sh"></div></div>
   <div id="quest" class="sh"><div class="t" id="qT">주요 목표</div><div class="d" id="qD"></div></div>
   <div id="mini"><canvas id="miniC" width="220" height="220"></canvas></div>
@@ -1282,6 +1283,7 @@ function frame(rdt){ clock.t += rdt;
     if (water){ water.material.uniforms.uT.value = UNI.uT.value; water.material.uniforms.camP.value.copy(camera.position); water.position.x = Math.round(camera.position.x/50)*50; water.position.z = Math.round(camera.position.z/50)*50; }
     if (GRASS.mat){ GRASS.mat.uniforms.uT.value = UNI.uT.value; GRASS.mat.uniforms.uPl.value.set(HERO.x, HERO.y, HERO.z); }
     if (sky) sky.position.copy(camera.position); }
+  netTick(rdt);
   if (!noRender){ if (composer) composer.render(); else renderer.render(scene, camera); } }
 function toggleLock(){ const H = HERO; if (H.lock){ H.lock = null; return; } let best = null, bs = 1e9; const fx0 = -Math.sin(CAM.yaw), fz0 = -Math.cos(CAM.yaw);
   for (const e of ENEMIES){ if (e.dead || e.st === 'dormant' || e.st === 'bossWait' && !GAME.bossOn) continue; const dx = e.x - H.x, dz = e.z - H.z, d = Math.hypot(dx, dz); if (d > 24) continue; const dot = (dx*fx0 + dz*fz0)/d; const sc = d*(1.6 - dot); if (sc < bs){ bs = sc; best = e; } }
@@ -1307,8 +1309,47 @@ loadAssets(p=>{ $('barI').style.width = Math.round(p*100) + '%'; }, ()=>{
       : '⚠ 3D 모델 파일을 찾지 못했어요. is-chars.glb · is-anims.glb · is-world.glb 가 isle.html 과 같은 폴더에 있는지 확인해 주세요.';
     $('title').appendChild(m); return; }
   buildWorldOnce(); GAME.state = 'title'; $('bar').style.display = 'none'; $('bNew').disabled = false; $('bNew').textContent = '새 모험'; if (loadSave()) $('bCont').style.display = 'block'; });
-try { if (window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && MP.initAuthOnly) MP.initAuthOnly(()=>{}); } catch(e){}
-window.__I = { COLS, frame, HERO, ENEMIES, GAME, CAM, INPUT, KEYS, startGame, set noRender(v){ noRender = v; }, camera, SEALS, CHESTS, NPC_OBJ, sampleH, groundAt, hurt, damageEnemy, toggleLock, talkTo, openChest, bossStart, clock, ASSET, dlgNext, DLG, spawnEnemy, CASTLE, CAMPS, VILLAGE, get PROTO(){ return PROTO; }, hitSeal };
+// =====================================================================
+//  멀티플레이 — 같은 방 사람들이 같은 섬에 보인다 (닉네임만 연동, 캐릭터는 섬의 용사)
+//  (해골·상자·봉인은 각자 모험 진행대로 따로)
+// =====================================================================
+const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
+const NET = { on:false, uid:null, name:'', players:{}, seen:{}, ghosts:{}, sendT:0, known:{} };
+const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 8000;
+function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; c.height = 56; const g = c.getContext('2d'); g.font = '900 28px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(String(t).slice(0, 12), 128, 28); g.fillStyle = '#fbf7ea'; g.fillText(String(t).slice(0, 12), 128, 28);
+  const tx = new THREE.CanvasTexture(c); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tx, transparent:true, depthWrite:false, depthTest:false, fog:false })); sp.scale.set(1.9, .42, 1); sp.position.y = 2.55; sp.renderOrder = 5; return sp; }
+(function startNet(){
+  if (!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase)) return;
+  try {
+    MP.onPlayersUpdate(val=>{ const t = performance.now();
+      for (const u in val){ const p = val[u]; if (!p || u === NET.uid) continue; const old = NET.players[u]; if (!old || old.ts !== p.ts) NET.seen[u] = t; NET.players[u] = p;
+        if (p.st && !NET.known[u] && GAME.state === 'play'){ NET.known[u] = 1; toast('👋 ' + (p.name || '누군가') + ' 님이 섬에 왔어요'); } }
+      for (const u in NET.players) if (!val[u]){ delete NET.players[u]; delete NET.known[u]; } });
+    MP.init('isle_' + URL_ROOM, (uid, err)=>{ if (err || !uid) return; NET.on = true; NET.uid = uid; NET.name = (MP.getDisplayName && MP.getDisplayName()) || '용사'; try { MP.setPresence('isle', URL_ROOM); } catch(e){} });
+  } catch(e){}
+})();
+function netTick(dt){
+  if (!NET.on) return;
+  NET.sendT -= dt; if (NET.sendT <= 0){ NET.sendT = .12; const H = HERO, inPlay = GAME.state === 'play';
+    const s = { name:NET.name, x:+H.x.toFixed(2), y:+H.y.toFixed(2), z:+H.z.toFixed(2), ry:+H.yaw.toFixed(2), st:inPlay ? 1 : 0, an:(H.ch && H.ch.curName) || 'Idle', gl:H.glide ? 1 : 0 };
+    try { MP.update(s); } catch(e){} }
+  let n = 0;
+  for (const u in NET.players){ const p = NET.players[u]; let gh = NET.ghosts[u];
+    const vis = worldBuilt && GAME.state === 'play' && freshP(u) && p.st;
+    if (!vis){ if (gh) gh.ch.g.visible = false; continue; } n++;
+    if (!gh){ const ch = makeChar('Hero'); ch.g.position.set(p.x || 0, p.y || 0, p.z || 0); scene.add(ch.g); gh = NET.ghosts[u] = { ch, an:'', tag:null, tagName:'', ry:p.ry || 0, gl:null }; play(ch, 'Idle'); }
+    const nm = p.name || '용사'; if (nm !== gh.tagName){ if (gh.tag) gh.ch.g.remove(gh.tag); gh.tag = nameTag(nm); gh.ch.g.add(gh.tag); gh.tagName = nm; }
+    const g = gh.ch.g; g.visible = true; const tx = p.x || 0, ty = p.y || 0, tz = p.z || 0;
+    if (Math.hypot(tx - g.position.x, tz - g.position.z) > 20) g.position.set(tx, ty, tz); else { const k = 1 - Math.exp(-12*dt); g.position.x += (tx - g.position.x)*k; g.position.y += (ty - g.position.y)*k; g.position.z += (tz - g.position.z)*k; }
+    let dr = (p.ry || 0) - gh.ry; while (dr > Math.PI) dr -= Math.PI*2; while (dr < -Math.PI) dr += Math.PI*2; gh.ry += dr*Math.min(1, dt*12); g.rotation.y = gh.ry;
+    if (p.an && p.an !== gh.an){ gh.an = p.an; play(gh.ch, p.an); }
+    if (p.gl && !gh.gl && glider){ gh.gl = glider.clone(); gh.gl.visible = true; gh.gl.position.set(0, 3.1, 0); g.add(gh.gl); } else if (!p.gl && gh.gl){ g.remove(gh.gl); gh.gl = null; }
+    if (gh.ch.mixer) gh.ch.mixer.update(dt); }
+  for (const u in NET.ghosts) if (!NET.players[u]){ scene.remove(NET.ghosts[u].ch.g); delete NET.ghosts[u]; }
+  const e = $('mpInfo'); if (e){ const t = GAME.state === 'play' ? '👥 섬에 ' + (n + 1) + '명' + (URL_ROOM !== 'PUBLIC' ? ' · 방 ' + URL_ROOM : '') : ''; if (e.textContent !== t) e.textContent = t; }
+}
+window.__I = { NET, COLS, frame, HERO, ENEMIES, GAME, CAM, INPUT, KEYS, startGame, set noRender(v){ noRender = v; }, camera, SEALS, CHESTS, NPC_OBJ, sampleH, groundAt, hurt, damageEnemy, toggleLock, talkTo, openChest, bossStart, clock, ASSET, dlgNext, DLG, spawnEnemy, CASTLE, CAMPS, VILLAGE, get PROTO(){ return PROTO; }, hitSeal };
 })();
 </script>
 <script>
