@@ -6,225 +6,104 @@
 <title>그로우 가든: 인피니티 RNG</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  :root { --bg:#0f1113; --panel:#171a1e; --panel2:#1e2227; --line:rgba(255,255,255,.08); --text:#e9ecef; --dim:#8b939c; --faint:#5c646c; --green:#3ddc84; --money:#f2c94c; }
-  html, body { height:100%; background:var(--bg); color:var(--text); font-family:'Pretendard','Noto Sans KR','Malgun Gothic',-apple-system,sans-serif; overflow:hidden; user-select:none; -webkit-user-select:none; }
+  :root { --panel:rgba(18,18,21,.9); --panel2:rgba(255,255,255,.07); --line:rgba(255,255,255,.1); --text:#f1f3f5; --dim:#9aa1a9; --money:#f2c94c; --green:#3ddc84; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#7fb6e8; font-family:'Montserrat','Pretendard','Noto Sans KR','Malgun Gothic',sans-serif; color:var(--text); touch-action:none; user-select:none; -webkit-user-select:none; }
   button { font-family:inherit; color:inherit; }
-  #app { position:fixed; inset:0; display:flex; flex-direction:column; }
-  /* ---- 상단 ---- */
-  #top { flex:none; display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); }
-  #top .hub { width:32px; height:32px; border-radius:8px; background:var(--panel2); display:flex; align-items:center; justify-content:center; text-decoration:none; color:var(--text); font-size:15px; flex:none; }
-  #top .title { font-weight:900; font-size:15px; white-space:nowrap; }
-  #top .title small { display:block; font-size:10px; font-weight:700; color:var(--dim); letter-spacing:.06em; }
-  #top .sp { flex:1; }
-  .chip { display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:9px; background:var(--panel2); font-size:12px; font-weight:800; white-space:nowrap; }
-  .chip i { font-style:normal; color:var(--dim); font-weight:700; font-variant-numeric:tabular-nums; }
+  #c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  .tb { position:absolute; top:10px; width:36px; height:36px; border-radius:9px; background:rgba(18,18,21,.55); border:none; display:flex; align-items:center; justify-content:center; pointer-events:auto; color:#fff; text-decoration:none; font-size:16px; cursor:pointer; }
+  #topR { position:absolute; top:10px; right:10px; display:flex; gap:6px; align-items:center; }
+  .chip { background:rgba(18,18,21,.55); border-radius:9px; padding:7px 11px; font-size:12px; font-weight:800; white-space:nowrap; }
+  .chip i { font-style:normal; opacity:.65; margin-left:5px; font-variant-numeric:tabular-nums; }
   #money { color:var(--money); font-size:14px; font-variant-numeric:tabular-nums; }
-  /* ---- 본문 ---- */
-  #main { flex:1; display:flex; min-height:0; }
-  #farmWrap { flex:1; position:relative; overflow:auto; padding:14px; min-width:0; }
-  #side { width:400px; flex:none; display:flex; flex-direction:column; border-left:1px solid var(--line); background:var(--panel); min-height:0; }
-  #tabs { flex:none; display:flex; border-bottom:1px solid var(--line); }
-  #tabs button { flex:1; padding:11px 0; background:none; border:none; font-size:13px; font-weight:800; color:var(--dim); cursor:pointer; border-bottom:2px solid transparent; position:relative; }
-  #tabs button.on { color:var(--text); border-bottom-color:var(--text); }
-  #tabs button b { position:absolute; top:6px; right:14%; min-width:16px; height:16px; border-radius:8px; background:#e5484d; color:#fff; font-size:10px; line-height:16px; padding:0 4px; display:none; }
-  .pane { flex:1; overflow:auto; padding:12px; display:none; min-height:0; }
-  .pane.on { display:block; }
-  @media (max-width:820px){
-    #main { flex-direction:column; }
-    #side { width:auto; height:52%; border-left:none; border-top:1px solid var(--line); }
-    #farmWrap { padding:10px; }
-    #top .title small { display:none; }
-    .hideM { display:none !important; }
-  }
-  /* ---- 농장 ---- */
-  #farmHead { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-  #farmHead h3 { font-size:14px; font-weight:900; margin-right:auto; }
-  .btn { border:none; border-radius:9px; padding:8px 12px; font-size:12px; font-weight:800; cursor:pointer; background:var(--panel2); }
-  .btn:hover { filter:brightness(1.15); } .btn:active { transform:scale(.97); }
-  .btn.pri { background:#e9ecef; color:#111; } .btn.ok { background:var(--green); color:#07210f; } .btn:disabled { opacity:.4; cursor:default; transform:none; filter:none; }
-  #farm { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px; }
-  .tile { position:relative; aspect-ratio:1; border-radius:12px; background:linear-gradient(180deg,#4a3526,#3a2a1e); box-shadow:inset 0 -6px 0 rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04); cursor:pointer; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .tile::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 6px, transparent 6px 12px); pointer-events:none; }
-  .tile.empty:hover { background:linear-gradient(180deg,#56402f,#433124); }
-  .tile.planting { box-shadow:inset 0 0 0 2px #e9ecef; }
-  .tile .pl { position:relative; font-size:40px; line-height:1; transition:transform .3s; filter:drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
-  .tile .bar { position:absolute; left:8px; right:8px; bottom:7px; height:5px; border-radius:3px; background:rgba(0,0,0,.35); overflow:hidden; }
-  .tile .bar i { display:block; height:100%; background:var(--green); }
-  .tile .tt { position:absolute; left:6px; top:5px; font-size:9.5px; font-weight:900; letter-spacing:.02em; text-shadow:0 1px 2px #000; }
-  .tile .tm { position:absolute; right:6px; top:5px; font-size:9.5px; font-weight:700; color:#cfd4d9; text-shadow:0 1px 2px #000; font-variant-numeric:tabular-nums; }
-  .tile.ready { animation:bob 1.6s ease-in-out infinite; }
-  .tile.ready .pl { transform:scale(1.08); }
-  @keyframes bob { 50% { transform:translateY(-2px); } }
-  .tile .hv { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:900; background:rgba(0,0,0,.55); padding:2px 7px; border-radius:6px; white-space:nowrap; }
-  .tile.lock { background:#1b1e22; box-shadow:inset 0 0 0 1px var(--line); color:var(--faint); font-size:11px; font-weight:800; flex-direction:column; gap:3px; }
-  #plantBar { margin-top:12px; padding:10px; border-radius:12px; background:var(--panel); border:1px solid var(--line); }
-  #plantBar .hd { font-size:12px; font-weight:800; color:var(--dim); margin-bottom:8px; display:flex; justify-content:space-between; }
-  #seedRow { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
-  .sd { flex:none; width:64px; padding:6px 4px 5px; border-radius:10px; background:var(--panel2); border:1px solid transparent; text-align:center; cursor:pointer; position:relative; }
-  .sd.on { border-color:#e9ecef; }
-  .sd .e { font-size:24px; } .sd .n { font-size:9.5px; font-weight:800; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .sd .q { position:absolute; top:3px; right:5px; font-size:10px; font-weight:900; color:var(--dim); }
-  /* ---- 등급 표시 ---- */
-  .tier { font-weight:900; }
-  .fx-Rare { filter:drop-shadow(0 0 4px #4ea3ff) drop-shadow(0 3px 2px rgba(0,0,0,.35)) !important; }
-  .fx-Epic { filter:drop-shadow(0 0 6px #a970ff) drop-shadow(0 3px 2px rgba(0,0,0,.35)) !important; }
-  .fx-Legendary { filter:drop-shadow(0 0 8px #ffb020) !important; animation:flick 1.2s infinite; }
-  .fx-Mythic { filter:drop-shadow(0 0 9px #ff4d6d) drop-shadow(0 0 2px #fff) !important; }
-  .fx-Beast { filter:drop-shadow(0 0 10px #3ddc84) hue-rotate(-20deg) saturate(1.4) !important; animation:growl 2s infinite; }
-  .fx-Celestial { filter:drop-shadow(0 0 12px #8fd3ff) drop-shadow(0 0 3px #fff) !important; }
-  .fx-Divine { filter:drop-shadow(0 0 14px #ffe27a) brightness(1.15) !important; }
-  .fx-Ultra { filter:drop-shadow(0 0 12px #5ef0ff) !important; animation:zap .5s steps(2) infinite; }
-  .fx-Hyper { filter:drop-shadow(-8px 0 6px #ff5ef2) drop-shadow(8px 0 6px #5ef0ff) !important; animation:hyper .6s infinite; }
-  .fx-Infinity { filter:drop-shadow(0 0 16px #fff) drop-shadow(0 0 30px #b98cff) !important; animation:cosmic 3s linear infinite; }
-  .fx-Hidden { filter:invert(1) drop-shadow(0 0 10px #ff003c) !important; animation:glitch .35s steps(2) infinite; }
-  .var-Golden { filter:sepia(1) saturate(4) hue-rotate(-12deg) brightness(1.15) drop-shadow(0 0 6px #ffd24a) !important; }
-  .var-Rainbow { animation:rainbow 2s linear infinite !important; }
-  @keyframes flick { 50% { filter:drop-shadow(0 0 12px #ff7a1a); } }
-  @keyframes growl { 50% { transform:scale(1.08) rotate(-4deg); } }
-  @keyframes zap { 50% { filter:drop-shadow(0 0 3px #5ef0ff) brightness(1.6); } }
-  @keyframes hyper { 50% { transform:translateX(2px) skewX(-6deg); } }
-  @keyframes cosmic { to { transform:rotate(360deg); } }
-  @keyframes glitch { 0% { transform:translate(-2px,1px); } 100% { transform:translate(2px,-1px); } }
-  @keyframes rainbow { from { filter:hue-rotate(0) saturate(2) drop-shadow(0 0 6px #fff); } to { filter:hue-rotate(360deg) saturate(2) drop-shadow(0 0 6px #fff); } }
-  .aura { position:absolute; inset:10%; border-radius:50%; pointer-events:none; }
-  .aura.Celestial, .aura.Divine, .aura.Ultra, .aura.Hyper, .aura.Infinity, .aura.Hidden { animation:auraSpin 4s linear infinite; }
-  .aura.Celestial { background:radial-gradient(circle, rgba(143,211,255,.35), transparent 65%); }
-  .aura.Divine { background:radial-gradient(circle, rgba(255,226,122,.45), transparent 65%); box-shadow:0 -28px 0 -24px #ffe27a; }
-  .aura.Ultra { background:conic-gradient(from 0deg, transparent, rgba(94,240,255,.4), transparent 30%); }
-  .aura.Hyper { background:conic-gradient(from 0deg, rgba(255,94,242,.4), rgba(94,240,255,.4), rgba(255,94,242,.4)); filter:blur(6px); }
-  .aura.Infinity { background:conic-gradient(#ff6b6b, #ffe36b, #7be08a, #6bb8ff, #b48cff, #ff6b6b); filter:blur(10px); opacity:.6; }
-  .aura.Hidden { background:radial-gradient(circle, rgba(255,0,60,.5), transparent 60%); }
-  @keyframes auraSpin { to { transform:rotate(360deg); } }
-  /* ---- 카드/목록 ---- */
-  .sec { font-size:11px; font-weight:900; color:var(--dim); letter-spacing:.06em; margin:4px 0 8px; display:flex; align-items:center; justify-content:space-between; }
+  #plotTag { position:absolute; top:52px; right:10px; font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); text-align:right; line-height:1.5; }
+  #prompt { position:absolute; left:50%; bottom:118px; transform:translateX(-50%); padding:8px 14px; border-radius:9px; background:rgba(18,18,21,.7); font-size:13px; font-weight:800; display:none; white-space:nowrap; }
+  #prompt kbd { display:inline-block; min-width:22px; padding:1px 6px; margin-right:7px; border-radius:5px; background:#fff; color:#111; font:900 12px sans-serif; text-align:center; }
+  body.touch #prompt kbd { display:none; }
+  #hotbar { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); display:flex; gap:5px; pointer-events:auto; max-width:96vw; overflow-x:auto; padding:2px; }
+  .hb { position:relative; flex:none; width:56px; height:56px; border-radius:10px; background:rgba(18,18,21,.6); border:2px solid transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; }
+  .hb.on { border-color:#fff; background:rgba(18,18,21,.8); }
+  .hb .e { font-size:22px; line-height:1; } .hb .n { font-size:8.5px; font-weight:800; margin-top:3px; max-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hb .k { position:absolute; top:2px; left:5px; font-size:9px; opacity:.6; font-weight:800; } .hb .q { position:absolute; top:2px; right:5px; font-size:9.5px; font-weight:900; }
+  body.touch .hb .k { display:none; }
+  #joy { position:absolute; left:0; bottom:0; width:42%; height:60%; pointer-events:auto; }
+  #joyB { position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(255,255,255,.14); border:2px solid rgba(255,255,255,.4); display:none; }
+  #joyS { position:absolute; left:31px; top:31px; width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.85); }
+  .mb { position:absolute; border-radius:50%; background:rgba(18,18,21,.5); border:2px solid rgba(255,255,255,.35); pointer-events:auto; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; }
+  #bJump { right:22px; bottom:96px; width:70px; height:70px; }
+  #bAct { right:100px; bottom:84px; width:58px; height:58px; font-size:12px; }
+  body:not(.touch) #joy, body:not(.touch) .mb { display:none !important; }
+  body.touch #hotbar { bottom:8px; } body.touch #prompt { bottom:174px; }
+  #keys { position:absolute; left:12px; bottom:12px; font-size:11px; color:#fff; opacity:.7; line-height:1.6; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  body.touch #keys { display:none; }
+  #panel { position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.35); }
+  #panel.on { display:flex; }
+  #pbox { width:min(94vw,520px); max-height:84vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.4); }
+  #phead { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); }
+  #ptitle { font-size:16px; font-weight:900; } #psub { font-size:11px; color:var(--dim); font-weight:700; }
+  #pclose { width:32px; height:32px; border-radius:8px; border:none; background:var(--panel2); cursor:pointer; font-size:14px; }
+  #pbody { overflow:auto; padding:12px 14px 14px; }
+  .sec { font-size:11px; font-weight:900; color:var(--dim); letter-spacing:.05em; margin:6px 0 8px; display:flex; justify-content:space-between; }
   .item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:11px; background:var(--panel2); margin-bottom:6px; border:1px solid transparent; }
-  .item.sel { border-color:#e9ecef; }
-  .item .ic { width:40px; height:40px; flex:none; border-radius:9px; background:rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; font-size:24px; position:relative; }
-  .item .inf { flex:1; min-width:0; }
-  .item .nm { font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .item .sub { font-size:11px; color:var(--dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .item .val { font-size:12px; font-weight:900; color:var(--money); white-space:nowrap; font-variant-numeric:tabular-nums; }
-  .traits { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
-  .tr { font-size:10px; font-weight:800; padding:2px 6px; border-radius:5px; background:rgba(255,255,255,.07); color:#cfd4d9; }
-  .vb { font-size:10px; font-weight:900; padding:1px 5px; border-radius:4px; margin-left:4px; }
-  .vb.Golden { background:#f2c94c; color:#231800; } .vb.Rainbow { background:linear-gradient(90deg,#ff6b6b,#ffe36b,#7be08a,#6bb8ff,#b48cff); color:#111; }
-  .row { display:flex; gap:6px; align-items:center; }
-  .muted { color:var(--dim); font-size:12px; line-height:1.6; }
-  .timer { font-variant-numeric:tabular-nums; }
-  select.sel2 { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:700 12px inherit; }
-  /* ---- 연구소 ---- */
-  #labSlots { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-  .slot { flex:1; height:96px; border-radius:12px; border:1.5px dashed rgba(255,255,255,.18); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:11px; color:var(--dim); cursor:pointer; text-align:center; padding:6px; position:relative; }
-  .slot.full { border-style:solid; border-color:rgba(255,255,255,.25); background:var(--panel2); color:var(--text); }
-  .slot .e { font-size:32px; }
-  #labPlus { font-size:18px; color:var(--faint); font-weight:900; }
-  #reel { height:74px; border-radius:12px; background:#0b0d0f; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:900; letter-spacing:.04em; margin-bottom:10px; overflow:hidden; position:relative; }
-  #reel.go { animation:reelPulse .12s infinite; }
-  @keyframes reelPulse { 50% { background:#12151a; } }
-  #odds { width:100%; border-collapse:collapse; font-size:11.5px; }
-  #odds td { padding:4px 4px; border-bottom:1px solid var(--line); }
-  #odds td:nth-child(2), #odds td:nth-child(3) { text-align:right; font-variant-numeric:tabular-nums; color:var(--dim); }
-  #odds tr.boost td:nth-child(2) { color:var(--green); font-weight:800; }
-  /* ---- 로그 ---- */
-  #log .l { font-size:12px; padding:7px 9px; border-radius:8px; background:var(--panel2); margin-bottom:5px; line-height:1.5; }
-  #log .l time { color:var(--faint); font-size:10.5px; margin-right:6px; font-variant-numeric:tabular-nums; }
-  /* ---- 알림/오버레이 ---- */
-  #toast { position:fixed; left:50%; top:62px; transform:translate(-50%,-8px); background:rgba(20,22,26,.95); border:1px solid var(--line); padding:9px 14px; border-radius:10px; font-size:13px; font-weight:800; opacity:0; transition:.25s; z-index:50; pointer-events:none; white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; }
+  .item.sel { border-color:#fff; }
+  .ic { width:42px; height:42px; flex:none; border-radius:9px; background:rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; font-size:24px; }
+  .inf { flex:1; min-width:0; } .nm { font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .sub { font-size:11px; color:var(--dim); margin-top:2px; }
+  .val { font-size:12px; font-weight:900; color:var(--money); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .btn { border:none; border-radius:9px; padding:8px 12px; font-size:12px; font-weight:800; cursor:pointer; background:rgba(255,255,255,.12); white-space:nowrap; }
+  .btn:hover { filter:brightness(1.2); } .btn:disabled { opacity:.35; cursor:default; filter:none; }
+  .btn.pri { background:#fff; color:#111; } .btn.ok { background:var(--green); color:#062010; }
+  .traits { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; } .tr { font-size:10px; font-weight:800; padding:2px 6px; border-radius:5px; background:rgba(255,255,255,.1); }
+  .vb { font-size:10px; font-weight:900; padding:1px 5px; border-radius:4px; margin-left:4px; } .vb.Golden { background:#f2c94c; color:#231800; } .vb.Rainbow { background:linear-gradient(90deg,#ff6b6b,#ffe36b,#7be08a,#6bb8ff,#b48cff); color:#111; }
+  .row { display:flex; gap:6px; align-items:center; } .muted { color:var(--dim); font-size:12px; line-height:1.6; }
+  #labSlots { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .slot { flex:1; height:92px; border-radius:12px; border:1.5px dashed rgba(255,255,255,.2); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; color:var(--dim); cursor:pointer; text-align:center; padding:6px; gap:3px; }
+  .slot.full { border-style:solid; background:var(--panel2); color:var(--text); } .slot .e { font-size:30px; }
+  #reel { height:64px; border-radius:12px; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; margin-bottom:10px; }
+  table.odds { width:100%; border-collapse:collapse; font-size:11.5px; } table.odds td { padding:4px; border-bottom:1px solid var(--line); } table.odds td:nth-child(n+2) { text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; } table.odds tr.boost td:nth-child(2) { color:var(--green); font-weight:800; }
+  select.s2 { background:rgba(255,255,255,.1); color:#fff; border:none; border-radius:8px; padding:6px 8px; font:700 12px inherit; } select.s2 option { color:#111; }
+  #toast { position:fixed; left:50%; top:56px; transform:translate(-50%,-6px); padding:8px 14px; border-radius:9px; background:rgba(18,18,21,.8); font-size:13px; font-weight:800; opacity:0; transition:.25s; z-index:50; pointer-events:none; white-space:nowrap; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
-  #banner { position:fixed; left:0; right:0; top:52px; z-index:55; display:flex; justify-content:center; pointer-events:none; }
-  #banner .b { margin-top:8px; padding:12px 18px; border-radius:12px; font-weight:900; font-size:14px; background:rgba(12,14,17,.96); border:1px solid rgba(255,255,255,.18); box-shadow:0 10px 30px rgba(0,0,0,.5); animation:bannerIn 5s forwards; max-width:94vw; text-align:center; }
-  @keyframes bannerIn { 0% { transform:translateY(-30px); opacity:0; } 8%,85% { transform:none; opacity:1; } 100% { opacity:0; } }
-  #weatherFx { position:fixed; inset:0; pointer-events:none; z-index:5; }
-  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:6; }
-  #reveal { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.75); }
+  #banner { position:fixed; left:0; right:0; top:56px; z-index:55; display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+  #banner .b { margin-top:6px; padding:10px 16px; border-radius:11px; font-weight:900; font-size:14px; background:rgba(12,14,17,.88); animation:bIn 5s forwards; max-width:94vw; text-align:center; }
+  @keyframes bIn { 0% { transform:translateY(-20px); opacity:0; } 8%,85% { transform:none; opacity:1; } 100% { opacity:0; } }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:30; }
+  #reveal { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
   #reveal.on { display:flex; }
-  #reveal .card { width:min(90vw,340px); border-radius:18px; background:var(--panel); border:1px solid var(--line); padding:22px 18px 16px; text-align:center; position:relative; overflow:hidden; }
-  #reveal .big { font-size:80px; margin:6px 0 10px; position:relative; display:inline-block; }
-  #reveal .tn { font-size:22px; font-weight:900; letter-spacing:.03em; }
-  #reveal .nm { font-size:14px; font-weight:800; margin-top:4px; }
-  #reveal .v { font-size:13px; color:var(--money); font-weight:900; margin:8px 0 4px; }
-  #reveal .odd { font-size:11px; color:var(--dim); }
-  #reveal .rays { position:absolute; inset:-50%; background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.06) 0 10deg, transparent 10deg 20deg); animation:auraSpin 12s linear infinite; pointer-events:none; }
-  #cut { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center; flex-direction:column; background:#000; color:#fff; text-align:center; }
-  #cut.on { display:flex; }
-  #cut .g { font:900 min(12vw,72px) monospace; letter-spacing:.1em; animation:glitch .12s steps(2) infinite; text-shadow:3px 0 #ff003c, -3px 0 #00e5ff; }
-  #cut .s { margin-top:16px; font:700 13px monospace; color:#9aa; min-height:20px; }
-  #cut.cosmic { background:radial-gradient(circle at 50% 50%, #2a1450, #05030d 70%); }
-  #cut.cosmic .g { animation:none; text-shadow:0 0 30px #b98cff, 0 0 60px #6bb8ff; font-family:inherit; }
-  #online { font-size:11px; color:var(--dim); }
+  #reveal .card { width:min(90vw,330px); border-radius:16px; background:rgba(18,18,21,.96); border:1px solid var(--line); padding:20px 18px 14px; text-align:center; }
+  #rvIcon { font-size:70px; margin:8px 0; } #rvTier { font-size:22px; font-weight:900; } #rvName { font-size:14px; font-weight:800; } #rvVal { font-size:13px; font-weight:900; color:var(--money); margin:8px 0 3px; } #rvOdd { font-size:11px; color:var(--dim); }
+  #cut { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center; flex-direction:column; background:#000; text-align:center; }
+  #cut.on { display:flex; } #cut .g { font:900 min(12vw,72px) monospace; text-shadow:3px 0 #ff003c, -3px 0 #00e5ff; animation:gl .12s steps(2) infinite; } #cut .s { margin-top:16px; font:700 13px monospace; color:#9aa; min-height:20px; }
+  #cut.cosmic { background:radial-gradient(circle, #2a1450, #05030d 70%); } #cut.cosmic .g { animation:none; text-shadow:0 0 30px #b98cff; }
+  @keyframes gl { 0% { transform:translate(-2px,1px); } 100% { transform:translate(2px,-1px); } }
+  .fx-Golden { filter:sepia(1) saturate(4) hue-rotate(-12deg) brightness(1.15); } .fx-Rainbow { animation:rb 2s linear infinite; }
+  @keyframes rb { from { filter:hue-rotate(0) saturate(2); } to { filter:hue-rotate(360deg) saturate(2); } }
+  #loading { position:fixed; inset:0; z-index:80; background:#0f1113; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
 </style>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f1113">
+<meta name="theme-color" content="#15130E">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
-<canvas id="weatherFx"></canvas><div id="flash"></div>
-<div id="app">
-  <div id="top">
-    <a class="hub" href="hub.html" title="허브">⌂</a>
-    <div class="title">그로우 가든<small>PLANT DNA · INFINITY RNG</small></div>
-    <div class="sp"></div>
-    <div class="chip" id="wxChip" title="날씨 (모두 같은 날씨)"><span id="wxName">☀ 맑음</span><i id="wxT">3:00</i></div>
-    <div class="chip hideM" title="특별 상점 재입고"><span>재입고</span><i id="rsT">5:00</i></div>
-    <div class="chip"><span id="money">0</span></div>
-  </div>
-  <div id="main">
-    <div id="farmWrap">
-      <div id="farmHead"><h3>내 밭 <span id="online"></span></h3>
-        <button class="btn" id="harvestAll" type="button">모두 수확</button>
-        <button class="btn" id="expandBtn" type="button">밭 넓히기</button></div>
-      <div id="farm"></div>
-      <div id="plantBar"><div class="hd"><span>심을 씨앗 고르기 → 빈 밭 누르기</span><span id="plantHint"></span></div><div id="seedRow"></div></div>
-    </div>
-    <div id="side">
-      <div id="tabs">
-        <button data-t="shop" class="on" type="button">상점</button>
-        <button data-t="lab" type="button">연구소</button>
-        <button data-t="bag" type="button">가방<b id="bagN"></b></button>
-        <button data-t="log" type="button">기록</button>
-      </div>
-      <div class="pane on" id="p-shop">
-        <div class="sec"><span>특별 상점 · 한정 재고</span><span class="timer" id="rsT2">5:00</span></div>
-        <div id="spShop"></div>
-        <div class="sec" style="margin-top:14px"><span>일반 상점</span><span>항상 판매</span></div>
-        <div id="regShop"></div>
-      </div>
-      <div class="pane" id="p-lab">
-        <div class="sec"><span>DNA 합성기</span><span id="luckTxt"></span></div>
-        <div id="labSlots"><div class="slot" id="slotA">A<br>가방에서 고르기</div><div id="labPlus">+</div><div class="slot" id="slotB">B<br>가방에서 고르기</div></div>
-        <div id="reel">?</div>
-        <div class="row" style="margin-bottom:12px"><button class="btn pri" id="combineBtn" type="button" style="flex:1;padding:12px">합성하기</button><label class="muted" style="display:flex;align-items:center;gap:5px;font-size:11px"><input type="checkbox" id="fastRoll"> 빠르게</label></div>
-        <div class="muted" style="font-size:11px;margin-bottom:10px">두 개(작물 또는 씨앗)를 넣으면 사라지고 새 하이브리드 씨앗이 나와요. 부모의 특성은 하나씩 70% 확률로 물려받고, 10% 확률로 새 특성이 생겨요. 부모 등급이 높을수록 운이 올라가요.</div>
-        <div class="sec"><span>등급 확률 (지금 기준)</span><span>배율</span></div>
-        <table id="odds"></table>
-      </div>
-      <div class="pane" id="p-bag">
-        <div class="sec"><span id="bagTitle">작물</span><span class="row"><select class="sel2" id="sortSel"><option value="val">가치순</option><option value="tier">등급순</option><option value="new">최신순</option></select></span></div>
-        <div class="row" style="margin-bottom:10px;flex-wrap:wrap">
-          <button class="btn" id="bagCrops" type="button">작물</button><button class="btn" id="bagSeeds" type="button">씨앗</button>
-          <span style="flex:1"></span>
-          <button class="btn" id="sellLow" type="button">레전더리 미만 팔기</button><button class="btn" id="sellAll" type="button">모두 팔기</button>
-        </div>
-        <div id="bag"></div>
-      </div>
-      <div class="pane" id="p-log">
-        <div class="sec"><span>발견한 등급</span><span id="rolls"></span></div>
-        <div id="dex" class="traits" style="margin-bottom:14px"></div>
-        <div class="sec"><span>기록</span></div>
-        <div id="log"></div>
-      </div>
-    </div>
-  </div>
+<canvas id="c"></canvas>
+<div id="hud">
+  <a class="tb" href="hub.html" style="left:10px" title="허브">⌂</a>
+  <div id="topR"><div class="chip"><span id="wxName">맑음</span><i id="wxT">3:00</i></div><div class="chip">재입고<i id="rsT">5:00</i></div><div class="chip"><span id="money">0</span></div></div>
+  <div id="plotTag"></div>
+  <div id="prompt"></div>
+  <div id="hotbar"></div>
+  <div id="keys">WASD 이동 · Space 점프 · 우클릭 드래그 시점 · 휠 줌 · E 상호작용<br>1~9 도구 고르기 · 클릭: 심기 / 수확 / 설치 · Q 손 비우기</div>
+  <div id="joy"><div id="joyB"><div id="joyS"></div></div></div>
+  <div id="bJump" class="mb">점프</div>
+  <div id="bAct" class="mb">E</div>
 </div>
-<div id="toast"></div>
-<div id="banner"></div>
-<div id="reveal"><div class="card"><div class="rays"></div>
-  <div class="tn" id="rvTier">Common</div><div class="big" id="rvIcon">🥕</div>
-  <div class="nm" id="rvName"></div><div class="traits" id="rvTraits" style="justify-content:center;margin-top:8px"></div>
-  <div class="v" id="rvVal"></div><div class="odd" id="rvOdd"></div>
-  <button class="btn pri" id="rvOk" type="button" style="margin-top:14px;width:100%;padding:11px">확인</button>
-</div></div>
-<div id="cut"><div class="g" id="cutG">ERROR</div><div class="s" id="cutS"></div></div>
+<div id="panel"><div id="pbox"><div id="phead"><div><div id="ptitle"></div><div id="psub"></div></div><span style="flex:1"></span><button id="pclose" type="button">✕</button></div><div id="pbody"></div></div></div>
+<div id="toast"></div><div id="banner"></div><div id="flash"></div>
+<div id="reveal"><div class="card"><div id="rvTier"></div><div id="rvIcon"></div><div id="rvName"></div><div class="traits" id="rvTraits" style="justify-content:center;margin-top:8px"></div><div id="rvVal"></div><div id="rvOdd"></div>
+  <button class="btn pri" id="rvOk" type="button" style="margin-top:14px;width:100%;padding:11px">확인</button></div></div>
+<div id="cut"><div class="g" id="cutG"></div><div class="s" id="cutS"></div></div>
+<div id="loading">불러오는 중…</div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
@@ -233,455 +112,661 @@
 (function(){
 'use strict';
 const $ = id => document.getElementById(id);
-// =====================================================================
-//  데이터 정의
-// =====================================================================
-// 등급: 위에서부터(가장 희귀한 것부터) 확률 검사. p = 기본 확률, mult = 가치 배율
-const TIERS = [
-  { k:'Common',    ko:'커먼',       p:1/2,        mult:1,      col:'#b8c0c8' },
-  { k:'Rare',      ko:'레어',       p:1/4,        mult:5,      col:'#4ea3ff' },
-  { k:'Epic',      ko:'에픽',       p:1/8,        mult:25,     col:'#a970ff' },
-  { k:'Legendary', ko:'레전더리',   p:1/20,       mult:120,    col:'#ffb020' },
-  { k:'Mythic',    ko:'미스틱',       p:1/50,       mult:500,    col:'#ff4d6d' },
-  { k:'Beast',     ko:'비스트',     p:1/125,      mult:2500,   col:'#3ddc84' },
-  { k:'Celestial', ko:'셀레스티얼', p:1/500,      mult:15000,  col:'#8fd3ff' },
-  { k:'Divine',    ko:'디바인',     p:1/2000,     mult:1e5,    col:'#ffe27a' },
-  { k:'Ultra',     ko:'울트라',     p:1/1e4,      mult:1e6,    col:'#5ef0ff' },
-  { k:'Hyper',     ko:'하이퍼',     p:1/1e5,      mult:1e7,    col:'#ff5ef2' },
-  { k:'Infinity',  ko:'인피니티',   p:1/1e6,      mult:1e9,    col:'#ffffff' },
-  { k:'Hidden',    ko:'???',        p:1/1e7,      mult:1e12,   col:'#ff003c' },   // 값: 정의되지 않음(표시는 ???)
-];
-const TI = {}; TIERS.forEach((t, i)=>{ TI[t.k] = i; t.i = i; });
-const ALERT_AT = TI.Celestial;
-// 변이(색 변형)
-const VARIANTS = { Normal:{ ko:'', mult:1 }, Golden:{ ko:'골든', mult:20 }, Rainbow:{ ko:'레인보우', mult:50 } };
-// 특성 풀: mult 는 곱으로 쌓인다(개수 제한 없음). grow = 자라는 시간 배율, luck = 합성 운 +, twin = 두 개 수확
-const TRAITS = {
-  Giant:{ ko:'거대', mult:2 },            Speedy:{ ko:'쾌속', mult:1.2, grow:.7 },   Overcharged:{ ko:'과충전', mult:3 },
-  Mutant:{ ko:'돌연변이', mult:2.5 },     Frozen:{ ko:'얼음', mult:1.8 },            Blazing:{ ko:'불꽃', mult:2.2 },
-  Shiny:{ ko:'반짝', mult:1.5 },          Ancient:{ ko:'고대', mult:4, grow:1.3 },   Toxic:{ ko:'독성', mult:1.6 },
-  Lucky:{ ko:'행운', mult:1.3, luck:.5 }, Twin:{ ko:'쌍둥이', mult:1, twin:true },   Glowing:{ ko:'발광', mult:1.4 },
-  Crystal:{ ko:'수정', mult:3.5 },        Starlit:{ ko:'별빛', mult:5 },             Electric:{ ko:'전기', mult:2.8 },
-  Sweet:{ ko:'달콤', mult:1.3 },          Heavy:{ ko:'묵직', mult:1.7 },             Void:{ ko:'공허', mult:8, rare:true },
-};
-const TRAIT_KEYS = Object.keys(TRAITS);
-// 기본 작물 (일반 상점)
-const SPECIES = {
-  carrot:    { ko:'당근',     e:'🥕', base:8,    grow:12,  cost:10 },
-  strawberry:{ ko:'딸기',     e:'🍓', base:14,   grow:18,  cost:20 },
-  blueberry: { ko:'블루베리', e:'🫐', base:22,   grow:24,  cost:35 },
-  tomato:    { ko:'토마토',   e:'🍅', base:35,   grow:30,  cost:60 },
-  corn:      { ko:'옥수수',   e:'🌽', base:55,   grow:40,  cost:100 },
-  grape:     { ko:'포도',     e:'🍇', base:90,   grow:50,  cost:170 },
-  pumpkin:   { ko:'호박',     e:'🎃', base:150,  grow:65,  cost:300 },
-  watermelon:{ ko:'수박',     e:'🍉', base:240,  grow:80,  cost:500 },
-  peach:     { ko:'복숭아',   e:'🍑', base:380,  grow:95,  cost:800 },
-  mushroom:  { ko:'버섯',     e:'🍄', base:600,  grow:110, cost:1300 },
-  pineapple: { ko:'파인애플', e:'🍍', base:950,  grow:130, cost:2100 },
-  coconut:   { ko:'코코넛',   e:'🥥', base:1500, grow:150, cost:3400 },
-};
-const SPEC_KEYS = Object.keys(SPECIES);
-const MAX_TILES = 30, START_TILES = 6;
-// 날씨 (모든 사람이 같은 날씨 — 서버 시계로 3분마다)
-const WEATHER = {
-  sunny:  { ko:'맑음',       ic:'☀', trait:null },
-  acid:   { ko:'산성비',     ic:'☔', trait:'Toxic',    desc:'돌연변이·특성 유전 3배' },
-  storm:  { ko:'뇌우',       ic:'⛈', trait:'Electric', desc:'울트라·하이퍼 확률 10배' },
-  meteor: { ko:'유성우',     ic:'☄', trait:'Starlit',  desc:'특별 상점 셀레스티얼·디바인 10배' },
-  rainbow:{ ko:'무지개',     ic:'🌈', trait:'Shiny',    desc:'레인보우 변이 5%' },
-};
-const WX_CYCLE = 180e3, RESTOCK = 300e3;
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0; if (isTouch) document.body.classList.add('touch');
 
 // =====================================================================
-//  도구
+//  게임 데이터
 // =====================================================================
+const TIERS = [
+  { k:'Common',    ko:'커먼',       p:1/2,    mult:1,     col:'#b8c0c8' },
+  { k:'Rare',      ko:'레어',       p:1/4,    mult:5,     col:'#4ea3ff' },
+  { k:'Epic',      ko:'에픽',       p:1/8,    mult:25,    col:'#a970ff' },
+  { k:'Legendary', ko:'레전더리',   p:1/20,   mult:120,   col:'#ffb020' },
+  { k:'Mythic',    ko:'미스틱',     p:1/50,   mult:500,   col:'#ff4d6d' },
+  { k:'Beast',     ko:'비스트',     p:1/125,  mult:2500,  col:'#3ddc84' },
+  { k:'Celestial', ko:'셀레스티얼', p:1/500,  mult:15000, col:'#8fd3ff' },
+  { k:'Divine',    ko:'디바인',     p:1/2000, mult:1e5,   col:'#ffe27a' },
+  { k:'Ultra',     ko:'울트라',     p:1/1e4,  mult:1e6,   col:'#5ef0ff' },
+  { k:'Hyper',     ko:'하이퍼',     p:1/1e5,  mult:1e7,   col:'#ff5ef2' },
+  { k:'Infinity',  ko:'인피니티',   p:1/1e6,  mult:1e9,   col:'#ffffff' },
+  { k:'Hidden',    ko:'???',        p:1/1e7,  mult:1e12,  col:'#ff003c' },
+];
+const TI = {}; TIERS.forEach((t, i)=>{ TI[t.k] = i; t.i = i; });
+const VARIANTS = { Normal:{ ko:'', mult:1 }, Golden:{ ko:'골든', mult:20 }, Rainbow:{ ko:'레인보우', mult:50 } };
+const VK = ['Normal','Golden','Rainbow'];
+const TRAITS = {
+  Giant:{ ko:'거대', mult:2 }, Speedy:{ ko:'쾌속', mult:1.2, grow:.7 }, Overcharged:{ ko:'과충전', mult:3 }, Mutant:{ ko:'돌연변이', mult:2.5 },
+  Frozen:{ ko:'얼음', mult:1.8 }, Blazing:{ ko:'불꽃', mult:2.2 }, Shiny:{ ko:'반짝', mult:1.5 }, Ancient:{ ko:'고대', mult:4, grow:1.3 },
+  Toxic:{ ko:'독성', mult:1.6 }, Lucky:{ ko:'행운', mult:1.3, luck:.5 }, Twin:{ ko:'쌍둥이', mult:1, twin:true }, Glowing:{ ko:'발광', mult:1.4 },
+  Crystal:{ ko:'수정', mult:3.5 }, Starlit:{ ko:'별빛', mult:5 }, Electric:{ ko:'전기', mult:2.8 }, Sweet:{ ko:'달콤', mult:1.3 },
+  Heavy:{ ko:'묵직', mult:1.7 }, Wet:{ ko:'촉촉', mult:1.4 }, Void:{ ko:'공허', mult:8, rare:true },
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
+// 작물: shape = 3D 모양, fc = 열매 색
+const SPECIES = {
+  carrot:    { ko:'당근',     e:'🥕', base:8,    grow:12,  cost:10,   shape:'root',   fc:0xff8a1f },
+  strawberry:{ ko:'딸기',     e:'🍓', base:14,   grow:18,  cost:20,   shape:'berry',  fc:0xe8263a, n:5 },
+  blueberry: { ko:'블루베리', e:'🫐', base:22,   grow:24,  cost:35,   shape:'berry',  fc:0x3b4fd8, n:9 },
+  tomato:    { ko:'토마토',   e:'🍅', base:35,   grow:30,  cost:60,   shape:'round',  fc:0xe3321f, n:4 },
+  corn:      { ko:'옥수수',   e:'🌽', base:55,   grow:40,  cost:100,  shape:'corn',   fc:0xffd23d },
+  grape:     { ko:'포도',     e:'🍇', base:90,   grow:50,  cost:170,  shape:'grape',  fc:0x7b3fb8 },
+  pumpkin:   { ko:'호박',     e:'🎃', base:150,  grow:65,  cost:300,  shape:'big',    fc:0xf07a12 },
+  watermelon:{ ko:'수박',     e:'🍉', base:240,  grow:80,  cost:500,  shape:'melon',  fc:0x2e8b3a },
+  peach:     { ko:'복숭아',   e:'🍑', base:380,  grow:95,  cost:800,  shape:'tree',   fc:0xffa07a, n:5 },
+  mushroom:  { ko:'버섯',     e:'🍄', base:600,  grow:110, cost:1300, shape:'shroom', fc:0xd8322a },
+  pineapple: { ko:'파인애플', e:'🍍', base:950,  grow:130, cost:2100, shape:'pine',   fc:0xf2b233 },
+  coconut:   { ko:'코코넛',   e:'🥥', base:1500, grow:150, cost:3400, shape:'palm',   fc:0x6b4423, n:3 },
+};
+const SPEC_KEYS = Object.keys(SPECIES);
+// 스프링클러: r 반경, spd 성장 배율, trait 새 특성 확률, gold 골든 확률, up 등급 +1 확률, dur 지속(초)
+const SPRINKLERS = {
+  sp1:{ ko:'기본 스프링클러', e:'💧', r:6,  spd:1.3, trait:0,   gold:0,   up:0,   dur:240, cost:2000,    col:0x9aa3ad },
+  sp2:{ ko:'고급 스프링클러', e:'💦', r:8,  spd:1.6, trait:.06, gold:0,   up:0,   dur:360, cost:20000,   col:0x4ea3ff },
+  sp3:{ ko:'황금 스프링클러', e:'🌟', r:9,  spd:1.9, trait:.08, gold:.03, up:0,   dur:480, cost:250000,  col:0xf2c94c },
+  sp4:{ ko:'신화 스프링클러', e:'🌀', r:11, spd:2.4, trait:.12, gold:.03, up:.01, dur:600, cost:3000000, col:0xb98cff },
+};
+const GROW_ITEMS = {
+  water:  { ko:'물뿌리개 (10회)', e:'🚿', cost:300,   desc:'자라는 작물 하나를 15% 더 키워요 (1회 사용)', give:{ water:10 } },
+  fert:   { ko:'비료',            e:'🧪', cost:1500,  desc:'3분 동안 내 밭 전체 성장 ×1.5', give:{ fert:1 } },
+  instant:{ ko:'성장 촉진제',     e:'⚡', cost:12000, desc:'작물 하나를 바로 다 키워요', give:{ instant:1 } },
+  luck:   { ko:'행운 비료',       e:'🍀', cost:40000, desc:'다음 유전자 합성 운 ×2', give:{} },
+};
+const WEATHER = {
+  sunny:  { ko:'맑음',   ic:'☀', trait:null },
+  acid:   { ko:'산성비', ic:'☔', trait:'Toxic',    desc:'특성 유전·돌연변이 3배, 작물이 촉촉해져요' },
+  storm:  { ko:'뇌우',   ic:'⛈', trait:'Electric', desc:'울트라·하이퍼 확률 10배' },
+  meteor: { ko:'유성우', ic:'☄', trait:'Starlit',  desc:'특별 재고에 셀레스티얼·디바인 10배' },
+  rainbow:{ ko:'무지개', ic:'🌈', trait:'Shiny',    desc:'레인보우 변이 5%' },
+};
+const WX_CYCLE = 180e3, RESTOCK = 300e3;
+const COLS = 6, ROWS = 5, SPOT = 3.4, MAX_SPOTS = COLS*ROWS, START_SPOTS = 9;
+
 const sNow = () => (window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
 function hash(n){ n = (n ^ 0x9e3779b9) >>> 0; n = Math.imul(n ^ (n >>> 16), 0x85ebca6b) >>> 0; n = Math.imul(n ^ (n >>> 13), 0xc2b2ae35) >>> 0; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; }
 function seeded(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const SUF = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
-function fmt(n){ if (!isFinite(n)) return '∞'; if (n < 1000) return String(Math.floor(n)); let i = 0; while (n >= 1000 && i < SUF.length - 1){ n /= 1000; i++; } if (n >= 1000) return n.toExponential(2);
-  return (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n)) + SUF[i]; }
+function fmt(n){ if (!isFinite(n)) return '∞'; if (n < 1000) return String(Math.floor(n)); let i = 0; while (n >= 1000 && i < SUF.length - 1){ n /= 1000; i++; } if (n >= 1000) return n.toExponential(2); return (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n)) + SUF[i]; }
 const esc = t => String(t).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const clock = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ':' + String(s % 60).padStart(2, '0'); };
 let uidN = 0; const uid = p => p + '_' + Date.now().toString(36) + (uidN++).toString(36) + Math.floor(Math.random()*1e4).toString(36);
-function oddsTxt(p){ if (p >= 1) return '100%'; const inv = 1/p; return inv < 1000 ? '1/' + (Math.round(inv*10)/10) : '1/' + fmt(inv); }
+const oddsTxt = p => p >= 1 ? '100%' : '1/' + (1/p < 1000 ? Math.round(10/p)/10 : fmt(1/p));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // =====================================================================
-//  상태 (저장)
+//  저장 상태
 // =====================================================================
-const SAVE_KEY = 'garden_save_v1';
-let S = null;
-function fresh(){ return { money:60, tiles:[], unlocked:START_TILES, seeds:[], crops:[], rolls:0, found:{}, bestVal:0, bestTier:0, logs:[], shopSlot:-1, bought:{} }; }
-try { S = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch(e){ S = null; }
-if (!S || typeof S !== 'object') S = fresh();
-S = Object.assign(fresh(), S);
-while (S.tiles.length < MAX_TILES) S.tiles.push(null);
-if (!S.seeds.length && !S.crops.length && S.tiles.every(t=>!t) && S.money < 10){ S.money = 60; }
-let dirty = true;
-function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
+const SAVE_KEY = 'garden3d_v1';
+function fresh(){ return { money:80, unlocked:START_SPOTS, seeds:[], crops:[], plants:[], sprinklers:[], gear:{ water:0, fert:0, instant:0, sp1:0, sp2:0, sp3:0, sp4:0 }, fertUntil:0, luckNext:0, rolls:0, found:{}, bestVal:0, bestTier:0, shopSlot:-1, bought:{}, t:Date.now(), plot:0 }; }
+let S; try { S = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch(e){ S = null; }
+S = Object.assign(fresh(), S || {}); S.gear = Object.assign(fresh().gear, S.gear || {});
+function save(){ S.t = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
 setInterval(save, 4000); addEventListener('pagehide', save);
 
-// =====================================================================
-//  씨앗 · 가치 계산
-// =====================================================================
-function traitMult(traits){ let m = 1; for (const t of traits || []) m *= (TRAITS[t] ? TRAITS[t].mult : 1); return m; }
-// 기본 가치 = 작물 기본값 × 등급 배율 × 변이 배율 × 특성 배율(곱)
-function seedValue(sd){ return SPECIES[sd.species].base * TIERS[TI[sd.tier]].mult * VARIANTS[sd.variant].mult * traitMult(sd.traits); }
-function growthTime(sd){ let g = SPECIES[sd.species].grow * (1 + TI[sd.tier] * 0.12); for (const t of sd.traits) if (TRAITS[t] && TRAITS[t].grow) g *= TRAITS[t].grow; return Math.max(5, Math.round(g)); }
-function makeSeed(o){
-  const sd = Object.assign({ id:uid('seed'), kind:'seed', isPrimary:true, species:'carrot', tier:'Common', variant:'Normal', traits:[], name:'', qty:1 }, o);
-  if (!sd.name) sd.name = SPECIES[sd.species].ko;
-  sd.baseValue = seedValue(sd); sd.growthTime = growthTime(sd); return sd; }
+// ---- 씨앗 ----
+function traitMult(tr){ let m = 1; for (const t of tr || []) m *= TRAITS[t] ? TRAITS[t].mult : 1; return m; }
+function seedValue(x){ return SPECIES[x.species].base * TIERS[TI[x.tier]].mult * VARIANTS[x.variant].mult * traitMult(x.traits); }
+function growthTime(x){ let g = SPECIES[x.species].grow * (1 + TI[x.tier]*0.12); for (const t of x.traits) if (TRAITS[t] && TRAITS[t].grow) g *= TRAITS[t].grow; return Math.max(5, Math.round(g)); }
+function makeSeed(o){ const sd = Object.assign({ id:uid('seed'), kind:'seed', isPrimary:true, species:'carrot', tier:'Common', variant:'Normal', traits:[], name:'', qty:1 }, o);
+  if (!sd.name) sd.name = SPECIES[sd.species].ko; sd.baseValue = seedValue(sd); sd.growthTime = growthTime(sd); return sd; }
 const seedKey = sd => sd.isPrimary ? ['P', sd.species, sd.tier, sd.variant].join('|') : sd.id;
-function addSeed(sd){ const k = seedKey(sd), ex = S.seeds.find(x=>seedKey(x) === k); if (ex && sd.isPrimary) ex.qty += sd.qty || 1; else S.seeds.push(sd); dirty = true; }
+function addSeed(sd){ const ex = sd.isPrimary && S.seeds.find(x=>seedKey(x) === seedKey(sd)); if (ex) ex.qty += sd.qty || 1; else S.seeds.push(sd); }
 function takeSeed(id){ const i = S.seeds.findIndex(x=>x.id === id); if (i < 0) return null; const sd = S.seeds[i];
   if ((sd.qty || 1) > 1){ sd.qty--; return Object.assign({}, sd, { qty:1, id:uid('seed') }); } S.seeds.splice(i, 1); return sd; }
-function fullName(x){ return (x.variant !== 'Normal' ? VARIANTS[x.variant].ko + ' ' : '') + TIERS[TI[x.tier]].ko + ' ' + x.name; }
-function icon(x, big){ const t = x.tier, cls = 'fx-' + t + (x.variant !== 'Normal' ? ' var-' + x.variant : '');
-  return '<span class="' + cls + '" style="display:inline-block">' + SPECIES[x.species].e + '</span>' + (TI[t] >= TI.Celestial ? '<span class="aura ' + t + '"></span>' : ''); }
-function traitHTML(tr){ return tr.length ? '<div class="traits">' + tr.map(t=>'<span class="tr">' + (TRAITS[t] ? TRAITS[t].ko : t) + '</span>').join('') + '</div>' : ''; }
+const fullName = x => (x.variant !== 'Normal' ? VARIANTS[x.variant].ko + ' ' : '') + TIERS[TI[x.tier]].ko + ' ' + x.name;
+const emo = x => '<span class="' + (x.variant !== 'Normal' ? 'fx-' + x.variant : '') + '">' + SPECIES[x.species].e + '</span>';
+const tag = x => '<span style="color:' + TIERS[TI[x.tier]].col + '">' + TIERS[TI[x.tier]].ko + '</span>';
 
-// =====================================================================
-//  날씨 · 재입고 (서버 시계 기준 — 모두 같은 날씨/같은 재고)
-// =====================================================================
-function weatherAt(slot){ const r = hash(slot * 7919 + 13); return r < .4 ? 'sunny' : r < .55 ? 'acid' : r < .7 ? 'storm' : r < .85 ? 'meteor' : 'rainbow'; }
-function curWeather(){ return weatherAt(Math.floor(sNow() / WX_CYCLE)); }
-function wxLeft(){ return (WX_CYCLE - sNow() % WX_CYCLE) / 1000; }
-function rsLeft(){ return (RESTOCK - sNow() % RESTOCK) / 1000; }
-// 특별 상점 재고: 재입고 번호로 씨앗을 뿌려서 모두 같은 재고 (유성우면 셀레스티얼·디바인 10배)
+// ---- 날씨 · 재입고 (서버 시계 → 모두 같음) ----
+function weatherAt(slot){ const r = hash(slot*7919 + 13); return r < .4 ? 'sunny' : r < .55 ? 'acid' : r < .7 ? 'storm' : r < .85 ? 'meteor' : 'rainbow'; }
+const curWeather = () => weatherAt(Math.floor(sNow()/WX_CYCLE));
+const wxLeft = () => (WX_CYCLE - sNow() % WX_CYCLE)/1000, rsLeft = () => (RESTOCK - sNow() % RESTOCK)/1000;
 function specialStock(slot){
-  const R = seeded(slot * 131 + 7), wx = weatherAt(Math.floor(slot * RESTOCK / WX_CYCLE)), meteor = wx === 'meteor';
-  const n = 4 + Math.floor(R() * 3), out = [];
-  for (let i=0;i<n;i++){
-    const r = R(); let tier;
-    const pDiv = meteor ? .005 : .0005, pCel = meteor ? .035 : .0035;
-    if (r < pDiv) tier = 'Divine'; else if (r < pDiv + pCel) tier = 'Celestial'; else if (r < .02) tier = 'Beast'; else if (r < .1) tier = 'Mythic'; else if (r < .38) tier = 'Legendary'; else tier = 'Epic';
-    const sp = SPEC_KEYS[Math.floor(Math.pow(R(), 1.6) * SPEC_KEYS.length)];
-    const sd = makeSeed({ species:sp, tier, isPrimary:true });
-    const price = Math.round(SPECIES[sp].cost * TIERS[TI[tier]].mult * 1.6);
-    out.push({ i, sd, price, stock: TI[tier] >= TI.Mythic ? 1 : 1 + Math.floor(R() * 3) });
-  }
-  return out;
-}
-function regularStock(){ const out = []; SPEC_KEYS.forEach(k=>{ out.push({ sd:makeSeed({ species:k, tier:'Common' }), price:SPECIES[k].cost });
-  if (SPECIES[k].cost >= 60) out.push({ sd:makeSeed({ species:k, tier:'Rare' }), price:SPECIES[k].cost * 6 }); }); return out; }
+  const R = seeded(slot*131 + 7), meteor = weatherAt(Math.floor(slot*RESTOCK/WX_CYCLE)) === 'meteor', n = 4 + Math.floor(R()*3), out = [];
+  for (let i=0;i<n;i++){ const r = R(), pd = meteor ? .005 : .0005, pc = meteor ? .035 : .0035;
+    const tier = r < pd ? 'Divine' : r < pd + pc ? 'Celestial' : r < .02 ? 'Beast' : r < .1 ? 'Mythic' : r < .38 ? 'Legendary' : 'Epic';
+    const sp = SPEC_KEYS[Math.floor(Math.pow(R(), 1.6)*SPEC_KEYS.length)], sd = makeSeed({ species:sp, tier });
+    out.push({ i, sd, price:Math.round(SPECIES[sp].cost*TIERS[TI[tier]].mult*1.6), stock:TI[tier] >= TI.Mythic ? 1 : 1 + Math.floor(R()*3) }); }
+  return out; }
+function regularStock(){ const out = []; SPEC_KEYS.forEach(k=>{ out.push({ sd:makeSeed({ species:k }), price:SPECIES[k].cost }); if (SPECIES[k].cost >= 60) out.push({ sd:makeSeed({ species:k, tier:'Rare' }), price:SPECIES[k].cost*6 }); }); return out; }
 
-// =====================================================================
-//  RNG: 등급 · 변이 · 특성
-// =====================================================================
-// luck: 전체 운(부모 등급·행운 특성), 날씨: 뇌우는 울트라·하이퍼 10배
-function tierProbs(luck, wx){
-  const ps = TIERS.map(t=>t.p * (t.i > 0 ? luck : 1));
-  if (wx === 'storm'){ ps[TI.Ultra] *= 10; ps[TI.Hyper] *= 10; }
-  // 커먼을 제외한 합이 1을 넘지 않게 (운이 아주 높을 때)
-  let rest = 0; for (let i=1;i<ps.length;i++) rest += ps[i]; if (rest > .95){ const k = .95 / rest; for (let i=1;i<ps.length;i++) ps[i] *= k; rest = .95; }
-  ps[0] = 1 - rest; return ps;
-}
-// 위(히든)에서부터 아래로 누적 확률 검사 — 걸린 가장 높은 등급, 아무것도 안 걸리면 커먼
-function rollTier(luck, wx){ const ps = tierProbs(luck, wx); const r = Math.random(); let acc = 0;
-  for (let i = TIERS.length - 1; i >= 1; i--){ acc += ps[i]; if (r < acc) return TIERS[i].k; } return 'Common'; }
-function rollVariant(wx, parents){ const r = Math.random(); const pr = wx === 'rainbow' ? .05 : .001; const pg = .01 + (parents.some(p=>p.variant === 'Golden') ? .04 : 0);
-  if (r < pr) return 'Rainbow'; if (r < pr + pg) return 'Golden'; return 'Normal'; }
-function labLuck(a, b){ let l = 1 + 0.1 * ((a ? TI[a.tier] : 0) + (b ? TI[b.tier] : 0)); for (const p of [a, b]) if (p && p.traits.includes('Lucky')) l += TRAITS.Lucky.luck; return l; }
-function portmanteau(a, b){ if (a === b) return a; const ha = a.slice(0, Math.ceil(a.length/2)), hb = b.slice(Math.floor(b.length/2)); return ha + hb; }
-
-// ---- 연구소 합성 ----
+// ---- RNG ----
+function tierProbs(luck, wx){ const ps = TIERS.map(t=>t.p*(t.i > 0 ? luck : 1)); if (wx === 'storm'){ ps[TI.Ultra] *= 10; ps[TI.Hyper] *= 10; }
+  let rest = 0; for (let i=1;i<ps.length;i++) rest += ps[i]; if (rest > .95){ const k = .95/rest; for (let i=1;i<ps.length;i++) ps[i] *= k; rest = .95; } ps[0] = 1 - rest; return ps; }
+// 가장 희귀한 등급(히든)부터 아래로 누적 검사 — 아무것도 안 걸리면 커먼
+function rollTier(luck, wx){ const ps = tierProbs(luck, wx), r = Math.random(); let acc = 0; for (let i=TIERS.length-1;i>=1;i--){ acc += ps[i]; if (r < acc) return TIERS[i].k; } return 'Common'; }
+function rollVariant(wx, parents){ const r = Math.random(), pr = wx === 'rainbow' ? .05 : .001, pg = .01 + (parents.some(p=>p.variant === 'Golden') ? .04 : 0); return r < pr ? 'Rainbow' : r < pr + pg ? 'Golden' : 'Normal'; }
+function labLuck(a, b){ let l = 1 + .1*((a ? TI[a.tier] : 0) + (b ? TI[b.tier] : 0)); for (const p of [a, b]) if (p && p.traits.includes('Lucky')) l += .5; if (S.luckNext) l *= 2; return l; }
+const port = (a, b) => a === b ? a : a.slice(0, Math.ceil(a.length/2)) + b.slice(Math.floor(b.length/2));
 function combineSeeds(A, B){
-  const wx = curWeather(), luck = labLuck(A, B);
-  const tier = rollTier(luck, wx);
-  // 특성: 부모 특성마다 70%(산성비 3배 → 사실상 확정)로 물려받고, 10%(산성비 30%)로 새 특성
-  const inherit = wx === 'acid' ? Math.min(1, .7 * 3) : .7, mutate = wx === 'acid' ? .3 : .1;
-  const traits = [];
+  const wx = curWeather(), luck = labLuck(A, B), tier = rollTier(luck, wx);
+  const inherit = wx === 'acid' ? 1 : .7, mutate = wx === 'acid' ? .3 : .1, traits = [];
   for (const t of A.traits.concat(B.traits)) if (!traits.includes(t) && Math.random() < inherit) traits.push(t);
-  let mutated = null;
-  if (Math.random() < mutate){ const pool = TRAIT_KEYS.filter(k=>!traits.includes(k) && (!TRAITS[k].rare || Math.random() < .25)); if (pool.length){ mutated = pool[Math.floor(Math.random()*pool.length)]; traits.push(mutated); } }
-  const variant = rollVariant(wx, [A, B]);
-  // 종: 값이 더 큰 부모 쪽, 이름은 두 부모 이름을 섞어서
-  const sp = SPECIES[A.species].base >= SPECIES[B.species].base ? A.species : B.species;
-  const name = portmanteau(A.name.replace(/^.* /, ''), B.name.replace(/^.* /, ''));
-  const sd = makeSeed({ species:sp, tier, variant, traits, isPrimary:false, name, parents:[A.name, B.name], born:Date.now() });
-  const ps = tierProbs(luck, wx);
-  return { sd, mutated, odds:ps[TI[tier]], luck, wx };
+  let mutated = null; if (Math.random() < mutate){ const pool = TRAIT_KEYS.filter(k=>!traits.includes(k) && (!TRAITS[k].rare || Math.random() < .25)); if (pool.length){ mutated = pool[Math.floor(Math.random()*pool.length)]; traits.push(mutated); } }
+  const variant = rollVariant(wx, [A, B]), sp = SPECIES[A.species].base >= SPECIES[B.species].base ? A.species : B.species;
+  const sd = makeSeed({ species:sp, tier, variant, traits, isPrimary:false, name:port(A.name, B.name), born:Date.now() });
+  const odds = tierProbs(luck, wx)[TI[tier]]; if (S.luckNext) S.luckNext = 0;
+  return { sd, mutated, odds, luck, wx };
 }
 
 // =====================================================================
-//  농장
+//  3D 장면 — 로블록스식 햇빛 · 그림자 · 하늘
 // =====================================================================
-let plantSel = null;   // 고른 씨앗 id
-function tileState(t){ if (!t) return 'empty'; return Date.now() >= t.readyAt ? 'ready' : 'grow'; }
-function plant(i){
-  if (i >= S.unlocked) return;
-  if (S.tiles[i]){ if (tileState(S.tiles[i]) === 'ready') harvest(i); return; }
-  if (!plantSel){ toast('아래에서 심을 씨앗을 먼저 골라요'); return; }
-  const sd = takeSeed(plantSel); if (!sd){ plantSel = null; renderSeedRow(); return; }
-  S.tiles[i] = { sd, plantedAt:Date.now(), readyAt:Date.now() + sd.growthTime * 1000, wx:{} };
-  if (!S.seeds.find(x=>x.id === plantSel)) plantSel = S.seeds[0] ? S.seeds[0].id : null;
-  dirty = true; renderSeedRow(); renderFarm();
-}
-function harvest(i){
-  const t = S.tiles[i]; if (!t || tileState(t) !== 'ready') return 0;
-  const sd = t.sd; const traits = sd.traits.slice();
-  // 자라는 동안 겪은 날씨가 특성으로 남을 수 있다 (날씨마다 25%)
-  for (const w in t.wx){ const tr = WEATHER[w] && WEATHER[w].trait; if (tr && !traits.includes(tr) && Math.random() < .25) traits.push(tr); }
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xcfe3f5, 90, 260);
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, .1, 600);
+function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f7a, .62); scene.add(hemi);
+scene.add(new THREE.AmbientLight(0xffffff, .16));
+const sun = new THREE.DirectionalLight(0xfff6ea, 1.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .02;
+Object.assign(sun.shadow.camera, { left:-45, right:45, top:45, bottom:-45, near:1, far:200 }); scene.add(sun); scene.add(sun.target);
+const skyU = { top:{ value:new THREE.Color(0x3d7fd6) }, bot:{ value:new THREE.Color(0xd8ebfa) } };
+const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, fog:false, uniforms:skyU,
+  vertexShader:'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:'uniform vec3 top; uniform vec3 bot; varying vec3 vP; void main(){ float h = clamp(vP.y*1.5+.1, 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, pow(h,.7)), 1.0); }' }));
+sky.renderOrder = -1; scene.add(sky);
+{ const sd = new THREE.Mesh(new THREE.CircleGeometry(12, 32), new THREE.MeshBasicMaterial({ color:0xfffbe8, fog:false, depthWrite:false })); sd.position.set(180, 240, 120); sd.lookAt(0, 0, 0); sky.add(sd); }
+for (let i=0;i<40;i++){ const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color:0xffffff, emissive:0xd8dde4 });
+  for (let k=0;k<5;k++){ const s = new THREE.Mesh(new THREE.BoxGeometry(5 + Math.random()*4, 2 + Math.random()*1.5, 4 + Math.random()*3), m); s.position.set((Math.random() - .5)*7, (Math.random() - .5)*1.5, (Math.random() - .5)*4); g.add(s); }
+  const a = Math.random()*6.28, r = 150 + Math.random()*140; g.position.set(Math.cos(a)*r, 70 + Math.random()*50, Math.sin(a)*r); scene.add(g); }
+const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.7, metalness:0 }, o || {}));
+function box(parent, w, h, d, mat, x, y, z, cast){ const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = cast !== false; m.receiveShadow = true; parent.add(m); return m; }
+function ctex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; }
+const grassTex = ctex(256, 256, (g, w, h)=>{ g.fillStyle = '#5fae4a'; g.fillRect(0, 0, w, h); for (let i=0;i<2200;i++){ g.fillStyle = Math.random() < .5 ? 'rgba(80,150,60,.5)' : 'rgba(120,190,90,.45)'; g.fillRect(Math.random()*w, Math.random()*h, 2, 2 + Math.random()*3); } });
+grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.repeat.set(40, 40);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M(0xffffff, { map:grassTex, roughness:.95 })); ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+const pathMat = M(0xd9c7a0, { roughness:.9 });
+box(scene, 170, .08, 12, pathMat, 0, .04, 0, false);
+for (const x of [-54, -18, 18, 54]) box(scene, 6, .07, 26, pathMat, x, .035, 0, false);
+function tree(x, z, s){ const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g); box(g, .9, 4, .9, M(0x7a5230), 0, 2, 0);
+  const lm = M(0x3f8f3a); for (const [a, b, c, r] of [[0, 5, 0, 2.2], [1, 4.4, .6, 1.6], [-1, 4.6, -.5, 1.7], [0, 6.2, 0, 1.5]]) box(g, r*1.6, r*1.3, r*1.6, lm, a, b, c); }
+for (let i=0;i<34;i++){ const a = i/34*Math.PI*2, r = 108 + (i%3)*9; tree(Math.cos(a)*r, Math.sin(a)*r*.75, .9 + (i%4)*.18); }
+
+// ---- 8개의 밭 ----
+const PLOTS = [];
+const PLOT_POS = [[-54,-42],[-18,-42],[18,-42],[54,-42],[-54,42],[-18,42],[18,42],[54,42]];
+const soilTex = ctex(128, 128, (g, w, h)=>{ g.fillStyle = '#6b4a2e'; g.fillRect(0, 0, w, h); for (let y=0;y<h;y+=16){ g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, y, w, 6); } for (let i=0;i<500;i++){ g.fillStyle = 'rgba(40,25,10,.35)'; g.fillRect(Math.random()*w, Math.random()*h, 2, 2); } });
+soilTex.wrapS = soilTex.wrapT = THREE.RepeatWrapping; soilTex.repeat.set(3, 3);
+function plotSign(text, col){ return ctex(512, 128, (g, w, h)=>{ g.fillStyle = '#3b2716'; g.fillRect(0, 0, w, h); g.fillStyle = '#5a3b22'; g.fillRect(8, 8, w - 16, h - 16); g.fillStyle = col || '#fff'; g.font = '900 54px "Malgun Gothic","Noto Sans KR",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w/2, h/2 + 3); }); }
+const moundM = M(0x4a311c, { roughness:1 }), lockM = M(0x3a3a3a, { roughness:1 }), rimM = M(0x8a6a44), postM = M(0x5a3b22);
+PLOT_POS.forEach(([cx, cz], i)=>{
+  const g = new THREE.Group(); g.position.set(cx, 0, cz); scene.add(g); const face = cz < 0 ? 1 : -1;   // 길 쪽 방향
+  box(g, COLS*SPOT + 2, .45, ROWS*SPOT + 2, M(0xffffff, { map:soilTex, roughness:1 }), 0, .22, 0, false);
+  const W2 = (COLS*SPOT + 2.5)/2, D2 = (ROWS*SPOT + 2.5)/2;
+  box(g, COLS*SPOT + 3, .6, .5, rimM, 0, .3, -D2); box(g, COLS*SPOT + 3, .6, .5, rimM, 0, .3, D2); box(g, .5, .6, ROWS*SPOT + 3, rimM, -W2, .3, 0); box(g, .5, .6, ROWS*SPOT + 3, rimM, W2, .3, 0);
+  const spots = [];
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){ const x = (c - (COLS - 1)/2)*SPOT, z = (r - (ROWS - 1)/2)*SPOT*face; const m = box(g, 1.9, .14, 1.9, moundM, x, .5, z, false); spots.push({ x, z, m }); }
+  const sm = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map:plotSign('빈 밭'), roughness:.8 }));
+  sm.position.set(0, 2.2, face*(D2 + 1)); if (face < 0) sm.rotation.y = Math.PI; sm.castShadow = true; g.add(sm);
+  box(g, .25, 2.2, .25, postM, -2.2, 1.1, face*(D2 + 1.05)); box(g, .25, 2.2, .25, postM, 2.2, 1.1, face*(D2 + 1.05));
+  const P0 = { i, cx, cz, g, face, spots, sign:sm, owner:null, plantG:new THREE.Group(), sprG:new THREE.Group(), key:'' };
+  g.add(P0.plantG); g.add(P0.sprG); PLOTS.push(P0);
+});
+function setSign(p, text, col){ const old = p.sign.material.map; p.sign.material.map = plotSign(text, col); p.sign.material.needsUpdate = true; if (old) old.dispose(); }
+function spotWorld(p, s){ const sp = p.spots[s]; return [p.cx + sp.x, p.cz + sp.z]; }
+
+// ---- 가판대 5개: 씨앗 · 스프링클러 · 유전자 연구소 · 성장 · 판매 ----
+const colliders = [];
+const STALLS = [
+  { k:'seed', ko:'씨앗 상점',     x:-48, col:'#3ddc84', roof:0x2f9e5b },
+  { k:'gear', ko:'스프링클러',    x:-24, col:'#4ea3ff', roof:0x2f6fb8 },
+  { k:'lab',  ko:'유전자 연구소', x:0,   col:'#b98cff', roof:0x6d45b8 },
+  { k:'grow', ko:'성장 상점',     x:24,  col:'#f2c94c', roof:0xc79a1e },
+  { k:'sell', ko:'판매',          x:48,  col:'#ff8a4d', roof:0xc75a24 },
+];
+function stallSign(t, col){ return ctex(512, 128, (g, w, h)=>{ g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = col; g.fillRect(0, h - 14, w, 14); g.fillStyle = '#1b1d21'; g.font = '900 60px "Malgun Gothic","Noto Sans KR",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, w/2, h/2 - 4); }); }
+const woodM = M(0x9b7148), whiteM = M(0xffffff, { roughness:.6 });
+STALLS.forEach(st=>{
+  const g = new THREE.Group(); g.position.set(st.x, 0, 0); scene.add(g); st.g = g; const roof = M(st.roof, { roughness:.55 });
+  box(g, 9, 1.4, 2, woodM, 0, .7, -2); box(g, 9.2, .2, 2.3, M(0xd9b98a), 0, 1.5, -2);
+  for (const [x, z] of [[-4.2, -2.8], [4.2, -2.8], [-4.2, -5.2], [4.2, -5.2]]) box(g, .35, 4.6, .35, woodM, x, 2.3, z);
+  for (let k=0;k<6;k++) box(g, 1.6, .25, 4.6, k % 2 ? roof : whiteM, -4 + k*1.6, 4.75, -3.9);
+  const sg = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.75), new THREE.MeshStandardMaterial({ map:stallSign(st.ko, st.col), roughness:.7 })); sg.position.set(0, 5.9, -1.6); sg.castShadow = true; g.add(sg);
+  const deco = { seed:[0x3ddc84, 0xe8263a, 0xffd23d], gear:[0x4ea3ff, 0x9aa3ad, 0xf2c94c], lab:[0xb98cff, 0x5ef0ff, 0xff5ef2], grow:[0xf2c94c, 0x3ddc84, 0x4ea3ff], sell:[0xf07a12, 0xe3321f, 0x2e8b3a] }[st.k];
+  deco.forEach((c, k)=>{ const geo = st.k === 'lab' ? new THREE.CylinderGeometry(.28, .35, .9, 12) : st.k === 'gear' ? new THREE.CylinderGeometry(.35, .45, .6, 10) : new THREE.SphereGeometry(.45, 14, 10);
+    const s = new THREE.Mesh(geo, M(c, st.k === 'lab' ? { emissive:c, emissiveIntensity:.45, roughness:.2 } : { roughness:.45 })); s.position.set(-2.5 + k*2.5, st.k === 'lab' ? 2.05 : 1.95, -2); s.castShadow = true; g.add(s); });
+  colliders.push({ minX:st.x - 4.6, maxX:st.x + 4.6, minZ:-5.6, maxZ:-.9 });
+});
+const labTube = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 3, 20, 1, true), new THREE.MeshStandardMaterial({ color:0xb98cff, transparent:true, opacity:.25, roughness:.1, side:THREE.DoubleSide, emissive:0x6d45b8, emissiveIntensity:.4 }));
+labTube.position.set(0, 1.5, -7.2); scene.add(labTube); colliders.push({ minX:-1.2, maxX:1.2, minZ:-8.4, maxZ:-6 });
+const labCore = new THREE.Mesh(new THREE.IcosahedronGeometry(.6, 0), M(0xffffff, { emissive:0xb98cff, emissiveIntensity:1.2 })); labCore.position.set(0, 1.6, -7.2); scene.add(labCore);
+function npc(x, z, lo){ try { if (window.MP && MP.buildAvatar){ const a = MP.buildAvatar(Object.assign(MP.defaultAvatarLoadout ? MP.defaultAvatarLoadout() : {}, lo || {})); a.position.set(x, 0, z); a.traverse(o=>{ if (o.isMesh) o.castShadow = true; }); scene.add(a); return a; } } catch(e){} return null; }
+[{ head:'wizardhat' }, { acc:'goggles' }, { acc:'glasses' }, { head:'beanie' }, { head:'helmet' }].forEach((lo, k)=>npc(STALLS[k].x, -4, lo));
+
+// =====================================================================
+//  작물 3D 모델 — 등급마다 색·광택·오라, 골든은 금속, 레인보우는 색이 돈다
+// =====================================================================
+const leafM = M(0x3f9a3a, { roughness:.75 }), stemM = M(0x2f7a2c, { roughness:.8 });
+const glowTex = ctex(64, 64, (g)=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.3, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
+const matCache = {};
+function fruitMat(color, tier, variant){
+  const key = color + '|' + tier + '|' + variant; if (matCache[key]) return matCache[key];
+  const ti = TI[tier], T = TIERS[ti]; let m;
+  if (tier === 'Hidden') m = M(0x0a0a0a, { emissive:0xff003c, emissiveIntensity:.8, roughness:.2 });
+  else if (variant === 'Golden') m = M(0xffcc33, { metalness:.85, roughness:.22, emissive:0x553300, emissiveIntensity:.35 });
+  else if (variant === 'Rainbow'){ m = M(0xffffff, { roughness:.35, emissive:0x222222 }); m.userData.rainbow = true; }
+  else { const c = new THREE.Color(color); if (ti >= 1) c.lerp(new THREE.Color(T.col), Math.min(.45, ti*.06)); m = M(c, { roughness:ti >= 2 ? .35 : .55, metalness:ti >= 6 ? .25 : 0 }); if (ti >= 3){ m.emissive = new THREE.Color(T.col); m.emissiveIntensity = Math.min(.9, .12 + ti*.07); } }
+  matCache[key] = m; return m; }
+function buildPlant(sd){
+  const g = new THREE.Group(), S0 = SPECIES[sd.species], fm = fruitMat(S0.fc, sd.tier, sd.variant), sh = S0.shape, fruits = new THREE.Group(); g.add(fruits);
+  const leaf = (x, y, z, s, ry, rz)=>{ const l = new THREE.Mesh(new THREE.BoxGeometry(.9*s, .12, .45*s), leafM); l.position.set(x, y, z); l.rotation.set(0, ry, rz); l.castShadow = true; g.add(l); };
+  const stem = (h, w)=>{ const s = new THREE.Mesh(new THREE.CylinderGeometry(w || .12, (w || .12)*1.3, h, 7), stemM); s.position.y = h/2; s.castShadow = true; g.add(s); };
+  const ball = (r, x, y, z, sx)=>{ const b = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), fm); b.position.set(x, y, z); if (sx) b.scale.set(sx[0], sx[1], sx[2]); b.castShadow = true; fruits.add(b); return b; };
+  if (sh === 'root'){ const c = new THREE.Mesh(new THREE.ConeGeometry(.35, 1.3, 10), fm); c.rotation.x = Math.PI; c.position.y = .25; c.castShadow = true; fruits.add(c); for (let k=0;k<5;k++) leaf(0, 1.1 + k*.05, 0, 1.1, k*1.25, .9); }
+  else if (sh === 'berry'){ stem(.9); for (let k=0;k<6;k++) leaf(Math.cos(k)*.5, .5 + k*.08, Math.sin(k)*.5, 1.3, k, .35); const n = S0.n || 5; for (let k=0;k<n;k++){ const a = k/n*Math.PI*2; ball(sd.species === 'blueberry' ? .16 : .24, Math.cos(a)*.55, .45 + (k%3)*.18, Math.sin(a)*.55, sd.species === 'strawberry' ? [1, 1.25, 1] : null); } }
+  else if (sh === 'round'){ stem(1.6); for (let k=0;k<6;k++) leaf(Math.cos(k*1.1)*.4, .6 + k*.18, Math.sin(k*1.1)*.4, 1.4, k*1.1, .4); for (let k=0;k<(S0.n || 4);k++){ const a = k*1.7; ball(.32, Math.cos(a)*.5, .7 + k*.25, Math.sin(a)*.5); } }
+  else if (sh === 'corn'){ stem(2.4, .14); for (let k=0;k<6;k++) leaf(0, .5 + k*.35, 0, 1.8, k*1.3, .5); for (const s of [-1, 1]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(.22, .16, .9, 10), fm); c.position.set(s*.3, 1.5 + s*.2, 0); c.rotation.z = s*.35; c.castShadow = true; fruits.add(c); } }
+  else if (sh === 'grape'){ stem(1.8, .1); leaf(0, 1.8, 0, 2, 0, 0); leaf(0, 1.7, 0, 2, 1.6, 0); for (let k=0;k<14;k++){ const lv = Math.floor(k/4); ball(.17, (k%4 - 1.5)*.22*(1 - lv*.2), 1.4 - lv*.28, ((k*7)%3 - 1)*.14); } }
+  else if (sh === 'big'){ for (let k=0;k<5;k++) leaf(Math.cos(k*1.3)*.9, .35, Math.sin(k*1.3)*.9, 1.8, k*1.3, .1); ball(.85, 0, .7, 0, [1.15, .8, 1.15]); const st = new THREE.Mesh(new THREE.CylinderGeometry(.08, .12, .4, 6), stemM); st.position.y = 1.4; g.add(st); }
+  else if (sh === 'melon'){ for (let k=0;k<5;k++) leaf(Math.cos(k*1.3), .25, Math.sin(k*1.3), 1.6, k*1.3, .1); ball(.8, 0, .65, 0, [1.35, .85, .95]); }
+  else if (sh === 'tree'){ const t = new THREE.Mesh(new THREE.CylinderGeometry(.18, .25, 2.2, 8), M(0x7a5230)); t.position.y = 1.1; t.castShadow = true; g.add(t); const cr = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), leafM); cr.position.y = 2.7; cr.castShadow = true; g.add(cr); for (let k=0;k<(S0.n || 5);k++){ const a = k/5*Math.PI*2; ball(.28, Math.cos(a), 2.3 + (k%2)*.5, Math.sin(a)); } }
+  else if (sh === 'shroom'){ const st = new THREE.Mesh(new THREE.CylinderGeometry(.3, .38, 1.2, 12), M(0xf1e6d2)); st.position.y = .6; st.castShadow = true; g.add(st); const cap = new THREE.Mesh(new THREE.SphereGeometry(.9, 18, 10, 0, Math.PI*2, 0, Math.PI/2), fm); cap.position.y = 1.1; cap.castShadow = true; fruits.add(cap); for (let k=0;k<6;k++){ const d = new THREE.Mesh(new THREE.SphereGeometry(.1, 8, 6), whiteM); const a = k*1.05; d.position.set(Math.cos(a)*.55, 1.55 + (k%2)*.1, Math.sin(a)*.55); fruits.add(d); } }
+  else if (sh === 'pine'){ ball(.45, 0, .6, 0, [1, 1.45, 1]); for (let k=0;k<7;k++) leaf(0, 1.3 + k*.06, 0, 1, k*.9, 1.2); }
+  else if (sh === 'palm'){ const t = new THREE.Mesh(new THREE.CylinderGeometry(.2, .3, 3, 8), M(0x8a6a44)); t.position.y = 1.5; t.rotation.z = .08; t.castShadow = true; g.add(t); for (let k=0;k<6;k++){ const l = new THREE.Mesh(new THREE.BoxGeometry(2.2, .1, .5), leafM); l.position.set(Math.cos(k), 3.05, Math.sin(k)); l.rotation.set(0, -k, -.35); l.castShadow = true; g.add(l); } for (let k=0;k<(S0.n || 3);k++) ball(.3, Math.cos(k*2.1)*.35, 2.7, Math.sin(k*2.1)*.35); }
+  const ti = TI[sd.tier];
+  if (ti >= TI.Legendary){ const T = TIERS[ti]; const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTex, color:new THREE.Color(T.col), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:.5 }));
+    const s = 2.2 + (ti - 3)*.35; spr.scale.set(s, s, 1); spr.position.y = 1.2; g.add(spr); g.userData.aura = spr; }
+  if (ti >= TI.Divine){ const halo = new THREE.Mesh(new THREE.TorusGeometry(.6, .06, 8, 24), M(0xffe27a, { emissive:0xffe27a, emissiveIntensity:1 })); halo.rotation.x = Math.PI/2; halo.position.y = 3.2; g.add(halo); g.userData.halo = halo; }
+  g.userData.fruits = fruits; g.userData.ti = ti; g.userData.rainbow = sd.variant === 'Rainbow'; g.userData.giant = ((sd.traits || []).includes('Giant') ? 1.25 : 1)*1.55;
+  return g; }
+function buildSprinkler(type, noRing){ const d = SPRINKLERS[type], g = new THREE.Group(); box(g, .5, .9, .5, M(0x6b7178, { metalness:.5, roughness:.35 }), 0, .45, 0);
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(.45, .3, .35, 12), M(d.col, { metalness:.4, roughness:.3, emissive:d.col, emissiveIntensity:.15 })); head.position.y = 1.05; head.castShadow = true; g.add(head);
+  if (!noRing){ const ring = new THREE.Mesh(new THREE.RingGeometry(d.r - .12, d.r, 48), new THREE.MeshBasicMaterial({ color:d.col, transparent:true, opacity:.28, side:THREE.DoubleSide, depthWrite:false })); ring.rotation.x = -Math.PI/2; ring.position.y = .12; g.add(ring); }
+  const drops = []; if (!noRing) for (let k=0;k<14;k++){ const s = new THREE.Mesh(new THREE.SphereGeometry(.07, 5, 4), new THREE.MeshBasicMaterial({ color:0x9fd4ff })); g.add(s); drops.push({ s, a:k/14*Math.PI*2, t:Math.random() }); }
+  g.userData = { head, drops, r:d.r }; return g; }
+
+// =====================================================================
+//  플레이어 = 허브에서 꾸민 아바타
+// =====================================================================
+let me = null, limbs = {}, held = new THREE.Group();
+function pivotize(g){ const ms = g.children.filter(o=>o.isMesh); if (ms.length < 6) return {}; const out = {};
+  ['legL','legR',null,'armL','armR'].forEach((n, i)=>{ if (!n) return; const m = ms[i], h = m.geometry.parameters.height; const pv = new THREE.Group(); pv.position.set(m.position.x, m.position.y + h/2, m.position.z); g.remove(m); m.position.set(0, -h/2, 0); pv.add(m); g.add(pv); out[n] = pv; }); return out; }
+function buildAvatarGroup(lo){ let g = null; try { if (window.MP && MP.buildAvatar) g = MP.buildAvatar(lo || (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null); } catch(e){ g = null; }
+  if (!g){ g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.4, .6), M(0x4a90ff)); m.position.y = 1.7; g.add(m); }
+  g.traverse(o=>{ if (o.isMesh) o.castShadow = true; }); return g; }
+function buildMe(lo){ const old = me; const g = buildAvatarGroup(lo); limbs = pivotize(g); if (old){ g.position.copy(old.position); g.rotation.copy(old.rotation); scene.remove(old); } me = g; scene.add(g);
+  held = new THREE.Group(); if (limbs.armR){ held.position.set(0, -1.25, .3); limbs.armR.add(held); } else g.add(held); refreshHeld(); }
+const P = { x:0, y:0, z:0, vy:0, face:0, grounded:true, walk:0 };
+const keys = {}, mv = { x:0, y:0 };
+let camYaw = 0, camPitch = .42, camDist = 14;
+
+// =====================================================================
+//  내 밭 — 심기 · 자라기 · 수확 · 스프링클러
+// =====================================================================
+let myPlot = 0, netDirty = true, dirty = true;
+const plantObjs = {};
+const plantAt = spot => S.plants.find(p=>p.spot === spot);
+function sprinklersAt(spot){ const [x, z] = spotWorld(PLOTS[myPlot], spot); return S.sprinklers.filter(s=>Math.hypot(s.x - x, s.z - z) <= SPRINKLERS[s.type].r).map(s=>SPRINKLERS[s.type]); }
+function speedAt(spot){ let m = 1; for (const d of sprinklersAt(spot)) m = Math.max(m, d.spd); if (S.fertUntil > Date.now()) m *= 1.5; const wx = curWeather(); if (wx === 'acid' || wx === 'storm') m *= 1.15; return m; }
+function doPlant(spot, seedId){
+  if (spot >= S.unlocked){ toast('잠긴 칸이에요 — 성장 상점에서 밭을 넓혀요'); return false; }
+  if (plantAt(spot)) return false;
+  const sd = takeSeed(seedId); if (!sd) return false;
+  S.plants.push({ spot, sd, prog:0, wx:{} }); sfx.plant(); dirty = true; syncPlants(); refreshHotbar(); return true; }
+function doHarvest(pl){
+  if (pl.prog < 1) return 0; const sd = pl.sd, traits = sd.traits.slice(), spr = sprinklersAt(pl.spot);
+  // 자라는 동안 겪은 날씨 → 특성 (날씨마다 25%)
+  for (const w in pl.wx){ const tr = WEATHER[w] && WEATHER[w].trait; if (tr && !traits.includes(tr) && Math.random() < .25) traits.push(tr); }
+  if (pl.wx.acid && !traits.includes('Wet') && Math.random() < .3) traits.push('Wet');
+  for (const d of spr) if (d.trait && Math.random() < d.trait){ const pool = TRAIT_KEYS.filter(k=>!traits.includes(k) && !TRAITS[k].rare); if (pool.length) traits.push(pool[Math.floor(Math.random()*pool.length)]); }
+  let variant = sd.variant, tier = sd.tier;
+  if (variant === 'Normal' && spr.some(d=>d.gold && Math.random() < d.gold)) variant = 'Golden';
+  if (TI[tier] < TIERS.length - 2 && spr.some(d=>d.up && Math.random() < d.up)) tier = TIERS[TI[tier] + 1].k;
   const n = traits.includes('Twin') ? 2 : 1;
-  for (let k=0;k<n;k++){
-    const weight = +(0.8 + Math.random()*0.6).toFixed(2);
-    const crop = { id:uid('crop'), kind:'crop', species:sd.species, name:sd.name, tier:sd.tier, variant:sd.variant, traits:traits.slice(), weight, born:Date.now() };
-    crop.value = Math.round(seedValue(crop) * weight);
-    S.crops.push(crop);
-    if (crop.value > S.bestVal){ S.bestVal = crop.value; submit(); }
-  }
-  S.tiles[i] = null; dirty = true;
-  return n;
+  for (let k=0;k<n;k++){ const weight = +(.8 + Math.random()*.6).toFixed(2);
+    const crop = { id:uid('crop'), kind:'crop', species:sd.species, name:sd.name, tier, variant, traits:traits.slice(), weight, born:Date.now() }; crop.value = Math.round(seedValue(crop)*weight);
+    S.crops.push(crop); if (crop.value > S.bestVal){ S.bestVal = crop.value; submit(); } }
+  S.plants.splice(S.plants.indexOf(pl), 1); sfx.coin(); dirty = true; syncPlants();
+  toast(fullName(Object.assign({}, sd, { tier, variant })) + ' 수확' + (n > 1 ? ' ×2' : '') + (tier !== sd.tier ? ' · 등급 상승!' : '') + ' → 판매대에서 팔아요');
+  return n; }
+function placeSprinkler(type, x, z){ const p = PLOTS[myPlot];
+  if (Math.abs(x - p.cx) > (COLS*SPOT)/2 + .5 || Math.abs(z - p.cz) > (ROWS*SPOT)/2 + .5){ toast('내 밭 안에 설치해요'); return false; }
+  if (!(S.gear[type] > 0)) return false; S.gear[type]--; S.sprinklers.push({ type, x:+x.toFixed(2), z:+z.toFixed(2), until:Date.now() + SPRINKLERS[type].dur*1000 });
+  sfx.plant(); toast(SPRINKLERS[type].ko + ' 설치 · ' + clock(SPRINKLERS[type].dur)); dirty = true; syncPlants(); refreshHotbar(); return true; }
+function syncPlants(){
+  const p = PLOTS[myPlot], seen = {};
+  for (const pl of S.plants){ seen[pl.spot] = 1; let o = plantObjs[pl.spot];
+    if (!o || o.key !== pl.sd.id){ if (o) p.plantG.remove(o.g); const g = buildPlant(pl.sd), sp = p.spots[pl.spot]; g.position.set(sp.x, .56, sp.z); g.rotation.y = (pl.spot*1.7) % 6.28; p.plantG.add(g); plantObjs[pl.spot] = { g, key:pl.sd.id }; } }
+  for (const s in plantObjs) if (!seen[s]){ p.plantG.remove(plantObjs[s].g); delete plantObjs[s]; }
+  while (p.sprG.children.length) p.sprG.remove(p.sprG.children[0]);
+  for (const s of S.sprinklers){ const g = buildSprinkler(s.type); g.position.set(s.x - p.cx, .5, s.z - p.cz); p.sprG.add(g); }
+  p.spots.forEach((sp, k)=>{ sp.m.material = k < S.unlocked ? moundM : lockM; });
+  netDirty = true; }
+function tickPlants(dt){
+  const now = Date.now(), wx = curWeather(), n0 = S.sprinklers.length;
+  S.sprinklers = S.sprinklers.filter(s=>s.until > now); if (S.sprinklers.length !== n0){ syncPlants(); toast('스프링클러가 다 됐어요'); }
+  for (const pl of S.plants){
+    if (pl.prog < 1){ pl.prog = Math.min(1, pl.prog + dt*speedAt(pl.spot)/pl.sd.growthTime); if (wx !== 'sunny') pl.wx[wx] = 1; if (pl.prog >= 1){ netDirty = true; } }
+    const o = plantObjs[pl.spot]; if (!o) continue; const u = o.g.userData, k = pl.prog;
+    o.g.scale.setScalar((.25 + .75*Math.min(1, k*1.05))*u.giant); u.fruits.visible = k > .55; if (k >= 1) u.fruits.scale.setScalar(1 + Math.sin(T*3 + pl.spot)*.03); }
 }
-function harvestAll(){ let n = 0; for (let i=0;i<S.unlocked;i++) n += harvest(i); if (n){ toast(n + '개 수확'); renderAll(); } else toast('다 자란 작물이 없어요'); }
-const expandCost = () => Math.round(150 * Math.pow(2.4, (S.unlocked - START_TILES) / 3));
-function expand(){ if (S.unlocked >= MAX_TILES) return; const c = expandCost(); if (S.money < c){ toast('돈이 부족해요 (' + fmt(c) + ')'); return; }
-  S.money -= c; S.unlocked = Math.min(MAX_TILES, S.unlocked + 3); dirty = true; toast('밭이 넓어졌어요'); renderAll(); }
+// 다른 사람 밭 (압축된 목록으로 그리기)
+function drawRemotePlot(p, list, spr){
+  const key = JSON.stringify([list || [], spr || []]); if (p.key === key) return; p.key = key;
+  while (p.plantG.children.length) p.plantG.remove(p.plantG.children[0]); while (p.sprG.children.length) p.sprG.remove(p.sprG.children[0]);
+  (list || []).forEach(a=>{ const [spot, si, ti, vi, prog] = a; if (!SPEC_KEYS[si] || !p.spots[spot]) return; const sd = { species:SPEC_KEYS[si], tier:TIERS[ti] ? TIERS[ti].k : 'Common', variant:VK[vi] || 'Normal', traits:[] };
+    const g = buildPlant(sd), sp = p.spots[spot]; g.position.set(sp.x, .56, sp.z); g.rotation.y = (spot*1.7) % 6.28; const k = (prog || 0)/100; g.scale.setScalar((.25 + .75*Math.min(1, k))*g.userData.giant); g.userData.fruits.visible = k > .55; p.plantG.add(g); });
+  (spr || []).forEach(s=>{ if (!SPRINKLERS[s[0]]) return; const g = buildSprinkler(s[0]); g.position.set(s[1], .5, s[2]); p.sprG.add(g); });
+}
 
 // =====================================================================
-//  상점 · 판매
+//  핫바 (씨앗 · 도구) — 손에 든 것
 // =====================================================================
-function buy(sd, price, spIdx){
-  if (S.money < price){ toast('돈이 부족해요'); return; }
-  if (spIdx !== undefined){ const slot = Math.floor(sNow() / RESTOCK); if (S.shopSlot !== slot){ S.shopSlot = slot; S.bought = {}; }
-    const st = specialStock(slot)[spIdx]; if (!st || (S.bought[spIdx] || 0) >= st.stock){ toast('품절'); return; } S.bought[spIdx] = (S.bought[spIdx] || 0) + 1; }
-  S.money -= price; addSeed(makeSeed(Object.assign({}, sd, { id:uid('seed'), qty:1 })));
-  if (!plantSel) plantSel = S.seeds[0].id;
-  toast(fullName(sd) + ' 씨앗 구입'); renderAll();
-}
-function sellCrop(id){ const i = S.crops.findIndex(c=>c.id === id); if (i < 0) return; const c = S.crops[i];
-  if (TI[c.tier] >= TI.Celestial && !confirm(fullName(c) + ' 을(를) 팔까요? (' + fmt(c.value) + ')')) return;
-  S.crops.splice(i, 1); S.money += c.value; if (labA === id) labA = null; if (labB === id) labB = null; toast('+' + fmt(c.value)); dirty = true; renderAll(); }
-function sellWhere(fn, label){ const list = S.crops.filter(fn); if (!list.length){ toast('팔 작물이 없어요'); return; }
-  const sum = list.reduce((a, c)=>a + c.value, 0); if (!confirm(label + ' ' + list.length + '개를 ' + fmt(sum) + '에 팔까요?')) return;
-  S.crops = S.crops.filter(c=>!fn(c)); S.money += sum; labA = labB = null; toast('+' + fmt(sum)); dirty = true; renderAll(); }
+let hot = [], sel = -1;
+function refreshHotbar(){
+  const prevKey = hot[sel] && hot[sel].key; hot = [];
+  S.seeds.slice().sort((a, b)=>TI[b.tier] - TI[a.tier] || b.baseValue - a.baseValue).forEach(sd=>hot.push({ key:'s:' + sd.id, kind:'seed', id:sd.id, e:SPECIES[sd.species].e, n:sd.name, q:sd.qty || 1, col:TIERS[TI[sd.tier]].col, v:sd.variant }));
+  for (const k in SPRINKLERS) if (S.gear[k] > 0) hot.push({ key:'g:' + k, kind:'spr', id:k, e:SPRINKLERS[k].e, n:SPRINKLERS[k].ko.replace(' 스프링클러', ''), q:S.gear[k], col:'#fff' });
+  if (S.gear.water > 0) hot.push({ key:'g:water', kind:'water', e:'🚿', n:'물뿌리개', q:S.gear.water, col:'#fff' });
+  if (S.gear.instant > 0) hot.push({ key:'g:instant', kind:'instant', e:'⚡', n:'촉진제', q:S.gear.instant, col:'#fff' });
+  if (S.gear.fert > 0) hot.push({ key:'g:fert', kind:'fert', e:'🧪', n:'비료', q:S.gear.fert, col:'#fff' });
+  sel = prevKey ? hot.findIndex(h=>h.key === prevKey) : (sel >= hot.length ? -1 : sel);
+  if (sel < 0 && prevKey && prevKey.startsWith('s:')){ const i = hot.findIndex(h=>h.kind === 'seed'); if (i >= 0) sel = i; }
+  $('hotbar').innerHTML = hot.slice(0, 12).map((h, i)=>'<div class="hb' + (i === sel ? ' on' : '') + '" data-i="' + i + '"><span class="k">' + (i < 9 ? i + 1 : '') + '</span><span class="q">' + (h.q > 1 ? h.q : '') + '</span><div class="e' + (h.v && h.v !== 'Normal' ? ' fx-' + h.v : '') + '">' + h.e + '</div><div class="n" style="color:' + h.col + '">' + esc(h.n) + '</div></div>').join('');
+  refreshHeld(); }
+function selectHot(i){ sel = sel === i ? -1 : i; refreshHotbar(); }
+$('hotbar').addEventListener('click', e=>{ const d = e.target.closest('.hb'); if (d) selectHot(+d.dataset.i); });
+function refreshHeld(){ if (!held) return; while (held.children.length) held.remove(held.children[0]); const h = hot[sel]; if (!h) return;
+  if (h.kind === 'seed'){ const b = new THREE.Mesh(new THREE.BoxGeometry(.5, .6, .15), M(0xe9dcc0)); b.castShadow = true; held.add(b); }
+  else if (h.kind === 'spr'){ const s = buildSprinkler(h.id, true); s.scale.setScalar(.5); held.add(s); }
+  else { const b = new THREE.Mesh(new THREE.CylinderGeometry(.18, .22, .6, 10), M(h.kind === 'water' ? 0x4ea3ff : h.kind === 'instant' ? 0xf2c94c : 0x3ddc84, { metalness:.3, roughness:.4 })); b.castShadow = true; held.add(b); } }
 
 // =====================================================================
-//  연구소 UI
+//  상호작용 — E 키 / 클릭 / 탭
 // =====================================================================
-let labA = null, labB = null, labPick = null, rolling = false;
-function findItem(id){ return S.crops.find(c=>c.id === id) || S.seeds.find(s=>s.id === id) || null; }
-function renderLab(){
-  for (const [el, id, L] of [[$('slotA'), labA, 'A'], [$('slotB'), labB, 'B']]){
-    const it = id && findItem(id);
-    if (it){ el.className = 'slot full'; el.innerHTML = '<div class="e" style="position:relative">' + icon(it) + '</div><div style="font-weight:800;font-size:11px">' + esc(fullName(it)) + '</div><div style="font-size:10px;color:var(--dim)">' + (it.kind === 'crop' ? '작물' : '씨앗') + ' · 특성 ' + it.traits.length + '</div>'; }
-    else { el.className = 'slot'; el.innerHTML = L + '<br>가방에서 고르기'; }
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function nearestStall(){ let best = null, bd = 7.5; for (const st of STALLS){ const d = Math.hypot(P.x - st.x, P.z + 1.2); if (d < bd){ bd = d; best = st; } } return best; }
+function inMyPlot(x, z){ const p = PLOTS[myPlot]; return Math.abs(x - p.cx) < (COLS*SPOT)/2 + 1.5 && Math.abs(z - p.cz) < (ROWS*SPOT)/2 + 1.5; }
+function nearestSpot(x, z, filter, maxD){ const p = PLOTS[myPlot]; let best = -1, bd = maxD || 2.6; p.spots.forEach((s, k)=>{ const d = Math.hypot(p.cx + s.x - x, p.cz + s.z - z); if (d < bd && filter(k)){ bd = d; best = k; } }); return best; }
+function useAt(x, z, fromClick){
+  const h = hot[sel];
+  if (h && h.kind === 'seed'){ if (!inMyPlot(x, z)){ if (fromClick) toast('내 밭(' + (myPlot + 1) + '번)에 심어요'); return false; }
+    const k = nearestSpot(x, z, k=>k < S.unlocked && !plantAt(k)); if (k < 0){ toast(S.plants.length >= S.unlocked ? '빈 칸이 없어요 — 밭을 넓혀요' : '빈 칸을 눌러요'); return false; } return doPlant(k, h.id); }
+  if (h && h.kind === 'spr') return placeSprinkler(h.id, x, z);
+  if (h && (h.kind === 'water' || h.kind === 'instant')){ const k = nearestSpot(x, z, k=>{ const pl = plantAt(k); return pl && pl.prog < 1; }); if (k < 0){ toast('자라는 작물을 골라요'); return false; }
+    const pl = plantAt(k); if (h.kind === 'water'){ pl.prog = Math.min(1, pl.prog + .15); S.gear.water--; toast('물을 줬어요 +15%'); } else { pl.prog = 1; S.gear.instant--; toast('다 자랐어요!'); } sfx.plant(); refreshHotbar(); dirty = true; return true; }
+  if (h && h.kind === 'fert'){ S.gear.fert--; S.fertUntil = Math.max(Date.now(), S.fertUntil) + 180e3; toast('비료: 3분 동안 성장 ×1.5'); refreshHotbar(); dirty = true; return true; }
+  const k = nearestSpot(x, z, k=>{ const pl = plantAt(k); return pl && pl.prog >= 1; }); if (k >= 0){ doHarvest(plantAt(k)); refreshHotbar(); return true; }
+  return false; }
+const ripeNear = () => S.plants.find(pl=>{ if (pl.prog < 1) return false; const [x, z] = spotWorld(PLOTS[myPlot], pl.spot); return Math.hypot(x - P.x, z - P.z) < 3.2; });
+function interact(){
+  if (panelKind) return;
+  const st = nearestStall(); if (st){ openStall(st.k); return; }
+  if (inMyPlot(P.x, P.z)){ const fx = P.x + Math.sin(P.face)*1.6, fz = P.z + Math.cos(P.face)*1.6; if (useAt(fx, fz)) return; if (useAt(P.x, P.z)) return; }
+  const pl = ripeNear(); if (pl){ doHarvest(pl); refreshHotbar(); } }
+function clickWorld(cx, cy){
+  if (panelKind) return; ndc.set(cx/innerWidth*2 - 1, -(cy/innerHeight)*2 + 1); ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects([PLOTS[myPlot].plantG, ground].concat(PLOTS[myPlot].spots.map(s=>s.m)), true);
+  if (!hits.length) return; const pt = hits[0].point; if (Math.hypot(pt.x - P.x, pt.z - P.z) > 28){ toast('너무 멀어요 — 가까이 가요'); return; } useAt(pt.x, pt.z, true); }
+function updatePrompt(){
+  const pr = $('prompt'), st = nearestStall(), h = hot[sel]; let t = null;
+  if (st) t = st.ko + ' 열기';
+  else if (inMyPlot(P.x, P.z)){ if (h && h.kind === 'seed') t = h.n + ' 심기 (칸 클릭 / 앞 칸)'; else if (h && h.kind === 'spr') t = '스프링클러 설치'; else if (h && (h.kind === 'water' || h.kind === 'instant')) t = h.n + ' 쓰기'; else if (h && h.kind === 'fert') t = '비료 뿌리기'; else if (ripeNear()) t = '수확하기'; }
+  else if (h && h.kind === 'seed') t = null;
+  if (t){ pr.style.display = 'block'; pr.innerHTML = '<kbd>E</kbd>' + esc(t); } else pr.style.display = 'none'; }
+
+// =====================================================================
+//  가판대 패널 — 씨앗 · 스프링클러 · 유전자 합성 · 성장 · 판매
+// =====================================================================
+let panelKind = null, labA = null, labB = null, labPick = null, rolling = false, bagMode = 'crops', sortMode = 'val', fastRoll = false;
+function openStall(k){ panelKind = k; labPick = null; $('panel').classList.add('on'); for (const kk in keys) keys[kk] = false; mv.x = mv.y = 0; renderPanel(); }
+function closePanel(){ panelKind = null; labPick = null; $('panel').classList.remove('on'); }
+$('pclose').addEventListener('click', closePanel); $('panel').addEventListener('click', e=>{ if (e.target === $('panel')) closePanel(); });
+const findItem = id => S.crops.find(c=>c.id === id) || S.seeds.find(s=>s.id === id) || null;
+function itemRow(it, btns){ const v = it.kind === 'crop' ? (it.tier === 'Hidden' ? '???' : fmt(it.value)) : '×' + (it.qty || 1);
+  return '<div class="item' + (it.id === labA || it.id === labB ? ' sel' : '') + '"><div class="ic">' + emo(it) + '</div><div class="inf"><div class="nm">' + tag(it) + ' ' + esc(it.name) + (it.variant !== 'Normal' ? '<span class="vb ' + it.variant + '">' + VARIANTS[it.variant].ko + '</span>' : '') + '</div><div class="sub">' + (it.kind === 'crop' ? it.weight + 'kg' : (it.isPrimary ? '상점 씨앗' : '하이브리드') + ' · ' + clock(it.growthTime)) + '</div>' +
+    (it.traits.length ? '<div class="traits">' + it.traits.map(t=>'<span class="tr">' + (TRAITS[t] ? TRAITS[t].ko : t) + '</span>').join('') + '</div>' : '') + '</div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="val">' + v + '</span><div class="row">' + btns + '</div></div></div>'; }
+const expandCost = () => Math.round(200*Math.pow(2.3, (S.unlocked - START_SPOTS)/3));
+function renderPanel(){
+  if (!panelKind) return; const b = $('pbody'), st = STALLS.find(s=>s.k === panelKind);
+  $('ptitle').textContent = st.ko; $('psub').textContent = '💰 ' + fmt(S.money);
+  if (panelKind === 'seed'){
+    const slot = Math.floor(sNow()/RESTOCK); if (S.shopSlot !== slot){ S.shopSlot = slot; S.bought = {}; }
+    let h = '<div class="sec"><span>특별 재고 · 한정 (모두 같은 재고)</span><span>재입고 ' + clock(rsLeft()) + '</span></div>';
+    h += specialStock(slot).map(x=>{ const left = x.stock - (S.bought[x.i] || 0); return '<div class="item"><div class="ic">' + emo(x.sd) + '</div><div class="inf"><div class="nm">' + tag(x.sd) + ' ' + x.sd.name + '</div><div class="sub">재고 ' + left + ' · 수확 약 ' + fmt(x.sd.baseValue) + ' · ' + clock(x.sd.growthTime) + '</div></div><button class="btn ' + (left > 0 ? 'ok' : '') + '" data-sp="' + x.i + '" type="button"' + (left > 0 && S.money >= x.price ? '' : ' disabled') + '>' + (left > 0 ? fmt(x.price) : '품절') + '</button></div>'; }).join('');
+    h += '<div class="sec" style="margin-top:12px"><span>항상 판매</span><span></span></div>';
+    h += regularStock().map((x, i)=>'<div class="item"><div class="ic">' + emo(x.sd) + '</div><div class="inf"><div class="nm">' + tag(x.sd) + ' ' + x.sd.name + '</div><div class="sub">수확 약 ' + fmt(x.sd.baseValue) + ' · ' + clock(x.sd.growthTime) + '</div></div><button class="btn" data-rg="' + i + '" type="button"' + (S.money >= x.price ? '' : ' disabled') + '>' + fmt(x.price) + '</button></div>').join('');
+    b.innerHTML = h;
+  } else if (panelKind === 'gear'){
+    b.innerHTML = '<div class="muted" style="margin-bottom:10px">핫바에서 골라 내 밭에 세우면, 반경 안 작물이 빨리 자라고 수확할 때 특성·골든·등급 상승이 붙을 수 있어요. 시간이 지나면 사라져요.</div>' +
+      Object.keys(SPRINKLERS).map(k=>{ const d = SPRINKLERS[k]; return '<div class="item"><div class="ic">' + d.e + '</div><div class="inf"><div class="nm">' + d.ko + ' <span style="color:var(--dim);font-size:11px">보유 ' + S.gear[k] + '</span></div><div class="sub">반경 ' + d.r + ' · 성장 ×' + d.spd + (d.trait ? ' · 특성 ' + Math.round(d.trait*100) + '%' : '') + (d.gold ? ' · 골든 ' + Math.round(d.gold*100) + '%' : '') + (d.up ? ' · 등급↑ ' + d.up*100 + '%' : '') + ' · ' + clock(d.dur) + '</div></div><button class="btn" data-gear="' + k + '" type="button"' + (S.money >= d.cost ? '' : ' disabled') + '>' + fmt(d.cost) + '</button></div>'; }).join('');
+  } else if (panelKind === 'grow'){
+    const ex = S.unlocked < MAX_SPOTS ? expandCost() : 0;
+    b.innerHTML = Object.keys(GROW_ITEMS).map(k=>{ const d = GROW_ITEMS[k], own = k === 'luck' ? (S.luckNext ? '준비됨' : '') : '보유 ' + (S.gear[k] || 0); return '<div class="item"><div class="ic">' + d.e + '</div><div class="inf"><div class="nm">' + d.ko + ' <span style="color:var(--dim);font-size:11px">' + own + '</span></div><div class="sub">' + d.desc + '</div></div><button class="btn" data-grow="' + k + '" type="button"' + (S.money >= d.cost && !(k === 'luck' && S.luckNext) ? '' : ' disabled') + '>' + fmt(d.cost) + '</button></div>'; }).join('') +
+      '<div class="item"><div class="ic">🧱</div><div class="inf"><div class="nm">밭 넓히기 (' + S.unlocked + '/' + MAX_SPOTS + '칸)</div><div class="sub">심을 수 있는 칸 +3</div></div><button class="btn" data-grow="expand" type="button"' + (ex && S.money >= ex ? '' : ' disabled') + '>' + (ex ? fmt(ex) : '최대') + '</button></div>' +
+      (S.fertUntil > Date.now() ? '<div class="muted">비료 효과 ' + clock((S.fertUntil - Date.now())/1000) + ' 남음</div>' : '');
+  } else if (panelKind === 'sell' || (panelKind === 'lab' && labPick)){
+    const cmp = sortMode === 'tier' ? (a, c)=>TI[c.tier] - TI[a.tier] : sortMode === 'new' ? (a, c)=>(c.born || 0) - (a.born || 0) : (a, c)=>(c.value || c.baseValue) - (a.value || a.baseValue);
+    const list = (bagMode === 'crops' ? S.crops : S.seeds).slice().sort(cmp).slice(0, 150);
+    let h = '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="btn' + (bagMode === 'crops' ? ' pri' : '') + '" data-bag="crops" type="button">작물 ' + S.crops.length + '</button>' + (labPick ? '<button class="btn' + (bagMode === 'seeds' ? ' pri' : '') + '" data-bag="seeds" type="button">씨앗</button>' : '') +
+      '<select class="s2" id="sortSel"><option value="val">가치순</option><option value="tier">등급순</option><option value="new">최신순</option></select><span style="flex:1"></span>' +
+      (labPick ? '<span class="muted">연구소 ' + labPick + ' 칸에 넣을 것</span>' : '<button class="btn" data-sellx="low" type="button">레전더리 미만 팔기</button><button class="btn ok" data-sellx="all" type="button">모두 팔기</button>') + '</div>';
+    h += list.length ? list.map(it=>itemRow(it, labPick ? '<button class="btn pri" data-put="' + it.id + '" type="button">넣기</button>' : '<button class="btn" data-sell="' + it.id + '" type="button">팔기</button>')).join('') : '<div class="muted">' + (bagMode === 'crops' ? '작물이 없어요. 밭에서 수확해 오세요.' : '씨앗이 없어요.') + '</div>';
+    b.innerHTML = h; const ss = $('sortSel'); ss.value = sortMode; ss.onchange = ()=>{ sortMode = ss.value; renderPanel(); };
+  } else if (panelKind === 'lab'){
+    const A = labA && findItem(labA), B = labB && findItem(labB), wx = curWeather(), luck = labLuck(A, B), ps = tierProbs(luck, wx);
+    const slot = (it, L)=>it ? '<div class="slot full" data-slot="' + L + '"><div class="e">' + emo(it) + '</div><b style="font-size:11px">' + esc(fullName(it)) + '</b><span style="font-size:10px;color:var(--dim)">특성 ' + it.traits.length + ' · 누르면 빼기</span></div>' : '<div class="slot" data-slot="' + L + '">' + L + '<br>작물·씨앗 넣기</div>';
+    b.innerHTML = '<div id="labSlots">' + slot(A, 'A') + '<b style="color:var(--dim)">+</b>' + slot(B, 'B') + '</div><div id="reel">?</div>' +
+      '<div class="row" style="margin-bottom:10px"><button class="btn pri" id="combineBtn" type="button" style="flex:1;padding:12px"' + (A && B && !rolling ? '' : ' disabled') + '>유전자 합성</button><label class="muted" style="font-size:11px;display:flex;gap:4px;align-items:center"><input type="checkbox" id="fastRoll"' + (fastRoll ? ' checked' : '') + '> 빠르게</label></div>' +
+      '<div class="muted" style="font-size:11px;margin-bottom:10px">두 재료가 사라지고 새 하이브리드 씨앗이 나와요. 부모 특성은 하나씩 70%로 이어지고(산성비 100%), 10%(산성비 30%)로 새 특성이 생겨요. 부모 등급이 높을수록 운이 올라가요. 지금 운 ×' + luck.toFixed(2) + ' · ' + WEATHER[wx].ic + ' ' + WEATHER[wx].ko + (S.luckNext ? ' · 🍀 행운 비료' : '') + '</div>' +
+      '<table class="odds">' + TIERS.slice().reverse().map(t=>'<tr' + (t.i > 0 && ps[t.i] > t.p*1.001 ? ' class="boost"' : '') + '><td><b style="color:' + t.col + '">' + t.ko + '</b></td><td>' + oddsTxt(ps[t.i]) + '</td><td>' + (t.k === 'Hidden' ? '???' : '×' + fmt(t.mult)) + '</td></tr>').join('') + '</table>' +
+      '<div class="sec" style="margin-top:12px"><span>발견한 등급 · 합성 ' + S.rolls + '회</span></div><div class="traits">' + TIERS.map(t=>S.found[t.k] ? '<span class="tr" style="color:' + t.col + '">' + t.ko + ' ' + S.found[t.k] + '</span>' : '<span class="tr" style="opacity:.35">???</span>').join('') + '</div>';
+    $('fastRoll').onchange = e=>{ fastRoll = e.target.checked; };
   }
-  const A = labA && findItem(labA), B = labB && findItem(labB), wx = curWeather(), luck = labLuck(A, B), ps = tierProbs(luck, wx);
-  $('luckTxt').textContent = '운 ×' + luck.toFixed(2) + (WEATHER[wx].desc && (wx === 'storm' || wx === 'acid' || wx === 'rainbow') ? ' · ' + WEATHER[wx].ko : '');
-  $('odds').innerHTML = TIERS.slice().reverse().map(t=>{ const boost = ps[t.i] > t.p * 1.001 && t.i > 0;
-    return '<tr' + (boost ? ' class="boost"' : '') + '><td><span class="tier" style="color:' + t.col + '">' + t.ko + '</span> <span style="color:var(--faint);font-size:10.5px">' + t.k + '</span></td><td>' + oddsTxt(ps[t.i]) + '</td><td>' + (t.k === 'Hidden' ? '???' : '×' + fmt(t.mult)) + '</td></tr>'; }).join('');
-  $('combineBtn').disabled = !(A && B) || rolling;
 }
-function pickForLab(slot){ labPick = slot; showTab('bag'); bagMode = S.crops.length ? 'crops' : 'seeds'; renderBag(); toast('연구소 ' + slot + ' 칸에 넣을 걸 골라요'); }
-function takeItem(id){ let i = S.crops.findIndex(c=>c.id === id); if (i >= 0) return S.crops.splice(i, 1)[0];
-  const sd = takeSeed(id); if (sd && plantSel === id && !S.seeds.find(x=>x.id === id)) plantSel = null; return sd; }
+$('pbody').addEventListener('click', e=>{
+  const t = e.target.closest('[data-sp],[data-rg],[data-gear],[data-grow],[data-sell],[data-sellx],[data-put],[data-bag],[data-slot],#combineBtn'); if (!t) return;
+  if (t.dataset.sp !== undefined){ const x = specialStock(Math.floor(sNow()/RESTOCK))[+t.dataset.sp]; if (!x || (S.bought[x.i] || 0) >= x.stock || S.money < x.price) return; S.bought[x.i] = (S.bought[x.i] || 0) + 1; S.money -= x.price; addSeed(makeSeed(Object.assign({}, x.sd, { id:uid('seed') }))); sfx.coin(); toast(fullName(x.sd) + ' 씨앗 구입'); }
+  else if (t.dataset.rg !== undefined){ const x = regularStock()[+t.dataset.rg]; if (!x || S.money < x.price) return; S.money -= x.price; addSeed(makeSeed(Object.assign({}, x.sd, { id:uid('seed') }))); sfx.coin(); toast(fullName(x.sd) + ' 씨앗 구입'); }
+  else if (t.dataset.gear){ const d = SPRINKLERS[t.dataset.gear]; if (S.money < d.cost) return; S.money -= d.cost; S.gear[t.dataset.gear]++; sfx.coin(); toast(d.ko + ' 구입 — 핫바에서 골라 밭에 설치'); }
+  else if (t.dataset.grow){ const k = t.dataset.grow;
+    if (k === 'expand'){ const ex = expandCost(); if (S.unlocked >= MAX_SPOTS || S.money < ex) return; S.money -= ex; S.unlocked = Math.min(MAX_SPOTS, S.unlocked + 3); syncPlants(); toast('밭이 넓어졌어요 (' + S.unlocked + '칸)'); }
+    else { const d = GROW_ITEMS[k]; if (S.money < d.cost) return; S.money -= d.cost; if (k === 'luck') S.luckNext = 1; else for (const g in d.give) S.gear[g] += d.give[g]; toast(d.ko + ' 구입'); } sfx.coin(); }
+  else if (t.dataset.sell){ const i = S.crops.findIndex(c=>c.id === t.dataset.sell); if (i < 0) return; const c = S.crops[i]; if (TI[c.tier] >= TI.Celestial && !confirm(fullName(c) + ' 을(를) 팔까요?')) return; S.crops.splice(i, 1); S.money += c.value; sfx.coin(); toast('+' + fmt(c.value)); }
+  else if (t.dataset.sellx){ const fn = t.dataset.sellx === 'low' ? c=>TI[c.tier] < TI.Legendary : ()=>true; const list = S.crops.filter(c=>fn(c) && c.id !== labA && c.id !== labB); if (!list.length){ toast('팔 작물이 없어요'); return; }
+    const sum = list.reduce((a, c)=>a + c.value, 0); if (!confirm(list.length + '개를 ' + fmt(sum) + '에 팔까요?')) return; S.crops = S.crops.filter(c=>!list.includes(c)); S.money += sum; sfx.coin(); toast('+' + fmt(sum)); }
+  else if (t.dataset.bag) bagMode = t.dataset.bag;
+  else if (t.dataset.put){ if (labPick === 'A') labA = t.dataset.put; else labB = t.dataset.put; labPick = null; }
+  else if (t.dataset.slot){ const L = t.dataset.slot; if (L === 'A' && labA) labA = null; else if (L === 'B' && labB) labB = null; else { labPick = L; bagMode = S.crops.length ? 'crops' : 'seeds'; } }
+  else if (t.id === 'combineBtn'){ doCombine(); return; }
+  dirty = true; refreshHotbar(); renderPanel(); });
+function takeItem(id){ const i = S.crops.findIndex(c=>c.id === id); if (i >= 0) return S.crops.splice(i, 1)[0]; return takeSeed(id); }
 function doCombine(){
   if (rolling) return; const A0 = labA && findItem(labA), B0 = labB && findItem(labB); if (!A0 || !B0) return;
-  if (labA === labB && (A0.qty || 1) < 2){ toast('같은 것을 두 번 넣으려면 2개가 필요해요'); return; }
-  const A = takeItem(labA), B = takeItem(labB);
-  if (!A || !B){ if (A) (A.kind === 'crop' ? S.crops.push(A) : addSeed(A)); toast('재료가 없어요'); renderAll(); return; }
-  labA = labB = null;
-  const res = combineSeeds(A, B);
-  S.rolls++; S.found[res.sd.tier] = (S.found[res.sd.tier] || 0) + 1;
-  if (TI[res.sd.tier] > S.bestTier){ S.bestTier = TI[res.sd.tier]; submit(); }
-  addSeed(res.sd); dirty = true;
-  try { if (window.MP && MP.addXP) MP.addXP(3 + TI[res.sd.tier] * 4); } catch(e){}
-  rolling = true; renderLab();
-  spinReel(res, ()=>{ rolling = false; reveal(res); renderAll(); });
-}
-function spinReel(res, done){
-  const reel = $('reel'), fast = $('fastRoll').checked, ti = TI[res.sd.tier];
-  if (fast){ setReel(res.sd.tier); done(); return; }
-  const steps = 18 + Math.min(10, ti * 2); let k = 0; reel.classList.add('go');
-  const tick = ()=>{ k++;
-    if (k >= steps){ reel.classList.remove('go'); setReel(res.sd.tier); sfx.land(ti); done(); return; }
-    // 보여주기용: 아래 등급 위주로 돌다가 끝에 결과
-    const show = k > steps - 4 && ti > 3 ? Math.min(ti, TIERS.length - 2) - (steps - k) : Math.floor(Math.pow(Math.random(), 2.2) * 7);
-    setReel(TIERS[Math.max(0, show)].k); sfx.tick(k / steps);
-    setTimeout(tick, 40 + Math.pow(k / steps, 3) * 260); };
-  tick();
-}
-function setReel(t){ const T = TIERS[TI[t]]; $('reel').innerHTML = '<span style="color:' + T.col + (t === 'Hidden' ? ';text-shadow:2px 0 #00e5ff' : '') + '">' + T.ko + '</span>'; }
+  if (labA === labB && (A0.qty || 1) < 2){ toast('같은 걸 두 번 넣으려면 2개가 필요해요'); return; }
+  const A = takeItem(labA), B = takeItem(labB); labA = labB = null; if (!A || !B) return;
+  const res = combineSeeds(A, B); S.rolls++; S.found[res.sd.tier] = (S.found[res.sd.tier] || 0) + 1; if (TI[res.sd.tier] > S.bestTier){ S.bestTier = TI[res.sd.tier]; submit(); }
+  addSeed(res.sd); dirty = true; try { if (window.MP && MP.addXP) MP.addXP(3 + TI[res.sd.tier]*4); } catch(e){}
+  rolling = true; renderPanel(); const ti = TI[res.sd.tier];
+  const setR = k=>{ const r = $('reel'); if (!r) return; const T = TIERS[TI[k]]; r.innerHTML = '<span style="color:' + T.col + '">' + T.ko + '</span>'; };
+  const done = ()=>{ rolling = false; setR(res.sd.tier); reveal(res); refreshHotbar(); renderPanel(); setR(res.sd.tier); };
+  if (fastRoll){ done(); return; }
+  const steps = 18 + Math.min(10, ti*2); let k = 0;
+  const tick = ()=>{ k++; if (k >= steps){ sfx.land(ti); done(); return; } const show = k > steps - 4 && ti > 3 ? Math.max(0, Math.min(ti, TIERS.length - 2) - (steps - k)) : Math.floor(Math.pow(Math.random(), 2.2)*7); setR(TIERS[show].k); sfx.tick(k/steps); setTimeout(tick, 40 + Math.pow(k/steps, 3)*260); };
+  tick(); }
 function reveal(res){
-  const sd = res.sd, T = TIERS[TI[sd.tier]];
+  const sd = res.sd, T = TIERS[TI[sd.tier]], ti = TI[sd.tier];
   $('rvTier').innerHTML = '<span style="color:' + T.col + '">' + T.ko + '</span>' + (sd.variant !== 'Normal' ? '<span class="vb ' + sd.variant + '">' + VARIANTS[sd.variant].ko + '</span>' : '');
-  $('rvIcon').innerHTML = icon(sd);
-  $('rvName').textContent = fullName(sd) + ' 씨앗';
-  $('rvTraits').innerHTML = sd.traits.map(t=>'<span class="tr"' + (t === res.mutated ? ' style="background:#3ddc84;color:#07210f"' : '') + '>' + (TRAITS[t] ? TRAITS[t].ko : t) + (t === res.mutated ? ' NEW' : '') + '</span>').join('') || '<span class="tr">특성 없음</span>';
+  $('rvIcon').innerHTML = emo(sd); $('rvName').textContent = fullName(sd) + ' 씨앗';
+  $('rvTraits').innerHTML = sd.traits.map(t=>'<span class="tr"' + (t === res.mutated ? ' style="background:#3ddc84;color:#062010"' : '') + '>' + TRAITS[t].ko + (t === res.mutated ? ' NEW' : '') + '</span>').join('') || '<span class="tr">특성 없음</span>';
   $('rvVal').textContent = sd.tier === 'Hidden' ? '가치: ???' : '수확 가치 약 ' + fmt(sd.baseValue);
   $('rvOdd').textContent = '확률 ' + oddsTxt(res.odds) + ' · 운 ×' + res.luck.toFixed(2) + ' · ' + WEATHER[res.wx].ko;
-  const ti = TI[sd.tier];
-  if (ti >= ALERT_AT){ const msg = T.ko + ' 등급 ' + fullName(sd) + ' 탄생!'; banner(msg, T.col); logLine('<b style="color:' + T.col + '">' + esc(msg) + '</b>'); broadcast(sd); flash(ti >= TI.Divine ? .9 : .5); }
-  else logLine('합성 → <b style="color:' + T.col + '">' + T.ko + '</b> ' + esc(sd.name) + (sd.traits.length ? ' · 특성 ' + sd.traits.length : '') + (res.mutated ? ' (새 특성: ' + TRAITS[res.mutated].ko + ')' : ''));
-  if (sd.tier === 'Hidden') cutscene('hidden', ()=>$('reveal').classList.add('on'));
-  else if (sd.tier === 'Infinity') cutscene('infinity', ()=>$('reveal').classList.add('on'));
-  else $('reveal').classList.add('on');
-}
+  if (ti >= TI.Celestial){ banner(T.ko + ' 등급 ' + fullName(sd) + ' 탄생!', T.col); broadcast(sd); flash(ti >= TI.Divine ? .8 : .45); }
+  const show = ()=>$('reveal').classList.add('on');
+  if (sd.tier === 'Hidden') cutscene('hidden', show); else if (sd.tier === 'Infinity') cutscene('infinity', show); else show(); }
 $('rvOk').addEventListener('click', ()=>$('reveal').classList.remove('on'));
-function cutscene(kind, then){
-  const c = $('cut'), g = $('cutG'), s = $('cutS'); c.className = 'on' + (kind === 'infinity' ? ' cosmic' : ''); sfx.big();
+function cutscene(kind, then){ const c = $('cut'); c.className = 'on' + (kind === 'infinity' ? ' cosmic' : ''); sfx.big();
   const lines = kind === 'hidden' ? ['ERR://DNA_SEQUENCE_OVERFLOW', '0x00000000 … 알 수 없는 유전자', '이 씨앗은 기록에 없습니다'] : ['우주가 한 줄로 정렬됩니다', '1 / 1,000,000', '∞ INFINITY'];
-  g.textContent = kind === 'hidden' ? '??????' : '∞'; let i = 0; s.textContent = '';
-  const step = ()=>{ if (i < lines.length){ s.textContent = lines[i++]; setTimeout(step, 1100); } else { c.className = ''; then(); } }; setTimeout(step, 500);
-}
+  $('cutG').textContent = kind === 'hidden' ? '??????' : '∞'; let i = 0; $('cutS').textContent = ''; const step = ()=>{ if (i < lines.length){ $('cutS').textContent = lines[i++]; setTimeout(step, 1100); } else { c.className = ''; then(); } }; setTimeout(step, 500); }
 
-// =====================================================================
-//  렌더
-// =====================================================================
-let bagMode = 'crops';
-function renderFarm(){
-  const now = Date.now(), wx = curWeather(); let html = '';
-  for (let i=0;i<MAX_TILES;i++){
-    if (i >= S.unlocked){ if (i === S.unlocked) html += '<div class="tile lock" data-i="lock">🔒<span>' + fmt(expandCost()) + '</span></div>'; continue; }
-    const t = S.tiles[i];
-    if (!t){ html += '<div class="tile empty' + (plantSel ? ' planting' : '') + '" data-i="' + i + '"></div>'; continue; }
-    if (wx !== 'sunny') t.wx[wx] = 1;   // 자라는 동안 겪은 날씨 기록
-    const k = Math.min(1, (now - t.plantedAt) / (t.readyAt - t.plantedAt)), sd = t.sd, T = TIERS[TI[sd.tier]];
-    const ready = k >= 1, sc = .35 + .65 * k;
-    const face = k < .35 ? '🌱' : k < .7 ? '🌿' : null;
-    html += '<div class="tile' + (ready ? ' ready' : '') + '" data-i="' + i + '"><span class="tt" style="color:' + T.col + '">' + T.ko + '</span>' +
-      (ready ? '' : '<span class="tm">' + clock((t.readyAt - now) / 1000) + '</span>') +
-      '<div class="pl" style="transform:scale(' + sc.toFixed(2) + ')">' + (face ? face : icon(sd)) + '</div>' +
-      (ready ? '<span class="hv">수확</span>' : '<div class="bar"><i style="width:' + (k*100).toFixed(1) + '%"></i></div>') + '</div>';
-  }
-  $('farm').innerHTML = html;
-  $('expandBtn').textContent = S.unlocked >= MAX_TILES ? '밭 최대' : '밭 넓히기 · ' + fmt(expandCost());
-  $('expandBtn').disabled = S.unlocked >= MAX_TILES;
-}
-function renderSeedRow(){
-  if (plantSel && !S.seeds.find(x=>x.id === plantSel)) plantSel = null;
-  if (!S.seeds.length){ $('seedRow').innerHTML = '<div class="muted">씨앗이 없어요. 상점에서 사거나 연구소에서 만들어요.</div>'; $('plantHint').textContent = ''; return; }
-  const list = S.seeds.slice().sort((a, b)=>TI[b.tier] - TI[a.tier] || b.baseValue - a.baseValue);
-  $('seedRow').innerHTML = list.map(sd=>'<div class="sd' + (sd.id === plantSel ? ' on' : '') + '" data-id="' + sd.id + '" title="' + esc(fullName(sd)) + '"><div class="e" style="position:relative">' + icon(sd) + '</div><div class="n" style="color:' + TIERS[TI[sd.tier]].col + '">' + esc(sd.name) + '</div>' + ((sd.qty || 1) > 1 ? '<span class="q">×' + sd.qty + '</span>' : '') + '</div>').join('');
-  const s = plantSel && S.seeds.find(x=>x.id === plantSel); $('plantHint').textContent = s ? fullName(s) + ' · ' + clock(s.growthTime) : '';
-}
-function renderShop(){
-  const slot = Math.floor(sNow() / RESTOCK); if (S.shopSlot !== slot){ S.shopSlot = slot; S.bought = {}; }
-  $('spShop').innerHTML = specialStock(slot).map(st=>{ const left = st.stock - (S.bought[st.i] || 0), T = TIERS[TI[st.sd.tier]];
-    return '<div class="item"><div class="ic">' + icon(st.sd) + '</div><div class="inf"><div class="nm"><span style="color:' + T.col + '">' + T.ko + '</span> ' + esc(st.sd.name) + '</div><div class="sub">재고 ' + left + ' · 수확 약 ' + fmt(st.sd.baseValue) + ' · ' + clock(st.sd.growthTime) + '</div></div>' +
-      '<button class="btn ' + (left > 0 ? 'ok' : '') + '" data-sp="' + st.i + '" type="button"' + (left > 0 && S.money >= st.price ? '' : ' disabled') + '>' + (left > 0 ? fmt(st.price) : '품절') + '</button></div>'; }).join('');
-  $('regShop').innerHTML = regularStock().map((st, i)=>{ const T = TIERS[TI[st.sd.tier]];
-    return '<div class="item"><div class="ic">' + icon(st.sd) + '</div><div class="inf"><div class="nm"><span style="color:' + T.col + '">' + T.ko + '</span> ' + esc(st.sd.name) + '</div><div class="sub">수확 약 ' + fmt(st.sd.baseValue) + ' · ' + clock(st.sd.growthTime) + '</div></div>' +
-      '<button class="btn" data-rg="' + i + '" type="button"' + (S.money >= st.price ? '' : ' disabled') + '>' + fmt(st.price) + '</button></div>'; }).join('');
-}
-function renderBag(){
-  const sort = $('sortSel').value;
-  const cmp = sort === 'tier' ? (a, b)=>TI[b.tier] - TI[a.tier] || (b.value || b.baseValue) - (a.value || a.baseValue) : sort === 'new' ? (a, b)=>(b.born || 0) - (a.born || 0) : (a, b)=>(b.value || b.baseValue) - (a.value || a.baseValue);
-  $('bagCrops').className = 'btn' + (bagMode === 'crops' ? ' pri' : ''); $('bagSeeds').className = 'btn' + (bagMode === 'seeds' ? ' pri' : '');
-  $('bagTitle').textContent = (labPick ? '연구소 ' + labPick + ' 칸에 넣기 · ' : '') + (bagMode === 'crops' ? '작물 ' + S.crops.length : '씨앗 ' + S.seeds.reduce((a, s)=>a + (s.qty || 1), 0));
-  const list = (bagMode === 'crops' ? S.crops : S.seeds).slice().sort(cmp).slice(0, 200);
-  if (!list.length){ $('bag').innerHTML = '<div class="muted">' + (bagMode === 'crops' ? '작물이 없어요. 밭에서 수확해요.' : '씨앗이 없어요.') + '</div>'; return; }
-  $('bag').innerHTML = list.map(it=>{ const T = TIERS[TI[it.tier]], inLab = it.id === labA || it.id === labB;
-    const v = it.kind === 'crop' ? (it.tier === 'Hidden' ? '???' : fmt(it.value)) : '×' + (it.qty || 1);
-    return '<div class="item' + (inLab ? ' sel' : '') + '"><div class="ic">' + icon(it) + '</div><div class="inf"><div class="nm"><span style="color:' + T.col + '">' + T.ko + '</span> ' + esc(it.name) + (it.variant !== 'Normal' ? '<span class="vb ' + it.variant + '">' + VARIANTS[it.variant].ko + '</span>' : '') + '</div>' +
-      '<div class="sub">' + (it.kind === 'crop' ? it.weight + 'kg' : (it.isPrimary ? '상점 씨앗' : '하이브리드') + ' · ' + clock(it.growthTime)) + '</div>' + traitHTML(it.traits) + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="val">' + v + '</span><div class="row">' +
-      (labPick ? '<button class="btn pri" data-lab="' + it.id + '" type="button">넣기</button>' : '<button class="btn" data-lab="' + it.id + '" type="button">연구소</button>') +
-      (it.kind === 'crop' && !labPick ? '<button class="btn" data-sell="' + it.id + '" type="button">팔기</button>' : '') + (it.kind === 'seed' && !labPick ? '<button class="btn" data-plant="' + it.id + '" type="button">심기</button>' : '') + '</div></div></div>'; }).join('');
-}
-function renderDex(){ $('rolls').textContent = '합성 ' + S.rolls + '회';
-  $('dex').innerHTML = TIERS.map(t=>{ const n = S.found[t.k] || 0; return '<span class="tr" style="' + (n ? 'color:' + t.col : 'opacity:.35') + '">' + (n ? t.ko : '???') + (n ? ' ' + n : '') + '</span>'; }).join(''); }
-function renderLog(){ $('log').innerHTML = S.logs.slice(-60).reverse().map(l=>'<div class="l"><time>' + l.t + '</time>' + l.h + '</div>').join('') || '<div class="muted">아직 기록이 없어요.</div>'; }
-function renderTop(){ $('money').textContent = '💰 ' + fmt(S.money); const n = S.crops.length; $('bagN').textContent = n; $('bagN').style.display = n ? 'inline-block' : 'none'; }
-function renderAll(){ renderTop(); renderFarm(); renderSeedRow(); renderShop(); renderLab(); renderBag(); renderDex(); renderLog(); }
-
-// ---- 알림 ----
+// ---- 알림 · 소리 ----
 let toastT = null;
-function toast(t){ const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(()=>e.classList.remove('on'), 2000); }
+function toast(t){ const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(()=>e.classList.remove('on'), 2200); }
 function banner(t, col){ const b = document.createElement('div'); b.className = 'b'; b.innerHTML = '<span style="color:' + (col || '#fff') + '">' + esc(t) + '</span>'; $('banner').appendChild(b); setTimeout(()=>b.remove(), 5000); }
 function flash(a){ const f = $('flash'); f.style.transition = 'none'; f.style.opacity = a; requestAnimationFrame(()=>{ f.style.transition = 'opacity .8s'; f.style.opacity = 0; }); }
-function logLine(h){ const d = new Date(); S.logs.push({ t:String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), h }); if (S.logs.length > 120) S.logs.splice(0, S.logs.length - 120); renderLog(); }
-
-// ---- 효과음 ----
-const sfx = (function(){ let ac = null; const un = ()=>{ if (!ac){ try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} } if (ac && ac.state === 'suspended') ac.resume(); };
-  ['pointerdown','keydown'].forEach(e=>addEventListener(e, un, { passive:true }));
+const sfx = (function(){ let ac = null; const un = ()=>{ if (!ac){ try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} } if (ac && ac.state === 'suspended') ac.resume(); }; ['pointerdown','keydown'].forEach(e=>addEventListener(e, un, { passive:true }));
   function tone(f0, f1, d, v, type, w){ if (!ac) return; const t = ac.currentTime + (w || 0), o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + d); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .02); }
-  return { tick(k){ tone(500 + k*500, 480 + k*500, .04, .03, 'square'); }, land(ti){ const b = 330 * Math.pow(1.12, ti); [0, 4, 7, 12].slice(0, 2 + Math.min(2, ti >> 1)).forEach((s, i)=>tone(b*Math.pow(2, s/12), b*Math.pow(2, s/12), .35, .07, 'triangle', i*.07)); },
-    big(){ [0, 3, 7, 10, 14, 19].forEach((s, i)=>tone(220*Math.pow(2, s/12), 220*Math.pow(2, s/12), 1.2, .06, 'sawtooth', i*.12)); }, coin(){ tone(1200, 1600, .12, .05, 'triangle'); } }; })();
+  return { tick(k){ tone(500 + k*500, 480 + k*500, .04, .03, 'square'); }, land(ti){ const b = 330*Math.pow(1.12, ti); [0, 4, 7, 12].slice(0, 2 + Math.min(2, ti >> 1)).forEach((s, i)=>tone(b*Math.pow(2, s/12), b*Math.pow(2, s/12), .35, .07, 'triangle', i*.07)); },
+    big(){ [0, 3, 7, 10, 14, 19].forEach((s, i)=>tone(220*Math.pow(2, s/12), 220*Math.pow(2, s/12), 1.2, .06, 'sawtooth', i*.12)); }, coin(){ tone(1200, 1600, .12, .05, 'triangle'); }, plant(){ tone(300, 180, .12, .08); }, jump(){ tone(260, 520, .12, .06); } }; })();
 
 // =====================================================================
-//  날씨 연출 (캔버스)
+//  날씨 (3D) — 비 · 번개 · 유성 · 무지개, 하늘색도 바뀐다
 // =====================================================================
-const cv = $('weatherFx'), cx = cv.getContext('2d'); let parts = [], lastWx = null, thunderT = 3;
-function fit(){ cv.width = innerWidth; cv.height = innerHeight; } addEventListener('resize', fit); fit();
-function wxFrame(dt){
-  const wx = curWeather(), W = cv.width, H = cv.height; cx.clearRect(0, 0, W, H);
-  if (wx !== lastWx){ parts = []; if (lastWx !== null){ banner(WEATHER[wx].ic + ' 날씨가 바뀌었어요: ' + WEATHER[wx].ko + (WEATHER[wx].desc ? ' — ' + WEATHER[wx].desc : '')); logLine('날씨: ' + WEATHER[wx].ko); } lastWx = wx; renderLab(); }
-  if (wx === 'acid' || wx === 'storm'){ while (parts.length < (wx === 'storm' ? 160 : 110)) parts.push({ x:Math.random()*W, y:Math.random()*H, v:600 + Math.random()*500 });
-    cx.strokeStyle = wx === 'acid' ? 'rgba(160,255,120,.35)' : 'rgba(170,200,255,.35)'; cx.lineWidth = 1.2; cx.beginPath();
-    for (const p of parts){ p.y += p.v*dt; p.x -= p.v*dt*.15; if (p.y > H){ p.y = -10; p.x = Math.random()*W*1.2; } cx.moveTo(p.x, p.y); cx.lineTo(p.x + 3, p.y - 14); } cx.stroke();
-    if (wx === 'storm'){ thunderT -= dt; if (thunderT <= 0){ thunderT = 4 + Math.random()*7; flash(.35); } } }
-  else if (wx === 'meteor'){ if (Math.random() < dt*3) parts.push({ x:Math.random()*W*1.2, y:-20, vx:-300 - Math.random()*200, vy:300 + Math.random()*200, l:1 });
-    for (let i=parts.length-1;i>=0;i--){ const p = parts[i]; p.x += p.vx*dt; p.y += p.vy*dt; p.l -= dt*.6; const g = cx.createLinearGradient(p.x, p.y, p.x - p.vx*.12, p.y - p.vy*.12); g.addColorStop(0, 'rgba(255,240,200,' + Math.max(0, p.l) + ')'); g.addColorStop(1, 'rgba(255,160,80,0)'); cx.strokeStyle = g; cx.lineWidth = 2.5; cx.beginPath(); cx.moveTo(p.x, p.y); cx.lineTo(p.x - p.vx*.12, p.y - p.vy*.12); cx.stroke(); if (p.l <= 0 || p.y > H) parts.splice(i, 1); } }
-  else if (wx === 'rainbow'){ const r = Math.max(W, H)*.55; cx.globalAlpha = .12; ['#ff6b6b','#ffb36b','#ffe36b','#7be08a','#6bb8ff','#b48cff'].forEach((c, i)=>{ cx.strokeStyle = c; cx.lineWidth = 14; cx.beginPath(); cx.arc(W*.5, H*1.05, r - i*14, Math.PI, 0); cx.stroke(); }); cx.globalAlpha = 1; }
-}
+const RAIN_N = 900, rainGeo = new THREE.BufferGeometry(), rainPos = new Float32Array(RAIN_N*6);
+for (let i=0;i<RAIN_N;i++){ const x = (Math.random() - .5)*80, y = Math.random()*40, z = (Math.random() - .5)*80; rainPos.set([x, y, z, x + .1, y - .9, z], i*6); }
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color:0xaacfff, transparent:true, opacity:.5 })); rain.visible = false; rain.frustumCulled = false; scene.add(rain);
+const rainbowArc = new THREE.Group(); ['#ff6b6b','#ffb36b','#ffe36b','#7be08a','#6bb8ff','#b48cff'].forEach((c, i)=>{ rainbowArc.add(new THREE.Mesh(new THREE.TorusGeometry(150 - i*4, 2, 6, 64, Math.PI), new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:.35, fog:false, depthWrite:false }))); });
+rainbowArc.position.set(0, -10, -220); rainbowArc.visible = false; scene.add(rainbowArc);
+const meteors = []; let wxNow = null, thunderT = 5;
+function applyWeather(wx){
+  const set = (top, bot, fog, sunI, hemiI)=>{ skyU.top.value.set(top); skyU.bot.value.set(bot); scene.fog.color.set(fog); sun.intensity = sunI; hemi.intensity = hemiI; };
+  if (wx === 'sunny') set(0x3d7fd6, 0xd8ebfa, 0xcfe3f5, 1.0, .62);
+  else if (wx === 'acid') set(0x4d6b3a, 0xa8c49a, 0x9fb892, .6, .55);
+  else if (wx === 'storm') set(0x2a3342, 0x6b7584, 0x5f6977, .45, .5);
+  else if (wx === 'meteor') set(0x120c2e, 0x3b2a6b, 0x2a2350, .4, .5);
+  else set(0x4f9be6, 0xf0f6ff, 0xe2eefa, 1.05, .66);
+  rain.visible = wx === 'acid' || wx === 'storm'; rain.material.color.set(wx === 'acid' ? 0xb8ff9a : 0xaacfff); rainbowArc.visible = wx === 'rainbow'; }
+function tickWeather(dt){
+  const wx = curWeather(); if (wx !== wxNow){ if (wxNow !== null) banner(WEATHER[wx].ic + ' 날씨: ' + WEATHER[wx].ko + (WEATHER[wx].desc ? ' — ' + WEATHER[wx].desc : '')); wxNow = wx; applyWeather(wx); renderPanel(); }
+  if (rain.visible){ rain.position.set(P.x, 0, P.z); const a = rainGeo.attributes.position.array; for (let i=0;i<RAIN_N;i++){ let y = a[i*6 + 1] - dt*38; if (y < 0) y += 40; a[i*6 + 1] = y; a[i*6 + 4] = y - .9; } rainGeo.attributes.position.needsUpdate = true; }
+  if (wx === 'storm'){ thunderT -= dt; if (thunderT <= 0){ thunderT = 4 + Math.random()*7; flash(.3); } }
+  if (wx === 'meteor' && Math.random() < dt*1.5){ const m = new THREE.Mesh(new THREE.CylinderGeometry(.15, .6, 10, 6), new THREE.MeshBasicMaterial({ color:0xffd9a0, fog:false })); m.position.set(P.x + (Math.random() - .5)*160, 90, P.z - 60 + (Math.random() - .5)*80); m.rotation.z = .8; scene.add(m); meteors.push({ m, t:0 }); }
+  for (let i=meteors.length-1;i>=0;i--){ const o = meteors[i]; o.t += dt; o.m.position.x -= dt*60; o.m.position.y -= dt*50; if (o.t > 2.2){ scene.remove(o.m); o.m.geometry.dispose(); meteors.splice(i, 1); } } }
 
 // =====================================================================
-//  멀티: 같은 방 사람 수 · 전체 알림 (셀레스티얼 이상)
+//  멀티 — 한 서버 8명: 밭 자리, 아바타, 서로의 밭, 대박 알림
 // =====================================================================
-const NET = { on:false, players:{}, seen:{}, nonce:0 };
+const NET = { on:false, uid:null, players:{}, ghosts:{}, seen:{}, sendT:0, fullT:0, plT:0, nonce:0, claimT:0 };
 const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || 'PUBLIC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })();
-function broadcast(sd){ if (!NET.on) return; NET.nonce++; try { MP.update({ al:{ n:NET.nonce, tier:sd.tier, name:fullName(sd), v:sd.variant }, bt:S.bestTier }); } catch(e){} }
-function submit(){ try { if (window.MP && MP.submitScore){ MP.submitScore('garden_tier', S.bestTier, 'desc'); if (S.bestVal > 0 && isFinite(S.bestVal)) MP.submitScore('garden_value', Math.min(S.bestVal, 9e15), 'desc'); } } catch(e){} }
+function myName(){ try { return (window.MP && MP.getDisplayName && MP.getDisplayName()) || '농부'; } catch(e){ return '농부'; } }
+function broadcast(sd){ if (!NET.on) return; NET.nonce++; try { MP.update({ al:{ n:NET.nonce, tier:sd.tier, name:fullName(sd) } }); } catch(e){} }
+function submit(){ try { if (window.MP && MP.submitScore){ MP.submitScore('garden_tier', S.bestTier, 'desc'); if (S.bestVal > 0) MP.submitScore('garden_value', Math.min(S.bestVal, 9e15), 'desc'); } } catch(e){} }
+const freshP = u => performance.now() - (NET.seen[u] || -1e9) < 20000;
+function takenPlots(){ const taken = {}; for (const u in NET.players){ const p = NET.players[u]; if (p && p.plot !== undefined && freshP(u)) taken[p.plot] = !taken[p.plot] || u < taken[p.plot] ? u : taken[p.plot]; } return taken; }
+function movePlot(i){ if (i === myPlot) return; const old = PLOTS[myPlot], p = PLOTS[i];
+  while (old.plantG.children.length) old.plantG.remove(old.plantG.children[0]); while (old.sprG.children.length) old.sprG.remove(old.sprG.children[0]); for (const k in plantObjs) delete plantObjs[k];
+  for (const s of S.sprinklers){ s.x += p.cx - old.cx; s.z += p.cz - old.cz; }
+  setSign(old, '빈 밭'); old.key = ''; myPlot = i; S.plot = i; setSign(p, myName() + '의 밭', '#ffe082'); syncPlants();
+  P.x = p.cx; P.z = p.cz + p.face*(ROWS*SPOT/2 + 5); camYaw = p.face > 0 ? 0 : Math.PI; toast((i + 1) + '번 밭이 내 밭이에요'); }
+function claimPlot(){ const t = takenPlots(); if (t[myPlot] && t[myPlot] < NET.uid){ for (let i=0;i<8;i++) if (!t[i]){ movePlot(i); return; } } }
+function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; c.height = 48; const g = c.getContext('2d'); g.font = '800 26px sans-serif'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.7)'; g.strokeText(String(t).slice(0, 14), 128, 34); g.fillStyle = '#fff'; g.fillText(String(t).slice(0, 14), 128, 34);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(c), depthWrite:false })); s.scale.set(2.6, .5, 1); s.position.y = 4.1; return s; }
 (function(){
   if (!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase)) return;
   try {
-    MP.onPlayersUpdate(val=>{ let n = 0;
-      for (const u in val){ const p = val[u]; if (!p) continue; n++; const old = NET.players[u];
-        if (p.al && (!old || !old.al || old.al.n !== p.al.n) && old){ const T = TIERS[TI[p.al.tier]] || TIERS[0]; const msg = (p.name || '누군가') + '님이 ' + p.al.name + ' 을(를) 만들었어요!'; banner('🌐 ' + msg, T.col); logLine('<b style="color:' + T.col + '">🌐 ' + esc(msg) + '</b>'); if (TI[p.al.tier] >= TI.Infinity) flash(.8); }
+    MP.onPlayersUpdate(val=>{ const t = performance.now();
+      for (const u in val){ const p = val[u]; if (!p) continue; const old = NET.players[u]; if (!old || old.ts !== p.ts) NET.seen[u] = t;
+        if (old && p.al && (!old.al || old.al.n !== p.al.n)){ const T = TIERS[TI[p.al.tier]] || TIERS[0]; banner('🌐 ' + (p.name || '누군가') + '님이 ' + p.al.name + ' 을(를) 만들었어요!', T.col); if (TI[p.al.tier] >= TI.Infinity) flash(.8); }
         NET.players[u] = p; }
-      for (const u in NET.players) if (!val[u]) delete NET.players[u];
-      $('online').textContent = n ? '· 같이 접속 ' + (n + 1) + '명' : ''; });
-    MP.init('garden_' + URL_ROOM, (uid, err)=>{ if (err || !uid) return; NET.on = true; try { MP.setPresence('garden', URL_ROOM); } catch(e){}
-      try { MP.update({ name:(MP.getDisplayName && MP.getDisplayName()) || '농부', bt:S.bestTier }); } catch(e){} });
-    setInterval(()=>{ if (NET.on) try { MP.update({ bt:S.bestTier }); } catch(e){} }, 10000);
+      for (const u in NET.players) if (!val[u]) delete NET.players[u]; });
+    MP.init('garden3d_' + URL_ROOM, (u, err)=>{ if (err || !u) return; NET.on = true; NET.uid = u; try { MP.setPresence('garden', URL_ROOM); } catch(e){}
+      // 잠깐 기다렸다가 비어 있는 밭 중 가장 앞 번호로
+      setTimeout(()=>{ const t = takenPlots(); if (t[myPlot]){ for (let i=0;i<8;i++) if (!t[i]){ movePlot(i); break; } } }, 1500);
+      if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l){ buildMe(l); NET.fullT = 0; } }); });
   } catch(e){}
 })();
+function netTick(dt){
+  const owners = {};
+  for (const u in NET.players){ const p = NET.players[u]; if (!p || !freshP(u)) continue; let gh = NET.ghosts[u];
+    const key = JSON.stringify(p.avatarLoadout || null);
+    if (!gh || (p.avatarLoadout && gh.key !== key)){ if (gh) scene.remove(gh.g); const g = buildAvatarGroup(p.avatarLoadout); const lm = pivotize(g); g.add(nameTag(p.name || '농부')); if (gh) g.position.copy(gh.g.position); else g.position.set(p.x || 0, 0, p.z || 0); scene.add(g); gh = NET.ghosts[u] = { g, key, ry:p.ry || 0, limbs:lm, w:0 }; }
+    const k = Math.min(1, dt*10), ox = gh.g.position.x, oz = gh.g.position.z; gh.g.position.x += ((p.x || 0) - ox)*k; gh.g.position.y += ((p.y || 0) - gh.g.position.y)*k; gh.g.position.z += ((p.z || 0) - oz)*k;
+    let d = (p.ry || 0) - gh.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); gh.ry += d*k; gh.g.rotation.y = gh.ry;
+    const sp = Math.hypot(gh.g.position.x - ox, gh.g.position.z - oz)/Math.max(dt, 1e-3); gh.w += dt*(sp > .5 ? 10 : 0); const L = gh.limbs; if (L.legL){ const s = sp > .5 ? Math.sin(gh.w)*.7 : 0; L.legL.rotation.x = s; L.legR.rotation.x = -s; L.armL.rotation.x = -s; L.armR.rotation.x = s; }
+    if (p.plot !== undefined && p.plot !== myPlot && PLOTS[p.plot]){ owners[p.plot] = 1; const pl = PLOTS[p.plot]; if (pl.owner !== u){ pl.owner = u; setSign(pl, (p.name || '농부') + '의 밭'); } drawRemotePlot(pl, p.pl, p.sp); } }
+  for (const u in NET.ghosts) if (!NET.players[u] || !freshP(u)){ scene.remove(NET.ghosts[u].g); delete NET.ghosts[u]; }
+  PLOTS.forEach((pl, i)=>{ if (i !== myPlot && !owners[i] && pl.owner){ pl.owner = null; setSign(pl, '빈 밭'); drawRemotePlot(pl, [], []); } });
+  if (!NET.on) return;
+  NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .12; NET.fullT -= .12; NET.plT -= .12; NET.claimT -= .12;
+  const s = { name:myName(), x:+P.x.toFixed(2), y:+P.y.toFixed(2), z:+P.z.toFixed(2), ry:+P.face.toFixed(2), plot:myPlot };
+  if (netDirty || NET.plT <= 0){ netDirty = false; NET.plT = 3; const p0 = PLOTS[myPlot];
+    s.pl = S.plants.map(pl=>[pl.spot, SPEC_KEYS.indexOf(pl.sd.species), TI[pl.sd.tier], VK.indexOf(pl.sd.variant), Math.round(pl.prog*100)]);
+    s.sp = S.sprinklers.map(x=>[x.type, +(x.x - p0.cx).toFixed(1), +(x.z - p0.cz).toFixed(1)]); }
+  if (NET.fullT <= 0){ NET.fullT = 4; try { s.avatarLoadout = (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null; } catch(e){} }
+  try { MP.update(s); } catch(e){}
+  if (NET.claimT <= 0){ NET.claimT = 2; claimPlot(); }
+}
 
 // =====================================================================
 //  입력
 // =====================================================================
-function showTab(t){ document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on', p.id === 'p-' + t)); if (t !== 'bag') labPick = null; renderBag(); }
-document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click', ()=>showTab(b.dataset.t)));
-$('farm').addEventListener('click', e=>{ const t = e.target.closest('.tile'); if (!t) return; if (t.dataset.i === 'lock'){ expand(); return; } const i = +t.dataset.i;
-  const st = S.tiles[i]; if (st && tileState(st) === 'ready'){ const n = harvest(i); if (n){ sfx.coin(); toast(fullName(st.sd) + ' 수확' + (n > 1 ? ' ×2' : '')); } renderAll(); return; } plant(i); renderTop(); });
-$('seedRow').addEventListener('click', e=>{ const d = e.target.closest('.sd'); if (!d) return; plantSel = plantSel === d.dataset.id ? null : d.dataset.id; renderSeedRow(); renderFarm(); });
-$('harvestAll').addEventListener('click', harvestAll);
-$('expandBtn').addEventListener('click', expand);
-$('spShop').addEventListener('click', e=>{ const b = e.target.closest('[data-sp]'); if (!b) return; const st = specialStock(Math.floor(sNow() / RESTOCK))[+b.dataset.sp]; if (st) buy(st.sd, st.price, st.i); });
-$('regShop').addEventListener('click', e=>{ const b = e.target.closest('[data-rg]'); if (!b) return; const st = regularStock()[+b.dataset.rg]; if (st) buy(st.sd, st.price); });
-$('bag').addEventListener('click', e=>{ const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.sell){ sellCrop(b.dataset.sell); sfx.coin(); }
-  else if (b.dataset.plant){ plantSel = b.dataset.plant; renderSeedRow(); renderFarm(); toast('빈 밭을 눌러 심어요'); if (innerWidth <= 820) $('farmWrap').scrollTop = 0; }
-  else if (b.dataset.lab){ const id = b.dataset.lab; const slot = labPick || (!labA ? 'A' : !labB ? 'B' : 'A');
-    if (slot === 'A') labA = id; else labB = id; labPick = null; showTab('lab'); renderLab(); } });
-$('bagCrops').addEventListener('click', ()=>{ bagMode = 'crops'; renderBag(); }); $('bagSeeds').addEventListener('click', ()=>{ bagMode = 'seeds'; renderBag(); });
-$('sortSel').addEventListener('change', renderBag);
-$('sellAll').addEventListener('click', ()=>sellWhere(c=>c.id !== labA && c.id !== labB, '작물'));
-$('sellLow').addEventListener('click', ()=>sellWhere(c=>TI[c.tier] < TI.Legendary && c.id !== labA && c.id !== labB, '레전더리 미만 작물'));
-$('slotA').addEventListener('click', ()=>{ if (labA){ labA = null; renderLab(); } else pickForLab('A'); });
-$('slotB').addEventListener('click', ()=>{ if (labB){ labB = null; renderLab(); } else pickForLab('B'); });
-$('combineBtn').addEventListener('click', doCombine);
+addEventListener('keydown', e=>{ keys[e.code] = true; if (e.repeat) return;
+  if (e.code === 'Escape'){ if (panelKind) closePanel(); return; } if (panelKind) return;
+  if (e.code === 'KeyE') interact(); if (e.code === 'Space'){ e.preventDefault(); jump(); } if (e.code === 'KeyQ'){ sel = -1; refreshHotbar(); }
+  if (/^Digit[1-9]$/.test(e.code)){ const i = +e.code.slice(5) - 1; if (i < hot.length) selectHot(i); } });
+addEventListener('keyup', e=>{ keys[e.code] = false; });
+addEventListener('blur', ()=>{ for (const k in keys) keys[k] = false; });
+let rDrag = false, lDown = null, lm = { x:0, y:0 };
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+canvas.addEventListener('mousedown', e=>{ if (isTouch) return; if (e.button === 2){ rDrag = true; lm = { x:e.clientX, y:e.clientY }; } else if (e.button === 0) lDown = { x:e.clientX, y:e.clientY }; });
+addEventListener('mouseup', e=>{ if (e.button === 2) rDrag = false; if (e.button === 0 && lDown){ if (Math.hypot(e.clientX - lDown.x, e.clientY - lDown.y) < 6) clickWorld(e.clientX, e.clientY); lDown = null; } });
+addEventListener('mousemove', e=>{ if (rDrag){ camYaw -= (e.clientX - lm.x)*.006; camPitch = clamp(camPitch + (e.clientY - lm.y)*.004, .08, 1.3); lm = { x:e.clientX, y:e.clientY }; } });
+addEventListener('wheel', e=>{ if (panelKind) return; camDist = clamp(camDist + Math.sign(e.deltaY)*1.2, 6, 30); }, { passive:true });
+(function(){ let jid = null, jc = { x:0, y:0 }, cid = null, cl = { x:0, y:0 }, tapT = 0, tapP = null; const jb = $('joyB'), js = $('joyS');
+  $('joy').addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; jid = t.identifier; jc = { x:t.clientX, y:t.clientY }; jb.style.display = 'block'; jb.style.left = (jc.x - 55) + 'px'; jb.style.top = (jc.y - 55) + 'px'; js.style.transform = ''; }, { passive:false });
+  $('joy').addEventListener('touchmove', e=>{ e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === jid){ let dx = t.clientX - jc.x, dy = t.clientY - jc.y; const d = Math.hypot(dx, dy), m = Math.min(d, 45); if (d > 0){ dx = dx/d*m; dy = dy/d*m; } js.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; mv.x = dx/45; mv.y = dy/45; } }, { passive:false });
+  const je = e=>{ for (const t of e.changedTouches) if (t.identifier === jid){ jid = null; mv.x = mv.y = 0; jb.style.display = 'none'; } }; $('joy').addEventListener('touchend', je); $('joy').addEventListener('touchcancel', je);
+  canvas.addEventListener('touchstart', e=>{ const t = e.changedTouches[0]; cid = t.identifier; cl = { x:t.clientX, y:t.clientY }; tapT = performance.now(); tapP = { x:t.clientX, y:t.clientY }; }, { passive:true });
+  canvas.addEventListener('touchmove', e=>{ for (const t of e.changedTouches) if (t.identifier === cid){ camYaw -= (t.clientX - cl.x)*.007; camPitch = clamp(camPitch + (t.clientY - cl.y)*.005, .08, 1.3); cl = { x:t.clientX, y:t.clientY }; } }, { passive:true });
+  canvas.addEventListener('touchend', e=>{ for (const t of e.changedTouches) if (t.identifier === cid){ cid = null; if (performance.now() - tapT < 300 && tapP && Math.hypot(t.clientX - tapP.x, t.clientY - tapP.y) < 12) clickWorld(t.clientX, t.clientY); } }, { passive:true });
+  $('bJump').addEventListener('touchstart', e=>{ e.preventDefault(); jump(); }, { passive:false });
+  $('bAct').addEventListener('touchstart', e=>{ e.preventDefault(); interact(); }, { passive:false }); })();
+function jump(){ if (P.grounded && !panelKind){ P.vy = 15; P.grounded = false; sfx.jump(); } }
 
 // =====================================================================
 //  메인 루프
 // =====================================================================
-if (!S.logs.length){ logLine('그로우 가든에 오신 걸 환영해요. 상점에서 씨앗을 사서 심어 보세요.'); if (!S.seeds.length){ addSeed(makeSeed({ species:'carrot', qty:3 })); } }
-plantSel = S.seeds[0] ? S.seeds[0].id : null;
-renderAll();
-let last = performance.now(), uiT = 0, lastRs = Math.floor(sNow() / RESTOCK);
-function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.1, (now - last) / 1000); last = now;
-  wxFrame(dt); uiT -= dt;
-  if (uiT <= 0){ uiT = .5; const wx = curWeather();
-    $('wxName').textContent = WEATHER[wx].ic + ' ' + WEATHER[wx].ko; $('wxT').textContent = clock(wxLeft()); $('rsT').textContent = clock(rsLeft()); $('rsT2').textContent = '재입고 ' + clock(rsLeft());
-    const rs = Math.floor(sNow() / RESTOCK); if (rs !== lastRs){ lastRs = rs; banner('특별 상점이 재입고됐어요'); renderShop(); }
-    renderFarm(); renderTop(); if (dirty){ dirty = false; renderShop(); } } }
-requestAnimationFrame(loop);
+let T = 0, uiT = 0;
+function collide(){ const R = .6; for (const c of colliders){ const qx = clamp(P.x, c.minX, c.maxX), qz = clamp(P.z, c.minZ, c.maxZ), dx = P.x - qx, dz = P.z - qz, d = Math.hypot(dx, dz);
+    if (d < R){ if (d > 1e-4){ P.x += dx/d*(R - d); P.z += dz/d*(R - d); } else P.z = c.maxZ + R; } }
+  P.x = clamp(P.x, -120, 120); P.z = clamp(P.z, -95, 95); }
+function frame(dt){
+  T += dt;
+  let ix = mv.x, iy = mv.y; if (!panelKind){ if (keys.KeyW || keys.ArrowUp) iy = -1; if (keys.KeyS || keys.ArrowDown) iy = 1; if (keys.KeyA || keys.ArrowLeft) ix = -1; if (keys.KeyD || keys.ArrowRight) ix = 1; } else ix = iy = 0;
+  const il = Math.hypot(ix, iy); if (il > 1){ ix /= il; iy /= il; }
+  const fx = Math.sin(camYaw), fz = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+  const vx = (fx*-iy + rx*ix)*11, vz = (fz*-iy + rz*ix)*11, moving = il > .1;
+  P.x += vx*dt; P.z += vz*dt; collide();
+  if (moving){ const tf = Math.atan2(vx, vz); let d = tf - P.face; d = Math.atan2(Math.sin(d), Math.cos(d)); P.face += d*Math.min(1, dt*12); }
+  P.vy -= 45*dt; P.y += P.vy*dt; if (P.y <= 0){ P.y = 0; P.vy = 0; P.grounded = true; }
+  if (me){ me.position.set(P.x, P.y, P.z); me.rotation.y = P.face; const L = limbs, holding = !!hot[sel];
+    if (L.legL){ if (moving && P.grounded){ P.walk += dt*11; const s = Math.sin(P.walk)*.75; L.legL.rotation.x = s; L.legR.rotation.x = -s; L.armL.rotation.x = -s; L.armR.rotation.x = holding ? -1.1 : s; }
+      else if (!P.grounded){ L.legL.rotation.x = .3; L.legR.rotation.x = -.3; L.armL.rotation.x = -.4; L.armR.rotation.x = holding ? -1.1 : -.4; }
+      else { for (const k of ['legL','legR','armL']) L[k].rotation.x *= .8; L.armR.rotation.x = holding ? -1.1 : L.armR.rotation.x*.8; } } }
+  const cy = P.y + 2.6, cdx = -Math.sin(camYaw)*Math.cos(camPitch), cdz = -Math.cos(camYaw)*Math.cos(camPitch), cdy = Math.sin(camPitch);
+  camera.position.set(P.x + cdx*camDist, Math.max(.5, cy + cdy*camDist), P.z + cdz*camDist); camera.lookAt(P.x, cy, P.z); sky.position.copy(camera.position);
+  sun.position.set(P.x + 40, 80, P.z + 25); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
+  tickPlants(dt); tickWeather(dt);
+  labCore.rotation.y += dt*1.5; labCore.rotation.x += dt*.7; labCore.position.y = 1.6 + Math.sin(T*2)*.15;
+  for (const p of PLOTS){ for (const g of p.sprG.children){ const u = g.userData; if (!u.head) continue; u.head.rotation.y += dt*4; for (const d of u.drops){ d.t = (d.t + dt*.8) % 1; const a = d.a + T*1.5, r = d.t*u.r*.9; d.s.position.set(Math.cos(a)*r, 1.1 + Math.sin(d.t*Math.PI)*1.4 - d.t*.5, Math.sin(a)*r); } }
+    for (const g of p.plantG.children){ const u = g.userData; if (u.aura) u.aura.material.opacity = (.35 + u.ti*.04)*(.8 + .2*Math.sin(T*3 + g.position.x)); if (u.halo) u.halo.rotation.z += dt; } }
+  for (const k in matCache){ const m = matCache[k]; if (m.userData.rainbow){ m.color.setHSL((T*.2) % 1, .8, .6); m.emissive.setHSL((T*.2) % 1, .8, .25); } }
+  netTick(dt);
+  uiT -= dt; if (uiT <= 0){ uiT = .5; const wx = curWeather(); $('wxName').textContent = WEATHER[wx].ic + ' ' + WEATHER[wx].ko; $('wxT').textContent = clock(wxLeft()); $('rsT').textContent = clock(rsLeft()); $('money').textContent = '💰 ' + fmt(S.money);
+    const n = Object.keys(NET.ghosts).length, ready = S.plants.filter(p=>p.prog >= 1).length;
+    $('plotTag').innerHTML = (myPlot + 1) + '번 밭 · ' + S.plants.length + '/' + S.unlocked + '칸' + (ready ? ' · 수확 ' + ready : '') + (n ? '<br>같은 서버 ' + (n + 1) + '명' : '') + (S.fertUntil > Date.now() ? '<br>🧪 비료 ' + clock((S.fertUntil - Date.now())/1000) : '');
+    if (panelKind) $('psub').textContent = '💰 ' + fmt(S.money);
+    updatePrompt(); if (dirty){ dirty = false; save(); } }
+  renderer.render(scene, camera); }
+let last = performance.now();
+function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, (now - last)/1000); last = now; frame(dt); }
 
-// 테스트 훅
-window.__G = { S, TIERS, TI, rollTier, tierProbs, combineSeeds, makeSeed, specialStock, curWeather, seedValue, harvest, plant, renderAll, addSeed, get labA(){ return labA; }, setLab(a, b){ labA = a; labB = b; renderLab(); }, doCombine, reveal, cutscene };
+// ---- 시작 ----
+buildMe();
+{ const away = Math.max(0, (Date.now() - (S.t || Date.now()))/1000); for (const pl of S.plants) pl.prog = Math.min(1, pl.prog + away/pl.sd.growthTime); }   // 떠나 있던 동안도 자란다
+if (!S.seeds.length && !S.plants.length && !S.crops.length){ addSeed(makeSeed({ species:'carrot', qty:4 })); addSeed(makeSeed({ species:'strawberry', qty:2 })); }
+myPlot = 0; { const p = PLOTS[myPlot]; setSign(p, myName() + '의 밭', '#ffe082'); P.x = p.cx; P.z = p.cz + p.face*(ROWS*SPOT/2 + 5); camYaw = p.face > 0 ? 0 : Math.PI; }
+for (const s of S.sprinklers){ const o = PLOTS[S.plot || 0], p = PLOTS[0]; s.x += p.cx - o.cx; s.z += p.cz - o.cz; } S.plot = 0;
+syncPlants(); refreshHotbar(); if (hot.length) selectHot(0);
+$('loading').remove(); wxNow = curWeather(); applyWeather(wxNow);
+toast('씨앗을 들고 내 밭의 칸을 누르면 심어져요 · 가판대 앞에서 E');
+requestAnimationFrame(loop);
+window.__G = { S, P, TIERS, TI, rollTier, tierProbs, combineSeeds, makeSeed, addSeed, specialStock, curWeather, doPlant, doHarvest, syncPlants, refreshHotbar, openStall, closePanel, useAt, frame, PLOTS, get myPlot(){ return myPlot; }, placeSprinkler, set camYaw(v){ camYaw = v; }, set camPitch(v){ camPitch = v; }, set camDist(v){ camDist = v; }, renderer, applyWeather, setLab(a, b){ labA = a; labB = b; }, doCombine, selectHot, get hot(){ return hot; }, interact, clickWorld };
 })();
 </script>
 <script>
