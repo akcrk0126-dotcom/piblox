@@ -91,7 +91,7 @@
   <div id="plotTag"></div>
   <div id="prompt"></div>
   <div id="hotbar"></div>
-  <div id="keys">WASD 이동 · Space 점프 · 우클릭 드래그 시점 · 휠 줌 · E 상호작용<br>1~9 도구 고르기 · 클릭: 심기 / 수확 / 설치 · Q 손 비우기</div>
+  <div id="keys">WASD 이동 · Space 점프 · 우클릭 드래그 시점 · 휠 줌 · E 상호작용<br>1~9 도구 고르기 · 흙 아무 데나 클릭해서 심기 · 작물 클릭 수확 · Q 손 비우기</div>
   <div id="joy"><div id="joyB"><div id="joyS"></div></div></div>
   <div id="bJump" class="mb">점프</div>
   <div id="bAct" class="mb">E</div>
@@ -179,7 +179,8 @@ const WEATHER = {
   rainbow:{ ko:'무지개', ic:'🌈', trait:'Shiny',    desc:'레인보우 변이 5%' },
 };
 const WX_CYCLE = 180e3, RESTOCK = 300e3;
-const COLS = 6, ROWS = 5, SPOT = 3.4, MAX_SPOTS = COLS*ROWS, START_SPOTS = 9;
+const COLS = 6, ROWS = 5, SPOT = 3.4, MAX_SPOTS = 60, START_SPOTS = 12, MIN_GAP = 1.5;
+const HALF_W = (COLS*SPOT)/2 + .4, HALF_D = (ROWS*SPOT)/2 + .4;   // 흙 위 아무 데나 심을 수 있는 범위(밭 중심 기준)
 
 const sNow = () => (window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
 function hash(n){ n = (n ^ 0x9e3779b9) >>> 0; n = Math.imul(n ^ (n >>> 16), 0x85ebca6b) >>> 0; n = Math.imul(n ^ (n >>> 13), 0xc2b2ae35) >>> 0; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; }
@@ -292,22 +293,22 @@ const PLOT_POS = [[-54,-42],[-18,-42],[18,-42],[54,-42],[-54,42],[-18,42],[18,42
 const soilTex = ctex(128, 128, (g, w, h)=>{ g.fillStyle = '#6b4a2e'; g.fillRect(0, 0, w, h); for (let y=0;y<h;y+=16){ g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, y, w, 6); } for (let i=0;i<500;i++){ g.fillStyle = 'rgba(40,25,10,.35)'; g.fillRect(Math.random()*w, Math.random()*h, 2, 2); } });
 soilTex.wrapS = soilTex.wrapT = THREE.RepeatWrapping; soilTex.repeat.set(3, 3);
 function plotSign(text, col){ return ctex(512, 128, (g, w, h)=>{ g.fillStyle = '#3b2716'; g.fillRect(0, 0, w, h); g.fillStyle = '#5a3b22'; g.fillRect(8, 8, w - 16, h - 16); g.fillStyle = col || '#fff'; g.font = '900 54px "Malgun Gothic","Noto Sans KR",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w/2, h/2 + 3); }); }
-const moundM = M(0x4a311c, { roughness:1 }), lockM = M(0x3a3a3a, { roughness:1 }), rimM = M(0x8a6a44), postM = M(0x5a3b22);
+const rimM = M(0x8a6a44), postM = M(0x5a3b22);
 PLOT_POS.forEach(([cx, cz], i)=>{
   const g = new THREE.Group(); g.position.set(cx, 0, cz); scene.add(g); const face = cz < 0 ? 1 : -1;   // 길 쪽 방향
   box(g, COLS*SPOT + 2, .45, ROWS*SPOT + 2, M(0xffffff, { map:soilTex, roughness:1 }), 0, .22, 0, false);
   const W2 = (COLS*SPOT + 2.5)/2, D2 = (ROWS*SPOT + 2.5)/2;
   box(g, COLS*SPOT + 3, .6, .5, rimM, 0, .3, -D2); box(g, COLS*SPOT + 3, .6, .5, rimM, 0, .3, D2); box(g, .5, .6, ROWS*SPOT + 3, rimM, -W2, .3, 0); box(g, .5, .6, ROWS*SPOT + 3, rimM, W2, .3, 0);
-  const spots = [];
-  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){ const x = (c - (COLS - 1)/2)*SPOT, z = (r - (ROWS - 1)/2)*SPOT*face; const m = box(g, 1.9, .14, 1.9, moundM, x, .5, z, false); spots.push({ x, z, m }); }
   const sm = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map:plotSign('빈 밭'), roughness:.8 }));
   sm.position.set(0, 2.2, face*(D2 + 1)); if (face < 0) sm.rotation.y = Math.PI; sm.castShadow = true; g.add(sm);
   box(g, .25, 2.2, .25, postM, -2.2, 1.1, face*(D2 + 1.05)); box(g, .25, 2.2, .25, postM, 2.2, 1.1, face*(D2 + 1.05));
-  const P0 = { i, cx, cz, g, face, spots, sign:sm, owner:null, plantG:new THREE.Group(), sprG:new THREE.Group(), key:'' };
+  const P0 = { i, cx, cz, g, face, sign:sm, owner:null, plantG:new THREE.Group(), sprG:new THREE.Group(), key:'' };
   g.add(P0.plantG); g.add(P0.sprG); PLOTS.push(P0);
 });
+const soilHit = new THREE.Group(); scene.add(soilHit);
+PLOTS.forEach(p=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W*2, HALF_D*2), new THREE.MeshBasicMaterial({ visible:false })); m.rotation.x = -Math.PI/2; m.position.set(p.cx, .46, p.cz); soilHit.add(m); });
 function setSign(p, text, col){ const old = p.sign.material.map; p.sign.material.map = plotSign(text, col); p.sign.material.needsUpdate = true; if (old) old.dispose(); }
-function spotWorld(p, s){ const sp = p.spots[s]; return [p.cx + sp.x, p.cz + sp.z]; }
+const plWorld = pl => [PLOTS[myPlot].cx + pl.x, PLOTS[myPlot].cz + pl.z];   // 작물 위치는 밭 중심 기준으로 저장
 
 // ---- 가판대 5개: 씨앗 · 스프링클러 · 유전자 연구소 · 성장 · 판매 ----
 const colliders = [];
@@ -399,16 +400,25 @@ let camYaw = 0, camPitch = .42, camDist = 14;
 // =====================================================================
 let myPlot = 0, netDirty = true, dirty = true;
 const plantObjs = {};
-const plantAt = spot => S.plants.find(p=>p.spot === spot);
-function sprinklersAt(spot){ const [x, z] = spotWorld(PLOTS[myPlot], spot); return S.sprinklers.filter(s=>Math.hypot(s.x - x, s.z - z) <= SPRINKLERS[s.type].r).map(s=>SPRINKLERS[s.type]); }
-function speedAt(spot){ let m = 1; for (const d of sprinklersAt(spot)) m = Math.max(m, d.spd); if (S.fertUntil > Date.now()) m *= 1.5; const wx = curWeather(); if (wx === 'acid' || wx === 'storm') m *= 1.15; return m; }
-function doPlant(spot, seedId){
-  if (spot >= S.unlocked){ toast('잠긴 칸이에요 — 성장 상점에서 밭을 넓혀요'); return false; }
-  if (plantAt(spot)) return false;
-  const sd = takeSeed(seedId); if (!sd) return false;
-  S.plants.push({ spot, sd, prog:0, wx:{} }); sfx.plant(); dirty = true; syncPlants(); refreshHotbar(); return true; }
+function sprinklersAt(pl){ const [x, z] = plWorld(pl); return S.sprinklers.filter(s=>Math.hypot(s.x - x, s.z - z) <= SPRINKLERS[s.type].r).map(s=>SPRINKLERS[s.type]); }
+function speedAt(pl){ let m = 1; for (const d of sprinklersAt(pl)) m = Math.max(m, d.spd); if (S.fertUntil > Date.now()) m *= 1.5; const wx = curWeather(); if (wx === 'acid' || wx === 'storm') m *= 1.15; return m; }
+// 이 자리에 심을 수 있나? (밭 안 · 다른 작물/스프링클러와 조금 떨어져야)
+function canPlantAt(x, z){ const p = PLOTS[myPlot], lx = x - p.cx, lz = z - p.cz;
+  if (Math.abs(lx) > HALF_W - .5 || Math.abs(lz) > HALF_D - .5) return 'out';
+  if (S.plants.length >= S.unlocked) return 'full';
+  if (S.plants.some(pl=>Math.hypot(pl.x - lx, pl.z - lz) < MIN_GAP)) return 'close';
+  if (S.sprinklers.some(sp=>Math.hypot(sp.x - x, sp.z - z) < 1)) return 'close';
+  return 'ok'; }
+function doPlant(x, z, seedId){
+  const why = canPlantAt(x, z);
+  if (why === 'full'){ toast('더 못 심어요 (' + S.unlocked + '개) — 성장 상점에서 밭을 넓혀요'); return false; }
+  if (why === 'close'){ toast('다른 작물과 너무 붙어 있어요'); return false; }
+  if (why === 'out') return false;
+  const sd = takeSeed(seedId); if (!sd) return false; const p = PLOTS[myPlot];
+  S.plants.push({ id:uid('pl'), x:+(x - p.cx).toFixed(2), z:+(z - p.cz).toFixed(2), rot:+(Math.random()*6.28).toFixed(2), sd, prog:0, wx:{} });
+  sfx.plant(); dirty = true; syncPlants(); refreshHotbar(); return true; }
 function doHarvest(pl){
-  if (pl.prog < 1) return 0; const sd = pl.sd, traits = sd.traits.slice(), spr = sprinklersAt(pl.spot);
+  if (pl.prog < 1) return 0; const sd = pl.sd, traits = sd.traits.slice(), spr = sprinklersAt(pl);
   // 자라는 동안 겪은 날씨 → 특성 (날씨마다 25%)
   for (const w in pl.wx){ const tr = WEATHER[w] && WEATHER[w].trait; if (tr && !traits.includes(tr) && Math.random() < .25) traits.push(tr); }
   if (pl.wx.acid && !traits.includes('Wet') && Math.random() < .3) traits.push('Wet');
@@ -424,32 +434,31 @@ function doHarvest(pl){
   toast(fullName(Object.assign({}, sd, { tier, variant })) + ' 수확' + (n > 1 ? ' ×2' : '') + (tier !== sd.tier ? ' · 등급 상승!' : '') + ' → 판매대에서 팔아요');
   return n; }
 function placeSprinkler(type, x, z){ const p = PLOTS[myPlot];
-  if (Math.abs(x - p.cx) > (COLS*SPOT)/2 + .5 || Math.abs(z - p.cz) > (ROWS*SPOT)/2 + .5){ toast('내 밭 안에 설치해요'); return false; }
+  if (Math.abs(x - p.cx) > HALF_W || Math.abs(z - p.cz) > HALF_D){ toast('내 밭 안에 설치해요'); return false; }
   if (!(S.gear[type] > 0)) return false; S.gear[type]--; S.sprinklers.push({ type, x:+x.toFixed(2), z:+z.toFixed(2), until:Date.now() + SPRINKLERS[type].dur*1000 });
   sfx.plant(); toast(SPRINKLERS[type].ko + ' 설치 · ' + clock(SPRINKLERS[type].dur)); dirty = true; syncPlants(); refreshHotbar(); return true; }
 function syncPlants(){
   const p = PLOTS[myPlot], seen = {};
-  for (const pl of S.plants){ seen[pl.spot] = 1; let o = plantObjs[pl.spot];
-    if (!o || o.key !== pl.sd.id){ if (o) p.plantG.remove(o.g); const g = buildPlant(pl.sd), sp = p.spots[pl.spot]; g.position.set(sp.x, .56, sp.z); g.rotation.y = (pl.spot*1.7) % 6.28; p.plantG.add(g); plantObjs[pl.spot] = { g, key:pl.sd.id }; } }
-  for (const s in plantObjs) if (!seen[s]){ p.plantG.remove(plantObjs[s].g); delete plantObjs[s]; }
+  for (const pl of S.plants){ seen[pl.id] = 1; let o = plantObjs[pl.id];
+    if (!o){ const g = buildPlant(pl.sd); g.position.set(pl.x, .46, pl.z); g.rotation.y = pl.rot || 0; g.userData.pid = pl.id; p.plantG.add(g); plantObjs[pl.id] = { g }; } }
+  for (const id in plantObjs) if (!seen[id]){ p.plantG.remove(plantObjs[id].g); delete plantObjs[id]; }
   while (p.sprG.children.length) p.sprG.remove(p.sprG.children[0]);
-  for (const s of S.sprinklers){ const g = buildSprinkler(s.type); g.position.set(s.x - p.cx, .5, s.z - p.cz); p.sprG.add(g); }
-  p.spots.forEach((sp, k)=>{ sp.m.material = k < S.unlocked ? moundM : lockM; });
+  for (const s of S.sprinklers){ const g = buildSprinkler(s.type); g.position.set(s.x - p.cx, .45, s.z - p.cz); p.sprG.add(g); }
   netDirty = true; }
 function tickPlants(dt){
   const now = Date.now(), wx = curWeather(), n0 = S.sprinklers.length;
   S.sprinklers = S.sprinklers.filter(s=>s.until > now); if (S.sprinklers.length !== n0){ syncPlants(); toast('스프링클러가 다 됐어요'); }
   for (const pl of S.plants){
-    if (pl.prog < 1){ pl.prog = Math.min(1, pl.prog + dt*speedAt(pl.spot)/pl.sd.growthTime); if (wx !== 'sunny') pl.wx[wx] = 1; if (pl.prog >= 1){ netDirty = true; } }
-    const o = plantObjs[pl.spot]; if (!o) continue; const u = o.g.userData, k = pl.prog;
-    o.g.scale.setScalar((.25 + .75*Math.min(1, k*1.05))*u.giant); u.fruits.visible = k > .55; if (k >= 1) u.fruits.scale.setScalar(1 + Math.sin(T*3 + pl.spot)*.03); }
+    if (pl.prog < 1){ pl.prog = Math.min(1, pl.prog + dt*speedAt(pl)/pl.sd.growthTime); if (wx !== 'sunny') pl.wx[wx] = 1; if (pl.prog >= 1) netDirty = true; }
+    const o = plantObjs[pl.id]; if (!o) continue; const u = o.g.userData, k = pl.prog;
+    o.g.scale.setScalar((.25 + .75*Math.min(1, k*1.05))*u.giant); u.fruits.visible = k > .55; if (k >= 1) u.fruits.scale.setScalar(1 + Math.sin(T*3 + pl.x)*.03); }
 }
 // 다른 사람 밭 (압축된 목록으로 그리기)
 function drawRemotePlot(p, list, spr){
   const key = JSON.stringify([list || [], spr || []]); if (p.key === key) return; p.key = key;
   while (p.plantG.children.length) p.plantG.remove(p.plantG.children[0]); while (p.sprG.children.length) p.sprG.remove(p.sprG.children[0]);
-  (list || []).forEach(a=>{ const [spot, si, ti, vi, prog] = a; if (!SPEC_KEYS[si] || !p.spots[spot]) return; const sd = { species:SPEC_KEYS[si], tier:TIERS[ti] ? TIERS[ti].k : 'Common', variant:VK[vi] || 'Normal', traits:[] };
-    const g = buildPlant(sd), sp = p.spots[spot]; g.position.set(sp.x, .56, sp.z); g.rotation.y = (spot*1.7) % 6.28; const k = (prog || 0)/100; g.scale.setScalar((.25 + .75*Math.min(1, k))*g.userData.giant); g.userData.fruits.visible = k > .55; p.plantG.add(g); });
+  (list || []).forEach(a=>{ const [lx, lz, si, ti, vi, prog] = a; if (!SPEC_KEYS[si] || !isFinite(lx) || !isFinite(lz)) return; const sd = { species:SPEC_KEYS[si], tier:TIERS[ti] ? TIERS[ti].k : 'Common', variant:VK[vi] || 'Normal', traits:[] };
+    const g = buildPlant(sd); g.position.set(clamp(lx, -HALF_W, HALF_W), .46, clamp(lz, -HALF_D, HALF_D)); g.rotation.y = (lx*7 + lz*3) % 6.28; const k = (prog || 0)/100; g.scale.setScalar((.25 + .75*Math.min(1, k))*g.userData.giant); g.userData.fruits.visible = k > .55; p.plantG.add(g); });
   (spr || []).forEach(s=>{ if (!SPRINKLERS[s[0]]) return; const g = buildSprinkler(s[0]); g.position.set(s[1], .5, s[2]); p.sprG.add(g); });
 }
 
@@ -480,32 +489,53 @@ function refreshHeld(){ if (!held) return; while (held.children.length) held.rem
 // =====================================================================
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function nearestStall(){ let best = null, bd = 7.5; for (const st of STALLS){ const d = Math.hypot(P.x - st.x, P.z + 1.2); if (d < bd){ bd = d; best = st; } } return best; }
-function inMyPlot(x, z){ const p = PLOTS[myPlot]; return Math.abs(x - p.cx) < (COLS*SPOT)/2 + 1.5 && Math.abs(z - p.cz) < (ROWS*SPOT)/2 + 1.5; }
-function nearestSpot(x, z, filter, maxD){ const p = PLOTS[myPlot]; let best = -1, bd = maxD || 2.6; p.spots.forEach((s, k)=>{ const d = Math.hypot(p.cx + s.x - x, p.cz + s.z - z); if (d < bd && filter(k)){ bd = d; best = k; } }); return best; }
+function inMyPlot(x, z){ const p = PLOTS[myPlot]; return Math.abs(x - p.cx) < HALF_W + 1 && Math.abs(z - p.cz) < HALF_D + 1; }
+function nearestPlant(x, z, filter, maxD){ let best = null, bd = maxD || 2.2; for (const pl of S.plants){ const [px, pz] = plWorld(pl), d = Math.hypot(px - x, pz - z); if (d < bd && filter(pl)){ bd = d; best = pl; } } return best; }
 function useAt(x, z, fromClick){
   const h = hot[sel];
-  if (h && h.kind === 'seed'){ if (!inMyPlot(x, z)){ if (fromClick) toast('내 밭(' + (myPlot + 1) + '번)에 심어요'); return false; }
-    const k = nearestSpot(x, z, k=>k < S.unlocked && !plantAt(k)); if (k < 0){ toast(S.plants.length >= S.unlocked ? '빈 칸이 없어요 — 밭을 넓혀요' : '빈 칸을 눌러요'); return false; } return doPlant(k, h.id); }
+  if (h && h.kind === 'seed'){ if (!inMyPlot(x, z)){ if (fromClick) toast('내 밭(' + (myPlot + 1) + '번) 흙 위에 심어요'); return false; }
+    const p = PLOTS[myPlot]; x = p.cx + clamp(x - p.cx, -(HALF_W - .5), HALF_W - .5); z = p.cz + clamp(z - p.cz, -(HALF_D - .5), HALF_D - .5); return doPlant(x, z, h.id); }
   if (h && h.kind === 'spr') return placeSprinkler(h.id, x, z);
-  if (h && (h.kind === 'water' || h.kind === 'instant')){ const k = nearestSpot(x, z, k=>{ const pl = plantAt(k); return pl && pl.prog < 1; }); if (k < 0){ toast('자라는 작물을 골라요'); return false; }
-    const pl = plantAt(k); if (h.kind === 'water'){ pl.prog = Math.min(1, pl.prog + .15); S.gear.water--; toast('물을 줬어요 +15%'); } else { pl.prog = 1; S.gear.instant--; toast('다 자랐어요!'); } sfx.plant(); refreshHotbar(); dirty = true; return true; }
+  if (h && (h.kind === 'water' || h.kind === 'instant')){ const pl = nearestPlant(x, z, pl=>pl.prog < 1); if (!pl){ toast('자라는 작물을 골라요'); return false; }
+    if (h.kind === 'water'){ pl.prog = Math.min(1, pl.prog + .15); S.gear.water--; toast('물을 줬어요 +15%'); } else { pl.prog = 1; S.gear.instant--; toast('다 자랐어요!'); } sfx.plant(); refreshHotbar(); dirty = true; return true; }
   if (h && h.kind === 'fert'){ S.gear.fert--; S.fertUntil = Math.max(Date.now(), S.fertUntil) + 180e3; toast('비료: 3분 동안 성장 ×1.5'); refreshHotbar(); dirty = true; return true; }
-  const k = nearestSpot(x, z, k=>{ const pl = plantAt(k); return pl && pl.prog >= 1; }); if (k >= 0){ doHarvest(plantAt(k)); refreshHotbar(); return true; }
+  const pl = nearestPlant(x, z, pl=>pl.prog >= 1); if (pl){ doHarvest(pl); refreshHotbar(); return true; }
   return false; }
-const ripeNear = () => S.plants.find(pl=>{ if (pl.prog < 1) return false; const [x, z] = spotWorld(PLOTS[myPlot], pl.spot); return Math.hypot(x - P.x, z - P.z) < 3.2; });
+const ripeNear = () => nearestPlant(P.x, P.z, pl=>pl.prog >= 1, 3.2);
 function interact(){
   if (panelKind) return;
   const st = nearestStall(); if (st){ openStall(st.k); return; }
-  if (inMyPlot(P.x, P.z)){ const fx = P.x + Math.sin(P.face)*1.6, fz = P.z + Math.cos(P.face)*1.6; if (useAt(fx, fz)) return; if (useAt(P.x, P.z)) return; }
+  const h = hot[sel];
+  if (inMyPlot(P.x, P.z)){ const fx = P.x + Math.sin(P.face)*1.8, fz = P.z + Math.cos(P.face)*1.8; if (h && h.kind === 'seed'){ if (useAt(fx, fz)) return; } else if (useAt(fx, fz) || useAt(P.x, P.z)) return; }
   const pl = ripeNear(); if (pl){ doHarvest(pl); refreshHotbar(); } }
+// 화면 좌표 → 땅/작물 (작물을 누르면 그 작물)
+function pick(cx, cy){ ndc.set(cx/innerWidth*2 - 1, -(cy/innerHeight)*2 + 1); ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects([PLOTS[myPlot].plantG, ground, soilHit], true); if (!hits.length) return null;
+  let o = hits[0].object, pid = null; while (o){ if (o.userData && o.userData.pid){ pid = o.userData.pid; break; } o = o.parent; }
+  return { pt:hits[0].point, pl:pid ? S.plants.find(p=>p.id === pid) : null }; }
 function clickWorld(cx, cy){
-  if (panelKind) return; ndc.set(cx/innerWidth*2 - 1, -(cy/innerHeight)*2 + 1); ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects([PLOTS[myPlot].plantG, ground].concat(PLOTS[myPlot].spots.map(s=>s.m)), true);
-  if (!hits.length) return; const pt = hits[0].point; if (Math.hypot(pt.x - P.x, pt.z - P.z) > 28){ toast('너무 멀어요 — 가까이 가요'); return; } useAt(pt.x, pt.z, true); }
+  if (panelKind) return; const r = pick(cx, cy); if (!r) return;
+  if (Math.hypot(r.pt.x - P.x, r.pt.z - P.z) > 30){ toast('너무 멀어요 — 가까이 가요'); return; }
+  const h = hot[sel];
+  if (r.pl && (!h || h.kind !== 'seed')){ const pl = r.pl;
+    if (h && (h.kind === 'water' || h.kind === 'instant') && pl.prog < 1){ const [x, z] = plWorld(pl); useAt(x, z, true); return; }
+    if (pl.prog >= 1){ doHarvest(pl); refreshHotbar(); return; }
+    if (!h){ toast(fullName(pl.sd) + ' · ' + Math.floor(pl.prog*100) + '% · 남은 시간 ' + clock((1 - pl.prog)*pl.sd.growthTime/speedAt(pl))); return; } }
+  useAt(r.pt.x, r.pt.z, true); }
+// 심을 자리 미리보기 (씨앗/스프링클러를 들고 있을 때 마우스 아래)
+const ghost = new THREE.Mesh(new THREE.RingGeometry(.55, .75, 28), new THREE.MeshBasicMaterial({ color:0x3ddc84, transparent:true, opacity:.8, side:THREE.DoubleSide, depthWrite:false }));
+ghost.rotation.x = -Math.PI/2; ghost.visible = false; scene.add(ghost);
+let hoverXY = null;
+function updateGhost(){
+  const h = hot[sel]; ghost.visible = false; if (!h || (h.kind !== 'seed' && h.kind !== 'spr') || panelKind) return;
+  let x, z; if (hoverXY && !isTouch){ const r = pick(hoverXY.x, hoverXY.y); if (!r) return; x = r.pt.x; z = r.pt.z; } else { x = P.x + Math.sin(P.face)*1.8; z = P.z + Math.cos(P.face)*1.8; }
+  if (!inMyPlot(x, z)) return; const ok = h.kind === 'spr' ? true : canPlantAt(x, z) === 'ok';
+  ghost.visible = true; ghost.position.set(x, .5, z); ghost.material.color.set(ok ? 0x3ddc84 : 0xff5a5a);
+  const sc = h.kind === 'spr' ? SPRINKLERS[h.id].r/.75 : 1; ghost.scale.set(sc, sc, sc); }
 function updatePrompt(){
   const pr = $('prompt'), st = nearestStall(), h = hot[sel]; let t = null;
   if (st) t = st.ko + ' 열기';
-  else if (inMyPlot(P.x, P.z)){ if (h && h.kind === 'seed') t = h.n + ' 심기 (칸 클릭 / 앞 칸)'; else if (h && h.kind === 'spr') t = '스프링클러 설치'; else if (h && (h.kind === 'water' || h.kind === 'instant')) t = h.n + ' 쓰기'; else if (h && h.kind === 'fert') t = '비료 뿌리기'; else if (ripeNear()) t = '수확하기'; }
+  else if (inMyPlot(P.x, P.z)){ if (h && h.kind === 'seed') t = h.n + ' 심기 (흙 아무 데나 클릭 / 바로 앞)'; else if (h && h.kind === 'spr') t = '스프링클러 설치'; else if (h && (h.kind === 'water' || h.kind === 'instant')) t = h.n + ' 쓰기'; else if (h && h.kind === 'fert') t = '비료 뿌리기'; else if (ripeNear()) t = '수확하기'; }
   else if (h && h.kind === 'seed') t = null;
   if (t){ pr.style.display = 'block'; pr.innerHTML = '<kbd>E</kbd>' + esc(t); } else pr.style.display = 'none'; }
 
@@ -520,7 +550,7 @@ const findItem = id => S.crops.find(c=>c.id === id) || S.seeds.find(s=>s.id === 
 function itemRow(it, btns){ const v = it.kind === 'crop' ? (it.tier === 'Hidden' ? '???' : fmt(it.value)) : '×' + (it.qty || 1);
   return '<div class="item' + (it.id === labA || it.id === labB ? ' sel' : '') + '"><div class="ic">' + emo(it) + '</div><div class="inf"><div class="nm">' + tag(it) + ' ' + esc(it.name) + (it.variant !== 'Normal' ? '<span class="vb ' + it.variant + '">' + VARIANTS[it.variant].ko + '</span>' : '') + '</div><div class="sub">' + (it.kind === 'crop' ? it.weight + 'kg' : (it.isPrimary ? '상점 씨앗' : '하이브리드') + ' · ' + clock(it.growthTime)) + '</div>' +
     (it.traits.length ? '<div class="traits">' + it.traits.map(t=>'<span class="tr">' + (TRAITS[t] ? TRAITS[t].ko : t) + '</span>').join('') + '</div>' : '') + '</div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="val">' + v + '</span><div class="row">' + btns + '</div></div></div>'; }
-const expandCost = () => Math.round(200*Math.pow(2.3, (S.unlocked - START_SPOTS)/3));
+const expandCost = () => Math.round(200*Math.pow(2.3, (S.unlocked - START_SPOTS)/4));
 function renderPanel(){
   if (!panelKind) return; const b = $('pbody'), st = STALLS.find(s=>s.k === panelKind);
   $('ptitle').textContent = st.ko; $('psub').textContent = '💰 ' + fmt(S.money);
@@ -537,7 +567,7 @@ function renderPanel(){
   } else if (panelKind === 'grow'){
     const ex = S.unlocked < MAX_SPOTS ? expandCost() : 0;
     b.innerHTML = Object.keys(GROW_ITEMS).map(k=>{ const d = GROW_ITEMS[k], own = k === 'luck' ? (S.luckNext ? '준비됨' : '') : '보유 ' + (S.gear[k] || 0); return '<div class="item"><div class="ic">' + d.e + '</div><div class="inf"><div class="nm">' + d.ko + ' <span style="color:var(--dim);font-size:11px">' + own + '</span></div><div class="sub">' + d.desc + '</div></div><button class="btn" data-grow="' + k + '" type="button"' + (S.money >= d.cost && !(k === 'luck' && S.luckNext) ? '' : ' disabled') + '>' + fmt(d.cost) + '</button></div>'; }).join('') +
-      '<div class="item"><div class="ic">🧱</div><div class="inf"><div class="nm">밭 넓히기 (' + S.unlocked + '/' + MAX_SPOTS + '칸)</div><div class="sub">심을 수 있는 칸 +3</div></div><button class="btn" data-grow="expand" type="button"' + (ex && S.money >= ex ? '' : ' disabled') + '>' + (ex ? fmt(ex) : '최대') + '</button></div>' +
+      '<div class="item"><div class="ic">🧱</div><div class="inf"><div class="nm">더 많이 심기 (' + S.unlocked + '/' + MAX_SPOTS + '개)</div><div class="sub">한 번에 심을 수 있는 작물 +4</div></div><button class="btn" data-grow="expand" type="button"' + (ex && S.money >= ex ? '' : ' disabled') + '>' + (ex ? fmt(ex) : '최대') + '</button></div>' +
       (S.fertUntil > Date.now() ? '<div class="muted">비료 효과 ' + clock((S.fertUntil - Date.now())/1000) + ' 남음</div>' : '');
   } else if (panelKind === 'sell' || (panelKind === 'lab' && labPick)){
     const cmp = sortMode === 'tier' ? (a, c)=>TI[c.tier] - TI[a.tier] : sortMode === 'new' ? (a, c)=>(c.born || 0) - (a.born || 0) : (a, c)=>(c.value || c.baseValue) - (a.value || a.baseValue);
@@ -564,7 +594,7 @@ $('pbody').addEventListener('click', e=>{
   else if (t.dataset.rg !== undefined){ const x = regularStock()[+t.dataset.rg]; if (!x || S.money < x.price) return; S.money -= x.price; addSeed(makeSeed(Object.assign({}, x.sd, { id:uid('seed') }))); sfx.coin(); toast(fullName(x.sd) + ' 씨앗 구입'); }
   else if (t.dataset.gear){ const d = SPRINKLERS[t.dataset.gear]; if (S.money < d.cost) return; S.money -= d.cost; S.gear[t.dataset.gear]++; sfx.coin(); toast(d.ko + ' 구입 — 핫바에서 골라 밭에 설치'); }
   else if (t.dataset.grow){ const k = t.dataset.grow;
-    if (k === 'expand'){ const ex = expandCost(); if (S.unlocked >= MAX_SPOTS || S.money < ex) return; S.money -= ex; S.unlocked = Math.min(MAX_SPOTS, S.unlocked + 3); syncPlants(); toast('밭이 넓어졌어요 (' + S.unlocked + '칸)'); }
+    if (k === 'expand'){ const ex = expandCost(); if (S.unlocked >= MAX_SPOTS || S.money < ex) return; S.money -= ex; S.unlocked = Math.min(MAX_SPOTS, S.unlocked + 4); syncPlants(); toast('이제 ' + S.unlocked + '개까지 심을 수 있어요'); }
     else { const d = GROW_ITEMS[k]; if (S.money < d.cost) return; S.money -= d.cost; if (k === 'luck') S.luckNext = 1; else for (const g in d.give) S.gear[g] += d.give[g]; toast(d.ko + ' 구입'); } sfx.coin(); }
   else if (t.dataset.sell){ const i = S.crops.findIndex(c=>c.id === t.dataset.sell); if (i < 0) return; const c = S.crops[i]; if (TI[c.tier] >= TI.Celestial && !confirm(fullName(c) + ' 을(를) 팔까요?')) return; S.crops.splice(i, 1); S.money += c.value; sfx.coin(); toast('+' + fmt(c.value)); }
   else if (t.dataset.sellx){ const fn = t.dataset.sellx === 'low' ? c=>TI[c.tier] < TI.Legendary : ()=>true; const list = S.crops.filter(c=>fn(c) && c.id !== labA && c.id !== labB); if (!list.length){ toast('팔 작물이 없어요'); return; }
@@ -685,7 +715,7 @@ function netTick(dt){
   NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .12; NET.fullT -= .12; NET.plT -= .12; NET.claimT -= .12;
   const s = { name:myName(), x:+P.x.toFixed(2), y:+P.y.toFixed(2), z:+P.z.toFixed(2), ry:+P.face.toFixed(2), plot:myPlot };
   if (netDirty || NET.plT <= 0){ netDirty = false; NET.plT = 3; const p0 = PLOTS[myPlot];
-    s.pl = S.plants.map(pl=>[pl.spot, SPEC_KEYS.indexOf(pl.sd.species), TI[pl.sd.tier], VK.indexOf(pl.sd.variant), Math.round(pl.prog*100)]);
+    s.pl = S.plants.map(pl=>[pl.x, pl.z, SPEC_KEYS.indexOf(pl.sd.species), TI[pl.sd.tier], VK.indexOf(pl.sd.variant), Math.round(pl.prog*100)]);
     s.sp = S.sprinklers.map(x=>[x.type, +(x.x - p0.cx).toFixed(1), +(x.z - p0.cz).toFixed(1)]); }
   if (NET.fullT <= 0){ NET.fullT = 4; try { s.avatarLoadout = (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null; } catch(e){} }
   try { MP.update(s); } catch(e){}
@@ -705,7 +735,7 @@ let rDrag = false, lDown = null, lm = { x:0, y:0 };
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 canvas.addEventListener('mousedown', e=>{ if (isTouch) return; if (e.button === 2){ rDrag = true; lm = { x:e.clientX, y:e.clientY }; } else if (e.button === 0) lDown = { x:e.clientX, y:e.clientY }; });
 addEventListener('mouseup', e=>{ if (e.button === 2) rDrag = false; if (e.button === 0 && lDown){ if (Math.hypot(e.clientX - lDown.x, e.clientY - lDown.y) < 6) clickWorld(e.clientX, e.clientY); lDown = null; } });
-addEventListener('mousemove', e=>{ if (rDrag){ camYaw -= (e.clientX - lm.x)*.006; camPitch = clamp(camPitch + (e.clientY - lm.y)*.004, .08, 1.3); lm = { x:e.clientX, y:e.clientY }; } });
+addEventListener('mousemove', e=>{ hoverXY = { x:e.clientX, y:e.clientY }; if (rDrag){ camYaw -= (e.clientX - lm.x)*.006; camPitch = clamp(camPitch + (e.clientY - lm.y)*.004, .08, 1.3); lm = { x:e.clientX, y:e.clientY }; } });
 addEventListener('wheel', e=>{ if (panelKind) return; camDist = clamp(camDist + Math.sign(e.deltaY)*1.2, 6, 30); }, { passive:true });
 (function(){ let jid = null, jc = { x:0, y:0 }, cid = null, cl = { x:0, y:0 }, tapT = 0, tapP = null; const jb = $('joyB'), js = $('joyS');
   $('joy').addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; jid = t.identifier; jc = { x:t.clientX, y:t.clientY }; jb.style.display = 'block'; jb.style.left = (jc.x - 55) + 'px'; jb.style.top = (jc.y - 55) + 'px'; js.style.transform = ''; }, { passive:false });
@@ -741,7 +771,7 @@ function frame(dt){
   const cy = P.y + 2.6, cdx = -Math.sin(camYaw)*Math.cos(camPitch), cdz = -Math.cos(camYaw)*Math.cos(camPitch), cdy = Math.sin(camPitch);
   camera.position.set(P.x + cdx*camDist, Math.max(.5, cy + cdy*camDist), P.z + cdz*camDist); camera.lookAt(P.x, cy, P.z); sky.position.copy(camera.position);
   sun.position.set(P.x + 40, 80, P.z + 25); sun.target.position.set(P.x, 0, P.z); sun.target.updateMatrixWorld();
-  tickPlants(dt); tickWeather(dt);
+  tickPlants(dt); tickWeather(dt); updateGhost(); ghost.rotation.z += dt;
   labCore.rotation.y += dt*1.5; labCore.rotation.x += dt*.7; labCore.position.y = 1.6 + Math.sin(T*2)*.15;
   for (const p of PLOTS){ for (const g of p.sprG.children){ const u = g.userData; if (!u.head) continue; u.head.rotation.y += dt*4; for (const d of u.drops){ d.t = (d.t + dt*.8) % 1; const a = d.a + T*1.5, r = d.t*u.r*.9; d.s.position.set(Math.cos(a)*r, 1.1 + Math.sin(d.t*Math.PI)*1.4 - d.t*.5, Math.sin(a)*r); } }
     for (const g of p.plantG.children){ const u = g.userData; if (u.aura) u.aura.material.opacity = (.35 + u.ti*.04)*(.8 + .2*Math.sin(T*3 + g.position.x)); if (u.halo) u.halo.rotation.z += dt; } }
@@ -749,7 +779,7 @@ function frame(dt){
   netTick(dt);
   uiT -= dt; if (uiT <= 0){ uiT = .5; const wx = curWeather(); $('wxName').textContent = WEATHER[wx].ic + ' ' + WEATHER[wx].ko; $('wxT').textContent = clock(wxLeft()); $('rsT').textContent = clock(rsLeft()); $('money').textContent = '💰 ' + fmt(S.money);
     const n = Object.keys(NET.ghosts).length, ready = S.plants.filter(p=>p.prog >= 1).length;
-    $('plotTag').innerHTML = (myPlot + 1) + '번 밭 · ' + S.plants.length + '/' + S.unlocked + '칸' + (ready ? ' · 수확 ' + ready : '') + (n ? '<br>같은 서버 ' + (n + 1) + '명' : '') + (S.fertUntil > Date.now() ? '<br>🧪 비료 ' + clock((S.fertUntil - Date.now())/1000) : '');
+    $('plotTag').innerHTML = (myPlot + 1) + '번 밭 · 작물 ' + S.plants.length + '/' + S.unlocked + (ready ? ' · 수확 ' + ready : '') + (n ? '<br>같은 서버 ' + (n + 1) + '명' : '') + (S.fertUntil > Date.now() ? '<br>🧪 비료 ' + clock((S.fertUntil - Date.now())/1000) : '');
     if (panelKind) $('psub').textContent = '💰 ' + fmt(S.money);
     updatePrompt(); if (dirty){ dirty = false; save(); } }
   renderer.render(scene, camera); }
@@ -758,13 +788,15 @@ function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, (now -
 
 // ---- 시작 ----
 buildMe();
+for (const pl of S.plants) if (pl.spot !== undefined && pl.x === undefined){ const c = pl.spot % COLS, r = Math.floor(pl.spot/COLS); pl.x = (c - (COLS - 1)/2)*SPOT; pl.z = (r - (ROWS - 1)/2)*SPOT; pl.id = uid('pl'); pl.rot = pl.spot*1.7 % 6.28; delete pl.spot; }
+S.unlocked = Math.max(S.unlocked, START_SPOTS);
 { const away = Math.max(0, (Date.now() - (S.t || Date.now()))/1000); for (const pl of S.plants) pl.prog = Math.min(1, pl.prog + away/pl.sd.growthTime); }   // 떠나 있던 동안도 자란다
 if (!S.seeds.length && !S.plants.length && !S.crops.length){ addSeed(makeSeed({ species:'carrot', qty:4 })); addSeed(makeSeed({ species:'strawberry', qty:2 })); }
 myPlot = 0; { const p = PLOTS[myPlot]; setSign(p, myName() + '의 밭', '#ffe082'); P.x = p.cx; P.z = p.cz + p.face*(ROWS*SPOT/2 + 5); camYaw = p.face > 0 ? 0 : Math.PI; }
 for (const s of S.sprinklers){ const o = PLOTS[S.plot || 0], p = PLOTS[0]; s.x += p.cx - o.cx; s.z += p.cz - o.cz; } S.plot = 0;
 syncPlants(); refreshHotbar(); if (hot.length) selectHot(0);
 $('loading').remove(); wxNow = curWeather(); applyWeather(wxNow);
-toast('씨앗을 들고 내 밭의 칸을 누르면 심어져요 · 가판대 앞에서 E');
+toast('씨앗을 들고 내 밭 흙 아무 데나 누르면 심어져요 · 가판대 앞에서 E');
 requestAnimationFrame(loop);
 window.__G = { S, P, TIERS, TI, rollTier, tierProbs, combineSeeds, makeSeed, addSeed, specialStock, curWeather, doPlant, doHarvest, syncPlants, refreshHotbar, openStall, closePanel, useAt, frame, PLOTS, get myPlot(){ return myPlot; }, placeSprinkler, set camYaw(v){ camYaw = v; }, set camPitch(v){ camPitch = v; }, set camDist(v){ camDist = v; }, renderer, applyWeather, setLab(a, b){ labA = a; labB = b; }, doCombine, selectHot, get hot(){ return hot; }, interact, clickWorld };
 })();
