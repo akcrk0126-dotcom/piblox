@@ -898,7 +898,11 @@ const MP = (function () {
     ref.once('value').then(snap => {
       const cur = snap.val() || {};
       accountName = cur.nickname || null;
-      const disp = getDisplayName();
+      // 계정에 이미 표시 이름이 있으면 그게 맞다(이름을 바꿀 땐 setNickname이 DB에 바로 쓴다).
+      // 예전엔 이 기기의 이름(새 기기면 무작위 '플레이어1234')으로 계정 이름을 덮어써서
+      // 다른 기기에서 로그인하면 계정이 '초기화'된 것처럼 보였다.
+      if (cur.displayName) { try { localStorage.setItem('mp_nickname', cur.displayName); } catch (e) {} }
+      const disp = cur.displayName || getDisplayName();
       const patch = { displayName: disp, displayNameLower: (disp || '').toLowerCase() };
       // 계정 이름이 아직 없으면(=이 계정의 최초 기록) 지금 이름으로 한 번만 고정한다
       if (!cur.nickname) {
@@ -1144,9 +1148,37 @@ const MP = (function () {
     if (!isConfigured()) { cb && cb(null, 'no-config'); return; }
     ensureApp();
     auth.signInWithEmailAndPassword(email, password).then(res => {
-      if (res.user.displayName) setNickname(res.user.displayName);
-      cb && cb(res.user, null);
+      // 게스트로 쌓인 이 기기의 캐시가 계정 데이터에 섞이지 않게 비우고, 계정 데이터를 다시 받는다
+      clearLocalCaches();
+      uid = res.user.uid;
+      restoreAccountData(info => cb && cb(res.user, null, info));
     }).catch(err => cb && cb(null, err));
+  }
+  function clearLocalCaches() {
+    myAvatarLoadout = null; myXP = null;
+    try { ['mp_xp', 'mp_avatar_loadout', 'mp_owned_items', 'mp_nickname', 'mp_account_name'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  }
+  // 계정(users/{uid})에 저장된 이름·아바타·레벨·아이템을 이 기기로 다시 받아온다
+  function restoreAccountData(cb) {
+    if (!isConfigured() || !db || !uid) { cb && cb(null); return; }
+    db.ref(`${MP_ROOT}/users/${uid}`).once('value').then(snap => {
+      const u = snap.val() || {};
+      try {
+        const name = u.displayName || u.nickname || (auth.currentUser && auth.currentUser.displayName);
+        if (name) localStorage.setItem('mp_nickname', name);
+        accountName = u.nickname || accountName;
+        if (u.avatarLoadout) { myAvatarLoadout = Object.assign(mpDefaultLoadout(), u.avatarLoadout); localStorage.setItem('mp_avatar_loadout', JSON.stringify(myAvatarLoadout)); }
+        if (typeof u.xp === 'number') { myXP = Math.max(u.xp, getLocalXP()); localStorage.setItem('mp_xp', String(myXP)); }
+        const owned = Object.keys(u.ownedItems || {}); if (owned.length) { const loc = getOwnedItems(); owned.forEach(id => { if (loc.indexOf(id) < 0) loc.push(id); }); localStorage.setItem('mp_owned_items', JSON.stringify(loc)); }
+        localStorage.setItem('mp_nickname_set', '1');
+      } catch (e) {}
+      cb && cb({ name: u.displayName || u.nickname || null, accountName: u.nickname || null, level: typeof u.xp === 'number' ? levelFromXP(u.xp).level : (u.level || 1), items: Object.keys(u.ownedItems || {}).length, avatar: u.avatarLoadout || null, email: u.email || (auth.currentUser && auth.currentUser.email) || null });
+    }).catch(err => { console.error('[MP] 계정 데이터 불러오기 실패', err && err.code || err); cb && cb(null, err); });
+  }
+  function resetPassword(email, cb) {
+    if (!isConfigured()) { cb && cb(false, 'no-config'); return; }
+    ensureApp();
+    auth.sendPasswordResetEmail(email).then(() => cb && cb(true)).catch(err => cb && cb(false, err));
   }
 
   // 로그아웃 — 계정에서 나온 뒤 반드시 익명으로 다시 붙는다.
@@ -1154,17 +1186,7 @@ const MP = (function () {
   // 이전 계정의 닉네임/아바타가 다음 계정으로 새어나가지 않게 캐시도 비운다.
   function signOutUser(cb) {
     if (!auth) { cb && cb(); return; }
-    const cleanup = () => {
-      myAvatarLoadout = null;
-      myXP = null;
-      try {
-        localStorage.removeItem('mp_xp');
-        localStorage.removeItem('mp_avatar_loadout');
-        localStorage.removeItem('mp_owned_items');
-        localStorage.removeItem('mp_nickname');
-        localStorage.removeItem('mp_account_name');
-      } catch (e) {}
-    };
+    const cleanup = clearLocalCaches;
     auth.signOut().then(() => {
       cleanup();
       // 게스트로 되돌아가기 — 실패해도 콜백은 반드시 부른다
@@ -1632,6 +1654,8 @@ const MP = (function () {
     searchUsers,
     addFriend,
     removeFriend,
+    restoreAccountData,
+    resetPassword,
     sendFriendRequest,
     acceptFriend,
     declineFriend,
