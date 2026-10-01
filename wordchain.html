@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>의자 끝말잇기</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root { --panel:rgba(20,20,23,.88); --line:rgba(255,255,255,.1); --text:#f1f3f5; --dim:#9aa1a9; --ok:#3ddc84; --bad:#ff5a52; --acc:#f2c94c; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#26221f; font-family:'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif; color:var(--text); touch-action:manipulation; }
+  button, input { font-family:inherit; color:inherit; }
+  #c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  .tb { position:absolute; top:10px; height:36px; min-width:36px; padding:0 10px; border-radius:9px; background:rgba(20,20,23,.6); border:none; display:flex; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; font-size:15px; font-weight:800; color:#fff; text-decoration:none; }
+  #roomTag { position:absolute; top:12px; right:12px; font-size:12px; font-weight:800; background:rgba(20,20,23,.6); padding:8px 11px; border-radius:9px; }
+  /* 위: 지금 단어 · 다음 글자 · 시간 */
+  #top { position:absolute; bottom:calc(max(16px, env(safe-area-inset-bottom)) + 66px); left:50%; transform:translateX(-50%); width:min(560px, 94vw); text-align:center; }
+  #word { display:inline-block; font-size:min(10vw, 46px); font-weight:900; letter-spacing:.06em; padding:4px 22px 6px; border-radius:16px; background:rgba(20,20,23,.72); text-shadow:0 2px 0 rgba(0,0,0,.4); min-width:160px; }
+  #word b { color:var(--acc); }
+  #need { margin-top:8px; font-size:14px; font-weight:800; color:#e9e2d0; text-shadow:0 1px 3px #000; }
+  #need .k { display:inline-block; min-width:30px; padding:2px 8px; margin:0 2px; border-radius:7px; background:var(--acc); color:#1b1d21; font-size:16px; font-weight:900; }
+  #bar { margin:8px auto 0; height:8px; width:min(420px, 80vw); border-radius:5px; background:rgba(0,0,0,.45); overflow:hidden; }
+  #barF { height:100%; width:100%; background:linear-gradient(90deg, #3ddc84, #f2c94c); border-radius:5px; }
+  #turnTxt { margin-bottom:6px; font-size:15px; font-weight:900; text-shadow:0 1px 4px #000; }
+  #turnTxt.me { color:var(--acc); }
+  /* 아래: 입력 */
+  #inp { position:absolute; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); transform:translateX(-50%); width:min(520px, 94vw); display:flex; gap:8px; pointer-events:auto; }
+  #inp input { flex:1; height:54px; border-radius:13px; border:2px solid rgba(255,255,255,.15); background:rgba(20,20,23,.9); padding:0 16px; font-size:22px; font-weight:800; outline:none; }
+  #inp input:focus { border-color:var(--acc); }
+  #inp input:disabled { opacity:.45; }
+  #inp button { width:84px; border:none; border-radius:13px; background:var(--acc); color:#1b1d21; font-size:16px; font-weight:900; cursor:pointer; }
+  #inp button:disabled { opacity:.35; cursor:default; }
+  #inp.shake { animation:sh .35s; } @keyframes sh { 20%,60% { transform:translateX(calc(-50% - 9px)); } 40%,80% { transform:translateX(calc(-50% + 9px)); } }
+  #err { position:absolute; left:50%; top:58px; transform:translateX(-50%); font-size:14px; font-weight:800; color:#fff; background:rgba(200,50,45,.92); padding:7px 13px; border-radius:9px; opacity:0; transition:opacity .2s; white-space:nowrap; }
+  #err.on { opacity:1; }
+  /* 오른쪽: 나온 단어 */
+  #log { position:absolute; right:12px; top:58px; width:150px; max-height:calc(100vh - 170px); overflow:hidden; display:flex; flex-direction:column; gap:4px; }
+  #log div { font-size:13px; font-weight:800; background:rgba(20,20,23,.6); padding:5px 9px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #log div i { font-style:normal; font-weight:600; opacity:.55; font-size:11px; margin-left:4px; }
+  #log div.boom { background:rgba(200,50,45,.7); }
+  @media (max-width:720px){ #log { display:none; } }
+  #banner { position:fixed; left:0; right:0; top:42%; z-index:40; text-align:center; pointer-events:none; }
+  #banner div { display:inline-block; font-size:min(12vw, 64px); font-weight:900; letter-spacing:.04em; text-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.5); animation:bn 1.6s forwards; }
+  @keyframes bn { 0% { transform:scale(.4); opacity:0; } 15% { transform:scale(1.12); opacity:1; } 25% { transform:scale(1); } 80% { opacity:1; } 100% { opacity:0; transform:translateY(-20px); } }
+  /* 로비 */
+  .scr { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(14,13,12,.72); backdrop-filter:blur(4px); }
+  .scr.show { display:flex; }
+  .card { width:min(420px, 92vw); background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:22px; text-align:center; }
+  .card h1 { font-size:30px; font-weight:900; letter-spacing:.02em; }
+  .card .sub { margin-top:4px; font-size:13px; color:var(--dim); font-weight:700; }
+  .big { display:block; width:100%; height:52px; margin-top:12px; border:none; border-radius:12px; background:var(--acc); color:#1b1d21; font-size:17px; font-weight:900; cursor:pointer; }
+  .big.alt { background:rgba(255,255,255,.1); color:#fff; }
+  .row { display:flex; gap:8px; margin-top:12px; } .row input { flex:1; min-width:0; height:48px; border-radius:12px; border:1px solid var(--line); background:rgba(0,0,0,.3); padding:0 12px; font-size:16px; font-weight:800; text-transform:uppercase; outline:none; }
+  .row .big { margin-top:0; width:auto; flex:none; padding:0 18px; }
+  .rules { margin-top:16px; text-align:left; font-size:12.5px; line-height:1.65; color:#cfd3d8; background:rgba(255,255,255,.05); border-radius:12px; padding:12px 14px; }
+  .rules b { color:#fff; }
+  .small { display:inline-block; margin-top:12px; font-size:13px; color:var(--dim); text-decoration:none; font-weight:800; background:none; border:none; cursor:pointer; }
+  #status { margin-top:10px; font-size:12.5px; color:var(--dim); font-weight:700; min-height:18px; }
+  #waitBox { position:absolute; left:50%; top:46%; transform:translate(-50%, -50%); text-align:center; font-weight:900; text-shadow:0 2px 6px #000; display:none; }
+  #waitBox .a { font-size:26px; } #waitBox .b { margin-top:6px; font-size:14px; color:#ddd; }
+  #loading { position:fixed; inset:0; z-index:80; background:#1a1816; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15130E">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <a class="tb" href="hub.html" style="left:10px" title="허브">⌂</a>
+  <button class="tb" id="leaveBtn" style="left:52px" type="button">나가기</button>
+  <div id="roomTag"></div>
+  <div id="top" style="display:none"><div id="turnTxt"></div><div id="word">—</div><div id="need"></div><div id="bar"><div id="barF"></div></div></div>
+  <div id="log"></div>
+  <div id="waitBox"><div class="a" id="waitA"></div><div class="b" id="waitB"></div></div>
+  <div id="err"></div>
+  <form id="inp" style="display:none" autocomplete="off"><input id="wIn" type="text" maxlength="12" placeholder="단어 입력" enterkeyhint="send" autocomplete="off" autocorrect="off" spellcheck="false"><button id="wBtn" type="submit">제출</button></form>
+</div>
+<div id="banner"></div>
+<div id="lobby" class="scr show"><div class="card">
+  <h1>🪑 의자 끝말잇기</h1>
+  <div class="sub">의자에 둘러앉아 끝말을 이어요. 시간 안에 못 대면 의자가 튕겨 나가요!</div>
+  <button class="big" id="soloBtn" type="button">혼자 연습 (봇 3명)</button>
+  <div class="row"><input id="roomIn" maxlength="12" placeholder="방 코드 (비우면 공개방)"><button class="big alt" id="onBtn" type="button">온라인</button></div>
+  <div id="status"></div>
+  <div class="rules">
+    <b>규칙</b><br>
+    · 앞 단어의 <b>마지막 글자</b>로 시작하는 단어를 써요. (두 글자 이상 · 사전에 있는 단어)<br>
+    · <b>두음법칙</b> 돼요: 력→역, 름→늠, 녀→여 …<br>
+    · 이미 나온 단어는 다시 못 써요.<br>
+    · 시간 안에 못 대면 ❤ 하나가 깨져요. ❤ 두 개 다 깨지면 <b>의자가 튕겨 나가요</b>.<br>
+    · 끝까지 남은 한 명이 우승! 갈수록 시간이 짧아져요.
+  </div>
+  <a class="small" href="hub.html">⌂ 허브로</a>
+</div></div>
+<div id="loading">불러오는 중…</div>
+<script>
+  window.addEventListener('error', function(e){ if (e.target && e.target !== window && e.target.tagName === 'SCRIPT') return; var l = document.getElementById('loading'); if (l) l.textContent = '⚠ 오류: ' + (e.message || ''); });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="multiplayer.js" onerror="window.__mpFail=true"></script>
+<script>
+(function(){
+'use strict';
+/* =====================================================================
+   의자 끝말잇기 — 둥근 탁자에 8명까지 둘러앉아 끝말잇기.
+   혼자 모드: 내 브라우저가 진행(봇 3명). 온라인 모드: 자리에 앉은 사람 중 uid가 가장 작은 사람이
+   '진행자'가 되어 게임 상태(g)를 자기 기록에 쓰고, 나머지는 그걸 보고 그린다. 진행자가 나가면 다음 사람이 이어받음.
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, k) => a + (b - a)*k;
+const SEATS = 8, LIVES = 2;
+const BOT_POOL = '사과 바나나 기차 자동차 비행기 학교 선생님 친구 가방 연필 공책 지우개 컴퓨터 고양이 강아지 토끼 호랑이 사자 코끼리 기린 원숭이 다람쥐 거북이 펭귄 돌고래 고래 상어 문어 오징어 나비 잠자리 개구리 하늘 바다 구름 무지개 태양 우주 지구 달빛 별빛 노을 바람 소나무 장미 해바라기 튤립 딸기 포도 수박 참외 복숭아 자두 레몬 키위 망고 감자 고구마 당근 양파 마늘 버섯 김치 라면 피자 치킨 햄버거 떡볶이 김밥 만두 냉면 짜장면 초콜릿 사탕 과자 아이스크림 케이크 우유 주스 커피 녹차 학생 의사 간호사 경찰 소방관 가수 배우 화가 작가 요리사 농부 어부 대통령 공주 왕자 여왕 기사 마법사 해적 로봇 공룡 괴물 유령 천사 요정 축구 야구 농구 배구 수영 스키 태권도 게임 노래 그림 영화 음악 피아노 기타 바이올린 드럼 나무 꽃밭 정원 공원 놀이터 시장 병원 은행 도서관 박물관 미술관 운동장 체육관 교실 복도 계단 엘리베이터 지하철 버스 택시 자전거 오토바이 배낭 모자 안경 신발 양말 장갑 목도리 우산 시계 거울 침대 의자 책상 소파 냉장고 세탁기 텔레비전 전화기 카메라 휴대폰 이어폰 마우스 키보드 모니터 프린터 가위 테이프 자석 열쇠 자물쇠 상자 바구니 접시 숟가락 젓가락 포크 냄비 프라이팬 주전자 물병 수건 비누 치약 칫솔 샴푸 거품 풍선 인형 장난감 블록 퍼즐 주사위 카드 트럼프 보물 지도 나침반 망원경 현미경 로켓 위성 행성 은하 혜성 화산 지진 태풍 번개 천둥 눈사람 썰매 크리스마스 생일 선물 편지 사진 앨범 일기 숙제 시험 방학 여행 캠핑 텐트 모닥불 낚시 등산 산책 소풍 도시락 김장 명절 설날 추석 한복 태극기 무궁화 독도 서울 부산 제주도 한강 남산 경복궁 사다리 미끄럼틀 그네 시소 모래 조개 진주 보석 다이아몬드 반지 목걸이 귀걸이 왕관 거인 난쟁이 마녀 빗자루 마술 요술 주문 물약 드래곤 유니콘 기차역 공항 항구 등대 다리 터널 고속도로 신호등 횡단보도 소방차 구급차 경찰차 트럭 포크레인 하마 악어 독수리 부엉이 참새 비둘기 앵무새 오리 거위 병아리 돼지 염소 사슴 늑대 여우 판다 코알라 캥거루 낙타 얼룩말 고슴도치 햄스터 금붕어 해파리 불가사리 미역 다시마 두부 계란 우동 국수 비빔밥 불고기 갈비 삼겹살 순대 어묵 호떡 붕어빵 솜사탕 팝콘 젤리 쿠키 도넛 와플 마카롱 푸딩 요거트 치즈 버터 식빵 샌드위치 토스트 수프 카레 스파게티 리조또 우리 여기 지금 당신 오늘 진짜 모두 엄마 아뇨 안녕 아빠 사람 자기 얘기 시간 사실 다음 내일 이상 생각 마지막 누구 여러분 소리 이야기 부인 수술 준비 전화 신경 걱정 아침 기분 어제 아들 머리 빌어먹을 아저씨 평생 문제 저녁 그레이 정신 미국 하루 이름 거짓말 오빠 아가씨 기억 아기 가족 마이크 바보 메러디스 상관 사건 얼굴 결혼 말씀 자식 마음 순간 새끼 로스 비밀 데릭 한잔 녀석 박사 관심 옛날 인간 제임스 보기 데이트 세상 세계 다섯 마약 며칠 헨리 남편 확인 파티 미스터 살인 심장 동생 릴리 마크 수정 삼촌 질문 아무래도 시작 요원 회사 건배 검사 오후 최소한 전하 발사 종일 아이구 점심 아래 자리 감히 자막 냄새 갈래 아내 무기 지역 어젯밤 폐하 인생 밤새 오랜 최근 왼쪽 경우 가기 전쟁 장난 스콧 담배 찰리 영국 매번 보스 오신 어찌 오른쪽 뉴욕 이따 물건 계신 이동 고작 번역 음식 약속 무척 선생 개인 연락 화장실 형님 하긴 보안 버크 대부분 할래 대학 드릴 예전 스티븐스 죽기 섹스 맥주 자유 셰퍼드 별거 루시퍼 달리 깜짝 거래 미스 중국 결혼식 기꺼이 몇몇 그쪽 이후 살짝 상처 농담 미첼 건물 달러 에이버리 일주일 꼬마 가슴 완료 배리 비록 마실 오기 호텔 더욱 지내 별일 하느님 자말 가득 쓰레기 도움 일할 아예 이곳 굳이 무릎 차려 가짜 정보 이유 되기 와인 독일 오히려 목소리 고등학교 소식 실제 말하기 이틀 한참 손님 하나님 프랑스 요새 작전 부모님 관련 헌트 존스 보일 여성 변호사 바래 해리 전체 깊이 아멘 여섯 그린 계획 지미 혈액 재미 접근 식사 코너 마리 대화 엘리엇 왓슨 이란 대장 아줌마 방법 높이 듣기 새벽 그려 카논 범죄 진정 캡틴 엉덩이 부탁 만일 손가락 공격 배포 웨버 이쪽 해본 런던 생길 상황 치료 엘리스 몰리 부스 대기 개자식 윌슨 꼼짝 전투 브라이언 키스 형제 폭탄 한테 일곱 성하 무언가 숙녀 수업 하길 머피 루이스 조심 심한 매년 안전 잭슨 감정 과연 전기 신사 정부 백인 수술실 도저히 조만간 브라보 이사 임신 잔뜩 하진 여름 감독 대충 시체 임무 어쩜 감옥 오전 사망 창문 제리 알기 오줌 종종 엔진 레지던트 각하 촬영 스트레스 블랙 연방 고통 당한 연구 나리 서류 일본 온갖 시스템 핸드폰 저것 애기 오버 파트너 위험 인턴 긴급 출발 나간 동물 딱히 볼래 드레스 운전 최대 긴장 마저 한대 테스트 시애틀 공연 자신 흑인 근처 메이 번호 그놈 작업 의료 한동안 발견 느낌 양반 탐정 보렴 마침 위치 노력 중인 다니엘 파리 마무리 경기 특별 북쪽 주변 제작 아파트 헛소리 악마 코드 하신 산소 신호 제인 켈리 조금씩 브루스 부디 해피 매기 조용 안드레 대위 역사상 테러 훈련 클럽 사업 거리 아버님 비행 나치 사무실 죽음 살기 자살 이식 설명 알렌 사이먼 조사 스타 오렴 얼레 인터넷 의미 피트 장기 해결 장소 원한 불법 실험 추적 무조건 전원 따위 어둠 뉴스 사격 고기 밴드 이안 인터뷰 선수 멍청이 가스 큰일 행동 끝내 이메일 주신 통신 셔츠 인사 사촌 멕시코 모건 여태 규칙 형사 펄스 워싱턴 근무 주실 아유 미사일 영상 포기 담당 이전 방송 저쪽 온통 표정 포드 명령 한마디 지금껏 이혼 유리 분위기 조그만 실례 얼음 눈치 화난 고대 부동산 첫째 그만큼 캠프 영웅 연기 보트 최소 그딴 웃음 댄스 실수 소녀 방향 내부 인마 약물 통화 수천 증거 집안 요리 총알 동료 교회 감사 로비 신부 하워드 슬슬 조차 리즈 진작 주님 패트릭 관계 목숨 비상 과학 바짝 양쪽 결정 올림픽 대령 외계인 소설 테이블 처리 대답 모습 보호 오우 쌍둥이 파일 진행 외상 미국인 오실 이모 군대 직장 파란 셔먼 기술 여기저기 되도록 응급 하룻밤 아하 베넷 주소 도착 기록 작동 쿠퍼 글로리 도망 마법 일반 금요일 상태 고장 캐리 니들 토요일 그것참 음성 한단 당분간 싸구려 워낙 구조 연결 로즈 내말 운동 대략 리사 발생 과거 스튜 지원 스미스 어째 웨인 포르노 프로그램 칼리 도리 둘째 주인님 실컷 무엇 사용 어머님 바랄 마담 군인 염병할 로마 현장 통제 신문 공기 수백 주말 전문 경비 살살 기계 구한 무대 나이트 연습 주목 애비 하려 공식 식당 로드 모조리 동쪽 소년 여덟 계실 아우 매주 소용 병신 저번 능력 데이터 남성 폭발 곧장 주인 녹색 형씨 중앙 차량 최종 장치 집중 허드슨 허락 서쪽 타임 오스카 저래 중위 이놈 화재 애디슨 직원 안부 하필 카터 공부 베스 국제 그나마 그대 아일랜드 여동생 자란 폭스 고급 성공 종양 평화 선배 미치 사냥 타일러 관리 장비 수영장 기회 바깥 시속 본부 이것저것 초대 계약 그분 으흠 짜증 지하 유럽 총기 조직 부분 고객 브라이스 수사 대박 본적 피부 보안관 헬기 슈퍼 한거 데이비스 위스키 년간 코트 신분증 옷장 작년 지난번 싸움 복부 마디 한건 생활 구역 본인 성적 작별 취한 다음날 메스 열차 존재 로렌스 외부 의역 인기 건너 소린 각각 웨스트 숨길 하하 정상 갈색 짜리 토비 스틸 노란 사람인 한명 로리 예상 창녀 웨이드 스페인 중간 초기 리드 출신 시동 겁쟁이 베티 기본 세금 실행 꼬맹이 시발 사회 그중 마냥 제거 초음파 몽땅 한글 수록 연쇄 일한 서비스 마스크 교육 아인 화학 소령 아담 미래 피츠 핑크 충돌 눈물 이랴 일부 프레스턴 에리카 아프리카 실종 무얼 가렴 어깨 대형 망칠 한숨 특정 맹세코 신장 애인 한때 사기 차트 지옥 승리 한두 작품 암튼 이딴 이집트 골프 조카 일인 두개 이빨 인공 상담 모인 조명 경보 역사 아홉 거시기 축하 청소 스포츠 부모 어이구 재판 드라마 특수 고향 남쪽 호출 브라운 개새끼 수학 날씨 귀신 지갑 버튼 도둑 기대 고개 그랜트 가실 그룹 나선 개리 시절 승인 사인 인제 암호 받기 편한 보험 부부 유진 재수 체포 신원 하비 지붕 반대 예비 케이스 예수 부대 얼간이 조각 공포 벨트 설탕 정리 공장 클레이 모리스 호수 시골 사모님 샴페인 탈출 수석 구멍 이용 접속 두개골 장벽 인류 연료 기름 파이팅 테리 자연 무단 이사회 클라크 마스터 실패 제법 무료 외계 오역 화성 하렴 교도소 쓸모 사실상 수색 드라이브 진실 소문 프로젝트 리더 으음 매디슨 혈관 전할 내기 보단 상상 수십 자격 으악 복수 동무 의학 밀러 도련님 클락 몽고메리 범인 온라인 의상 생애 파커 테일러 클램프 지랄 감염 납치 인정 나름 기밀 법적 폭풍 감기 가치 풋볼 갈수록 피타 바늘 금발 아따 챈들러 포스터 주기 티켓 회복 실력 덩치 개소리 변한 분석 센터 술집 전화번호 코카인 방사선 생명 월요일 착륙 교통 마일 샅샅이 저놈 가본 잔소리 깁스 머리카락 백작 염려 충격 기저귀 시티 가죽 극장 바른 마신 죄책감 한달 상사 블레이크 출혈 할거 망친 공동 신체 흉부 로저 골치 연설 한쪽 바퀴 베스트 생존 비명 희망 해리스 말구 대학교 사형 이비 왼발 천재 가동 교수 마음껏 주사 배터리 한방 자동 가능성 추운 비숍 경관 대사 구두 한판 저들 베를린 두려움 챔피언 박스 크림 강철 응급실 충전 카우보이 요괴 압력 녹음 분노 박수 줄곧 일요일 수염 월리 후안 폴란드 업무 베리 어른 산타 공짜 의견 속일 영혼 마님 윌리엄스 채널 금속 에그 잡기 부엌 매달 시저 위장 출동 이럼 날개 권리 보조 환영 주마 언덕 빌딩 황금 후회 채프먼 계산 종교 광대 가정 자매 용기 기운 지방 이브 오디션 고문 동전 국경 리치 넥타이 워커 옆집 온종일 질질 선택 베트남 웨슬리 낭비 겨울 낮잠 예약 에스더 하와이 바이러스 변태 달걀 암흑 바위 마구 무리 졸업 시민 영업 액션 숙청 악당 산사 화상 차례 크리스티 대회 남부 영영 알파 외국 승객 성인 칠면조 상대 정작 칵테일 농장 죄송 대마초 직업 변신 보신 법원 현금 사장 진통제 현실 목요일 모니카 스타일 구경 소송 거짓 유명 하여간 미소 토드 브랜드 파괴 마르코 책임 사흘 여권 실험실 등등 튜브 거대 지상 호흡 조준 동영상 출입 척추 옥수수 선한 그년 공간 속옷 부상 네놈 최신 무장 해제 소스 모양 이륙 대동맥 서명 선장 야간 연주 스튜어트 해선 웰스 절개 일명 볼일 헤드 군사 아녀 러셀 전직 건강 암살 히틀러 오래전 스테이크 전력 신음 유죄 소피 포터 광산 목표 가브리엘 초록색 유대인 카이사르 메인 하란 라이트 막기 더블 협상 체스 여태껏 돌연변이 존슨 손상 우주선 모델 조건부 악한 고스트 필름 바닥 전날 어우 프랭클린 애완동물 리허설 방사능 파운드 하여튼 시합 케이 메이데이 전송 산산조각 요청 알바 표현 장례식 링컨 주인공 매디 저주 레이저 검색 방식 악몽 근육 해킹 연애 후드 믿음 발포 토르 하키 총상 밧줄 팬티 이제껏 이웃 엑스레이 이중 연극 피셔 오른 정치 그리스 마사 판매 종료 휴식 심리 대량 아일 통증 라이더 과일 기상 행복 조종사 반응 무선 점프 느그 플라스틱 천국 선거 고집 소위 감당 체크 코치 베이스 주렴 소개 크리켓 의식 장인어른 세월 성질 비열한 부하 길거리 우측 페인트 독립 파란색 표범 멜리사 더더욱 자료 레인 경험 소금 각본 울프 어린애 문신 박쥐 미친놈 사령관 음료수 매리 샐러드 데비 다소 대개 의대 현대 서부 향수 스위스 마마 모임 동굴 전사 가석방 수상 그릇 교열 사기꾼 가능 케익 미미 한창 리스 항공 게리 총격 힘껏 운명 미터 올리 파이프 일자리 파키스탄 짐승 아무렴 시드 봉합 미처 불쑥 그깟 벌레 노비 본드 주차 귀염둥이 재킷 크레인 철수 다운 소름 고위 중학교 영장 홀딱 목욕 안내 경계 아드님 터너 회색 동부 제국 평균 수배 미팅 법정 소변 후퇴 환경 어르신 가려 와이프 취소 골드 그토록 혈압 전국 밀스 무덤 대사관 지울 일정 계좌 활동 해변 장애 아벨 전진 활짝 장거리 반경 화요일 어허 수리 침실 평소 첫날 명예 소련 미사 케이블 면회 무모한 진흙 탱크 발목 병사 재능 보드카 수요일 좌현 살수 노예 포트 방문 예술 알리 물고기 진심 그간 발작 흰색 주식 세운 조언 다이어트 매니저 그릴 유태인 퍼뜩 세포 아이리스 안개 검정 스웨터 홍보 고정 중독 내년 퇴원 판사 박살 자존심 야한 발표 보스턴 장전 최초 귀한 진단 레즈비언 공중 일등 세트 북부 제한 제공 비타민 지난주 설리 주간 드림 출산 뚱보 도난 아악 시멘트 브레이크 페퍼 부족 베이커 보라색 생선 헤로인 트롤 제안 보진 목표물 홍콩 연구실 마이애미 고생 월급 단독 임상 차마 카지노 어이쿠 협조 피어스 할리우드 잠자코 시방 대원 의회 온대 질러 입양 수치 돌격 해안 쓰기 함장 플로렌스 고모 가구 무려 집단 경비원 침입 사울 빨리빨리 할리 불가능 수신 부담 고민 아동 라이터 콜린스 셋째 액셀 갈수 아참 민간인 시설 폭력 도전 이글 종류 시내 그럭저럭 난리 항생제 함정 한결 싱글 베로니카 심호흡 수갑 페리 지문 토머스 에잇 민간 꼬리 병장 괴짜 전환 트레일러 앤더슨 수류탄 중력 네트워크 단계 병력 막상 디지털 행사 이만큼 연속 한편 분홍색 배트 생체 예산 이리저리 체육 주둥이 외출 흥미 일일 홉스 역할 핵심 허리 정맥 상병 키드 머저리 공작 자궁 신디 업로드 대표 메데인 개월 왕국 입술 쇼핑 의용 로이스 빨간색 축제 스케줄 강간 커플 시리즈 블레이드 스무 소속 그리핀 궁전 오리지널 속임수 게일 거참 투표 질투 하버드 라인 사설 아그네스 동작 허튼 로빈슨 사전 깜둥이 방송국 공개 증명 한바탕 원작 버질 헤더 한발 로키 몇일 성모 베이컨 진입 치마 계집애 미친년 자켓 초등학교 해외 주방 격리 패스 숙모 딕스 버드 전설 서방님 중령 손목 대규모 생물 하치 취급 배달 따님 한국 조절 오염 골절 교황 하우스 로렌 옳소 땅콩 좌측 아메리카 안전벨트 자국 장인 무전기 자정 커트 날짜 수영복 면접 메기 오늘날 활성화 넬슨 오예 콘서트 충성 전통 아씨 압박 양복 한적 보내기 진료 헌터 더욱더 요한 수표 점수 연인 붕대 해당 죄수 룸메이트 알코올 샘플 사냥꾼 거부 후보 발자국 내용 나기 가문 변화 텍스 신입 설령 방패 트렁크 기껏 음반 감방 커튼 이스트 흉내 레이더 방울 연구소 미션 법률 프레슬리 버디 사생활 총각 노릇 리스트 좌회전 가운 시트 로사 코디 설사 새미 서연 사무엘 위기 절반 명단 미확인 전달 보일러 회전 고마 배심원 셰리 출근 인상 어려 의원 절차 권한 정돈 국장 주먹 야수 아가리 시신 현상 슬픔 일급 성경 세기 시각 분리 스탠리 종족 대출 이라크 면역 안한 점화 몹쓸 의심 폭파 스카프 위쪽 불알 경사 정식 염병 간수 과장 도끼 적응 사무라이 기관 가격 전용 피클 음주 인질 실내 들기 재산 대상 야호 장관 이년 까마귀 올린 현상금 자금 자선 실크 우울증 레벨 스위치 장사 사막 힉스 등록 마비 조종 확보 인디언 델타 최첨단 위원회 소형 권투 우승 혁명 불빛 이분 이슬람 폐쇄 발전기 브룩 차단 매력 치유 커녕 닉스 무진장 차근차근 노인 모금 원격 즉각 아웃 디저트 심장마비 특허 화장 수년 동맥 하사 카페 사내 위협 와일드 차렷 변경 헬멧 규정 금융 간식 발가락 식물 항복 자신감 수준 블랙홀 갈기갈기 동화 바싹 리타 미술 엉터리 헬리콥터 그쯤 타기 국내 개발 정장 질려 통한 욕실 예측 오바 오두막 지점 물질 거절 기념 화살 하질 모드 레코드 과한 인구 운영 출장 빨래 목록 위층 비난 브래들리 기간 쿠바 과정 소장 국방부 도중 일종 교사 깡패 이병 테니스 크기 최고급 호박 다발성 속인 알콜 수동 회진 스케이트 인물 설치 인식 낙하 심문 파파 변기 확신 통할 대머리 계집 모스 왕비 신용카드 트리 용납 강제 식량 해리슨 연금 눈빛 태평양 은색 클리닉 핫도그 노크 승무원 판단 배급 왕실 순찰 판막 루스 진저 사정 제때 정보원 언론 에드워즈 기업 역대 재빨리 걸음 권총 기독교 출구 폭행 조수 이불 니콜 되질 장식 칭찬 기념일 코리 링크 수행 울타리 체리 물려 서커스 탄약 타이밍 처녀 쓰리 타입 전방 우회전 토마토 데일 인종 추락 증상 말장난 멋쟁이 기적 작작 해병 지팡이 서른 교장 지친 뮤지컬 임대 일루 수입 함선 오스틴 만성 개뿔 오토 하여금 이반 복장 신용 증인 가톨릭 이스라엘 우현 백화점 표적 독한 범행 잔디 시대 추진 호르몬 경비대 간대 재생 비용 번호판 사이렌 정할 차우 기능 손톱 하트 으응 올리브 신청 변형 보소 달리기 드레 다루기 덩어리 은퇴 무전 수수께끼 콜린 그다음 페기 비로소 미합중국 브루클린 액체 한장 케네디 야옹 스피드 수작 진정제 대포 인근 별명 습격 야생 도스 추기경 뒤쪽 외교 고파 해병대 밤낮 질병 케인 이왕 부정 구식 사제 전술 제퍼슨 재즈 공급 무작정 도일 애송이 절단 아차 사이비 서랍 독감 일병 소원 추수 편집 디자인 성냥 팬케이크 아브라함 요구 이내 왕창 여유 구려 필립스 나뭇잎 국민 메이저 좌표 뇌물 화물 알레르기 플레이 오픈 서클 색깔 흔들 처벌 도박 조건 음료 지하실 사이즈 포프 그곳 목적 대전 후론 파스타 이태리 펑크 부두 슬쩍 협박 그래그래 깃발 집합 움직임 오마 직후 성장 사준 오류 휴대전화 오일 주름 동물원 과부 최우선 반한 정화 계곡 무역 그까짓 국립 힙합 브랜디 책임감 루비 불평 엑스 동성 적색 남동생 거미 도주 시집 범위 로맨스 실려 빨갱이 골동품 다음번 워드 단순 보상 오호 해산 아이비 카톨릭 들러리 흔적 다중 약혼 회계 백신 끝내기 스카우트 유산 아래쪽 이론 디제이 개방 군용 유니폼 가령 아람 귀환 모텔 주진 독성 지휘관 수술대 나란 혼인 주민 시기 포인트 킬러 요셉 마주 삭제 캐릭터 베개 좌석 패터슨 설정 접촉 위조 공화국 로저스 쇼크 나루토 에이즈 대가리 먹이 윈체스터 괴도 권력 하일 수용소 부츠 앰뷸런스 조안 되려 성격 사온 빙빙 동맥류 학기 건설 터키 입력 신혼 개그 티셔츠 패션 흥분 백악관 교환 로그 영향력 휴대용 하디 길버트 청소년 반대편 주위 주차장 경찰관 매트리스 수액 봉투 로간 총통 교대 리브 맥기 쓰레기통 모니터링 경감 컨트롤 사이공 벌벌 프라이드 모스크바 거즈 눈썹 바베큐 탐사 차차 노란색 영차 노바 롤링 때문 경제 국왕 근디 갤럽 귀족 매트 라파엘 지퍼 속한 발신인 반년 조조 방귀 콘돔 비즈니스 버클리 무도회 빨강 여하튼 후진 탑승 뿌리 갤러리 모험 클래식 제품 마차 어쨌건 도청 부활절 학부모 야외 시즌 감독관 본래 열정 버릇 주택 정신병 네덜란드 표준 초콜렛 전차 걷기 쥐새끼 영하 호모 관제 함교 욕조 루피 보인 그렇듯 고담 보장 원자력 저격수 아래층 스웨덴 하구 크립톤 완성 파크 멤피스 경력 가인 일류 목사 대처 노트북 구출 배짱 지기 줄거리 졸업생 영수증 흉터 각종 안달이 제네바 중단 스텝 교신 수집 일생 급성 동성애 초대장 단백질 오코넬 맥스웰 금색 서방 에이그 신임 중사 갑판 여지껏 난들 스토커 속속들이 애틀랜타 인원 벽장 캔디 피티 도운 영감 경쟁 혼란 정한 잔말 품위 검은색 카피 발리 수녀 불꽃 누님 자하 교수형 재활 사후 가신 첩보 로이드 형편 행방불명 연장 초록 변명 여인 신혼여행 추억 건축 인디 마미 노출 카트 취재 상원 도장 브라질 배신 존경 영양 입구 도쿄 기쁨 여럿 부패 논문 브람스 보모 깨질 발음 아이쿠 도통 석유 황제 재정 설리번 배경 널리 립스틱 처치 일치 신뢰 지휘 덴마크 평가 유치원 어느새 훗날 위반 볼트 성벽 잉글랜드 마함 시몬 지불 침묵 포제 온건 고려 잔돈 예정 차우더 내리기 원주민 출처 짐작 바비큐 페이스 라틴 주제 그레고리 전염병 국토 우후 자원 불륜 야채 연관 어뢰 상승 도둑질 라임 관리인 그따위 주연 스물 엉망 불량 셜리 영감님 토빈 모르핀 마음속 대피 방사성 연락처 물리 장교 실비 태도 마케팅 반사 기수 입장 마취 치료제 바람둥이 모실 아바 밀실 무식한 치매 시청 생일날 솜씨 칠레 청년 고추 녹화 백업 보관 바텐더 독점 난생 동기 메모리 중일 갈고리 감동 정맥주사 이런저런 조이스 복구 생략 생전 사상 살길 활화산 필수 벌금 포함 산업 치기 포커 다운로드 우라질 아말 말썽 법무부 롤러 안쪽 도둑놈 문화 성탄절 수송 식탁 저택 호흡기 강화 허허 넘버 점차 단체 테스 몬티 생명체 부잣집 제약 휴대 만족 아미타불 지명 궤도 냉동 글씨 승상 굴착 너구리 비트 지각 조정 할렘 체스터 살인마 제롬 스피커 콘크리트 아이언 공사 심전도 카슨 프라이 메모 항공기 유전 장애인 미행 너머 라벤더 오진 취미 결론 낙하산 단추 공공 구리 행위 미치광이 조작 뻔히 맥박 다보스 여느 할망구 졸졸 열기 고무 탄생 미용실 경기장 신조 두통 생화학 아티스트 안전장치 구글 검시관 읽기 네이선 안정 법칙 오크 무스 소규모 핸드백 중심 기념품 숨소리 절친 암호화 피닉 복권 원장 피드백 입학 부품 장담 텔레포트 거실 포옹 무렵 예방 오래도록 까꿍 일보 젠장맞을 자체 향기 할멈 명함 해골 문득 협곡 후딱 용병 껍질 차기 저분 증언 휴스턴 요트 조류 직전 무사 전략 조선 기존 잠옷 친척 별수 할배 복귀 분당 랜드 방탄 줄줄 순수 리키 야생동물 사려 교전 두뇌 라이벌 슈퍼맨 막대 약품 피차 자산 거물 체중 고소 살래 가마 스프레이 클라이브 소란 외국인 무능한 걸레 단속 파시스트 스님 손뼉 피그 영주 망토 정글 변치 포도주 기초 이기기 양동이 구린내 설득력 닉슨 새우 띄엄띄엄 목격 관제탑 동상 아스피린 워프 파악 확장 제왕 구분 천연 찬성 호주 애써 등신 크로스 본거 영역 남녀 한낱 환각 출연 과소평가 조기 어유 스틱 참석 규제 발진 경주 트레이너 지적 함대 매장 출생 한개 카르텔 로프 색스 도구 예예 자녀 도슨 공습 달래 포장 이민 대학생 토리 집착 정체 구원 상호 곰팡이 반복 작성 이방인 미녀 등장 골수 제독 경적 추한 저장 저년 의무 시선 생물학 갑옷 심실 세척 하이킹 아레스 지그 골반 수익 게이트 생방송 드라이버 유론 플랜 러브 고리 신인 스탠바이 사적 생쥐 코스튬 가발 실망 표본 옥상 균형 점검 떠돌이 퇴각 나으리 코코넛 브리핑 테마 꼬박 자극 로버 발톱 동창회 일개 생신 만화책 트럼펫 진한 파우더 악명 현관 시주 나트륨 훌쩍 섣불리 심사 해커 정찰 싱크대 요거 리그 기관총 퍼레이드 이기 장님 포착 인명 식품 가란 억제 수비 응답 패턴 홉킨스 모처럼 주당 손바닥 무명 지난밤 연합 커버 악수 경치 에미 경매 두리 레이스 모레 레이놀즈 벽돌 변환 데미안 영국인 타깃 커터 양호 태운 사춘기 갤런 러시아인 부치 본건 배관공 뚜껑 헛간 중대 우주인 너무너무 부위 학원 심부름 에코 참치 손잡이 무방비 레스터 아치 포르투갈 잠수함 미식축구 효과음 전속 물품 오른발 소질 관객 드라이 레이크 근접 가드너 기절 구급 가상 여사 혈소판 민트 사부 편집증 스톱 기립 소울 대중 동맹 수학여행 잠복 진찰 막내 당최 밀수 히피 레인저 코뿔소 촛불 햇살 커티스 게스트 금새 재단 소비에트 앨리 광장 대접 실베스터 봉쇄 순경 사형수 단기 제목 영광 무인 예기 라마 알리바이 시범 집들이 업계 닭고기 우물 똥물 태국 오닐 봉합사 확대 데모 전파 정밀 버번 엄한 던지기 팔꿈치 비비 양키 훈장 폭동 월남 가비 단테 서버 개미 비닐 요기 리퍼 동정심 복싱 말투 에구 노동 깃털 프린트 해석 건조기 치인 엊그제 베르너 선회 기집애 전학 연대 신화 견인기 유머 손전등 참조 듬뿍 감각 말기 축소 정신병원 합격 외딴 좀처럼 내장 트로이 아린 캠퍼스 차원 후반 스캔들 노르웨이 꼭대기 응응 개비 짓거리 주황색 불꽃놀이 완벽 페인터 당일 햇빛 접수 경영 신념 파초 외곽 선글라스 또래 집행 허리케인 패들 디디 피라미드 인권 유닛 패드 바보짓 영화배우 정희 변호인 군의관 프로스트 벙커 영향 마술사 서너 적혈구 일부일 메뉴 식료품 퇴학 마쇼 스페이스 남음 벙어리 발레 마취제 대부 열흘 신참 우편 가루 간단 폰티액 선임 점보 인적 상한 고교 발키리 카운트 기악 기구 코브 가사 세대 제리코 저드 들일 애완 조끼 오래오래 우루 답변 포치 마트 분홍 배치 우드 살금살금 나단 뇌사 심박 후추 참말 노벨 자문 월리스 메이스 온천 리무진 구석 만남 앞장 소총 축복 각기 라스 가망 침투 보호막 허브 장모님 마라톤 토네이도 생산 단검 베네딕트 확률 다이빙 이송 은총이 망치 갖은 곱하기 루터 아낙 반대쪽 거저 관할 코미디 채운 승진 에디슨 웨이터 팔찌 악성 건너편 삼십 십자가 새들 스텐 인줄 트로피 채소 사령부 척수 이웃집 원인 지식 갈비뼈 악기 나사 영구 협회 두진 회장 터치다운 근성 경호 금메달 캐럴 대문 추후 배관 오븐 이끈 하루하루 카펫 폭포 면허증 근거 설득 구디 가이드 구제 학살 몸매 퇴근 대응 냅킨 살림 잉크 험프리 승부 세탁 숨바꼭질 정답 매춘부 이별 헤드폰 선박 바이킹 답장 안절부절 복용 일동 몰핀 거구 백혈구 운전대 상품 소고기 에이스 고운 유인원 취직 중국인 타월 자칭 미끼 채우기 관타나모 광선 전투기 복제 냉큼 완수 불길 수분 왜곡 주장 매듭 뇌진탕 공황 고용 클론 보건 교체 죄인 기소 하래 관상동맥 출력 사태 이천 폭격 하강 돼지고기 절제술 살인범 구석구석 나위 겁도 양성 은주 범죄인 졸업식 위탁 서머 스승님 사양 스킵 더하기 주유소 솔로몬 스프링 플러스 법의학 한들 합병 만화 컨테이너 구조대 불록 할인 도자기 애론 탈리 공산당 티비 발굴 검둥이 웨섹스 만담 신들 시인 언급 관광 노래방 한말 전시회 리스본 당연 성당 울기 애당초 발전 해지기 톰슨 점심때 성폭행 낸들 엄호 전선 웨스턴 속보 위생병 화신 패러데이 잡담 예루살렘 악화 환상 가소 글러브 착용 종합 도마뱀 꼴통 술술 해명 고물 출전 치코 울음 전남편 홍차 해밀턴 교정 명중 취향 헌법 캡슐 처방 스털링 스릴 유혹 감자튀김 참한 비교 윤리 행진 장례 장부 까짓 처방전 계절 미세스 시위 사각 일상 버전 새틴 엘리트 말래 호기심 내사 숨쉬기 부검 아모 정전 드레싱 뜨개질 대비 비장 개별 물리학 절름발이 맨션 티그 해머 식모 헤헤 공범 봉수 다한 불합격 헌신 매형 정당 뒤통수 출현 추측 차세대 성기 플래그 일본인 눈알 사원 핵폭탄 보수 야인 독극물 접선 용돈 말없이 밀리 상위 슈미트 면허 때마침 정렬 들것 덴버 얼씨구 반장 익명 매독 카프 물벼룩 남학생 핸드볼 발레리 바티칸 지난달 요크 인슐린 치타 일당 터지기 상수 삽입 소음 후장 고관절 강간범 준거 대공 랑데부 외상성 리얼리티 이교도 한물 머핀 수평 노트 허블 튀김 관절 희생 폭발물 레슨 스트리퍼 방위 수련 문학 돌파 약점 거미줄 젖이 짝짓기 빵집 블라인드 꼬꼬마 땡땡이 캐스팅 프롬 모퉁이 총격전 에어컨 안대 주식회사 세균 카스타뇨 제수씨 안단 아셔 비스킷 콘래드 간섭 형수 청혼 알루미늄 다스 선율 학대 로그인 의리 꼭꼭 필리핀 조깅 프로덕션 하이힐 용품 서약 메달 판결 부순 수제 측정 더기 왼손 영화사 구세주 중부 휘플 굼벵이 구매 아틀라스 서기 수중 후방 호들갑 프린스 주려 시비 풋내기 픽업 컨디션 초상화 제복 이쯤 침공 정보국 티타늄 하원 치곤 선원 아프간 추진기 콧수염 친위대 슈퍼스타 이삭 진화 똥구멍 보름달 세탁물 자격증 스토리 헤밍웨이 진동 뜨기 모르 주석 보너스 북동쪽 올수 재앙 기금 이따금 거주 수면제 피난 간판 피치 볼륨 망신 패배 복사 선발 여배우 깨기 야만인 흠씬 매뉴얼 백조 징계 오질 무당 맨해튼 구실 식기 등반 아트로핀 실현 피곤 조타수 드러머 알로하 홍수 경호원 호출기 프로포즈 입원 각국 시버트 불려 누리 황소 주류 코스 사교 재채기 소유 타이틀 말라깽이 대강 파산 결승전 터치 시술 기숙사 감사절 캐스터 냉각 탈장 전자기 팩스 염색 꼼꼼히 오코너 선천성 불안 집사 비치 배꼽 녹스 영토 열상 장기간 대리 애정 넣기 와선 레이먼드 심판 어따 로안 숙소 이집 아부 페루 운동화 미들급 질환 모나코 투명인간 힌트 부친 우연 동일 성능 복무 강력 매너 산더미 일기장 적외선 기왕 비공개 북서쪽 소화기 손가락질 제비 총독 부술 심장병 표지판 목장 메이크업 반짝 재활용 결함 개념 적극 루소 사물함 원본 턱시도 다시금 루스벨트 타이탄 재료 필드 선반 샌님 욕망 허위 기반 대본 음향 대퇴골 기억력 수직 손녀 트랙 부처 볼링 통합 실리 고백 포틀랜드 맞춤 미상 철책 펀치 슬라이드 크레이그 허니문 파견 늘상 향후 개입 인격 익히 자판기 델리 로맹 기폭 호손 디스코 청소부 흐름 의제 하산 관장 오믈렛 가라사대 스위트 이따위 방콕 가급적 이십 으르렁 성현 인쇄 부적 사돈 집사람 아리 딸딸이 제트 해방 부처님 기원전 이즈 윌킨스 당직 기침 마운트 성병 외진 북위 조치 벌기 해독 콕스 저만큼 프로토콜 은하계 통조림 캐머런 손수 명인 진술 도파민 경례 우째 파텔 내거 존중 토퍼 잠입 혈액형 천장 파트 상공 쇼트 광견병 리몬 족제비 심정 제조 에메랄드 미친것 라운드 전개 정문 풍경 모집 교정기 헤쳐 바트 신문사 신형 레슬링 줄기 원수 핑계 체내 문장 방앗간 발차기 감마선 조국 보이스 수호 그새 명성 케첩 실전 편견 플레처 탄환 괴인 단골 조난 취업 꽃다발 경비병 와일더 돌기 편인 최우수 레버 나누기 개장 히스 하프 야드 샌더 아비 별반 별것 파자마 자비 계산대 머리칼 청각 돌팔이 구역질 크로켓 정복 이하 증가 반란 사료 편의점 심령 제정신 입증 구명 정책 불타 다일 결합 지운 전해질 특수부대 생리 펑펑 진통 분장 잠재의식 퇴직 집중력 휴전 분수 보관함 병동 스쿠버 유모 췌장 누드 갱단 달째 운전면허 원형 특종 헤일 주둥아리 금일 마이너스 세일 난소 토론 밑바닥 양아치 찬스 타잔 청소기 설교 제대 요르단 곧잘 보석금 혼수 연간 저격 학자금 관찰 캠벨 폭풍우 조랑말 우두머리 과속 신병 가량 종결 점심시간 병실 구슬 항공사 파열 본능 캠페인 훠이 사위 코요테 클립 행운 파상풍 영화관 남극 끌기 보급 감소 천식 항암 예외 스크린 홀로그램 마드리드 기후 악질 재주 구덩이 레온 동공 상실 합병증 아이히만 우예 비울 엘리사 된장 요금 출판 화풀이 깡통 내시경 구성 중반 줄무늬 알고리즘 메두사 차징 사토 공유 매시간 미드 포즈 퍼센트 모형 분대장 뒷문 큐피드 가선 운송 지평선 잠수 활기 정육점 주정뱅이 템플 기증 외로움 구울 생판 드레이크 외삼촌 환기 막대기 여신 신분 합성 동력 멸종 상금 주일 한수 맘보 그래픽 앙투안 극비 소대장 피츠버그 쇼맨 중동 골고루 크리크 시한 조회 나인 증권 확실 에스코트 객실 갈갈이 사본 유대 그랴 스케치 한껏 기획 초속 하얀색 멸망 영사관 차차차 자연히 부려 금주 수감 멍멍이 변호 페인 유언장 베일 렌치 서양 관통상 들판 미남 출입구 가지신 식물인간 유모차 쫑알 식구 사냥개 가로등 발신 두목 기드온 국방 조항 수혈 개똥 늦잠 이주 교도관 검토 건초 욕심 이식수술 스푼 체력 메타돈 음식물 고등학생 이토록 리처드슨 세부 주사기 총소리 고친 라울 정숙 벌떡 엄살 부재중 경동맥 선두 한눈 나폴레옹 제자리 애칭 군중 기둥 샤를 전등 만니톨 입찰 미수 휴일 첨단 비상용 내리 블라우스 탐문 미신 상부 반역 노마 몸값 남미 불명료 북한 서장 얼룩 항아리 차선 음모 외투 도우미 저항 수속 코비 카운터 탈락 타령 쉬리 구토 경련 행정 허용 시바 자외선 참견 전신 흉골 항법 탄토 스태프 주입 범벅이 내심 술병 카르멘 열대 생강 공학 거물급 기뢰 과제 호외 감출 스티커 퀴즈 댄스파티 까딱 야망 대마 시치미 째깍 패치 성별 이때 상류층 대함 블루베리 자본 어제밤 대리인 파병 바느질 체인 즐거움 벌컨 국회 평행 억양 아론 벨벳 빵빵 스윙 분류 금단 재배치 북유럽 호위 팔기 맹장 이단 쫄딱 탐폰 소수 호조 지배 아카데미 플루토 우체국 본사 워너 제보 크리스털 응당 추신 군단 순회 회원 괴벨스 한순간 저작권 소방 탐지기 찬장 추격 아랍 구속 해양 테이트 은근 사탄 절벽 세탁소 체온 가십 차별 미카엘 비너스 오백 리빙스턴 반쪽 댈러스 호스 다수 딜러 보란 감명 표식 라구 구형 풀장 디젤 카버 카네기 닷새 생기 대주교 동독 저하 암초 초반 타이머 농사 간혹 별자리 묵은 오십 마루 단일 아픔 효소 선뜻 중개인 반찬 적인 피겨 지출 녹음기 똑똑이 신앙 간부 핸들 탈수 파일럿 카메라맨 르네상스 별별 수산 마린 좌심실 루카 놀기 배역 작곡가 칼슘 연대기 흡혈귀 섭씨 세타 기생충 꼬리표 대나무 맞선 가지기 더미 사립 발부 대륙 골목 꼬치꼬치 난민 모신 사법 벤치 피어슨 기압 전한 진공 폐기물 인터폴 하루빨리 페넬로페 미해결 예언 정기 앵커 고전 쿵푸 도킹 집안일 경골 변이 빙글빙글 형수님 하버 규모 렌즈 스파이크 식인 플랫 유인 부재 유람선 흡입기 소유권 슈트 브란트 참전 브루투스 옥스퍼드 우주복 은혜 투쟁 고압 위생 페리보트 양배추 삼류 장착 한걸음 정직 당나귀 늑골 탐색 질소 양초 가정방문 슈퍼마켓 만찬 철거 우정 오렌지색 지분 가본적 군복 참기 라이스 지노 설계 이름표 전구 주거 상인 보충 데드 프랑코 지장 기어코 프롤린 저두 여분 이새끼 조명탄 마흔 푸드 형부 회수 스타킹 동정 석방 지혜 포위 허튼소리 고등 충분 배제 삼각형 구획 싸그리 오말 리비 처남 에피소드 연말 겨드랑이 투하 정통 곰곰이 종신 철철 이마 지체 디자이너 모일 시궁창 저녁때 잠꾸러기 오타 한사람 진탕 현찰 충동 앞뒤 매복 등록증 약혼녀 척척 손수건 성형 딱총나무 이벤트 세리 벼룩 안정화 요양원 세븐 발걸음 직역 리모컨 실리콘 오프라인 탐험 찌꺼기 광부 양심 동틀 괴사 직감 혈액검사 구호 피닉스 억조 심폐 협정 족족 여관 헤비급 흉관 소용돌이 울음소리 요법 울보 사마 조리 기독교인 저승 어머머 꿀꺽 여론 인조 도미노 질주 합동 대피소 점령 친히 밥맛 숙취 선전 유전체 영호 오티스 가솔린 결장 딸애 이온 벼락 날인 세계대전 화물선 마당 앞선 파업 어마 소통 밀가루 외모 로스트 시력 알란 개수작 쿠데타 루실 마인드 말뜻 거신 투명 패거리 부활 코마 은폐 파인애플 고유 소매 컵케이크 활활 함부르크 소행성 뛰기 수사관 이체 진상 사살 방범 채권 경보기 인체 해발 토크 니콜라이 루트 끼리 쇄골 화약 해체 암컷 사항 스파링 태그 혼돈 정비 수요가 잠깐잠깐 교란 신성 오른손 순환 안보 페가수스 철학 램프 셀린 이탈 리온 아미 자제 블루스 대출금 사우디 붉은색 여정 화장품 자택 유방암 절제 핏줄 링거 할매 대동맥류 긴장감 호크 앞쪽 파타 쿠션 웹스터 치료법 걸작 에녹 개복 맞은편 폭약 트레이닝 파손 어머니날 머리띠 의장 수컷 밸브 정치인 일찌감치 그래프 아처 은신처 멤버 임산부 두수 이익 뒷골목 주머니쥐 부쩍 파편 메리트 임금 전인 프란츠 에러 질리 오프닝 스타인 기각 카스 재호 방문객 요전 경추 조약 비법 대관식 포주 지능 역습 더러 로션 요놈 다행이 케이프 나흘 태반 면담 변동 시편 플랩 자루 말일 보비 쫄쫄이 펌프 하인 아몬드 올림 이달 구강 금화 거일 지뢰 로렌츠 저질 향상 돌돌 인공호흡 정액 전립선 도독 모서리 굴뚝 클릭 세실 촌뜨기 문지기 럭스 콘월 배정 우왕 자그마치 산악 헤엄 입기 서열 턱수염 절인 진전 등장인물 우편함 일리 망상 라즈베리 운명선 초당 툴레 동화책 영수 아날로그 프로필 청문회 택배 작살 지연 골칫거리 금빛 주파수 일회용 보마 요석 형광 투입 콩나물 기자회견 견학 후원 보헤미안 초자연 놀림 왕위 이윤 얼마간 법안 씨앗 논리 산모 사이보그 어미 보고타 숙박 카불 농도 제우스 브라스 왁스 복원 장작 기양 소품 수술복 천한 매춘 복합 거머리 무한 여부 운전수 브래디 난장판 고속 징역 독사 보구 결말 도티 분할 담낭 병태 목발 찰칵 평판 마르코스 증거물 우표 바하 남서쪽 이등병 패러디 생검 도달 총원 대걸레 화분 말싸움 에이구 징조 충성심 냉혈한 아케이드 세로토닌 임박 검증 브로드 무신 심술 착각 고르기 태미 협력 도버 전처 삼일 차인 한통 게시판 충치 석사 리포트 문학상 자일스 임충 달력 후작 바이어스 탈선 대학원 골짜기 프랑크 풀기 미스터리 철창 현대판 사랑방 상우 합류 페니실린 부케 불임 점호 박람회 더프 좀도둑 다트 그로브 이본 소지품 주교 자위 개두술 교차 낙태 양치질 가필드 불명 섬유 중년 호구 육상 콜트 흑흑 엘리슨 밀워키 청구 퇴역 인용 일제히 운전사 두기 전례 왕립 자백 무의식 깨끗 분출 공포증 삼각 선거운동 가히 시럽 시파 베어드 숙부님 조종실 호민관 간호원 해치 격리실 가정부 대천사 명품 번쩍 배틀 체코 십분 플레밍 자구 이토 대인 피크 품평회 석궁 별건 급식 보슈 기병대 극적 인형극 육체 넷째 유동 아편 수법 보따리 우리말 고인 감마 산통 아크 천공 주저 비운 고층 평방 동결 저딴 뉴턴 베니스 이맘 비무장 보급품 송신 우씨 머릿결 지리 그늘 오사카 야곱 시걸 윙크 눈깔 폭격기 창씨개명 적용 야기 서점 로치 추출 몸소 해부 아울러 프레이저 유방 우르르 이언 사올 베이징 살사 유감 국선 표할 웃음소리 모린 케일 면상 키리노 백마 서경 신상 갈등 이복 곰돌이 자스민 근신 롤리 동위원소 당뇨병 소음기 리튬 화력 우편물 레이블 탄창 연설문 비행사 원조 뇌졸중 휘파람 제닌 나팔 결제 강연 자장가 임명 양수 여학생 관상 복강 줄창 방화벽 매매 통역 전액 바이올렛 맞이 복역 건달 동기화 일제 설비 새총 구별 그물 홀인원 예거 눈가리개 그램 라벨 비컨 얼씬 매직 플러그 덕후 상속 궁금 대모 정당화 승강기 처형 위트 착륙장 방광 공무 맨체스터 정거장 전염성 바그다드 체조 보초 일꾼 문구 일행 시노 마그네슘 발짝 폭죽 수습 소주 종말 대변 갈가리 생후 배설물 추천 탈옥 항문 일거리 중립 익사 계정 찰흙 과잉 콜먼 해상 악덕 최신식 신작 알바레즈 군주 인민 늙다리 침몰 몸부림 약국 남김없이 데뷔 낱낱이 선체 심장이식 꼬꼬댁 피부색 주임상사 계급 회계사 인거 빈민가 신종 야광 무늬 양식 큰소리 구축 족장이 세례식 얼음장 오죽 열혈 계부 소다수 무지한 흑사병 더글러스 환호 피날레 천주교 목욕물 말짱 감금 체크인 가르침 순결 제외 열한 페인트칠 환불 자책 궁수 묘기 침상 핵무기 사체 칼륨 터전 샤이엔 혈통 수동형 무작위 진출 오작동 어림 잡음 주행 맘속 시마 철제 두피 하단 품질 오리엔트 리도카인 슬리퍼 칭칭 술탄 통치 발동 호프만 실탄 정신감응 에타 법대 웃기 차비 타임머신 켈러 졸업반 관중 섭취 밀매 요건 미혼 송두리째 공상 희귀 솔트 기동 능금 조상 해수 교훈 무허가 펄펄 신물 에덴 유출 바흐 온실 쪽쪽 향신료 호화 전보 스리랑카 로마인 후우 꿈속 관통 영안실 오락가락 재떨이 방탄복 남동쪽 변소 스포츠카 야전 초인종 독약 옵션 모친 안길 등록금 나체 비단 장기이식 진척 신약 컴백 과외 때리기 로큰롤 징집 티에리 면도기 애덤 북극 추방 재건 명탐정 동참 귀뚜라미 회의실 전기톱 채팅 박리 출입증 돌연 분대 자갸 털기 대책 부작용 딸래미 요소 비공식 보관소 날기 형인 정각 욕구 낙엽'.split(' ');
+
+// =====================================================================
+//  사전 · 두음법칙 · 검사
+// =====================================================================
+let DICT = null, BYFIRST = null; const BOTIDX = new Map();
+for (const w of BOT_POOL){ const k = w[0]; if (!BOTIDX.has(k)) BOTIDX.set(k, []); BOTIDX.get(k).push(w); }
+function loadDict(cb){
+  fetch('words-ko.txt').then(r=>{ if (!r.ok) throw new Error(r.status); return r.text(); }).then(t=>{ const arr = t.split('\n'); DICT = new Set(arr); for (const w of BOT_POOL) DICT.add(w); BYFIRST = null; cb(true); })
+    .catch(()=>{ DICT = new Set(BOT_POOL); cb(false); }); }
+function byFirst(){ if (BYFIRST) return BYFIRST; BYFIRST = new Map(); for (const w of DICT){ if (w.length < 2) continue; const k = w[0]; let a = BYFIRST.get(k); if (!a) BYFIRST.set(k, a = []); a.push(w); } return BYFIRST; }
+const ITYPE = new Set([2, 3, 6, 7, 12, 17, 20]);   // ㅑ ㅒ ㅕ ㅖ ㅛ ㅠ ㅣ
+function starts(ch){ const c = ch.charCodeAt(0) - 0xAC00; if (c < 0 || c > 11171) return [ch]; const cho = Math.floor(c/588), jung = Math.floor((c % 588)/28), jong = c % 28, mk = h => String.fromCharCode(0xAC00 + (h*21 + jung)*28 + jong);
+  if (cho === 5) return [ch, mk(ITYPE.has(jung) ? 11 : 2)];   // ㄹ → ㅇ / ㄴ
+  if (cho === 2 && ITYPE.has(jung)) return [ch, mk(11)];       // ㄴ → ㅇ
+  return [ch]; }
+function checkWord(w, prev, used){
+  if (!/^[가-힣]+$/.test(w)) return '한글 단어만 돼요';
+  if (w.length < 2) return '두 글자 이상 써요';
+  if (prev){ const st = starts(prev[prev.length - 1]); if (!st.includes(w[0])) return '\'' + st.join('\' 또는 \'') + '\'(으)로 시작해야 해요'; }
+  if (!DICT.has(w)) return '사전에 없는 단어예요';
+  if (used && used.includes(w)) return '이미 나온 단어예요';
+  return null; }
+function candidates(prev, used, pool){ const out = []; for (const s of starts(prev[prev.length - 1])){ const a = pool.get(s); if (a) for (const w of a) if (!used.includes(w)) out.push(w); } return out; }
+const isKiller = w => candidates(w, [], byFirst()).length === 0;   // 한방 단어?
+function randomStart(used){ for (let k=0;k<200;k++){ const w = BOT_POOL[Math.floor(Math.random()*(k < 150 ? 340 : BOT_POOL.length))]; if (w.length >= 2 && w.length <= 3 && !used.includes(w) && candidates(w, used, BOTIDX).length >= 8) return w; } return '기차'; }
+const limitFor = round => clamp(15 - round*.35, 6, 15)*1000;
+
+// =====================================================================
+//  소리
+// =====================================================================
+const sfx = (function(){ let ac = null; const un = ()=>{ if (!ac){ try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} } if (ac && ac.state === 'suspended') ac.resume(); }; ['pointerdown','keydown'].forEach(e=>addEventListener(e, un, { passive:true }));
+  function tone(f0, f1, d, v, type, w){ if (!ac) return; const t = ac.currentTime + (w || 0), o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + d); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .02); }
+  function noise(d, v, f){ if (!ac) return; const n = ac.createBuffer(1, ac.sampleRate*d, ac.sampleRate), x = n.getChannelData(0); for (let i=0;i<x.length;i++) x[i] = (Math.random()*2 - 1)*Math.pow(1 - i/x.length, 2); const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = n; fl.type = 'lowpass'; fl.frequency.value = f || 900; g.gain.value = v; s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start(); }
+  return { tick(hi){ tone(hi ? 1400 : 1000, hi ? 1300 : 950, .05, .05, 'square'); }, ok(){ tone(660, 660, .12, .08, 'triangle'); tone(990, 990, .18, .07, 'triangle', .08); }, bad(){ tone(180, 120, .25, .1, 'sawtooth'); },
+    type(){ tone(1800 + Math.random()*400, 1500, .03, .02, 'square'); }, boom(){ noise(1.1, .9, 700); tone(120, 40, .6, .4); }, eject(){ tone(200, 1400, .7, .08, 'sawtooth'); noise(.6, .3, 3000); },
+    turn(){ tone(880, 880, .1, .06); }, win(){ [0, 4, 7, 12, 16].forEach((s, i)=>tone(523*Math.pow(2, s/12), 523*Math.pow(2, s/12), .45, .07, 'triangle', i*.11)); } }; })();
+
+// =====================================================================
+//  3D — 따뜻한 방, 둥근 탁자, 의자 8개
+// =====================================================================
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.25 : 1.75));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1d1a17); scene.fog = new THREE.Fog(0x1d1a17, 22, 48);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, .1, 120);
+function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.fov = innerWidth < innerHeight ? 68 : 50; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.75, metalness:0 }, o || {}));
+function ctex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; }
+function box(p, w, h, d, m, x, y, z){ const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; p.add(o); return o; }
+scene.add(new THREE.HemisphereLight(0xfff1dc, 0x2a2420, .42));
+scene.add(new THREE.AmbientLight(0xffffff, .12));
+const lamp = new THREE.SpotLight(0xffe2b8, 1.25, 30, .75, .5, 1.2); lamp.position.set(0, 8.3, 0); lamp.target.position.set(0, 0, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024); lamp.shadow.bias = -.0004; scene.add(lamp); scene.add(lamp.target);
+const fill = new THREE.DirectionalLight(0xbcd0ff, .22); fill.position.set(-8, 10, 6); scene.add(fill);
+// 바닥 · 벽
+{ const plank = ctex(512, 512, (g, w, h)=>{ g.fillStyle = '#7a5a3e'; g.fillRect(0, 0, w, h); for (let r=0;r<8;r++){ let x = -Math.random()*200; while (x < w){ const L = 160 + Math.random()*200; g.fillStyle = 'hsl(' + (26 + Math.random()*6) + ',' + (32 + Math.random()*8) + '%,' + (30 + Math.random()*8) + '%)'; g.fillRect(x + 1, r*64 + 1, L - 2, 62); for (let k=0;k<6;k++){ g.fillStyle = 'rgba(0,0,0,.06)'; g.fillRect(x + Math.random()*L, r*64 + Math.random()*62, 30 + Math.random()*60, 1); } x += L; } } });
+  plank.wrapS = plank.wrapT = THREE.RepeatWrapping; plank.repeat.set(6, 6);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), M(0xffffff, { map:plank, roughness:.8 })); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(6.2, 48), M(0x5a3a32, { roughness:.95 })); rug.rotation.x = -Math.PI/2; rug.position.y = .01; rug.receiveShadow = true; scene.add(rug);
+  const rug2 = new THREE.Mesh(new THREE.RingGeometry(5.7, 5.95, 48), M(0xc9a46a, { roughness:.9 })); rug2.rotation.x = -Math.PI/2; rug2.position.y = .015; scene.add(rug2);
+  const wallM = M(0x8d8578, { roughness:.95 }), wainM = M(0x4a3626, { roughness:.7 });
+  for (const [x, z, ry] of [[0, -16, 0], [0, 16, Math.PI], [-16, 0, Math.PI/2], [16, 0, -Math.PI/2]]){ const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    box(g, 32, 9, .4, wallM, 0, 4.5, 0); box(g, 32, 2.2, .5, wainM, 0, 1.1, .05); box(g, 32, .18, .62, M(0x6a4a30), 0, 2.25, .05);
+    for (const wx of [-8, 8]){ const fr = box(g, 3.2, 2.2, .1, M(0x2a2018), wx, 4.6, .25); const pic = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.8), M(0xffffff, { map:ctex(256, 160, (c, w, h)=>{ const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, ['#6a8fb0','#b07a5a','#7aa07a','#9a8ab8'][Math.floor(Math.random()*4)]); gr.addColorStop(1, '#2a2a30'); c.fillStyle = gr; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,.25)'; c.beginPath(); c.arc(w*.7, h*.35, 18, 0, 7); c.fill(); c.fillStyle = 'rgba(20,20,20,.6)'; c.beginPath(); c.moveTo(0, h); c.lineTo(w*.35, h*.5); c.lineTo(w*.6, h*.8); c.lineTo(w, h*.55); c.lineTo(w, h); c.fill(); }) })); pic.position.set(wx, 4.6, .31); g.add(pic); } }
+  // 펜던트 등
+  box(scene, .06, 2, .06, M(0x222222), 0, 9.6, 0);
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(1.3, .9, 28, 1, true), M(0x2c3a33, { side:THREE.DoubleSide, roughness:.5 })); shade.position.y = 8.4; scene.add(shade);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.28, 16, 12), new THREE.MeshBasicMaterial({ color:0xfff1d0 })); bulb.position.y = 8.05; scene.add(bulb);
+  // 구석 화분 · 책장
+  for (const [x, z] of [[-13, -13], [13, -13], [-13, 13], [13, 13]]){ const pot = new THREE.Mesh(new THREE.CylinderGeometry(.7, .5, 1.2, 16), M(0xb76a48)); pot.position.set(x, .6, z); pot.castShadow = true; scene.add(pot); for (let k=0;k<5;k++){ const l = new THREE.Mesh(new THREE.IcosahedronGeometry(.9 - k*.08, 0), M(0x3f7f45)); l.position.set(x + (Math.random() - .5)*.8, 1.7 + k*.45, z + (Math.random() - .5)*.8); l.castShadow = true; scene.add(l); } }
+  for (const x of [-6, 6]){ const g = new THREE.Group(); g.position.set(x, 0, -15.2); scene.add(g); box(g, 4, 5.6, 1, M(0x3a2a1c), 0, 2.8, 0); for (let r=0;r<4;r++) for (let k=0;k<9;k++) box(g, .32, .9 + Math.random()*.25, .7, M(new THREE.Color().setHSL(Math.random(), .35, .4)), -1.6 + k*.4, .7 + r*1.35, .2); } }
+// 탁자
+const TABLE_Y = 1.6, TABLE_R = 2.45;
+{ const wood = M(0x6b4a30, { roughness:.55 }); const top = new THREE.Mesh(new THREE.CylinderGeometry(TABLE_R, TABLE_R, .16, 48), wood); top.position.y = TABLE_Y; top.castShadow = top.receiveShadow = true; scene.add(top);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(TABLE_R, .06, 8, 48), M(0x4a3020)); rim.rotation.x = Math.PI/2; rim.position.y = TABLE_Y; scene.add(rim);
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(.28, .45, TABLE_Y, 16), M(0x3a2a1c)); leg.position.y = TABLE_Y/2; leg.castShadow = true; scene.add(leg);
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.2, .14, 24), M(0x3a2a1c)); foot.position.y = .07; scene.add(foot); }
+// 가운데 폭탄(시계) + 지금 차례를 가리키는 화살표
+const bomb = new THREE.Group(); bomb.position.y = TABLE_Y + .62; scene.add(bomb);
+const bombBody = new THREE.Mesh(new THREE.SphereGeometry(.5, 24, 18), M(0x1d1f24, { roughness:.35, metalness:.25 })); bombBody.castShadow = true; bomb.add(bombBody);
+{ const cap = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .16, 12), M(0x555a60, { metalness:.6, roughness:.35 })); cap.position.y = .52; bomb.add(cap);
+  const fuse = new THREE.Mesh(new THREE.TorusGeometry(.22, .035, 6, 12, Math.PI*.9), M(0xc7a46a)); fuse.position.set(.18, .62, 0); fuse.rotation.z = .3; bomb.add(fuse); }
+const sparkTex = ctex(64, 64, (g)=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,220,1)'); gr.addColorStop(.3, 'rgba(255,190,80,.9)'); gr.addColorStop(1, 'rgba(255,120,30,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
+const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map:sparkTex, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true })); spark.position.set(.42, .66, 0); spark.scale.set(.5, .5, 1); bomb.add(spark);
+const sparkL = new THREE.PointLight(0xffa040, .6, 4); sparkL.position.set(.42, .7, 0); bomb.add(sparkL);
+const arrow = new THREE.Group(); arrow.position.y = TABLE_Y + .1; scene.add(arrow);
+{ const am = M(0xf2c94c, { emissive:0x7a5a10, emissiveIntensity:.5, roughness:.4 }); const shaft = new THREE.Mesh(new THREE.BoxGeometry(.16, .05, 1.2), am); shaft.position.z = 1.05; arrow.add(shaft); const head = new THREE.Mesh(new THREE.ConeGeometry(.22, .45, 4), am); head.rotation.x = Math.PI/2; head.position.z = 1.85; arrow.add(head); }
+// 의자
+const seatAng = i => i/SEATS*Math.PI*2, SEAT_R = 3.55, SEAT_Y = 1.0;
+const chairs = [];
+for (let i=0;i<SEATS;i++){ const a = seatAng(i), g = new THREE.Group(); g.position.set(Math.sin(a)*SEAT_R, 0, Math.cos(a)*SEAT_R); g.rotation.y = a + Math.PI; scene.add(g);
+  const wood = M(0x8a6340, { roughness:.6 }), cush = M(0x9a3b32, { roughness:.9 });
+  box(g, 1.35, .16, 1.25, wood, 0, SEAT_Y - .08, 0); const c = box(g, 1.2, .12, 1.1, cush, 0, SEAT_Y + .05, 0);
+  for (const [x, z] of [[-.55, -.5], [.55, -.5], [-.55, .5], [.55, .5]]) box(g, .13, SEAT_Y - .16, .13, wood, x, (SEAT_Y - .16)/2, z);
+  box(g, 1.35, 1.7, .14, wood, 0, SEAT_Y + .85, -.6); box(g, 1.15, 1.2, .08, cush, 0, SEAT_Y + .95, -.52);
+  const glow = new THREE.Mesh(new THREE.RingGeometry(.95, 1.15, 40), new THREE.MeshBasicMaterial({ color:0xf2c94c, transparent:true, opacity:0, depthWrite:false })); glow.rotation.x = -Math.PI/2; glow.position.y = .03; g.add(glow);
+  chairs.push({ g, cush, glow, home:g.position.clone(), a, out:0 }); }
+// 큰 단어판 (탁자 위에 떠 있음, 늘 카메라를 봄)
+const boardCv = document.createElement('canvas'); boardCv.width = 1024; boardCv.height = 256; const boardTex = new THREE.CanvasTexture(boardCv);
+const board = new THREE.Sprite(new THREE.SpriteMaterial({ map:boardTex, transparent:true, depthWrite:false })); board.position.set(0, 4.6, 0); board.scale.set(6.4, 1.6, 1); scene.add(board);
+let boardKey = '';
+function drawBoard(word, sub){ const key = word + '|' + sub; if (key === boardKey) return; boardKey = key; const g = boardCv.getContext('2d'), w = 1024, h = 256; g.clearRect(0, 0, w, h);
+  g.fillStyle = 'rgba(20,20,23,.78)'; const r = 40; g.beginPath(); g.moveTo(r, 10); g.arcTo(w - 10, 10, w - 10, h - 10, r); g.arcTo(w - 10, h - 10, 10, h - 10, r); g.arcTo(10, h - 10, 10, 10, r); g.arcTo(10, 10, w - 10, 10, r); g.fill();
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 120px "Pretendard","Noto Sans KR",sans-serif';
+  if (word && word.length > 1){ const head = word.slice(0, -1), tail = word.slice(-1); const tw = g.measureText(word).width, hw = g.measureText(head).width; g.textAlign = 'left'; g.fillStyle = '#fff'; g.fillText(head, w/2 - tw/2, 118); g.fillStyle = '#f2c94c'; g.fillText(tail, w/2 - tw/2 + hw, 118); }
+  else { g.fillStyle = '#fff'; g.fillText(word || '', w/2, 118); }
+  g.textAlign = 'center'; g.font = '800 38px "Pretendard","Noto Sans KR",sans-serif'; g.fillStyle = 'rgba(255,255,255,.7)'; g.fillText(sub || '', w/2, 214); boardTex.needsUpdate = true; }
+
+// ---- 아바타 ----
+function pivotize(g){ const ms = g.children.filter(o=>o.isMesh); if (ms.length < 6) return {}; const out = {};
+  ['legL','legR',null,'armL','armR'].forEach((n, i)=>{ if (!n) return; const m = ms[i], h = m.geometry.parameters.height; const pv = new THREE.Group(); pv.position.set(m.position.x, m.position.y + h/2, m.position.z); g.remove(m); m.position.set(0, -h/2, 0); pv.add(m); g.add(pv); out[n] = pv; }); return out; }
+function buildAvatar(lo){ let g = null; try { if (window.MP && MP.buildAvatar) g = MP.buildAvatar(lo || null); } catch(e){ g = null; }
+  if (!g){ g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, .6), M(0x4a90ff)); m.position.y = 1.5; g.add(m); }
+  g.traverse(o=>{ if (o.isMesh) o.castShadow = true; }); return g; }
+function tagSprite(){ const c = document.createElement('canvas'); c.width = 512; c.height = 192; const t = new THREE.CanvasTexture(c); const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false })); s.scale.set(3.2, 1.2, 1); s.userData = { c, t, key:'' }; return s; }
+function drawTag(s, name, lives, typing, mine, turn){ const key = [name, lives, typing, mine, turn].join('|'); if (s.userData.key === key) return; s.userData.key = key; const g = s.userData.c.getContext('2d'), w = 512, h = 192; g.clearRect(0, 0, w, h); g.textAlign = 'center'; g.textBaseline = 'middle';
+  if (typing){ g.font = '900 54px "Pretendard","Noto Sans KR",sans-serif'; const tw = Math.min(480, g.measureText(typing).width + 44); g.fillStyle = turn ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.8)'; const x0 = w/2 - tw/2; g.beginPath(); g.moveTo(x0 + 22, 6); g.arcTo(x0 + tw, 6, x0 + tw, 80, 22); g.arcTo(x0 + tw, 80, x0, 80, 22); g.arcTo(x0, 80, x0, 6, 22); g.arcTo(x0, 6, x0 + tw, 6, 22); g.fill(); g.beginPath(); g.moveTo(w/2 - 12, 79); g.lineTo(w/2 + 12, 79); g.lineTo(w/2, 96); g.fill(); g.fillStyle = '#1b1d21'; g.fillText(typing, w/2, 45); }
+  g.font = '800 34px "Pretendard","Noto Sans KR",sans-serif'; g.lineWidth = 7; g.strokeStyle = 'rgba(0,0,0,.7)'; const nm = String(name).slice(0, 10); g.strokeText(nm, w/2, 128); g.fillStyle = mine ? '#f2c94c' : '#fff'; g.fillText(nm, w/2, 128);
+  if (lives !== null){ g.font = '30px sans-serif'; g.fillText(lives > 0 ? '❤'.repeat(lives) + '🖤'.repeat(Math.max(0, LIVES - lives)) : '💥', w/2, 168); }
+  s.userData.t.needsUpdate = true; }
+// 자리마다 앉은 아바타
+const seatObj = new Array(SEATS).fill(null);   // { id, g, limbs, tag, key, fly }
+function seatAvatar(i, id, lo){ const cur = seatObj[i], key = id + '|' + JSON.stringify(lo || null); if (cur && cur.key === key) return cur;
+  if (cur) scene.remove(cur.g); if (!id){ seatObj[i] = null; return null; }
+  const g = buildAvatar(lo), limbs = pivotize(g); const a = seatAng(i); g.position.set(Math.sin(a)*(SEAT_R - .05), SEAT_Y - .93, Math.cos(a)*(SEAT_R - .05)); g.rotation.y = a + Math.PI;
+  if (limbs.legL){ limbs.legL.rotation.x = -Math.PI/2; limbs.legR.rotation.x = -Math.PI/2; limbs.armL.rotation.x = -.5; limbs.armR.rotation.x = -.5; }
+  const tag = tagSprite(); tag.position.set(0, 4.25, 0); g.add(tag); scene.add(g);
+  return seatObj[i] = { id, g, limbs, tag, key, fly:0, base:g.position.clone() }; }
+
+// ---- 효과: 튕겨 나가기 · 폭발 · 꽃가루 ----
+const parts = [];
+function burst(x, y, z, cols, n, sp){ for (let k=0;k<n;k++){ const m = new THREE.Mesh(new THREE.BoxGeometry(.14, .14, .04), new THREE.MeshBasicMaterial({ color:cols[k % cols.length] })); m.position.set(x, y, z); scene.add(m); const a = Math.random()*6.28, u = Math.random(); parts.push({ m, v:new THREE.Vector3(Math.cos(a)*sp*(.3 + u), sp*(.6 + Math.random()), Math.sin(a)*sp*(.3 + u)), t:0, life:1.6 + Math.random()*.8 }); } }
+function tickParts(dt){ for (let i=parts.length-1;i>=0;i--){ const p = parts[i]; p.t += dt; p.v.y -= 9*dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt*7; p.m.rotation.y += dt*5; if (p.m.position.y < .05){ p.m.position.y = .05; p.v.set(0, 0, 0); } if (p.t > p.life){ scene.remove(p.m); p.m.geometry.dispose(); parts.splice(i, 1); } } }
+function ejectSeat(i){ const so = seatObj[i], ch = chairs[i]; if (ch) ch.out = .001; if (so){ so.fly = .001; so.vy = 14; so.spin = (Math.random() < .5 ? -1 : 1)*8; } const a = seatAng(i); burst(Math.sin(a)*SEAT_R, 1.2, Math.cos(a)*SEAT_R, [0xffd23d, 0xff8a3d, 0xffffff], 26, 5); sfx.eject(); }
+function resetSeats(){ for (let i=0;i<SEATS;i++){ const ch = chairs[i]; ch.out = 0; ch.g.position.copy(ch.home); ch.g.rotation.x = 0; const so = seatObj[i]; if (so){ so.fly = 0; so.g.position.copy(so.base); so.g.rotation.x = 0; so.g.rotation.z = 0; so.g.visible = true; } } }
+
+// =====================================================================
+//  게임 상태 (진행자가 씀)
+// =====================================================================
+let MODE = null;          // 'solo' | 'online'
+const ME = { id:'me', name:'나' };
+const PL = {};            // id → { id, name, seat, bot, lo, skill, typ }
+let G = freshG();
+function freshG(){ return { st:'idle', ids:[], lives:{}, turn:null, word:'', used:[], tEnd:0, round:0, seq:0, last:null, boom:null, win:null, startAt:0, endAt:0, n:0 }; }
+const now = () => (MODE === 'online' && window.MP && MP.serverNow) ? MP.serverNow() : Date.now();
+const alive = g => g.ids.filter(id=>(g.lives[id] || 0) > 0);
+function nextAlive(g, id){ const L = g.ids.length; let k = g.ids.indexOf(id); for (let s=0;s<L;s++){ k = (k + 1) % L; if ((g.lives[g.ids[k]] || 0) > 0) return g.ids[k]; } return id; }
+function hostStart(ids){ G = Object.assign(freshG(), { st:'play', ids:ids.slice(), round:0, seq:G.seq + 1, n:(G.n || 0) + 1 }); for (const id of ids) G.lives[id] = LIVES; G.word = randomStart([]); G.used = [G.word]; G.turn = ids[Math.floor(Math.random()*ids.length)]; G.tEnd = now() + limitFor(0) + 1500; hostDirty(); }
+function hostSubmit(id, w){ if (G.st !== 'play' || G.turn !== id || now() > G.tEnd) return 'late'; const why = checkWord(w, G.word, G.used); if (why) return why;
+  G.used = G.used.concat([w]); if (G.used.length > 400) G.used = G.used.slice(-400); G.word = w; G.round++; G.last = { id, w, n:G.seq + 1, k:isKiller(w) ? 1 : 0 }; G.turn = nextAlive(G, id); G.tEnd = now() + limitFor(G.round); G.seq++; hostDirty(); return null; }
+function hostTick(){ const t = now();
+  if (G.st === 'play' && t > G.tEnd){ const id = G.turn; G.lives[id] = Math.max(0, (G.lives[id] || 0) - 1); G.boom = { id, n:G.seq + 1, out:G.lives[id] <= 0 ? 1 : 0 };
+    const al = alive(G); if (al.length <= 1){ G.st = 'end'; G.win = al[0] || null; G.endAt = t + 7000; G.turn = null; }
+    else { G.word = randomStart(G.used); G.used = G.used.concat([G.word]); G.turn = nextAlive(G, id); G.tEnd = t + limitFor(G.round) + 2200; }
+    G.seq++; hostDirty(); }
+  else if (G.st === 'end' && t > G.endAt){ G.st = 'idle'; G.seq++; hostDirty(); } }
+let hostDirtyF = false; function hostDirty(){ hostDirtyF = true; }
+
+// =====================================================================
+//  봇
+// =====================================================================
+const BOT_NAMES = ['하늘봇', '별이봇', '도윤봇', '서아봇', '지호봇'];
+const botPlan = {};
+function botTick(){ if (G.st !== 'play') return; const id = G.turn, p = PL[id]; if (!p || !p.bot) return; let pl = botPlan[id];
+  if (!pl || pl.seq !== G.seq){ const c1 = candidates(G.word, G.used, BOTIDX); let w = null;
+    if (c1.length && Math.random() < p.skill){ const short = c1.filter(x=>x.length <= 3); const src = short.length && Math.random() < .7 ? short : c1; w = src[Math.floor(Math.random()*src.length)]; }
+    else if (Math.random() < p.skill*.6){ const c2 = candidates(G.word, G.used, byFirst()).filter(x=>x.length <= 4); if (c2.length) w = c2[Math.floor(Math.random()*c2.length)]; }
+    pl = botPlan[id] = { seq:G.seq, w, at:now() + 900 + Math.random()*2600*(1.4 - p.skill), typed:0, nextT:0 }; }
+  const t = now(); if (t < pl.at) return;
+  if (!pl.w){ if (!pl.fake){ pl.fake = G.word.slice(-1); } p.typ = pl.fake; return; }   // 못 찾음 → 첫 글자만 쓰고 고민
+  if (pl.typed < pl.w.length){ if (t >= pl.nextT){ pl.typed++; pl.nextT = t + 130 + Math.random()*120; p.typ = pl.w.slice(0, pl.typed); sfx.type(); } return; }
+  if (t >= pl.nextT + 250){ hostSubmit(id, pl.w); p.typ = ''; } }
+
+// =====================================================================
+//  온라인
+// =====================================================================
+const NET = { on:false, uid:null, players:{}, seat:-1, sendT:0, fullT:0, subN:0, lastSub:{}, cacheG:null, hostId:null, typ:'', typT:0 };
+const URL_ROOM = (()=>{ try { return ((new URLSearchParams(location.search).get('room')) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12); } catch(e){ return ''; } })();
+function myName(){ try { return (window.MP && MP.getDisplayName && MP.getDisplayName()) || '플레이어'; } catch(e){ return '플레이어'; } }
+function myLoadout(){ try { return (MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || null; } catch(e){ return null; } }
+const fresh = p => p && p.ts && (now() - p.ts) < 14000;
+function seatedNet(){ const out = []; for (const u in NET.players){ const p = NET.players[u]; if (fresh(p) && p.seat >= 0 && p.seat < SEATS) out.push(u); } if (NET.on && NET.seat >= 0 && !out.includes(NET.uid)) out.push(NET.uid); return out; }
+function startOnline(code){ const room = (code || 'PUBLIC').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'PUBLIC';
+  if (!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase)){ $('status').textContent = '온라인 연결을 못 했어요 — 혼자 연습을 해 보세요'; return; }
+  $('status').textContent = '접속 중…'; MODE = 'online'; ME.name = myName();
+  try {
+    MP.onPlayersUpdate(val=>{ NET.players = val || {}; });
+    MP.init('wordchain_' + room, (u, err)=>{ if (err || !u){ $('status').textContent = '접속 실패 — 잠시 후 다시'; MODE = null; return; }
+      NET.on = true; NET.uid = u; ME.id = u; try { MP.setPresence && MP.setPresence('wordchain', room); } catch(e){}
+      $('roomTag').textContent = '방 ' + room; $('lobby').classList.remove('show'); history.replaceState(null, '', '?room=' + room);
+      setTimeout(claimSeat, 1200);
+      if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l){ NET.lo = l; NET.fullT = 0; } }); });
+  } catch(e){ $('status').textContent = '접속 실패'; MODE = null; } }
+function takenSeats(){ const t = {}; for (const u in NET.players){ if (u === NET.uid) continue; const p = NET.players[u]; if (fresh(p) && p.seat >= 0) t[p.seat] = t[p.seat] && t[p.seat] < u ? t[p.seat] : u; } return t; }
+function claimSeat(){ if (!NET.on) return; const t = takenSeats();
+  if (NET.seat >= 0 && (!t[NET.seat] || t[NET.seat] > NET.uid)) return;   // 내 자리 그대로 (겹치면 uid 작은 쪽이 임자)
+  NET.seat = -1; for (let i=0;i<SEATS;i++) if (!t[i]){ NET.seat = i; break; } NET.fullT = 0; }
+function pickHost(){ const s = seatedNet().sort(); return s[0] || null; }
+let lastSeenG = 0;
+function netTick(dt){ if (!NET.on) return;
+  // 진행자 정하기 → 진행자 기록의 g가 진짜 게임
+  const host = pickHost(), amHost = host === NET.uid;
+  if (host !== NET.hostId){ // 진행자가 바뀜: 내가 새 진행자면 마지막으로 본 g를 이어받는다
+    if (amHost && NET.cacheG){ G = JSON.parse(JSON.stringify(NET.cacheG)); G.used = G.used || []; G.ids = G.ids || []; G.lives = G.lives || {}; if (G.st === 'play') G.tEnd = Math.max(G.tEnd, now() + 4000); hostDirty(); }
+    NET.hostId = host; }
+  if (!amHost && host){ const hp = NET.players[host]; if (hp && hp.g){ const g = hp.g; if (!g.used) g.used = []; if (!g.ids) g.ids = []; if (!g.lives) g.lives = {}; G = g; NET.cacheG = g; } }
+  if (amHost){ NET.cacheG = G;
+    // 사람들 제출 받기
+    for (const u in NET.players){ const p = NET.players[u]; if (!fresh(p) || !p.sub) continue; if (NET.lastSub[u] === p.sub.n) continue; NET.lastSub[u] = p.sub.n; if (p.sub.seq === G.seq) hostSubmit(u, String(p.sub.w || '')); }
+    // 나간 사람 정리: 게임 중 차례인 사람이 사라지면 그 사람 목숨 0
+    if (G.st === 'play'){ const seated = seatedNet(); for (const id of G.ids){ if ((G.lives[id] || 0) > 0 && !seated.includes(id)){ G.lives[id] = 0; if (G.turn === id){ G.turn = nextAlive(G, id); G.tEnd = now() + limitFor(G.round); } G.seq++; hostDirty(); if (alive(G).length <= 1){ G.st = 'end'; G.win = alive(G)[0] || null; G.endAt = now() + 7000; } } } }
+    // 대기 → 2명 이상 앉으면 카운트다운
+    if (G.st === 'idle'){ const s = seatedNet(); if (s.length >= 2){ G.st = 'count'; G.startAt = now() + 9000; G.seq++; hostDirty(); } }
+    else if (G.st === 'count'){ const s = seatedNet(); if (s.length < 2){ G.st = 'idle'; G.seq++; hostDirty(); } else if (now() >= G.startAt){ const ids = s.sort((a, b)=>(seatOf(a) - seatOf(b))); hostStart(ids); } }
+    hostTick(); }
+  NET.sendT -= dt; NET.fullT -= dt; if (NET.sendT > 0 && !hostDirtyF) return; NET.sendT = amHost ? .25 : .4;
+  const s = { name:ME.name, seat:NET.seat, typ:NET.typ || '' };
+  if (NET.fullT <= 0){ NET.fullT = 5; s.lo = NET.lo || myLoadout(); }
+  if (amHost && (hostDirtyF || Math.random() < .2)){ s.g = G; hostDirtyF = false; } else if (!amHost) s.g = null;
+  if (NET.pendingSub){ s.sub = NET.pendingSub; NET.pendingSub = null; }
+  try { MP.update(s); } catch(e){}
+  NET.claimT = (NET.claimT || 0) - .4; if (NET.claimT <= 0){ NET.claimT = 1; claimSeat(); } }
+function seatOf(id){ if (MODE === 'solo') return PL[id] ? PL[id].seat : 99; if (id === NET.uid) return NET.seat; const p = NET.players[id]; return p && p.seat >= 0 ? p.seat : 99; }
+function nameOf(id){ if (MODE === 'solo') return PL[id] ? PL[id].name : '?'; if (id === NET.uid) return ME.name; const p = NET.players[id]; return (p && p.name) || '플레이어'; }
+
+// =====================================================================
+//  혼자 모드
+// =====================================================================
+function startSolo(){ MODE = 'solo'; ME.id = 'me'; ME.name = myName(); for (const k in PL) delete PL[k];
+  PL.me = { id:'me', name:ME.name, seat:0, lo:myLoadout() };
+  const names = BOT_NAMES.slice().sort(()=>Math.random() - .5);
+  [2, 4, 6].forEach((seat, k)=>{ const id = 'bot' + k; PL[id] = { id, name:names[k], seat, bot:true, skill:.8 + Math.random()*.17, lo:botLoadout(k) }; });
+  $('lobby').classList.remove('show'); $('roomTag').textContent = '혼자 연습';
+  G = freshG(); G.st = 'count'; G.startAt = now() + 3500; G.seq = 1; }
+function botLoadout(k){ const sk = ['skin_light', 'skin_tan', 'skin_brown', 'skin_classic'], sh = ['shirt_red', 'shirt_blue', 'shirt_green', 'shirt_black', 'shirt_white'], pa = ['pants_black', 'pants_navy', 'pants_grey', 'pants_khaki'];
+  return { skin:sk[(k*3 + 1) % sk.length], shirt:sh[(k*2 + 1) % sh.length], pants:pa[k % pa.length] }; }
+function soloTick(){ if (MODE !== 'solo') return;
+  if (G.st === 'count' && now() >= G.startAt){ hostStart(Object.keys(PL).sort((a, b)=>PL[a].seat - PL[b].seat)); }
+  if (G.st === 'idle'){ G.st = 'count'; G.startAt = now() + 4000; G.seq++; resetSeats(); }
+  hostTick(); botTick(); }
+
+// =====================================================================
+//  내 입력
+// =====================================================================
+const wIn = $('wIn'); let errT = null;
+function showErr(t){ const e = $('err'); e.textContent = t; e.classList.add('on'); clearTimeout(errT); errT = setTimeout(()=>e.classList.remove('on'), 1800); const f = $('inp'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); sfx.bad(); }
+$('inp').addEventListener('submit', e=>{ e.preventDefault(); const w = wIn.value.trim(); if (!w || G.st !== 'play' || G.turn !== ME.id) return;
+  const why = checkWord(w, G.word, G.used); if (why){ showErr(why); return; }
+  if (MODE === 'solo'){ const r = hostSubmit('me', w); if (r){ showErr(r === 'late' ? '시간 초과!' : r); return; } }
+  else if (NET.hostId === NET.uid){ const r = hostSubmit(NET.uid, w); if (r){ showErr(r === 'late' ? '시간 초과!' : r); return; } NET.typ = ''; }   // 내가 진행자면 바로 처리
+  else { NET.subN++; NET.pendingSub = { w, n:NET.subN + '_' + Date.now(), seq:G.seq }; NET.sendT = 0; NET.typ = w; wIn.disabled = true; setTimeout(()=>{ wIn.disabled = false; }, 900); }
+  wIn.value = ''; });
+wIn.addEventListener('input', ()=>{ if (MODE === 'solo' && PL.me) PL.me.typ = wIn.value; else { NET.typ = wIn.value.slice(0, 12); } });
+$('soloBtn').addEventListener('click', ()=>{ if (!DICT) return; startSolo(); });
+$('onBtn').addEventListener('click', ()=>{ if (!DICT) return; startOnline($('roomIn').value); });
+$('roomIn').addEventListener('keydown', e=>{ if (e.key === 'Enter') $('onBtn').click(); });
+$('leaveBtn').addEventListener('click', ()=>{ if (MODE === 'online'){ location.href = 'wordchain.html'; return; } MODE = null; G = freshG(); for (const k in PL) delete PL[k]; for (let i=0;i<SEATS;i++) seatAvatar(i, null); resetSeats(); $('lobby').classList.add('show'); });
+
+// =====================================================================
+//  화면 갱신
+// =====================================================================
+let seenSeq = -1, seenLast = null, seenBoom = null, seenWin = null, seenSt = '', tickS = -1, myTurnPrev = false, wins = parseInt(localStorage.getItem('wc_wins') || '0', 10) || 0, myWords = 0;
+function banner(t, col){ const b = $('banner'); b.innerHTML = ''; const d = document.createElement('div'); d.textContent = t; d.style.color = col || '#fff'; b.appendChild(d); }
+function logLine(html, cls){ const L = $('log'), d = document.createElement('div'); d.innerHTML = html; if (cls) d.className = cls; L.insertBefore(d, L.firstChild); while (L.children.length > 14) L.removeChild(L.lastChild); }
+const esc = t => String(t).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+function seatList(){ // [ [seat, id, lo] ]
+  const out = []; if (MODE === 'solo'){ for (const id in PL) out.push([PL[id].seat, id, PL[id].lo]); }
+  else if (MODE === 'online'){ for (const u in NET.players){ const p = NET.players[u]; if (u !== NET.uid && fresh(p) && p.seat >= 0 && p.seat < SEATS) out.push([p.seat, u, p.lo]); } if (NET.seat >= 0) out.push([NET.seat, NET.uid, NET.lo || myLoadout()]); }
+  return out; }
+function typingOf(id){ if (MODE === 'solo') return PL[id] ? PL[id].typ || '' : ''; if (id === NET.uid) return NET.typ || ''; const p = NET.players[id]; return (p && p.typ) || ''; }
+function updateUI(){
+  // 자리
+  const list = seatList(), used = {}; for (const [s, id, lo] of list){ if (used[s]) continue; used[s] = 1; seatAvatar(s, id, lo); } for (let i=0;i<SEATS;i++) if (!used[i]) seatAvatar(i, null);
+  const inGame = id => G.ids && G.ids.includes(id);
+  for (let i=0;i<SEATS;i++){ const so = seatObj[i]; if (!so) continue; const turn = G.st === 'play' && G.turn === so.id; so.tag.visible = so.id !== ME.id; drawTag(so.tag, nameOf(so.id), inGame(so.id) ? (G.lives[so.id] || 0) : null, turn ? typingOf(so.id) || '…' : '', so.id === ME.id, turn); }
+  // 이벤트: 단어 성공 / 폭발 / 우승
+  if (G.last && JSON.stringify(G.last) !== seenLast){ seenLast = JSON.stringify(G.last); if (seenSeq >= 0){ const l = G.last; logLine(esc(l.w) + '<i>' + esc(nameOf(l.id)) + '</i>'); sfx.ok(); const s = seatOf(l.id); if (s < SEATS){ const a = seatAng(s); burst(Math.sin(a)*2.2, TABLE_Y + .4, Math.cos(a)*2.2, [0xf2c94c, 0x3ddc84, 0xffffff], 10, 3); } if (l.id === ME.id) myWords++; if (l.k) banner('한방 단어!', '#ff8a4d'); } }
+  if (G.boom && JSON.stringify(G.boom) !== seenBoom){ seenBoom = JSON.stringify(G.boom); if (seenSeq >= 0){ const b = G.boom, s = seatOf(b.id); sfx.boom(); burst(0, TABLE_Y + .6, 0, [0x333333, 0xff8a3d, 0xffd23d], 30, 6); shakeT = .5; logLine('💥 ' + esc(nameOf(b.id)) + (b.out ? ' 탈락' : ' ❤-1'), 'boom');
+    if (b.out && s < SEATS) setTimeout(()=>ejectSeat(s), 350); banner(b.out ? nameOf(b.id) + ' 탈락!' : '펑! ' + nameOf(b.id), '#ff6a5a'); } }
+  if (G.st !== seenSt){ if (G.st === 'play' && seenSt !== 'play'){ resetSeats(); $('log').innerHTML = ''; myWords = 0; banner('시작!', '#f2c94c'); sfx.win(); }
+    if (G.st === 'end' && seenSt === 'play'){ const w = G.win; banner(w ? (w === ME.id ? '🏆 우승!' : nameOf(w) + ' 우승!') : '무승부', '#f2c94c'); sfx.win(); const s = seatOf(w); if (s < SEATS){ const a = seatAng(s); burst(Math.sin(a)*SEAT_R, 4, Math.cos(a)*SEAT_R, [0xf2c94c, 0xff6b8a, 0x4ea3ff, 0x3ddc84, 0xffffff], 70, 7); }
+      if (w === ME.id){ wins++; try { localStorage.setItem('wc_wins', wins); } catch(e){} try { if (window.MP && MP.submitScore) MP.submitScore('wordchain_wins', wins, 'desc'); } catch(e){} }
+      try { if (window.MP && MP.addXP && G.ids.includes(ME.id)) MP.addXP(4 + myWords*2 + (w === ME.id ? 15 : 0)); } catch(e){} }
+    seenSt = G.st; }
+  seenSeq = G.seq;
+  // 위 HUD
+  const playing = G.st === 'play', t = now();
+  $('top').style.display = playing ? '' : 'none';
+  if (playing){ const w = G.word || ''; $('word').innerHTML = esc(w.slice(0, -1)) + '<b>' + esc(w.slice(-1)) + '</b>'; const st = starts(w.slice(-1)); $('need').innerHTML = '다음 글자 ' + st.map(c=>'<span class="k">' + c + '</span>').join(' 또는 ');
+    const lim = limitFor(G.round), left = Math.max(0, G.tEnd - t), k = clamp(left/lim, 0, 1); $('barF').style.width = (k*100) + '%'; $('barF').style.background = k < .3 ? '#ff5a52' : k < .6 ? 'linear-gradient(90deg,#f2c94c,#ff8a4d)' : 'linear-gradient(90deg,#3ddc84,#f2c94c)';
+    const mine = G.turn === ME.id; $('turnTxt').textContent = mine ? '내 차례! (' + Math.ceil(left/1000) + '초)' : nameOf(G.turn) + '의 차례'; $('turnTxt').classList.toggle('me', mine);
+    const sec = Math.ceil(left/1000); if (sec !== tickS){ tickS = sec; if (sec <= 5 && sec > 0) sfx.tick(sec <= 2); }
+    board.visible = false; }
+  if (!playing) board.visible = true;
+  if (G.st === 'count') drawBoard(Math.max(0, Math.ceil((G.startAt - t)/1000)) + '', '곧 시작해요');
+  else if (G.st === 'end') drawBoard(G.win ? nameOf(G.win) : '—', '우승 🏆');
+  else drawBoard('…', MODE === 'online' ? '2명 이상 앉으면 시작해요' : '');
+  // 입력창
+  const myTurn = playing && G.turn === ME.id, inMine = playing && G.ids.includes(ME.id) && (G.lives[ME.id] || 0) > 0;
+  $('inp').style.display = MODE && (inMine || myTurn) ? '' : 'none'; $('wBtn').disabled = !myTurn; wIn.placeholder = myTurn ? (starts((G.word || ' ').slice(-1)).join('/') + '(으)로 시작…') : '다른 사람 차례';
+  if (myTurn && !myTurnPrev){ sfx.turn(); wIn.value = ''; if (MODE === 'solo' && PL.me) PL.me.typ = ''; NET.typ = ''; if (!isTouch) wIn.focus(); else { try { wIn.focus(); } catch(e){} } }
+  if (!myTurn && myTurnPrev){ wIn.value = ''; NET.typ = ''; if (PL.me) PL.me.typ = ''; }
+  myTurnPrev = myTurn;
+  // 기다리는 글
+  const wb = $('waitBox'); let wa = '', wbT = '';
+  if (MODE === 'online' && G.st !== 'play'){ const n = seatedNet().length; if (G.st === 'count'){ wa = Math.max(0, Math.ceil((G.startAt - t)/1000)) + '초 뒤 시작'; wbT = n + '명 참가'; } else if (G.st === 'idle'){ wa = '친구를 기다리는 중…'; wbT = '방 코드를 알려주세요 · ' + n + '/' + SEATS; } }
+  else if (MODE === 'online' && G.st === 'play' && !G.ids.includes(ME.id)){ wa = '관전 중'; wbT = '다음 판부터 참가해요'; }
+  else if (MODE === 'solo' && G.st === 'count'){ wa = Math.max(0, Math.ceil((G.startAt - t)/1000)) + ''; wbT = '곧 시작해요'; }
+  if (NET.on && NET.seat < 0){ wa = '자리가 꽉 찼어요'; wbT = '관전 중 — 자리가 나면 앉아요'; }
+  wb.style.display = wa ? 'block' : 'none'; $('waitA').textContent = wa; $('waitB').textContent = wbT; }
+
+// =====================================================================
+//  루프
+// =====================================================================
+let T = 0, shakeT = 0, camA = 0, uiT = 0; const lookAt = new THREE.Vector3(0, 1.8, 0);
+function frame(dt){ T += dt;
+  if (MODE === 'solo') soloTick(); else if (MODE === 'online') netTick(dt);
+  uiT -= dt; if (uiT <= 0){ uiT = .08; updateUI(); }
+  // 폭탄: 남은 시간이 적을수록 빨리 뛰고, 화살표는 지금 차례 쪽으로
+  const playing = G.st === 'play', t = now(); const left = playing ? Math.max(0, G.tEnd - t)/limitFor(G.round) : 1;
+  const beat = playing ? (1 + (1 - left)*6) : .6; const pulse = 1 + Math.max(0, Math.sin(T*beat*Math.PI*2))*(.04 + (1 - left)*.1); bomb.scale.setScalar(pulse); bomb.rotation.y += dt*.4;
+  bombBody.material.emissive.setRGB(playing ? (1 - left)*.5*Math.max(0, Math.sin(T*beat*Math.PI*2)) : 0, 0, 0);
+  spark.scale.setScalar(.35 + Math.random()*.25); sparkL.intensity = .4 + Math.random()*.5;
+  const ts = playing ? seatOf(G.turn) : -1; if (ts >= 0 && ts < SEATS){ let d = seatAng(ts) - arrow.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); arrow.rotation.y += d*Math.min(1, dt*8); } else arrow.rotation.y += dt*.6;
+  // 의자 · 아바타
+  for (let i=0;i<SEATS;i++){ const ch = chairs[i], so = seatObj[i]; const turn = playing && so && G.turn === so.id;
+    ch.glow.material.opacity += ((turn ? .85 : 0) - ch.glow.material.opacity)*Math.min(1, dt*8);
+    if (ch.out > 0){ ch.out += dt; const a = ch.a; const k = Math.min(1, ch.out*2); ch.g.position.set(ch.home.x + Math.sin(a)*k*.6, Math.sin(Math.min(1, ch.out*3)*Math.PI)*.5, ch.home.z + Math.cos(a)*k*.6); ch.g.rotation.x = -k*.5; }
+    if (so){ if (so.fly > 0){ so.fly += dt; so.vy -= 22*dt; so.g.position.y += so.vy*dt; const a = seatAng(i); so.g.position.x += Math.sin(a)*dt*5; so.g.position.z += Math.cos(a)*dt*5; so.g.rotation.x += so.spin*dt; if (so.fly > 2.2) so.g.visible = false; }
+      else if (so.limbs.armL){ const k = turn ? 1 : 0; so.limbs.armL.rotation.x = -.5 - k*(.6 + Math.sin(T*14)*.25); so.limbs.armR.rotation.x = -.5 - k*(.6 - Math.sin(T*14)*.25); so.g.position.y = so.base.y + (turn ? Math.abs(Math.sin(T*6))*.04 : 0); } } }
+  tickParts(dt);
+  // 카메라: 내 자리 뒤 위쪽에서 탁자를 내려다봄 (자리 없으면 천천히 돈다)
+  const ms = MODE ? seatOf(ME.id) : -1; let tgtA; if (ms >= 0 && ms < SEATS) tgtA = seatAng(ms); else tgtA = T*.08;
+  let d = tgtA - camA; d = Math.atan2(Math.sin(d), Math.cos(d)); camA += d*Math.min(1, dt*2);
+  const portrait = innerWidth < innerHeight, R = portrait ? 9.6 : 7.6, H = portrait ? 11.5 : 9.4;
+  camera.position.set(Math.sin(camA)*R, H, Math.cos(camA)*R);
+  const tgt = new THREE.Vector3(-Math.sin(camA)*.8, 1.3, -Math.cos(camA)*.8); if (ts >= 0 && ts < SEATS){ const a = seatAng(ts); tgt.x += Math.sin(a)*.9; tgt.z += Math.cos(a)*.9; } lookAt.lerp(tgt, Math.min(1, dt*3));
+  if (shakeT > 0){ shakeT -= dt; camera.position.x += (Math.random() - .5)*shakeT*.6; camera.position.y += (Math.random() - .5)*shakeT*.6; }
+  camera.lookAt(lookAt);
+  renderer.render(scene, camera); }
+let lastT = performance.now();
+function loop(n){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.max(0, (n - lastT)/1000)); lastT = n; frame(dt); }
+drawBoard('끝말잇기', '의자에 앉아 이어 가요');
+loadDict(ok=>{ $('loading').remove(); if (!ok) $('status').textContent = '사전을 못 불러와서 작은 단어장만 써요'; if (URL_ROOM){ $('roomIn').value = URL_ROOM; } });
+requestAnimationFrame(loop);
+// 탭이 뒤로 가도(애니메이션 멈춤) 진행은 계속되게
+setInterval(()=>{ if (document.hidden && MODE){ if (MODE === 'solo') soloTick(); else netTick(1); } }, 1000);
+window.__W = { get G(){ return G; }, PL, frame, checkWord, starts, candidates, hostSubmit, startSolo, get DICT(){ return DICT; }, BOTIDX, ME, NET, startOnline, now, seatObj };
+})();
+</script>
+<script>
+  (function(){ // PWA: 서비스 워커 (미리보기/iframe/file:// 에서는 건너뜀)
+    let inFrame = true; try { inFrame = window.self !== window.top; } catch(e){}
+    const okHost = /^https?:$/.test(location.protocol) && !/claudeusercontent|claude\.ai/.test(location.hostname);
+    if (!('serviceWorker' in navigator) || inFrame || !okHost) return;
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js', { updateViaCache:'none' }).catch(()=>{}); });
+  })();
+</script>
+</body>
+</html>
