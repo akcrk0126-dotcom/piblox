@@ -20,6 +20,19 @@
   #haltV.warn b { opacity:1; animation:hv .12s infinite alternate; } @keyframes hv { from { transform:translate(-3px,1px); } to { transform:translate(3px,-1px); } }
   #glitch { position:fixed; inset:0; pointer-events:none; z-index:8; opacity:0; background:repeating-linear-gradient(0deg, rgba(160,80,255,.18) 0 2px, transparent 2px 5px); mix-blend-mode:screen; }
   #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  /* 컷씬: 레터박스 · 자막 · 하얀 페이드 */
+  #lbT, #lbB { position:fixed; left:0; right:0; height:0; background:#000; z-index:30; pointer-events:none; transition:height .6s cubic-bezier(.6,0,.2,1); }
+  #lbT { top:0; } #lbB { bottom:0; }
+  body.cine #lbT, body.cine #lbB { height:12vh; }
+  body.cine #hud { display:none; }
+  #cine { position:fixed; left:0; right:0; bottom:15vh; z-index:31; text-align:center; pointer-events:none; opacity:0; transition:opacity .5s; text-shadow:0 2px 12px #000; }
+  #cine.on { opacity:1; }
+  #cine.day { text-shadow:none; } #cine.day span { color:#6a5a44; }
+  #cine b { display:block; font:900 min(8vw,54px) 'Noto Serif KR',serif; letter-spacing:.3em; color:#f2e6cc; }
+  #cine span { display:block; margin-top:8px; font:600 min(4vw,17px) 'Noto Sans KR',sans-serif; letter-spacing:.08em; color:rgba(240,228,205,.85); }
+  #skipC { position:fixed; right:18px; bottom:calc(12vh + 10px); z-index:31; font:700 11px sans-serif; letter-spacing:.12em; color:rgba(255,255,255,.4); display:none; pointer-events:none; }
+  body.cine #skipC { display:block; }
+  #whiteF { position:fixed; inset:0; z-index:29; background:#fff8ea; opacity:0; pointer-events:none; }
   #hud.off > *:not(#fsWrap) { display:none !important; }
   .tb { width:36px; height:36px; border-radius:8px; background:rgba(10,8,6,.55); border:1px solid rgba(255,240,210,.12); color:#e8e0d0; display:flex; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; font-size:15px; text-decoration:none; }
   #fsWrap { position:absolute; top:10px; left:10px; display:flex; gap:6px; z-index:40; }
@@ -108,8 +121,9 @@
 <div id="glitch"></div>
 <div id="holy"></div>
 <div id="haltV"><b>뒤로 돌아!</b></div>
+<div id="whiteF"></div><div id="lbT"></div><div id="lbB"></div><div id="cine"><b id="cineT"></b><span id="cineS"></span></div><div id="skipC">SPACE · 탭 — 건너뛰기</div>
 <div id="hud" class="off">
-  <div id="fsWrap"><a class="tb" href="hub.html" title="허브">⌂</a><button id="muteBtn" class="tb" type="button">🔊</button><button id="fsBtn" class="tb" type="button">⛶</button></div>
+  <div id="fsWrap"><a class="tb" href="hub.html" title="허브">⌂</a><button id="muteBtn" class="tb" type="button">🔊</button><button id="fsBtn" class="tb" type="button">⛶</button><button id="gfxBtn" class="tb" type="button" title="빛 번짐(블룸) 켜기/끄기">✨</button></div>
   <div id="door">DOOR 000</div>
   <div id="obj"></div>
   <div id="gold">🪙 0</div>
@@ -177,6 +191,13 @@
   document.addEventListener('click', function(ev){ var p=document.getElementById('errorPanel'); if (ev.target===p) p.classList.remove('show'); });
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/MaskPass.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
@@ -213,6 +234,28 @@ scene.add(camera);
 function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const hemi = new THREE.HemisphereLight(0x6a5a48, 0x0a0806, 0.22); scene.add(hemi);
+// ----- 후처리: 전등 빛 번짐(블룸) + 색보정 · 비네트 · 색수차 -----
+const GradeShader = { uniforms:{ tDiffuse:{ value:null }, uT:{ value:0 }, uCA:{ value:.0016 }, uRed:{ value:0 } },
+  vertexShader:'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:'uniform sampler2D tDiffuse; uniform float uT, uCA, uRed; varying vec2 vUv;\n' +
+    'void main(){ vec2 d = vUv - .5; float r2 = dot(d, d); vec2 o = d*uCA*(1.0 + r2*6.0);\n' +
+    ' vec3 c = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);\n' +
+    ' float l = dot(c, vec3(.299,.587,.114)); c = mix(vec3(l), c, .9);\n' +           // 살짝 바랜 색
+    ' c = c*vec3(1.04, 1.0, .92) + vec3(.012, .008, .0);\n' +                          // 따뜻한 호텔 톤, 검정은 살짝 들뜨게
+    ' c = mix(c, c*c*(3.0 - 2.0*c), .25);\n' +                                          // 대비
+    ' c = mix(c, vec3(l*1.2, l*.15, l*.1), uRed);\n' +
+    ' float n = fract(sin(dot(vUv*(uT + 1.0), vec2(12.9898, 78.233)))*43758.5453); c += (n - .5)*.025;\n' +   // 디더링 (어두운 데 띠 줄이기)
+    ' gl_FragColor = vec4(c, 1.0); }' };
+let composer = null, gradePass = null, bloomOn = LS.get('hotel_bloom', LOW ? '0' : '1') === '1';
+function setupPost(){ composer = null; gradePass = null; if (!bloomOn || !THREE.EffectComposer || !THREE.RenderPass || !THREE.ShaderPass || !THREE.UnrealBloomPass) return;
+  try { const pr = renderer.getPixelRatio(), w = Math.floor(innerWidth*pr), h = Math.floor(innerHeight*pr);
+    const rt = (renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) ? new THREE.WebGLMultisampleRenderTarget(w, h, { format:THREE.RGBAFormat }) : new THREE.WebGLRenderTarget(w, h, { format:THREE.RGBAFormat });
+    rt.texture.encoding = THREE.sRGBEncoding;   // sRGB로 담아 8비트에서도 어두운 곳 띠가 안 생기게
+    const c = new THREE.EffectComposer(renderer, rt); c.addPass(new THREE.RenderPass(scene, camera));
+    c.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(w/2, h/2), .55, .45, .78));
+    gradePass = new THREE.ShaderPass(GradeShader); c.addPass(gradePass); composer = c; } catch(e){ composer = null; } }
+function renderFrame(){ if (composer){ try { gradePass.uniforms.uT.value = (T % 10); composer.render(); return; } catch(e){ composer = null; } } renderer.render(scene, camera); }
+addEventListener('resize', ()=>{ if (composer) composer.setSize(innerWidth, innerHeight); });
 // 필름 노이즈
 (function(){ const c = $('grain'), g = c.getContext('2d'); const id = g.createImageData(256, 256); setInterval(()=>{ const d = id.data; for (let i=0;i<d.length;i+=4){ const v = Math.random()*255; d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255; } g.putImageData(id, 0, 0); c.style.transform = 'translate(' + (Math.random()*40 - 20) + 'px,' + (Math.random()*40 - 20) + 'px)'; }, 70); })();
 
@@ -246,6 +289,7 @@ const audio = (function(){
     slam(x, z){ const b = at(x, z, 1.4, .6); if (!b) return; noise(.35, .6, 'lowpass', 400, 0, b); tone('sine', 90, 40, .3, .4, 0, b); },
     drawer(){ noise(.35, .12, 'bandpass', 600, 0, 0, 1.5); noise(.08, .1, 'lowpass', 300, now() + .32); },
     wardrobe(){ tone('sawtooth', 160, 110, .3, .04); noise(.25, .1, 'bandpass', 500, 0, 0, 2); noise(.1, .15, 'lowpass', 250, now() + .25); },
+    bell(){ const t = now(); tone('sine', 2093, 2093, 1.8, .11, t); tone('sine', 5600, 5600, .7, .025, t); tone('triangle', 1047, 1047, 1.4, .035, t); noise(.03, .12, 'highpass', 5000, t); },
     coin(){ const t = now(); [1568, 2093, 2637].forEach((f, i)=>tone('sine', f, f, .35, .05, t + i*.05)); noise(.08, .05, 'highpass', 6000, t); },
     pick(){ tone('triangle', 660, 990, .12, .06); tone('sine', 1320, 1320, .2, .04, now() + .08); },
     lock(){ noise(.06, .2, 'highpass', 3000); tone('square', 300, 280, .06, .05); noise(.06, .2, 'highpass', 3000, now() + .12); },
@@ -635,6 +679,7 @@ function buildFinal(room, g){ const { L, H } = room;
   for (const sx of [-1, 1]){ const hg = new THREE.Group(); hg.position.set(sx*2.2, 0, L - .15); g.add(hg); B(hg, MAT.door, -sx*1.1, 2.4, 0, 2.2, 4.8, .12); room['gate' + sx] = hg; }
   const light = new THREE.Mesh(new THREE.PlaneGeometry(.12, 4.8), new THREE.MeshBasicMaterial({ map:glowT, transparent:true, blending:THREE.AdditiveBlending })); light.position.set(0, 2.4, L - .08); light.rotation.y = Math.PI; g.add(light); room.gapLight = light;
   B(g, MAT.trim, 0, 4.95, L - .12, 5, .3, .3); sign(g, 0, 5.6, L - .14, '출 구', '#aee0ff', Math.PI);
+  { const out = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.8), new THREE.MeshBasicMaterial({ color:0xfff3dc, fog:false })); out.position.set(0, 2.4, L - .04); out.rotation.y = Math.PI; g.add(out); }   // 문 너머 아침 햇살
   const hit = new THREE.Mesh(new THREE.BoxGeometry(4.4, 4.8, .3), new THREE.MeshBasicMaterial({ visible:false })); hit.position.set(0, 2.4, L - .2); g.add(hit); hit.userData.inter = { kind:'exit', label:'문을 밀고 나가기' }; interacts.push(hit); room.inters.push(hit);
   for (const z of [4, 10, 15]){ addLamp(room, g, -5, H - .5, z, 'ceil', 5); addLamp(room, g, 5, H - .5, z, 'ceil', 5); }
   for (let k=0;k<6;k++){ const x = k % 2 ? 7 : -7, z = 3 + Math.floor(k/2)*5; const c = new THREE.Mesh(new THREE.CylinderGeometry(.4, .45, H, 16), MAT.panel); c.position.set(x, H/2, z); g.add(c); addCol(room, x, z, .9, .9); }
@@ -742,10 +787,10 @@ const P = { x:0, z:2, yaw:Math.PI, pitch:0, vx:0, vz:0, crouch:0, hp:100, vitT:0
 const keys = {}; const mv = { x:0, y:0 };
 let locked = false;
 function wantLock(){ if (isTouch || !running || paused) return; try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } catch(e){} }
-document.addEventListener('pointerlockchange', ()=>{ locked = document.pointerLockElement === canvas; if (!locked && running && !paused && !P.dead && !isTouch && !winShown) setPause(true); });
-addEventListener('mousemove', e=>{ if (!locked) return; P.yaw -= e.movementX*.0022; P.pitch = clamp(P.pitch - e.movementY*.0022, -1.45, 1.45); });
+document.addEventListener('pointerlockchange', ()=>{ locked = document.pointerLockElement === canvas; if (!locked && running && !paused && !P.dead && !isTouch && !winShown && !CUT) setPause(true); });
+addEventListener('mousemove', e=>{ if (!locked || CUT) return; P.yaw -= e.movementX*.0022; P.pitch = clamp(P.pitch - e.movementY*.0022, -1.45, 1.45); });
 canvas.addEventListener('click', ()=>{ audio.unlock(); if (!locked) wantLock(); });
-addEventListener('keydown', e=>{ keys[e.code] = true; if (e.repeat) return; audio.unlock(); if (!running) return;
+addEventListener('keydown', e=>{ if (CUT) return; keys[e.code] = true; if (e.repeat) return; audio.unlock(); if (!running) return;
   if (e.code === 'KeyE') interact(); else if (e.code === 'KeyF') toggleLight(); else if (e.code === 'Digit1') useBandage(); else if (e.code === 'Digit2') useVitamin(); else if (e.code === 'KeyM') audio.toggleMute(); else if (e.code === 'Escape' && isTouch) setPause(!paused); });
 addEventListener('keyup', e=>{ keys[e.code] = false; });
 addEventListener('blur', ()=>{ for (const k in keys) keys[k] = false; });
@@ -846,7 +891,7 @@ function findAim(){ if (P.hidden){ aim = { hide:P.hidden, label:'나가기' }; r
   for (const h of hit){ if (blocked(camera.position.x, camera.position.z, h.point.x, h.point.z)) break; aim = Object.assign({ mesh:h.object, dist:h.distance }, h.object.userData.inter); break; } }
 function blocked(x0, z0, x1, z1){ const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz); if (L < .15) return false; const ex = x1 - dx/L*.12, ez = z1 - dz/L*.12;
   for (const b of nearCols()){ if (b.off || b.door || b.maxY < 1.3 || b.minY > 1.3) continue; let t0 = 0, t1 = 1; const ok = [[x0, ex - x0, b.minX, b.maxX], [z0, ez - z0, b.minZ, b.maxZ]].every(([o, d, mn, mx])=>{ if (Math.abs(d) < 1e-9) return o >= mn && o <= mx; let a = (mn - o)/d, c = (mx - o)/d; if (a > c){ const q = a; a = c; c = q; } t0 = Math.max(t0, a); t1 = Math.min(t1, c); return t0 <= t1; }); if (ok) return true; } return false; }
-function interact(){ if (!running || P.dead || paused) return; if (P.hidden){ unhide(); return; } findAim(); if (!aim) return; const a = aim;
+function interact(){ if (!running || P.dead || paused || CUT || T - cutEndT < .35) return; if (P.hidden){ unhide(); return; } findAim(); if (!aim) return; const a = aim;
   if (a.kind === 'door') tryDoor(a.door, true);
   else if (a.kind === 'drawer') toggleDrawer(a.drawer);
   else if (a.kind === 'hide') hideIn(a.hide);
@@ -972,7 +1017,7 @@ function makeSeek(){ const g = new THREE.Group(); const m = MAT.black;
   g.traverse(o=>{ if (o.isMesh) o.castShadow = !LOW; }); scene.add(g); return { g, la, ra, ll, rl }; }
 function startSeek(s){ const path = rushPath(Math.max(0, s - 1), Math.min(rooms.length - 1, s + 3)); ensureRooms(s + 4);
   const path2 = rushPath(Math.max(0, s - 1), s + 3); const m = makeSeek();
-  entity.seek = { s, path:path2, d:0, spd:5.5, t:0, m, snd:audio.loops.chase(), grabT:0, emerge:0 }; entity.seek.snd.set(.5); P.chaseBoost = true; audio.sfx.goo(P.x, P.z); msg('달려!', 1600); }
+  entity.seek = { s, path:path2, d:0, spd:5.5, t:0, m, snd:audio.loops.chase(), grabT:0, emerge:0 }; entity.seek.snd.set(.5); P.chaseBoost = true; seekCut(entity.seek); }
 function tickSeek(dt){ const e = entity.seek; if (!e) return; e.t += dt;
   if (P.room > e.s + 3){ endSeek(true); return; }
   const pp = pathProj(e.path, P.x, P.z); e.spd = Math.min(7.5, 5.2 + e.t*.25); if (e.t < 1.5) e.spd = 0;
@@ -1084,7 +1129,7 @@ function tickDust(dt){ const d = dust, p = d.pos; for (let k=0;k<d.N;k++){ const
 function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textContent = 'DOOR ' + String(i).padStart(3, '0');
   if (i > bestRoom){ bestRoom = i; LS.set('hotel_best', bestRoom); }
   if (r.type === 'library' || r.type === 'chase' || r.type === 'final'){ if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); }
-  if (r.type === 'library') giantAt = T + 2.5;
+  if (r.type === 'library'){ if (!entity.giant) startGiant(r); giantAt = 0; if (!P.cutLib){ P.cutLib = true; libraryCut(); } }
   if (r.type === 'halt'){ if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); startHalt(r); msg('…복도가 유난히 푸르다', 2200); }
   if (r.type === 'chase' && seekRooms.includes(i)) startSeek(i);
   if (r.type === 'eyes' && Math.random() < .6) audio.sfx.whisper();
@@ -1149,11 +1194,12 @@ function revive(){ if (!P.revive) return; P.revive = false; P.dead = false; P.hp
   renderSlots(); msg('🪬 부적의 힘으로 되살아났다', 2500); wantLock(); }
 function submitBest(){ try { if (window.MP && MP.submitScore) MP.submitScore('hotel_best', bestRoom, 'desc'); if (window.MP && MP.addXP) MP.addXP(10 + P.room*2); } catch(e){} }
 let winShown = false;
-function winGame(){ if (winShown) return; winShown = true; running = false; audio.sfx.win(); const r = rooms[FINAL]; if (r){ for (const sx of [-1, 1]){ const gt = r['gate' + sx]; if (gt) gt.rotation.y = sx*1.2; } }
+function winGame(){ if (winShown) return; winShown = true; running = false; audio.sfx.win(); if (document.pointerLockElement) document.exitPointerLock(); escapeCut(winGame2); }
+function winGame2(){ const r = rooms[FINAL]; if (r){ for (const sx of [-1, 1]){ const gt = r['gate' + sx]; if (gt) gt.rotation.y = sx*1.2; } }
   bestRoom = 100; LS.set('hotel_best', 100); const wins = (parseInt(LS.get('hotel_wins', '0'), 10) || 0) + 1; LS.set('hotel_wins', wins); addGold(100);
   if (document.pointerLockElement) document.exitPointerLock();
   const sec = Math.round((performance.now() - runStart)/1000); $('winS').innerHTML = '100개의 문을 지나 호텔을 빠져나왔다.<br>걸린 시간 <b>' + Math.floor(sec/60) + '분 ' + (sec % 60) + '초</b> · 금화 🪙 ' + (P.gold + 100) + ' (탈출 보너스 +100) · 탈출 ' + wins + '회';
-  setTimeout(()=>{ $('win').classList.add('show'); $('hud').classList.add('off'); }, 1200); submitBest(); try { if (window.MP && MP.submitScore) MP.submitScore('hotel_wins', wins, 'desc'); } catch(e){} }
+  $('win').classList.add('show'); $('hud').classList.add('off'); submitBest(); try { if (window.MP && MP.submitScore) MP.submitScore('hotel_wins', wins, 'desc'); } catch(e){} }
 
 // =====================================================================
 //  로비 / 상점
@@ -1169,10 +1215,80 @@ function renderLobby(){ $('rec').innerHTML = '최고 기록 <b>DOOR ' + String(b
 function msgL(t){ const e = $('rec'); const o = e.innerHTML; e.innerHTML = '<span style="color:#ff8a7a">' + t + '</span>'; setTimeout(renderLobby, 1400); }
 
 // =====================================================================
+//  컷씬 — 레터박스 + 자막 + 카메라 연출 (Space / 클릭 / 탭으로 건너뛰기)
+//  shot: { dur, p0, p1, l0, l1 (월드 좌표 [x,y,z]) | toPlayer, t, s, col, start(), on(k, dt), shake, lin }
+// =====================================================================
+let CUT = null, cutEndT = -9;
+const _m4 = new THREE.Matrix4(), _cv0 = new THREE.Vector3(), _cv1 = new THREE.Vector3(), _cup = new THREE.Vector3(0, 1, 0);
+const easeIO = k => k < .5 ? 2*k*k : 1 - Math.pow(-2*k + 2, 2)/2;
+const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0])*k, a[1] + (b[1] - a[1])*k, a[2] + (b[2] - a[2])*k];
+function eyePose(){ return { p:[P.x, 1.62 - P.crouch*.62, P.z], q:new THREE.Quaternion().setFromEuler(new THREE.Euler(P.pitch, P.yaw, 0, 'YXZ')) }; }
+function lookQ(p, l){ _m4.lookAt(_cv0.set(p[0], p[1], p[2]), _cv1.set(l[0], l[1], l[2]), _cup); return new THREE.Quaternion().setFromRotationMatrix(_m4); }
+function eyeLook(d){ const e = eyePose(); return [e.p[0] - Math.sin(P.yaw)*d, e.p[1] + Math.sin(P.pitch)*d, e.p[2] - Math.cos(P.yaw)*d]; }
+function setCineText(t, s, col){ const c = $('cine'); if (!t && !s){ c.classList.remove('on'); return; } $('cineT').textContent = t || ''; $('cineT').style.color = col || ''; $('cineS').textContent = s || ''; c.classList.remove('on'); void c.offsetWidth; c.classList.add('on'); }
+function playCut(shots, opt){ opt = opt || {}; for (const k in keys) keys[k] = false; mv.x = mv.y = 0; CUT = { shots, i:0, t:0, age:0, started:false, end:opt.end, skip:opt.skip !== false, ent:opt.ent };
+  document.body.classList.add('cine'); arms.visible = false; $('prompt').style.display = 'none'; }
+function endCut(){ const c = CUT; if (!c) return; CUT = null; cutEndT = T; document.body.classList.remove('cine'); setCineText(''); if (c.end) c.end(); }
+function skipCut(){ if (!CUT || !CUT.skip || CUT.age < .5) return; endCut(); }
+function tickCut(dt){ const c = CUT, sh = c.shots[c.i]; c.age += dt;
+  if (!c.started){ c.started = true; c.t = 0; if (sh.start) sh.start(); if (sh.t !== undefined || sh.s !== undefined) setCineText(sh.t, sh.s, sh.col); if (sh.toPlayer){ c.fromP = camera.position.toArray(); c.fromQ = camera.quaternion.clone(); } }
+  c.t += dt; const k = clamp(c.t/sh.dur, 0, 1), e = sh.lin ? k : easeIO(k);
+  if (sh.toPlayer){ const ep = eyePose(); camera.position.set(c.fromP[0] + (ep.p[0] - c.fromP[0])*e, c.fromP[1] + (ep.p[1] - c.fromP[1])*e, c.fromP[2] + (ep.p[2] - c.fromP[2])*e); camera.quaternion.copy(c.fromQ).slerp(ep.q, e); }
+  else { const p = lerp3(sh.p0, sh.p1 || sh.p0, e), l = lerp3(sh.l0, sh.l1 || sh.l0, e); camera.position.set(p[0], p[1], p[2]); camera.quaternion.copy(lookQ(p, l)); }
+  if (sh.shake){ camera.position.x += (Math.random() - .5)*sh.shake; camera.position.y += (Math.random() - .5)*sh.shake; }
+  audio.listener.x = camera.position.x; audio.listener.z = camera.position.z;
+  if (sh.on) sh.on(k, dt);
+  if (CUT === c && c.t >= sh.dur){ c.i++; c.started = false; if (c.i >= c.shots.length) endCut(); } }
+addEventListener('keydown', e=>{ if (CUT && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) skipCut(); }, true);
+addEventListener('pointerdown', ()=>{ if (CUT) skipCut(); }, true);
+
+// ----- 1. 체크인: 로비 소개 -----
+function introCut(){ const r = rooms[0]; if (!r) return; const W = (lx, y, lz)=>{ const q = L2W(r, lx, lz); return [q[0], y, q[1]]; };
+  const { xl, xr, L } = r, Hh = r.H || H0, bell = W(xl + 2.2, 1.16, 5), D = W(r.exLocal[0], 1.35, r.exLocal[1]), C = W(0, 1.6, L/2);
+  let rang = false;
+  playCut([
+    { dur:3.6, p0:W(xr - .8, 3.3, L - 1.2), p1:W(xr - 1.6, 2.8, L - 2.6), l0:W(xl + 1, .9, 1.5), l1:W(0, 1.1, 3), t:'새벽 3시 33분', s:'심야 호텔 · MIDNIGHT HOTEL' },
+    { dur:2.8, p0:W(xl + 3.4, 1.55, 4.1), p1:W(xl + 2.95, 1.38, 4.55), l0:bell, t:'', s:'…계세요?', on:k=>{ if (!rang && k > .3){ rang = true; audio.sfx.bell(); } } },
+    { dur:2.6, p0:W(1.3, 1.25, 4.4), p1:W(.9, 1.05, 5.2), l0:W(0, Hh - .5, 7), t:'', s:'불이… 깜빡인다', start:()=>{ for (const l of r.lamps) l.flick = 2.2; audio.sfx.flick && audio.sfx.flick(); } },
+    { dur:3.4, p0:[lerp(C[0], D[0], .15), 1.65, lerp(C[2], D[2], .15)], p1:[lerp(C[0], D[0], .72), 1.55, lerp(C[2], D[2], .72)], l0:D, t:'문은 100개', s:'출구는 맨 끝에 있다. 살아서 나가라.' },
+    { dur:1.0, toPlayer:true, t:'', s:'' },
+  ], { end:()=>{ msg('서랍을 뒤져 쓸 만한 걸 찾자', 2600); wantLock(); } }); }
+
+// ----- 2. 추적자 등장 -----
+function seekCut(e){ const pp = pathProj(e.path, P.x, P.z), d0 = Math.max(0, pp - 8); e.d = d0; const [x, z] = pathAt(e.path, d0), e0 = eyePose();
+  const dx = x - e0.p[0], dz = z - e0.p[2], dl = Math.hypot(dx, dz) || 1, ux = dx/dl, uz = dz/dl;
+  const cam0 = [e0.p[0] + ux*.6 - uz*.5, 1.25, e0.p[2] + uz*.6 + ux*.5], cam1 = [e0.p[0] + ux*1.6 - uz*.35, 1.1, e0.p[2] + uz*1.6 + ux*.35];
+  e.m.g.position.set(x, -3.3, z); e.m.g.rotation.y = Math.atan2(-ux, -uz);
+  const glow = { x, y:1.4, z, col:0xff5a4a, base:3.5, dist:9 }; extraLights.push(glow);
+  playCut([
+    { dur:1.1, p0:e0.p, l0:eyeLook(4), l1:[x, 1.3, z], t:'', s:'', start:()=>{ audio.sfx.goo(x, z); } },
+    { dur:2.8, p0:cam0, p1:cam1, l0:[x, 1.0, z], l1:[x, 2.7, z], t:'추적자', s:'뒤돌아보지 마. 달려!', col:'#ff5a4a', shake:.03,
+      on:(k)=>{ const q = easeIO(k); e.m.g.position.y = (q - 1)*3.3; glow.y = .3 + q*2.4; const ph = T*3; e.m.la.rotation.x = -.6 - Math.sin(ph)*.2; e.m.ra.rotation.x = -.6 + Math.sin(ph)*.2; if (Math.random() < .25) dripAt(x + rnd(-.3, .3), 2.4*q, z + rnd(-.3, .3)); } },
+    { dur:.7, toPlayer:true, t:'', s:'' },
+  ], { end:()=>{ const k = extraLights.indexOf(glow); if (k >= 0) extraLights.splice(k, 1); e.emerge = 1; e.t = 0; e.d = Math.max(0, pathProj(e.path, P.x, P.z) - 9); e.m.g.position.y = 0; msg('달려!', 1600); P.shake = .4; wantLock(); } }); }
+
+// ----- 3. 도서관 -----
+function libraryCut(){ const g = entity.giant; if (!g) return; const r = g.room, Hh = (r.H || H0) - .7, e0 = eyePose(), gx = g.x, gz = g.z, dx = e0.p[0] - gx, dz = e0.p[2] - gz;
+  g.m.g.rotation.y = Math.atan2(dx, dz);
+  const mid = [lerp(e0.p[0], gx, .55), Hh, lerp(e0.p[2], gz, .55)], glow = { x:gx, y:3.2, z:gz, col:0xffb070, base:14, dist:24 }; extraLights.push(glow);
+  playCut([
+    { dur:3.4, p0:[e0.p[0], 2.2, e0.p[2]], p1:[lerp(e0.p[0], gx, .15), Hh, lerp(e0.p[2], gz, .15)], l0:[gx, 2.6, gz], l1:[gx, 3.4, gz], t:'도서관', s:'그것은 앞을 보지 못한다. 하지만 아주 작은 소리도 듣는다.' },
+    { dur:2.6, p0:mid, p1:[lerp(e0.p[0], gx, .7), Hh - .3, lerp(e0.p[2], gz, .7)], l0:[gx, 3.6, gz], l1:[gx, 4.3, gz], t:'', s:'빛나는 책 5권을 찾아라 — 웅크리면(C) 발소리가 작아진다', shake:.025, start:()=>{ audio.sfx.roar(gx, gz); } },
+    { dur:1.1, toPlayer:true, t:'', s:'' },
+  ], { end:()=>{ const k = extraLights.indexOf(glow); if (k >= 0) extraLights.splice(k, 1); wantLock(); } }); }
+
+// ----- 4. 탈출 -----
+function escapeCut(done){ const r = rooms[FINAL]; if (!r){ done(); return; } const W = (lx, y, lz)=>{ const q = L2W(r, lx, lz); return [q[0], y, q[1]]; }, L = r.L, wf = $('whiteF'), e0 = eyePose();
+  playCut([
+    { dur:2.6, p0:e0.p, p1:W(0, 1.6, L - 2.4), l0:eyeLook(4), l1:W(0, 2.1, L + 4), t:'', s:'', on:k=>{ const q = easeIO(k); for (const sx of [-1, 1]){ const gt = r['gate' + sx]; if (gt) gt.rotation.y = sx*1.25*q; } wf.style.opacity = (q*.45).toFixed(3); } },
+    { dur:3.0, p0:W(0, 1.6, L - 2.4), p1:W(0, 1.75, L + 2.5), l0:W(0, 2.1, L + 4), l1:W(0, 2.6, L + 14), t:'탈출', s:'100개의 문을 지나, 아침 햇살 속으로', col:'#5a4630', start:()=>$('cine').classList.add('day'), on:k=>{ wf.style.opacity = (.45 + .55*Math.min(1, k*1.4)).toFixed(3); } },
+  ], { end:()=>{ $('cine').classList.remove('day'); wf.style.opacity = '1'; done(); setTimeout(()=>{ wf.style.transition = 'opacity 1.6s'; wf.style.opacity = '0'; setTimeout(()=>{ wf.style.transition = ''; }, 1700); }, 200); } }); }
+
+// =====================================================================
 //  게임 흐름
 // =====================================================================
 let running = false, paused = false, runStart = 0;
-function clearWorld(){ for (const r of rooms) if (r && !r.disposed) disposeRoom(r); rooms.length = 0; interacts.length = 0; extraLights.length = 0;
+function clearWorld(){ if (CUT){ CUT = null; document.body.classList.remove('cine'); setCineText(''); } for (const r of rooms) if (r && !r.disposed) disposeRoom(r); rooms.length = 0; interacts.length = 0; extraLights.length = 0;
   if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); if (entity.screech){ scene.remove(entity.screech.sp); entity.screech = null; } if (entity.seek) endSeek(false); if (entity.giant){ scene.remove(entity.giant.m.g); entity.giant = null; } endHalt(); for (const d of drips) scene.remove(d.m); drips.length = 0; }
 function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; rooms.push(makeRoom(rooms.length, prev)); } }
 function startRun(){ audio.unlock(); clearWorld(); winShown = false;
@@ -1181,7 +1297,7 @@ function startRun(){ audio.unlock(); clearWorld(); winShown = false;
   if (kit.flash){ P.light = { type:'flash', on:true, battery:100 }; } if (kit.band) P.bandage += 2; if (kit.vit) P.vitamin += 1; if (kit.rev) P.revive = true; if (kit.cross) P.cross = 1; kit = {}; LS.set('hotel_kit', '{}');
   ensureRooms(2); $('door').textContent = 'DOOR 000'; renderSlots(); setObj();
   $('lobby').classList.remove('show'); $('dead').classList.remove('show'); $('win').classList.remove('show'); $('pause').classList.remove('show'); $('hud').classList.remove('off'); $('hide').classList.remove('on');
-  running = true; paused = false; runStart = performance.now(); wantLock(); msg('심야 호텔에 오신 걸 환영합니다', 3000); }
+  running = true; paused = false; runStart = performance.now(); P.cutLib = false; wantLock(); introCut(); }
 function toLobby(){ running = false; paused = false; clearWorld(); $('pause').classList.remove('show'); $('dead').classList.remove('show'); $('win').classList.remove('show'); $('hud').classList.add('off'); $('lobby').classList.add('show'); renderLobby(); if (document.pointerLockElement) document.exitPointerLock(); }
 function setPause(v){ if (!running || P.dead) return; paused = v; $('pause').classList.toggle('show', v); if (!v) wantLock(); }
 $('start').addEventListener('click', startRun); $('dAgain').addEventListener('click', startRun); $('wAgain').addEventListener('click', startRun); $('dLobby').addEventListener('click', toLobby); $('pLobby').addEventListener('click', ()=>{ submitBest(); toLobby(); }); $('pResume').addEventListener('click', ()=>setPause(false)); $('dRevive').addEventListener('click', revive);
@@ -1286,6 +1402,8 @@ function updateRoom(){ let cur = P.room; for (let i = Math.max(0, P.room - 1); i
   if (cur !== P.room){ P.room = cur; if (cur > P.maxRoom) onEnterRoom(cur); ensureRooms(cur + 2); for (let i=0;i<cur - 2;i++){ const r = rooms[i]; if (r && !r.disposed) disposeRoom(r); } setObj(); } }
 function frame(dt){
   T += dt;
+  if (CUT){ tickCut(dt); updateAnims(dt); updateLights(dt); tickDust(dt); tickFx(dt); tickDrips(dt); updateGhosts(dt); netSend(dt); if (!noRender) renderFrame(); return; }
+  if (gradePass){ const tr = entity.seek ? .16 : (running && P.hp < 35 ? .1 : 0); gradePass.uniforms.uRed.value += (tr - gradePass.uniforms.uRed.value)*Math.min(1, dt*3); }
   if (running && !paused && !P.dead){
     const spd = stepPlayer(dt); updateRoom();
     P.invT = Math.max(0, P.invT - dt);
@@ -1302,13 +1420,14 @@ function frame(dt){
     camera.position.set(Math.sin(T*.05)*1.5, 1.6, 6 + Math.cos(T*.05)); camera.rotation.set(0, Math.PI + Math.sin(T*.1)*.3, 0); updateLights(dt); tickDust(dt); }
   else if (P.dead){ tickFx(dt); }
   updateGhosts(dt); netSend(dt);
-  if (!noRender) renderer.render(scene, camera); }
+  if (!noRender) renderFrame(); }
 let noRender = false;
 let lastT = performance.now();
 function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.max(0, (now - lastT)/1000)); lastT = now; frame(dt); }
 // 로비 배경용 방
-ensureRooms(1); renderLobby(); requestAnimationFrame(loop);
-window.__H = { NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
+ensureRooms(1); renderLobby(); setupPost(); requestAnimationFrame(loop);
+$('gfxBtn').style.opacity = bloomOn ? 1 : .45; $('gfxBtn').addEventListener('click', ()=>{ bloomOn = !bloomOn; LS.set('hotel_bloom', bloomOn ? '1' : '0'); setupPost(); $('gfxBtn').style.opacity = bloomOn ? 1 : .45; msg(bloomOn ? '빛 번짐 켜짐' : '빛 번짐 꺼짐 (가벼움)', 1400); });
+window.__H = { get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
 })();
 </script>
 <script>
