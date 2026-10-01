@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>내 게임 (piblox 스타터 키트)</title>
+<style>
+  /* ---- 기본 화면: 꽉 찬 캔버스 + HUD ---- */
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#9ad8ff; font-family:'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif; color:#fff; user-select:none; -webkit-user-select:none; touch-action:none; }
+  canvas#c{ display:block; width:100%; height:100%; }
+  .ol{ text-shadow:0 2px 0 rgba(0,0,0,.45), 0 0 6px rgba(0,0,0,.35); }
+  #hud{ position:fixed; inset:0; pointer-events:none; }
+  #title{ position:absolute; top:12px; left:50%; transform:translateX(-50%); font-size:22px; font-weight:900; }
+  #info{ position:absolute; top:12px; right:12px; padding:6px 12px; border-radius:8px; background:rgba(18,18,21,.6); font-size:13px; font-weight:700; }
+  #msg{ position:absolute; left:50%; top:30%; transform:translateX(-50%); font-size:30px; font-weight:900; opacity:0; transition:opacity .25s; white-space:nowrap; }
+  #keys{ position:absolute; left:50%; bottom:8px; transform:translateX(-50%); font-size:11px; font-weight:700; opacity:.75; white-space:nowrap; }
+  /* ---- 모바일: 왼쪽 조이스틱 · 오른쪽 시점 드래그 · 점프 버튼 ---- */
+  #joy{ position:absolute; left:0; bottom:0; width:45%; height:60%; pointer-events:auto; }
+  #look{ position:absolute; right:0; top:0; width:55%; height:100%; pointer-events:auto; }
+  #joyB{ position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); display:none; }
+  #joyS{ position:absolute; left:31px; top:31px; width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.85); }
+  #bJump{ position:absolute; right:24px; bottom:40px; width:78px; height:78px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(30,30,30,.45); display:flex; align-items:center; justify-content:center; font-size:28px; pointer-events:auto; }
+  body:not(.touch) #joy, body:not(.touch) #look, body:not(.touch) #bJump{ display:none; }
+  body.touch #keys{ display:none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="title" class="ol">🎮 내 게임</div>
+  <div id="info">불러오는 중…</div>
+  <div id="msg" class="ol"></div>
+  <div id="keys" class="ol">WASD 이동 · Space 점프 · 오른쪽 드래그 시점 · 휠 줌 · / 채팅 · . 이모트</div>
+  <div id="joy"><div id="joyB"><div id="joyS"></div></div></div>
+  <div id="look"></div>
+  <div id="bJump">⬆</div>
+</div>
+
+<script>
+/* =====================================================================
+   piblox 스타터 키트
+   ---------------------------------------------------------------------
+   이 파일 하나로 시작해요. 이미 들어 있는 것:
+   · 로블록스식 아바타 (허브에서 꾸민 그대로) · 걷기 애니메이션 · 이름표
+   · 3인칭 카메라 · WASD/점프 · 모바일 조이스틱 · 블록 충돌
+   · 멀티플레이 (다른 사람 위치/아바타) · 채팅 · 이모트  ← multiplayer.js 가 해 줌
+   직접 고칠 곳은 아래 "🛠 여기서부터 내 게임" 부분이에요.
+   자세한 설명: README.md (사람용) · CLAUDE.md (AI용)
+   ===================================================================== */
+
+// ---- ① 설정: 이 두 줄만 내 게임에 맞게 바꾸세요 ----
+const GAME_ID = 'mygame';                 // 영어 소문자/숫자만. 멀티 방 이름 앞에 붙어서 다른 게임과 안 섞여요
+const GAME_TITLE = '🎮 내 게임';
+// piblox 사이트 주소 (multiplayer.js 를 여기서 불러와요). 주인이 알려준 주소로 바꾸세요.
+const PIBLOX_SITE = 'https://akcrk0126-dotcom.github.io/piblox/';
+
+// ---- ② 필요한 스크립트를 순서대로 불러오기 (three.js → firebase → multiplayer.js) ----
+function loadScript(src){ return new Promise((ok, no)=>{ const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
+(async ()=>{
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
+  try { for (const f of ['app', 'auth', 'database']) await loadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-' + f + '.js'); } catch(e){ window.__mpFail = true; }
+  // piblox 사이트에서 먼저 받고, 안 되면(같은 저장소 안에서 테스트할 때) 바로 위 폴더에서
+  try { await loadScript(PIBLOX_SITE + 'multiplayer.js'); } catch(e){ try { await loadScript('../multiplayer.js'); } catch(e2){ window.__mpFail = true; } }
+  startGame();
+})();
+
+function startGame(){
+'use strict';
+const THREE = window.THREE;
+const MP = window.MP || null;                       // 없으면 혼자 하기 모드
+const mpOn = !!(MP && MP.isConfigured && MP.isConfigured() && !window.__mpFail && window.firebase);
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b)=> v < a ? a : v > b ? b : v, lerp = (a, b, t)=> a + (b - a)*t;
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0; if (isTouch) document.body.classList.add('touch');
+$('title').textContent = GAME_TITLE; document.title = GAME_TITLE.replace(/^\S+\s/, '') || document.title;
+
+// =====================================================================
+//  렌더러 · 장면 · 빛
+// =====================================================================
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:!isTouch });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2)); renderer.shadowMap.enabled = !isTouch; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (MP && MP.hookRenderer) MP.hookRenderer(renderer);   // 이모트가 이 렌더러에서도 보이게 (이미 걸려 있으면 아무 일 없음)
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9ad8ff); scene.fog = new THREE.Fog(0x9ad8ff, 80, 260);
+const camera = new THREE.PerspectiveCamera(66, innerWidth/innerHeight, 0.1, 600);
+function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
+resize(); addEventListener('resize', resize);
+scene.add(new THREE.HemisphereLight(0xe8f4ff, 0x7a8a6a, 0.7));
+const sun = new THREE.DirectionalLight(0xfff4e0, 0.85); sun.castShadow = !isTouch; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-60, right:60, top:60, bottom:-60, near:1, far:200 }); scene.add(sun); scene.add(sun.target);
+
+// =====================================================================
+//  🧱 기본 에셋: 재질 · 블록 · 충돌 (로블록스 스터드 느낌)
+// =====================================================================
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; }
+const TEX = {
+  stud: canvasTex(128, 128, (g, w, h)=>{ g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); for (let i=0;i<2;i++) for (let j=0;j<2;j++){ g.fillStyle = 'rgba(0,0,0,.10)'; g.beginPath(); g.arc(32 + i*64, 34 + j*64, 18, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(30 + i*64, 30 + j*64, 16, 0, 7); g.fill(); } g.strokeStyle = 'rgba(0,0,0,.12)'; g.lineWidth = 3; g.strokeRect(0, 0, w, h); }),
+  stripe: canvasTex(128, 128, (g, w, h)=>{ for (let i=0;i<8;i++){ g.fillStyle = i % 2 ? '#fff' : '#d8d8d8'; g.fillRect(0, i*16, w, 16); } }),
+  wood: canvasTex(256, 256, (g, w, h)=>{ for (let y=0;y<h;y+=32){ let x = -Math.random()*120; while (x < w){ const L = 90 + Math.random()*130, v = 212 + Math.random()*40|0; g.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; g.fillRect(x, y, L, 32); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x, y, 2, 32); x += L; } } }),
+};
+const matCache = new Map();
+// mat(색, 무늬, 반복): 무늬는 'stud' | 'stripe' | 'wood' | null
+function mat(color, tex, rep){ const key = color + '|' + tex + '|' + rep; if (matCache.has(key)) return matCache.get(key); const o = { color }; if (tex){ o.map = TEX[tex].clone(); o.map.needsUpdate = true; o.map.repeat.set(rep || 1, rep || 1); } const m = new THREE.MeshLambertMaterial(o); matCache.set(key, m); return m; }
+// 충돌 상자 목록: 플레이어는 이 상자들 위를 걷고 옆으로는 막혀요
+const colliders = [];
+// block(x, y, z, 가로, 높이, 세로, 재질, 옵션) → 메쉬. y 는 "가운데" 높이예요. 옵션: { nocollide, kill, shadow:false }
+function block(x, y, z, w, h, d, material, opt){ opt = opt || {};
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material || mat(0xa3a2a5, 'stud', 2)); m.position.set(x, y, z); m.castShadow = opt.shadow !== false; m.receiveShadow = true; scene.add(m);
+  if (!opt.nocollide){ m.userData.col = { minX:x - w/2, maxX:x + w/2, minY:y - h/2, maxY:y + h/2, minZ:z - d/2, maxZ:z + d/2, kill:!!opt.kill, mesh:m }; colliders.push(m.userData.col); }
+  return m; }
+function removeBlock(m){ scene.remove(m); const i = colliders.indexOf(m.userData.col); if (i >= 0) colliders.splice(i, 1); }
+// 간판(글자 판): sign('글자', x, y, z, 회전Y)
+function sign(text, x, y, z, ry, bg){ const t = canvasTex(512, 128, (g, w, h)=>{ g.fillStyle = bg || '#22262e'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = '900 60px Pretendard, "Malgun Gothic", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w/2, h/2 + 4); });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), new THREE.MeshBasicMaterial({ map:t, side:THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry || 0; scene.add(m); return m; }
+const BRICK = { gray:0xa3a2a5, red:0xc4281c, blue:0x0d69ac, yellow:0xf5cd30, green:0x287f35, white:0xf2f3f3, black:0x1b2a35, orange:0xda8541, purple:0x6b327c };
+
+// =====================================================================
+//  🧍 아바타 (허브에서 꾸민 그대로) — multiplayer.js 의 MP.buildAvatar 를 써요
+// =====================================================================
+function fallbackAvatar(){ const g = new THREE.Group(), S = 0.62; const mk = (w, h, d, c, x, y)=>{ const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color:c })); m.position.set(x, y, 0); g.add(m); return m; };
+  mk(S, 2*S, S, 0x287F35, -S/2, S); mk(S, 2*S, S, 0x287F35, S/2, S); mk(2*S, 2*S, S, 0x0B62C4, 0, 3*S); mk(S, 2*S, S, 0xF5CD30, -1.5*S, 3*S); mk(S, 2*S, S, 0xF5CD30, 1.5*S, 3*S); mk(2*S, S, S, 0xF5CD30, 0, 4.5*S); return g; }
+// 팔다리를 어깨/엉덩이 기준으로 돌릴 수 있게 감싸기 (자식 순서: 왼다리, 오른다리, 몸통, 왼팔, 오른팔, 머리)
+function pivotize(g){ const ms = g.children.filter(o=>o.isMesh); if (ms.length < 6) return {}; const out = {};
+  ['legL', 'legR', null, 'armL', 'armR'].forEach((n, i)=>{ if (!n) return; const m = ms[i], h = m.geometry.parameters.height; const pv = new THREE.Group(); pv.position.set(m.position.x, m.position.y + h/2, m.position.z); g.remove(m); m.position.set(0, -h/2, 0); pv.add(m); g.add(pv); out[n] = pv; }); return out; }
+function makeAvatar(loadout){ let g = null; try { if (MP && MP.buildAvatar) g = MP.buildAvatar(loadout || {}); } catch(e){ g = null; } if (!g) g = fallbackAvatar(); g.traverse(o=>{ if (o.isMesh) o.castShadow = true; }); return { g, limbs:pivotize(g) }; }
+function nameTag(text){ const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d'); x.font = '800 30px Pretendard, "Malgun Gothic", sans-serif'; x.textAlign = 'center'; x.lineWidth = 6; x.strokeStyle = 'rgba(0,0,0,.75)'; x.strokeText(String(text).slice(0, 14), 128, 42); x.fillStyle = '#fff'; x.fillText(String(text).slice(0, 14), 128, 42);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(c), depthTest:false, transparent:true })); s.scale.set(2.8, 0.7, 1); s.position.y = 4.2; s.renderOrder = 5; return s; }
+// 걷기/점프 애니메이션 (moving: 걷는 중, air: 공중)
+function animLimbs(a, dt, moving, air){ const L = a.limbs; if (!L.legL) return;
+  if (air){ L.armL.rotation.x = lerp(L.armL.rotation.x, -2.6, .3); L.armR.rotation.x = lerp(L.armR.rotation.x, -2.6, .3); L.legL.rotation.x = .3; L.legR.rotation.x = -.2; }
+  else if (moving){ a.walkT = (a.walkT || 0) + dt*12; const s = Math.sin(a.walkT)*.8; L.armL.rotation.x = s; L.armR.rotation.x = -s; L.legL.rotation.x = -s; L.legR.rotation.x = s; }
+  else for (const k of ['armL', 'armR', 'legL', 'legR']) L[k].rotation.x *= .8; }
+
+// =====================================================================
+//  🏃 플레이어 물리 (이동 · 점프 · 중력 · 상자 충돌)
+// =====================================================================
+const RAD = 0.62, CHAR_H = 3.4, WALK = 16, JUMP = 34, GRAVITY = -110, STEP = 0.8;
+const me = { x:0, y:0.05, z:0, vy:0, grounded:true, facing:Math.PI, moving:false, jumpBuf:0, coyote:0 };
+let spawnPoint = { x:0, y:0.1, z:0 };
+function groundAt(x, z, y){ let best = -1e9; for (const b of colliders){ if (x + .35 < b.minX || x - .35 > b.maxX || z + .35 < b.minZ || z - .35 > b.maxZ) continue; if (b.maxY <= y + STEP && b.maxY > best) best = b.maxY; } return best; }
+function touching(p){ for (const b of colliders){ if (p.x + RAD > b.minX && p.x - RAD < b.maxX && p.z + RAD > b.minZ && p.z - RAD < b.maxZ && p.y < b.maxY + .05 && p.y + CHAR_H > b.minY) return b; } return null; }
+function collide(p){ for (const b of colliders){ if (b.maxY <= p.y + STEP*.99 || b.minY >= p.y + CHAR_H) continue; const qx = clamp(p.x, b.minX, b.maxX), qz = clamp(p.z, b.minZ, b.maxZ), dx = p.x - qx, dz = p.z - qz, d2 = dx*dx + dz*dz; if (d2 >= RAD*RAD) continue;
+    if (d2 > 1e-9){ const d = Math.sqrt(d2), k = (RAD - d)/d; p.x += dx*k; p.z += dz*k; } else { const l = p.x - b.minX, r = b.maxX - p.x, u = p.z - b.minZ, dn = b.maxZ - p.z, m = Math.min(l, r, u, dn); if (m === l) p.x = b.minX - RAD; else if (m === r) p.x = b.maxX + RAD; else if (m === u) p.z = b.minZ - RAD; else p.z = b.maxZ + RAD; } } }
+function stepPlayer(p, mx, mz, dt){ p.moving = Math.hypot(mx, mz) > .05; p.x += mx*WALK*dt; p.z += mz*WALK*dt;
+  if (p.grounded){ const g = groundAt(p.x, p.z, p.y); if (g > p.y + .05 && g <= p.y + STEP) p.y = g; }
+  collide(p); p.jumpBuf = Math.max(0, p.jumpBuf - dt); p.coyote = p.grounded ? .12 : Math.max(0, p.coyote - dt);
+  if (p.jumpBuf > 0 && (p.grounded || p.coyote > 0)){ p.vy = JUMP; p.grounded = false; p.jumpBuf = 0; p.coyote = 0; }
+  const prevY = p.y; let ny = p.y + p.vy*dt + .5*GRAVITY*dt*dt; p.vy = Math.max(-90, p.vy + GRAVITY*dt);
+  if (p.vy <= 0){ const g = groundAt(p.x, p.z, prevY + .01); if (g > -1e8 && ny <= g){ ny = g; p.vy = 0; p.grounded = true; } else p.grounded = false; }
+  else { for (const b of colliders){ if (prevY + CHAR_H <= b.minY + .05 && ny + CHAR_H >= b.minY && p.x + .4 > b.minX && p.x - .4 < b.maxX && p.z + .4 > b.minZ && p.z - .4 < b.maxZ){ ny = b.minY - CHAR_H; p.vy = 0; } } p.grounded = false; }
+  p.y = ny; }
+function respawn(){ Object.assign(me, { x:spawnPoint.x, y:spawnPoint.y, z:spawnPoint.z, vy:0 }); }
+
+// =====================================================================
+//  🎮 입력 (키보드 · 마우스 · 터치)
+// =====================================================================
+const keys = {}, mv = { x:0, y:0 };
+let camYaw = Math.PI, camPitch = .42, camDist = 15, rDrag = false, lastM = { x:0, y:0 };
+const chatting = ()=> !!window.MPChatOpen;
+addEventListener('keydown', e=>{ if (chatting()) return; keys[e.code] = true; if (e.code === 'Space'){ e.preventDefault(); me.jumpBuf = .15; } });
+addEventListener('keyup', e=>{ keys[e.code] = false; });
+addEventListener('blur', ()=>{ for (const k in keys) keys[k] = false; });
+addEventListener('contextmenu', e=>e.preventDefault());
+addEventListener('mousedown', e=>{ if (e.button === 2){ rDrag = true; lastM = { x:e.clientX, y:e.clientY }; } });
+addEventListener('mouseup', e=>{ if (e.button === 2) rDrag = false; });
+addEventListener('mousemove', e=>{ if (!rDrag) return; camYaw -= (e.clientX - lastM.x)*.005; camPitch = clamp(camPitch + (e.clientY - lastM.y)*.0035, -.6, 1.3); lastM = { x:e.clientX, y:e.clientY }; });
+addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*1.4, 4, 30); }, { passive:true });
+let joyId = null, joyC = { x:0, y:0 }, lookId = null, lookP = { x:0, y:0 };
+$('joy').addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; joyId = t.identifier; joyC = { x:t.clientX, y:t.clientY }; const b = $('joyB'); b.style.display = 'block'; b.style.left = (t.clientX - 55) + 'px'; b.style.top = (t.clientY - 55) + 'px'; }, { passive:false });
+$('joy').addEventListener('touchmove', e=>{ e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === joyId){ let dx = t.clientX - joyC.x, dy = t.clientY - joyC.y; const d = Math.min(55, Math.hypot(dx, dy)), a = Math.atan2(dy, dx); dx = Math.cos(a)*d; dy = Math.sin(a)*d; $('joyS').style.left = (31 + dx) + 'px'; $('joyS').style.top = (31 + dy) + 'px'; mv.x = dx/55; mv.y = dy/55; } }, { passive:false });
+$('look').addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; lookId = t.identifier; lookP = { x:t.clientX, y:t.clientY }; }, { passive:false });
+$('look').addEventListener('touchmove', e=>{ e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === lookId){ camYaw -= (t.clientX - lookP.x)*.006; camPitch = clamp(camPitch + (t.clientY - lookP.y)*.004, -.6, 1.3); lookP = { x:t.clientX, y:t.clientY }; } }, { passive:false });
+addEventListener('touchend', e=>{ for (const t of e.changedTouches){ if (t.identifier === joyId){ joyId = null; mv.x = mv.y = 0; $('joyB').style.display = 'none'; } if (t.identifier === lookId) lookId = null; } });
+$('bJump').addEventListener('touchstart', e=>{ e.preventDefault(); me.jumpBuf = .15; }, { passive:false });
+function readMove(){ let ix = mv.x, iy = mv.y; if (!chatting()){ if (keys.KeyW || keys.ArrowUp) iy = -1; if (keys.KeyS || keys.ArrowDown) iy = 1; if (keys.KeyA || keys.ArrowLeft) ix = -1; if (keys.KeyD || keys.ArrowRight) ix = 1; }
+  const fx = Math.sin(camYaw), fz = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw); let mx = fx*(-iy) + rx*ix, mz = fz*(-iy) + rz*ix; const l = Math.hypot(mx, mz); if (l > 1){ mx /= l; mz /= l; } return [mx, mz]; }
+
+// =====================================================================
+//  🌐 멀티플레이 (다른 사람 보이기) — 방 이름은 GAME_ID 로 시작해서 다른 게임과 안 섞여요
+// =====================================================================
+const ROOM = 'ext_' + GAME_ID + '_' + ((()=>{ try { return (new URLSearchParams(location.search).get('room') || 'public').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'PUBLIC'; } catch(e){ return 'PUBLIC'; } })());
+const others = new Map();      // uid → { a:{g,limbs}, x,y,z,ry, tx,ty,tz,try, an, name, loKey }
+let myName = '나', myActor = null;
+try { if (MP) myName = MP.getDisplayName() || '나'; } catch(e){}
+function buildMe(lo){ if (myActor) scene.remove(myActor.g); myActor = makeAvatar(lo); scene.add(myActor.g); }
+buildMe(MP && MP.getLocalAvatarLoadout ? MP.getLocalAvatarLoadout() : null);
+function onPlayers(players){ const seen = new Set();
+  for (const uid in players || {}){ const p = players[uid]; if (!p) continue; seen.add(uid); let o = others.get(uid); const loKey = JSON.stringify(p.avatarLoadout || {});
+    if (!o || o.loKey !== loKey){ if (o) scene.remove(o.a.g); const a = makeAvatar(p.avatarLoadout || {}); a.g.add(nameTag(p.name || '플레이어')); scene.add(a.g); o = Object.assign(o || { x:p.x || 0, y:p.y || 0, z:p.z || 0, ry:p.ry || 0 }, { a, loKey }); others.set(uid, o); }
+    Object.assign(o, { tx:+p.x || 0, ty:+p.y || 0, tz:+p.z || 0, try:+p.ry || 0, an:p.an | 0, name:p.name, data:p.d || null }); }
+  for (const [uid, o] of others) if (!seen.has(uid)){ scene.remove(o.a.g); others.delete(uid); }
+  onOthersChanged(); }
+if (mpOn){ MP.onPlayersUpdate(onPlayers);
+  MP.init(ROOM, (uid, err)=>{ if (err || !uid) return; try { MP.setPresence(GAME_ID, ROOM); } catch(e){}
+    if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l) buildMe(l); }); }); }
+let sendT = 0, lastSent = '';
+// 내 상태 보내기 (0.1초마다). extra 에 넣은 값은 다른 사람의 others.get(uid).data 로 받아요
+function netSend(dt, extra){ if (!mpOn) return; sendT -= dt; if (sendT > 0) return; sendT = .1;
+  const d = { x:+me.x.toFixed(2), y:+me.y.toFixed(2), z:+me.z.toFixed(2), ry:+me.facing.toFixed(2), an:!me.grounded ? 2 : me.moving ? 1 : 0, d:extra || null };
+  const s = JSON.stringify(d); if (s === lastSent) return; lastSent = s; MP.update(d); }
+
+// =====================================================================
+//  공용 화면 도우미
+// =====================================================================
+let msgT = null; function showMsg(text, ms){ const e = $('msg'); e.textContent = text; e.style.opacity = 1; clearTimeout(msgT); msgT = setTimeout(()=>{ e.style.opacity = 0; }, ms || 1800); }
+function setInfo(html){ $('info').innerHTML = html; }
+
+/* #####################################################################
+   🛠 여기서부터 내 게임  —  아래 4개 함수만 고쳐도 게임이 돼요
+   · buildWorld()        : 맵 만들기 (block(...) 으로 블록 쌓기, spawnPoint 정하기)
+   · gameTick(dt, t)     : 매 프레임 실행 (규칙, 점수, 함정 등)
+   · onOthersChanged()   : 다른 플레이어가 들어오거나 나갈 때
+   · myExtraData()       : 다른 사람에게 같이 보낼 내 정보 (점수 등, 작게!)
+   ##################################################################### */
+let coins = 0; const coinMeshes = [];
+function buildWorld(){
+  // 바닥 (회색 스터드 판)
+  block(0, -1, 0, 120, 2, 120, mat(BRICK.green, 'stud', 60));
+  sign(GAME_TITLE, 0, 7, -14, 0, '#c4281c');
+  // 예시: 계단 장애물 코스
+  const cols = [BRICK.red, BRICK.blue, BRICK.yellow, BRICK.green, BRICK.orange, BRICK.purple];
+  for (let i=0;i<8;i++) block(-12 + i*3.2, .5 + i*1.1, -26 - (i % 2)*2, 2.6, 1 + i*2.2, 2.6, mat(cols[i % cols.length], 'stud', 1));
+  // 예시: 밟으면 처음으로 돌아가는 빨간 블록 (kill:true)
+  block(14, .05, -10, 6, .2, 6, mat(0xff3030), { kill:true });
+  // 예시: 동전 10개 — 줍기는 gameTick 에서
+  for (let i=0;i<10;i++){ const a = i/10*Math.PI*2, m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .16, 20), new THREE.MeshLambertMaterial({ color:0xffd23a, emissive:0x6a4a00 })); m.rotation.x = Math.PI/2; m.position.set(Math.cos(a)*18, 1.3, Math.sin(a)*18); scene.add(m); coinMeshes.push(m); }
+  spawnPoint = { x:0, y:.1, z:8 };
+}
+function gameTick(dt, t){
+  // 동전 돌리기 + 줍기
+  for (const m of coinMeshes){ if (!m.visible) continue; m.rotation.z += dt*3; if (Math.hypot(me.x - m.position.x, me.z - m.position.z) < 1.5 && Math.abs(me.y + 1.2 - m.position.y) < 2){ m.visible = false; coins++; showMsg('🪙 +1', 700); } }
+  // 빨간 블록을 밟았거나 아래로 떨어지면 처음으로
+  const b = touching(me); if (b && b.kill){ showMsg('💥 으악!', 1200); respawn(); }
+  if (me.y < -40) respawn();
+  setInfo('🪙 ' + coins + ' · 👥 ' + (others.size + 1) + '명' + (mpOn ? '' : ' (혼자)'));
+}
+function onOthersChanged(){ /* 예: 사람 수에 따라 게임 시작 */ }
+function myExtraData(){ return { c:coins }; }
+/* ##################################################################### */
+
+// =====================================================================
+//  메인 루프
+// =====================================================================
+buildWorld(); respawn();
+const clock = new THREE.Clock(); let T = 0;
+function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta(), .05); T += dt;
+  const [mx, mz] = readMove(); if (Math.hypot(mx, mz) > .05){ let d = Math.atan2(mx, mz) - me.facing; d = Math.atan2(Math.sin(d), Math.cos(d)); me.facing += d*Math.min(1, 14*dt); }
+  stepPlayer(me, mx, mz, dt); gameTick(dt, T);
+  myActor.g.position.set(me.x, me.y, me.z); myActor.g.rotation.y = me.facing; animLimbs(myActor, dt, me.moving && me.grounded, !me.grounded);
+  for (const o of others.values()){ const k = Math.min(1, 12*dt); o.x = lerp(o.x, o.tx, k); o.y = lerp(o.y, o.ty, k); o.z = lerp(o.z, o.tz, k); let d = o.try - o.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); o.ry += d*k;
+    if (Math.hypot(o.tx - o.x, o.tz - o.z) > 15){ o.x = o.tx; o.y = o.ty; o.z = o.tz; } o.a.g.position.set(o.x, o.y, o.z); o.a.g.rotation.y = o.ry; animLimbs(o.a, dt, o.an === 1, o.an === 2); }
+  // 카메라 (캐릭터 뒤 · 위)
+  const px = me.x, py = me.y + 2.6, pz = me.z; camera.position.set(px - Math.sin(camYaw)*Math.cos(camPitch)*camDist, py + Math.sin(camPitch)*camDist, pz - Math.cos(camYaw)*Math.cos(camPitch)*camDist); camera.lookAt(px, py - .2, pz);
+  sun.position.set(me.x + 30, 80, me.z + 20); sun.target.position.set(me.x, 0, me.z);
+  netSend(dt, myExtraData());
+  renderer.render(scene, camera); }
+loop();
+window.__GAME = { me, others, colliders, block, removeBlock, respawn, get coins(){ return coins; } };   // 콘솔에서 테스트용
+}
+</script>
+</body>
+</html>
