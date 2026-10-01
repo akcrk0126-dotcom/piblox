@@ -174,6 +174,8 @@
     <b>무너진 천장</b> — C로 웅크려 밑으로 지나가요. <b>철창 문</b> — 방 안의 레버를 당겨요.<br>
     <b>52번 제프 상점</b> — 모은 금화로 장비를 사요. <b>정원</b> — 비 내리는 바깥 정원을 지나요.<br>
     <b>한 방에 너무 오래 있으면</b> — 어둠이 조여 와요. 계속 앞으로!<br>
+    <b>49 도서관 입구 · 51 출구 · 60 비밀 통로(튀어나온 책을 당기면 책장이 밀림) · 70번대 의무실(약장 · 해골 열쇠 → 해골방) · 89 정원 · 90~99 온실</b><br>
+    <b>레스토랑 · 거실 · 엘리베이터 복도 · 붉은 방</b>, 작은 옆방(상자 방 · 단칸 화장실 · 소형 객실)도 가끔 나와요.<br>
     <b>50번 도서관 자물쇠</b> — 책마다 '도형 = 숫자' 단서, 힌트 종이에 도형 순서. 다섯 자리를 맞춰요.<br>
     <b>옷장에 너무 오래</b> — 「숨바꼭질」이 쫓아내요. <b>90번대 온실</b> — 어둡고 덫이 많아요. <b>일행과 4방 이상 떨어지면</b> — 「글리치」가 끌고 가요.<br>
     <b>✝ 십자가</b> — 괴물에게 당하는 순간 딱 한 번 막아줘요.
@@ -497,23 +499,24 @@ function B(parent, mat, x, y, z, w, h, d, opt){ return mesh(parent, uvBox(w, h, 
 // =====================================================================
 const H0 = 4.2, DW = 1.7, DH = 2.9;
 const BOOKS_NEED = 5;   // 도서관 문을 여는 데 필요한 책
-const rooms = []; let runSeed = 1, seekRooms = [], haltRooms = [], libRoom = 50, FINAL = 100, courtRoom = 66, shopRoom = 52;
+const rooms = []; let runSeed = 1, seekRooms = [], haltRooms = [], libRoom = 50, FINAL = 100, courtRoom = 89, shopRoom = 52, secretRoom = 60, infirmRoom = 72;
 // 씨앗으로 특별한 방 번호 정하기 (같은 호텔이면 모두 똑같이)
-function planSpecial(){ const old = _rng; _rng = seeded(runSeed ^ 0x5eed); seekRooms = [rint(30, 38), rint(78, 88)]; haltRooms = [rint(20, 26), rint(56, 72), rint(92, 97)]; courtRoom = 66; for (let k=0;k<30;k++){ const c = rint(60, 74); if (!haltRooms.includes(c) && !haltRooms.includes(c - 1) && !haltRooms.includes(c + 1)){ courtRoom = c; break; } } _rng = old; }
+function planSpecial(){ const old = _rng; _rng = seeded(runSeed ^ 0x5eed); seekRooms = [rint(30, 38), rint(78, 85)]; haltRooms = [rint(20, 26), rint(42, 46), rint(63, 68)]; courtRoom = 89; secretRoom = 60; infirmRoom = rint(70, 74); _rng = old; }
 const interacts = [];                 // { mesh, room, kind, label, act }
 function L2W(room, lx, lz){ const c = room.cos, s = room.sin; return [room.ox + lx*c + lz*s, room.oz - lx*s + lz*c]; }
 function addCol(room, cx, cz, w, d, y0, y1, extra){ const [x, z] = L2W(room, cx, cz); const sw = Math.abs(room.sin) > .5; const hw = (sw ? d : w)/2, hd = (sw ? w : d)/2;
   const c = Object.assign({ minX:x - hw, maxX:x + hw, minZ:z - hd, maxZ:z + hd, minY:y0 || 0, maxY:y1 === undefined ? H0 : y1 }, extra || {}); room.cols.push(c); return c; }
-function roomType(i){ if (i === 0) return 'lobby'; if (i === libRoom) return 'library'; if (i === FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (i === courtRoom) return 'court';
+function roomType(i){ if (i === 0) return 'lobby'; if (i === libRoom) return 'library'; if (i === FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (i === courtRoom) return 'court'; if (i === libRoom - 1) return 'libin'; if (i === libRoom + 1) return 'libout'; if (i === secretRoom) return 'secret'; if (i === infirmRoom) return 'infirm';
   for (const s of seekRooms){ if (i >= s - 3 && i < s) return 'eyes'; if (i >= s && i < s + 3) return 'chase'; if (i === s + 3) return 'chaseEnd'; }
   if (haltRooms.includes(i)) return 'halt';
-  if (i >= 90 && i <= 98) return 'green';
+  if (i >= 90 && i <= 99) return 'green';
+  if (i >= 8){ const q = R(); if (q < .06) return 'restaurant'; if (q < .12) return 'living'; if (q < .16) return 'elvhall'; }
   return R() < .28 ? 'hall' : 'room'; }
 function makeRoom(i, prev){ const old = _rng; _rng = seeded(Math.imul(runSeed, 2654435761) ^ (i * 40503 + 7)); try { return makeRoom0(i, prev); } finally { _rng = old; } }
 function makeRoom0(i, prev){
   const type = roomType(i);
   let W, L, H = H0;
-  if (type === 'lobby'){ W = 14; L = 13; } else if (type === 'hall'){ W = 4.6; L = rnd(16, 24); } else if (type === 'library'){ W = 26; L = 30; H = 6.4; } else if (type === 'chase'){ W = 5.2; L = rnd(30, 38); } else if (type === 'chaseEnd'){ W = 11; L = 12; } else if (type === 'halt'){ W = 5; L = 36; } else if (type === 'final'){ W = 24; L = 28; H = 8; } else if (type === 'shop'){ W = 10; L = 9; } else if (type === 'green'){ W = rnd(10, 13); L = rnd(12, 16); H = 5.2; } else if (type === 'court'){ W = 16; L = 20; H = 4.6; } else { W = rnd(8.5, 12.5); L = rnd(9, 14); }
+  if (type === 'lobby'){ W = 14; L = 13; } else if (type === 'hall'){ W = 4.6; L = rnd(16, 24); } else if (type === 'library'){ W = 26; L = 30; H = 6.4; } else if (type === 'chase'){ W = 5.2; L = rnd(30, 38); } else if (type === 'chaseEnd'){ W = 11; L = 12; } else if (type === 'halt'){ W = 5; L = 36; } else if (type === 'final'){ W = 24; L = 28; H = 8; } else if (type === 'shop'){ W = 10; L = 9; } else if (type === 'green'){ W = rnd(10, 13); L = rnd(12, 16); H = 5.2; } else if (type === 'libin'){ W = 6; L = 14; H = 5; } else if (type === 'libout'){ W = 5.4; L = 11; } else if (type === 'secret'){ W = 10; L = 10; } else if (type === 'infirm'){ W = 13; L = 15; } else if (type === 'restaurant'){ W = rnd(12, 14); L = rnd(12, 15); } else if (type === 'living'){ W = rnd(10, 12); L = rnd(10, 12); } else if (type === 'elvhall'){ W = 5.6; L = rnd(16, 22); } else if (type === 'court'){ W = 16; L = 20; H = 4.6; } else { W = rnd(8.5, 12.5); L = rnd(9, 14); }
   const dir = prev ? prev.exitDir.slice() : [0, 1]; const ang = Math.atan2(dir[0], dir[1]);
   const room = { i, type, W, L, H, cols:[], lamps:[], inters:[], hides:[], loot:[], dark:false, locked:false, ox:prev ? prev.exitPos[0] : 0, oz:prev ? prev.exitPos[1] : 0, cos:Math.cos(ang), sin:Math.sin(ang), ang, dir };
   const ox = (type === 'room' || type === 'lobby') ? rnd(-.3, .3)*(W - 3) : type === 'library' ? 0 : rnd(-.2, .2)*(W - 3.4);
@@ -521,7 +524,7 @@ function makeRoom0(i, prev){
   // 출구 방향
   let ex = 'f'; const opts = ['f'];
   const rDir = [dir[1], -dir[0]], lDir = [-dir[1], dir[0]];   // 로컬 +x → rDir
-  if (type === 'room' || type === 'hall' || type === 'eyes' || type === 'green'){ if (rDir[1] >= -.01) opts.push('r'); if (lDir[1] >= -.01) opts.push('l'); if (R() < .5 && opts.length > 1) ex = pick(opts.slice(1)); }
+  if (type === 'room' || type === 'hall' || type === 'eyes' || type === 'green' || type === 'restaurant' || type === 'living' || type === 'elvhall'){ if (rDir[1] >= -.01) opts.push('r'); if (lDir[1] >= -.01) opts.push('l'); if (R() < .5 && opts.length > 1) ex = pick(opts.slice(1)); }
   room.exitKind = ex;
   if (ex === 'f'){ room.exLocal = [clamp(rnd(room.xl + 1.4, room.xr - 1.4), room.xl + 1.3, room.xr - 1.3), L]; room.exitDir = dir.slice(); }
   else if (ex === 'r'){ room.exLocal = [room.xr, rnd(L*.45, L - 1.4)]; room.exitDir = rDir; }
@@ -539,6 +542,8 @@ function makeRoom0(i, prev){
   // 무너진 천장(웅크려 지나가기) · 철창 + 레버
   if (i >= 14 && type === 'room' && !room.locked && L >= 9.5 && R() < .14) room.beam = true;
   if (i >= 7 && type === 'room' && !room.locked && !room.beam && !room.dupeN && R() < .13) room.gated = true;
+  if (i >= 3 && (type === 'room' || type === 'living') && !room.dupeN && W >= 9 && L >= 9.5 && R() < .3) room.closet = room.gated ? null : pick(['box', 'toilet', 'mini']);
+  if (i >= 30 && (type === 'room' || type === 'hall') && !room.dark && R() < .05) room.red = true;
   room.snareN = (i >= 15 && (type === 'room' || type === 'hall') && R() < Math.min(.4, .18 + (i - 15)*.004)) ? rint(1, type === 'hall' ? 3 : 2) : 0; if (type === 'green') room.snareN = rint(2, 4);
   // 월드 경계
   const cs = [[room.xl, 0], [room.xr, 0], [room.xl, L], [room.xr, L]].map(p=>L2W(room, p[0], p[1]));
@@ -661,19 +666,28 @@ function buildRoom(room){
   else if (type === 'shop') buildShop(room, g);
   else if (type === 'court') buildCourt(room, g);
   else if (type === 'green') buildGreen(room, g);
-  else furnishRoom(room, g);
+  else if (type === 'libin') buildLibIn(room, g);
+  else if (type === 'libout') buildLibOut(room, g);
+  else if (type === 'secret') buildSecret(room, g);
+  else if (type === 'infirm') buildInfirm(room, g);
+  else if (type === 'restaurant') buildRestaurant(room, g);
+  else if (type === 'living') buildLiving(room, g);
+  else if (type === 'elvhall') buildElvHall(room, g);
+  else { if (room.closet) closetKeepout(room); furnishRoom(room, g); }
+  if (room.closet) buildCloset(room, g);
   if ((type === 'room' || type === 'hall' || type === 'green') && R() < .32){ const gm = itemMesh('gold'); gm.scale.setScalar(1.6); gm.position.set(rnd(xl + .9, xr - .9), .01, rnd(2, L - 2)); g.add(gm); regItem(room, gm, 'gold'); }
   if (room.beam) buildBeam(room, g);
   if (room.gated) buildGate(room, g);
   // 천장 등
-  if (type === 'hall' || type === 'chase'){ for (let z = 2.5; z < L - 1; z += 4.2){ addLamp(room, g, xl + .2, 2.35, z, 'sconce', 2.2); addLamp(room, g, xr - .2, 2.35, z + 2.1 < L - .5 ? z + 2.1 : z, 'sconce', 2.2); } }
+  if (type === 'hall' || type === 'chase' || type === 'libin' || type === 'libout' || type === 'elvhall'){ for (let z = 2.5; z < L - 1; z += 4.2){ addLamp(room, g, xl + .2, 2.35, z, 'sconce', 2.2); addLamp(room, g, xr - .2, 2.35, z + 2.1 < L - .5 ? z + 2.1 : z, 'sconce', 2.2); } }
   else if (type === 'halt'){ for (let z = 3; z < L - 1; z += 6){ for (const l of [addLamp(room, g, xl + .2, 2.35, z, 'sconce', 1.8), addLamp(room, g, xr - .2, 2.35, z + 3 < L - .5 ? z + 3 : z, 'sconce', 1.8)]){ l.col = 0x6a9aff; l.bulbMat.color.set(0x9ac0ff); } } }
-  else if (type === 'room' || type === 'eyes' || type === 'chaseEnd' || type === 'shop'){ const n = L > 11 ? 2 : 1; for (let k=0;k<n;k++) addLamp(room, g, cx, H - .35, L*(k + 1)/(n + 1), 'ceil'); }
+  else if (type === 'room' || type === 'eyes' || type === 'chaseEnd' || type === 'shop' || type === 'secret' || type === 'infirm' || type === 'restaurant' || type === 'living'){ const n = L > 11 ? 2 : 1; for (let k=0;k<n;k++) addLamp(room, g, cx, H - .35, L*(k + 1)/(n + 1), 'ceil'); }
   // 열쇠 — 잠긴 방은 서랍 7개마다 하나씩(최대 3개) 넣어서 찾기 쉽게
   if (room.locked && type !== 'library'){ const ds = room.loot.filter(d=>!d.key); if (ds.length){ const nk = clamp(Math.ceil(ds.length/7), 1, 3); for (let q=0;q<nk;q++){ const rest = ds.filter(d=>!d.key); if (rest.length) pick(rest).key = true; } } else { const t = sideTable(room, g, cx, L*.6, 0); const k = itemMesh('key'); k.position.set(0, .78, 0); t.add(k); regItem(room, k, 'key'); } }
   if (type === 'eyes') addWallEyes(room, g);
   if (room.snareN) placeSnares(room, g, room.snareN);
   // 그림자 받는 물체 업데이트
+  if (room.red) for (const l of room.lamps){ l.col = 0xff2a14; l.bulbMat.color.set(0xff3a20); }
   g.updateMatrixWorld(true); room.built = true;
 }
 function scaleUV(geo, a, b){ const uv = geo.attributes.uv; for (let k=0;k<uv.count;k++) uv.setXY(k, uv.getX(k)*a, uv.getY(k)*b); uv.needsUpdate = true; }
@@ -902,6 +916,88 @@ function tickCourt(dt){ const r = rooms[courtRoom]; const inC = !!(r && !r.dispo
   if (want && Math.random() < dt*.05){ flash2(); } }
 function flash2(){ hemi.intensity = .9; setTimeout(()=>{ hemi.intensity = .22; }, 120); setTimeout(()=>audio.sfx.thunder(), 500); }
 
+// =====================================================================
+//  나무위키 THE HOTEL 방 목록 기준으로 추가한 방들
+// =====================================================================
+function bigSign(g, x, y, z, t, col, ry, sc){ const m = sign(g, x, y, z, t, col, ry); m.scale.setScalar(sc || 1); return m; }
+// ----- 49호: 도서관 입구 (높은 천장, 양쪽 책장, 커다란 문틀) -----
+function buildLibIn(room, g){ const { L, xl, xr, H } = room, cx = (xl + xr)/2;
+  for (const sx of [-1, 1]) for (let z = 2; z < L - 2; z += 2.6){ bookcase(room, g, sx < 0 ? xl + .3 : xr - .3, z, sx < 0 ? Math.PI/2 : -Math.PI/2, 3.2); }
+  const [ex] = room.exLocal; B(g, MAT.trim, ex, 3.6, L - .2, 3.4, .5, .3); for (const sx of [-1, 1]) B(g, MAT.trim, ex + sx*1.45, 1.8, L - .2, .4, 3.6, .3);
+  bigSign(g, ex, 4.35, L - .16, '도서관', '#e8c878', Math.PI, 1.1); room.carpetRun = true;
+  const run = new THREE.Mesh(new THREE.PlaneGeometry(2, L - .5), MAT.carpets[0]); run.rotation.x = -Math.PI/2; run.position.set(cx, .012, L/2); g.add(run); scaleUV(run.geometry, 1, L/3); }
+// ----- 51호: 도서관 출구 (쓰러진 책, 어지러운 복도) -----
+function buildLibOut(room, g){ const { L, xl, xr } = room;
+  for (let k=0;k<14;k++){ const b = B(g, MAT.books, rnd(xl + .4, xr - .4), .05, rnd(1, L - 1), .3, .08, .42); b.rotation.y = rnd(0, 6.28); }
+  bookcase(room, g, xl + .3, L*.35, Math.PI/2, 2.6); bookcase(room, g, xr - .3, L*.65, -Math.PI/2, 2.6); const t = bookcase(room, g, xr - .9, L*.3, -1.2, 2.2); }
+// ----- 60호: 비밀 통로 방 (출구가 책장 뒤에 숨어 있다) -----
+function buildSecret(room, g){ const { L, xl, xr } = room, [ex, ez] = room.exLocal;
+  const sh = new THREE.Group(); sh.position.set(ex, 0, L - .45); g.add(sh); B(sh, MAT.dark, 0, 1.6, 0, 2.6, 3.2, .7); const fr = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3), MAT.booksLib); fr.position.set(0, 1.6, -.36); fr.rotation.y = Math.PI; sh.add(fr);
+  room.shelf = sh; room.shelfX = ex; room.shelfDir = ex > (xl + xr)/2 ? -1 : 1; room.shelfO = 0; room.shelfCol = addCol(room, ex, L - .45, 2.6, .7, 0, 3.2);
+  // 다른 책장들 + 살짝 튀어나온 책 3권 (그중 하나만 진짜)
+  const spots = []; for (const sx of [-1, 1]) for (const z of [2.5, 5.5]){ const x = sx < 0 ? xl + .3 : xr - .3; bookcase(room, g, x, z, sx < 0 ? Math.PI/2 : -Math.PI/2, 2.6); spots.push([x + (sx < 0 ? .3 : -.3), z, sx]); }
+  const real = rint(0, spots.length - 1); room.books3 = [];
+  spots.forEach(([x, z, sx], k)=>{ const b = B(g, k === real ? MAT.red : MAT.blanket[1], x, 1.5, z + rnd(-.3, .3), .18, .34, .26); b.rotation.z = sx*.25; const hit = new THREE.Mesh(new THREE.BoxGeometry(.5, .6, .6), new THREE.MeshBasicMaterial({ visible:false })); hit.position.copy(b.position); g.add(hit);
+    hit.userData.inter = { kind:'sbook', room, real:k === real, mesh:b, label:'튀어나온 책 당기기' }; interacts.push(hit); room.inters.push(hit); });
+  plant(room, g, xl + .6, L - .6); plant(room, g, xr - .6, L - .6); painting(room, g, (xl + xr)/2 - 3, 2.3, .2, 0); }
+function pullBook(a){ const r = a.room; a.mesh.rotation.z *= 2.4; audio.sfx.clank(); a.mesh.userData = {}; if (!a.real){ msg('…아무 일도 없다', 1400); return; } openShelf(r); }
+function openShelf(r, remote){ if (r.shelfT !== undefined) return; if (!remote) shareEv('secret', r.i); r.shelfT = 1; audio.sfx.gate(); msg('책장이 스르륵 밀려난다 — 비밀 통로!', 2400); setObj(); }
+// ----- 의무실 + 해골방 -----
+function buildInfirm(room, g){ const { L, xl, xr, H } = room, cx = (xl + xr)/2; room.meds = [];
+  const sheet = MAT.white, metal = MAT.metal, cur = new THREE.MeshStandardMaterial({ color:0xd8e0d8, roughness:.9, transparent:true, opacity:.85, side:THREE.DoubleSide });
+  for (const sx of [-1, 1]) for (const z of [3.5, 7.5, 11.5]){ if (sx > 0 && z > 10) continue; const x = sx < 0 ? xl + 1.4 : xr - 1.4; const f = furn(room, g, x, z, sx < 0 ? Math.PI/2 : -Math.PI/2);
+    B(f, metal, 0, .5, 0, 1.0, .08, 2); B(f, sheet, 0, .6, 0, .95, .14, 1.9); B(f, sheet, 0, .7, -.75, .7, .1, .35); for (const [a, b] of [[-.45, -.95], [.45, -.95], [-.45, .95], [.45, .95]]) B(f, metal, a, .25, b, .05, .5, .05); B(f, metal, 0, .85, -1, 1, .7, .05);
+    footCol(room, x, z, Math.PI/2, 1, 2, .7); const c = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.2), cur); c.position.set(x + (sx < 0 ? 1.0 : -1.0), 1.5, z); c.rotation.y = Math.PI/2; g.add(c); }
+  // 약장 (열면 반창고/비타민)
+  for (const x of [xl + 1.2, xr - 1.2]){ const cab = new THREE.Group(); cab.position.set(x, 0, .3); g.add(cab); B(cab, MAT.white, 0, 1.5, 0, 1.4, 1.8, .4); B(cab, MAT.red, 0, 2.1, .21, .3, .08, .01, { noShadow:true }); B(cab, MAT.red, 0, 2.1, .21, .08, .3, .01, { noShadow:true }); addCol(room, x, .3, 1.4, .4, 0, 2.4);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.8, .5), new THREE.MeshBasicMaterial({ visible:false })); hit.position.set(x, 1.5, .55); g.add(hit); const c = { room, hit, used:false, m:room.meds.length }; room.meds.push(c); hit.userData.inter = { kind:'med', cab:c, label:'약장 열기' }; interacts.push(hit); room.inters.push(hit); }
+  // 링거대
+  for (let k=0;k<3;k++){ const x = cx + rnd(-2, 2), z = rnd(3, L - 3); B(g, metal, x, 1, z, .04, 2, .04); const bag = new THREE.Mesh(new THREE.BoxGeometry(.18, .26, .06), new THREE.MeshStandardMaterial({ color:0xc8e8ff, transparent:true, opacity:.7 })); bag.position.set(x, 1.85, z); g.add(bag); }
+  bigSign(g, cx, 3.2, .2, '의무실', '#9ad8b0', 0, .9);
+  // 해골방: 오른쪽 앞 구석의 잠긴 방 (해골 열쇠는 침대 위 어딘가)
+  const k0 = xr - 2.6; wallRun(room, g, 'z', k0, L - 5.5, L - 2.4, L - 3.95, MAT.walls[3], H); wallRun(room, g, 'x', L - 5.5, k0, xr, null, MAT.walls[3], H); wallRun(room, g, 'x', L - 2.4, k0, xr, null, MAT.walls[3], H);
+  const kd = makeDoor(room, g, k0, L - 3.95, -Math.PI/2, '☠'); kd.skull = true; kd.locked = true; room.skullDoor = kd;
+  { const lk = new THREE.Group(); lk.position.set(DW - .18, 1.0, .12); kd.hinge.add(lk); B(lk, MAT.iron, 0, 0, 0, .16, .14, .06); kd.lock = lk; }
+  for (let k=0;k<3;k++){ const b = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 8), MAT.white); b.position.set(xr - rnd(.5, 2), .13, L - rnd(2.8, 5)); g.add(b); const bn = B(g, MAT.white, b.position.x + .3, .04, b.position.z, .5, .06, .08); bn.rotation.y = rnd(0, 3); }
+  const gm = itemMesh('gold'); gm.scale.setScalar(2); gm.position.set(xr - 1.3, .01, L - 4.4); g.add(gm); regItem(room, gm, 'gold');
+  const cr = itemMesh('cross'); cr.position.set(xr - .8, .01, L - 3.2); g.add(cr); regItem(room, cr, 'cross');
+  const sk = itemMesh('skey'); sk.position.set(xl + 1.4, .75, pick([3.5, 7.5, 11.5])); g.add(sk); regItem(room, sk, 'skey');
+  addLamp(room, g, xr - 1.3, H - .4, L - 4, 'ceil', 2.5); }
+function useMed(c, remote){ if (c.used) return; c.used = true; c.hit.userData.inter = null; if (!remote){ shareEv('med', c.room.i, { m:c.m }); const r0 = Math.random(); if (r0 < .6){ P.bandage++; msg('🩹 약장에서 반창고를 찾았다', 1800); } else { P.vitamin++; msg('💊 약장에서 비타민을 찾았다', 1800); } renderSlots(); audio.sfx.pick(); } }
+// ----- 레스토랑 -----
+function buildRestaurant(room, g){ const { L, xl, xr } = room, cx = (xl + xr)/2, cloth = MAT.white;
+  for (const x of [cx - 3.2, cx + 3.2]) for (const z of [L*.3, L*.62]){ const f = furn(room, g, x, z, 0); const top = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .06, 20), cloth); top.position.y = .78; f.add(top); const sk = new THREE.Mesh(new THREE.CylinderGeometry(.86, .9, .5, 20, 1, true), cloth); sk.position.y = .52; f.add(sk);
+    const cd = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .2, 8), MAT.white); cd.position.y = .9; f.add(cd); for (let k=0;k<4;k++){ const a = k*Math.PI/2 + .4; const ch = furn(room, g, x + Math.cos(a)*1.2, z + Math.sin(a)*1.2, -a + Math.PI/2); B(ch, MAT.dark, 0, .45, 0, .45, .06, .45); B(ch, MAT.dark, 0, .8, -.2, .45, .7, .05); for (const [a2, b2] of [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]]) B(ch, MAT.dark, a2, .22, b2, .04, .45, .04); }
+    addCol(room, x, z, 1.8, 1.8, 0, .8); const pl = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .02, 14), MAT.white); pl.position.set(x + .35, .82, z); g.add(pl); }
+  const bx = room.exitKind === 'l' ? xr - .7 : xl + .7, bl = L*.5; B(g, MAT.dark, bx, .55, L/2, .8, 1.1, bl); B(g, MAT.trim, bx, 1.12, L/2, 1, .06, bl + .2); addCol(room, bx, L/2, .8, bl, 0, 1.15);
+  for (let k=0;k<6;k++){ const bt = new THREE.Mesh(new THREE.CylinderGeometry(.05, .06, .3, 8), new THREE.MeshStandardMaterial({ color:pick([0x2a5a2a, 0x5a1a1a, 0x8a6a2a]), roughness:.2 })); bt.position.set(bx, 1.3, L/2 - bl/2 + .4 + k*(bl - .8)/5); g.add(bt); }
+  bigSign(g, cx, 3.4, .2, '레스토랑', '#e8c878', 0, .8); }
+// ----- 거실 (벽난로) -----
+function buildLiving(room, g){ const { L, xl, xr, H } = room, cx = (xl + xr)/2;
+  const fs = room.exitKind === 'l' ? 1 : -1, fpx = fs < 0 ? xl + .45 : xr - .45, fpz = L*.5; const fp = new THREE.Group(); fp.position.set(fpx, 0, fpz); fp.rotation.y = fs < 0 ? Math.PI/2 : -Math.PI/2; g.add(fp);
+  B(fp, MAT.panel, 0, 1.1, 0, 2.6, 2.2, .7); B(fp, MAT.trim, 0, 2.25, -.05, 2.9, .12, .9); B(fp, MAT.black, 0, .65, .3, 1.3, .9, .1, { noShadow:true }); addCol(room, fpx, fpz, .7, 2.6, 0, 2.3);
+  const fire = new THREE.Sprite(new THREE.SpriteMaterial({ map:MAT.glow.map, color:0xff8a30, blending:THREE.AdditiveBlending, transparent:true, depthWrite:false })); fire.scale.set(1.4, 1.2, 1); const fl0 = fpx - fs*.75; const [fx, fzW] = L2W(room, fl0, fpz); fire.position.set(fl0, .55, fpz); g.add(fire);
+  room.lamps.push({ x:fx, y:.7, z:fzW, base:3.2, dist:9, col:0xff9a40, on:true, broken:false, flick:0, bulbMat:new THREE.MeshBasicMaterial(), shadeMat:MAT.shade.clone(), spr:fire, room, kind:'fire' }); room.fire = fire;
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(4, 3), MAT.carpets[1]); rug.rotation.x = -Math.PI/2; rug.position.set(cx, .012, L*.55); g.add(rug);
+  for (const [x, z, r] of [[cx, L*.35, 0], [cx - 2.3, L*.58, Math.PI/2], [cx + 2.3, L*.58, -Math.PI/2]]){ const f = furn(room, g, x, z, r); B(f, MAT.blanket[0], 0, .3, 0, 2, .6, .9); B(f, MAT.blanket[0], 0, .8, -.38, 2, .7, .18); footCol(room, x, z, r, 2, .9, .8); }
+  const t = furn(room, g, cx, L*.58, 0); B(t, MAT.dark, 0, .42, 0, 1.2, .06, .7); footCol(room, cx, L*.58, 0, 1.2, .7, .5);
+  bookcase(room, g, xl + .3, L*.25, Math.PI/2); dresser(room, g, xr - .35, L*.25, -Math.PI/2); wardrobe(room, g, fs < 0 ? xr - .5 : xl + .5, L*.78, fs < 0 ? -Math.PI/2 : Math.PI/2); painting(room, g, fpx - fs*.2, 3, fpz, fs < 0 ? Math.PI/2 : -Math.PI/2); }
+// ----- 엘리베이터 복도 (벽에 닫힌 엘리베이터 문들) -----
+function buildElvHall(room, g){ const { L, xl, xr } = room;
+  for (let z = 3.5; z < L - 3; z += 5){ for (const sx of [-1, 1]){ const x = sx < 0 ? xl + .14 : xr - .14, ry = sx < 0 ? Math.PI/2 : -Math.PI/2; const e = new THREE.Group(); e.position.set(x, 0, z); e.rotation.y = ry; g.add(e);
+    for (const d of [-1, 1]) B(e, MAT.brass, d*.6, 1.5, .02, 1.15, 3, .05); B(e, MAT.trim, 0, 3.15, .05, 2.6, .25, .1); for (const d of [-1, 1]) B(e, MAT.trim, d*1.25, 1.5, .05, .15, 3.1, .1);
+    const ar = new THREE.Mesh(new THREE.CircleGeometry(.08, 3), new THREE.MeshBasicMaterial({ color:Math.random() < .3 ? 0xff5a3a : 0x3a2a1a })); ar.position.set(1.5, 1.4, .06); ar.rotation.z = Math.PI/2; e.add(ar); } } }
+// ----- 사이드 방: 상자 방 · 단칸 화장실 · 소형 객실 (방 앞쪽 구석, 작은 문 안) -----
+function closetSide(room){ return Math.abs(room.xl) > Math.abs(room.xr) ? -1 : 1; }
+function closetKeepout(room){ const sd = closetSide(room), a = sd < 0 ? room.xl : room.xr - 2.6, ko = keepouts(room); ko.push([a - .1, a + 2.7, 0, 3.4]); }
+function buildCloset(room, g){ const sd = closetSide(room), H = room.H, edge = sd < 0 ? room.xl : room.xr, inner = edge - sd*2.4, kind = room.closet, wm = MAT.walls[(room.i*3 + 1) % 4];
+  wallRun(room, g, 'z', inner, 0, 2.4, 1.2, wm, H); wallRun(room, g, 'x', 2.4, Math.min(edge, inner), Math.max(edge, inner), null, wm, H);
+  const d = makeDoor(room, g, inner, 1.2, sd < 0 ? Math.PI/2 : -Math.PI/2, ''); d.side = true; room.sideDoor = d; if (kind === 'toilet') d.toiletJack = Math.random() < .12;
+  const cx = edge - sd*1.2; addLamp(room, g, cx, H - .4, 1.2, 'ceil', 1.6);
+  if (kind === 'box'){ for (let k=0;k<4;k++){ const c = B(g, MAT.crate, cx + rnd(-.5, .5), .35 + (k > 2 ? .7 : 0), rnd(.5, 1.9), .7, .7, .7); c.rotation.y = rnd(-.3, .3); } const gm = itemMesh('gold'); gm.scale.setScalar(1.6); gm.position.set(cx, .02, 1.6); g.add(gm); regItem(room, gm, 'gold'); if (R() < .4){ const ik = pick(['bandage', 'battery', 'vitamin']), it = itemMesh(ik); it.position.set(cx + .3, .72, .7); g.add(it); regItem(room, it, ik); } }
+  else if (kind === 'toilet'){ const t = new THREE.Group(); t.position.set(edge - sd*.45, 0, 1.2); g.add(t); B(t, MAT.white, 0, .22, 0, .45, .44, .6); B(t, MAT.white, -sd*.05, .55, 0, .14, .5, .5); const sink = B(g, MAT.white, cx, .85, 2.1, .6, .12, .4); const mir = new THREE.Mesh(new THREE.PlaneGeometry(.6, .7), new THREE.MeshStandardMaterial({ color:0x30343a, roughness:.05, metalness:.9 })); mir.position.set(cx, 1.6, 2.28); mir.rotation.y = Math.PI; g.add(mir); addCol(room, edge - sd*.45, 1.2, .6, .7, 0, .9); }
+  else { const f = furn(room, g, cx, 1.4, sd < 0 ? Math.PI/2 : -Math.PI/2); B(f, MAT.dark, 0, .25, 0, 1, .35, 1.8); B(f, MAT.sheet, 0, .47, 0, .95, .1, 1.7); footCol(room, cx, 1.4, Math.PI/2, 1, 1.8, .6); nightstand(room, g, edge - sd*.35, .4, sd < 0 ? Math.PI/2 : -Math.PI/2); } }
+
 // ----- 90번대 온실: 어둡고, 식물이 빽빽하고, 덫이 많다 -----
 function buildGreen(room, g){ const { L, xl, xr, H } = room, cx = (xl + xr)/2;
   for (let x = xl + 2; x < xr - 1; x += 2.2) B(g, MAT.metal, x, H - .08, L/2, .12, .14, L, { noShadow:true }); for (let z = 2; z < L - 1; z += 2.2) B(g, MAT.metal, cx, H - .08, z, room.W, .14, .12, { noShadow:true });
@@ -1006,6 +1102,8 @@ function itemMesh(kind){ const gr = new THREE.Group();
   else if (kind === 'book'){ const bm = new THREE.MeshStandardMaterial({ color:0xc07a20, emissive:0xffb040, emissiveIntensity:2.2, roughness:.5 }); B(gr, bm, 0, 0, 0, .3, .42, .09); const s = new THREE.Sprite(MAT.glow); s.scale.set(1.8, 1.8, 1); gr.add(s); gr.userData.glow = s;
     // 책장 위로 솟는 빛기둥 — 도서관 어디서든 보이게
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(.14, .3, 5, 12, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.28, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 2.3; gr.add(beam); gr.userData.beam = beam; }
+  else if (kind === 'skey'){ const bm = new THREE.MeshStandardMaterial({ color:0xe8e0c8, roughness:.5, emissive:0x6a6050, emissiveIntensity:.6 }); const sk = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), bm); sk.position.set(-.1, .05, 0); gr.add(sk); B(gr, bm, .04, .03, 0, .18, .025, .025); B(gr, bm, .12, .03, .02, .025, .025, .05); const sp = new THREE.Sprite(MAT.glow); sp.scale.set(.8, .8, 1); sp.position.y = .05; gr.add(sp); gr.scale.setScalar(1.5); }
+  else if (kind === 'cross'){ B(gr, MAT.gold, 0, .14, 0, .04, .28, .03); B(gr, MAT.gold, 0, .19, 0, .16, .04, .03); const sp = new THREE.Sprite(MAT.glow); sp.scale.set(.9, .9, 1); sp.position.y = .15; gr.add(sp); }
   else if (kind === 'paper'){ const pt = ctex(128, 160, (c, w, h)=>{ c.fillStyle = '#e8dcc0'; c.fillRect(0, 0, w, h); c.strokeStyle = '#8a7a5a'; c.lineWidth = 2; for (let y=30;y<h;y+=18){ c.beginPath(); c.moveTo(12, y); c.lineTo(w - 12, y); c.stroke(); } c.fillStyle = '#5a2a10'; c.font = 'bold 26px serif'; c.textAlign = 'center'; c.fillText('? ? ? ? ?', w/2, 90); });
     const pp = new THREE.Mesh(new THREE.PlaneGeometry(.26, .32), new THREE.MeshStandardMaterial({ map:pt, emissive:0x3a2a10, emissiveMap:pt, emissiveIntensity:.6, roughness:.9, side:THREE.DoubleSide })); pp.rotation.x = -Math.PI/2; pp.position.y = .01; gr.add(pp); const sp = new THREE.Sprite(MAT.glow); sp.scale.set(.8, .8, 1); sp.position.y = .08; gr.add(sp); }
   else if (kind === 'ekey' || kind === 'switch'){ if (kind === 'ekey'){ const km = new THREE.MeshStandardMaterial({ color:0xff7a3a, emissive:0xff4a10, emissiveIntensity:1.2, roughness:.3, metalness:.6 }); const r0 = new THREE.Mesh(new THREE.TorusGeometry(.05, .014, 6, 14), km); r0.rotation.x = Math.PI/2; r0.position.set(-.1, .02, 0); gr.add(r0); B(gr, km, .05, .02, 0, .2, .02, .02); B(gr, km, .13, .02, .02, .02, .02, .05); const tag = B(gr, MAT.red, -.2, .02, 0, .1, .02, .14); }
@@ -1016,10 +1114,10 @@ function itemMesh(kind){ const gr = new THREE.Group();
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(.08, .2, 3.5, 10, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 1.8; gr.add(beam); }
   gr.traverse(o=>{ if (o.isMesh) o.castShadow = false; }); return gr; }
 function regItem(room, m, kind){ const sid = room.built ? null : room.i + ':' + (room.itemN = (room.itemN || 0) + 1); const hit = new THREE.Mesh(new THREE.SphereGeometry(kind === 'book' ? .3 : .18, 8, 6), new THREE.MeshBasicMaterial({ visible:false })); m.add(hit);
-  const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기', paper:'힌트 종이 줍기', fuse:'퓨즈 줍기', ekey:'전기실 열쇠 줍기', switch:'차단기 스위치 줍기' };
+  const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기', paper:'힌트 종이 줍기', skey:'해골 열쇠 줍기', cross:'십자가 줍기', fuse:'퓨즈 줍기', ekey:'전기실 열쇠 줍기', switch:'차단기 스위치 줍기' };
   hit.userData.inter = { kind:'item', item:kind, mesh:m, label:labels[kind] || '줍기', sid, room }; interacts.push(hit); room.inters.push(hit); return hit; }
 function disposeRoom(room){ scene.remove(room.g); room.g.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material.map.image && o.material !== MAT.door && o.material.map !== TX.plate) {} });
-  for (const m of room.inters){ const k = interacts.indexOf(m); if (k >= 0) interacts.splice(k, 1); } if (room.door){ const k = interacts.indexOf(room.door.leaf); if (k >= 0) interacts.splice(k, 1); room.door.leaf.material && 0; } room.disposed = true; }
+  for (const m of room.inters){ const k = interacts.indexOf(m); if (k >= 0) interacts.splice(k, 1); } if (room.door){ const k = interacts.indexOf(room.door.leaf); if (k >= 0) interacts.splice(k, 1); room.door.leaf.material && 0; } for (const d of [room.sideDoor, room.skullDoor, room.eDoor]){ if (d){ const k = interacts.indexOf(d.leaf); if (k >= 0) interacts.splice(k, 1); } } room.disposed = true; }
 
 buildTextures(); buildMats();
 
@@ -1046,7 +1144,7 @@ function updateLights(dt){ const cand = [];
 // =====================================================================
 //  플레이어
 // =====================================================================
-const P = { x:0, z:2, yaw:Math.PI, pitch:0, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, stepSign:1, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, lookT:0, invT:0 };
+const P = { x:0, z:2, yaw:Math.PI, pitch:0, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, stepSign:1, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, skullKey:false, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, lookT:0, invT:0 };
 const keys = {}; const mv = { x:0, y:0 };
 let locked = false;
 function wantLock(){ if (isTouch || (!running && !LB.on) || paused || LB.desk) return; try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } catch(e){} }
@@ -1161,18 +1259,22 @@ function interact(){ if ((!running && !LB.on) || P.dead || paused || CUT || T - 
   else if (a.kind === 'item') pickItem(a);
   else if (a.kind === 'dupe') openDupe(a.dupe);
   else if (a.kind === 'sw') swInteract(a.room, a.k);
+  else if (a.kind === 'sbook') pullBook(a);
+  else if (a.kind === 'med') useMed(a.cab);
   else if (a.kind === 'lever') pullLever(a.room);
   else if (a.kind === 'jshop') openJShop();
   else if (a.kind === 'shop') openDesk(); }
 function tryDoor(door, manual){ if (door.open > 0 || door.target > 0) return;
   const room = door.room;
+  if (door.skull && door.locked){ if (P.skullKey){ P.skullKey = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); msg('해골 열쇠로 문을 열었다…', 2000); } else { if (manual){ msg('해골 그림이 그려진 문… 해골 열쇠가 필요해', 2400); audio.sfx.lock(); } return; } openDoor(door); return; }
+  if (door.side && door.toiletJack && !door.jackDone){ door.jackDone = true; setTimeout(()=>{ if (!running) return; audio.sfx.jack(); flashScare('jack', .45); P.shake = .7; msg('…화장실에 누가 있었다', 2000); }, 300); }
   if (door.edoor && door.locked){ if (P.ekey){ door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); msg('전기실 문을 열었다', 1800); setObj(); } else { if (manual){ msg('전기실이다… 잠겨 있다. 창고 어딘가에 열쇠가 있을 거야', 2400); audio.sfx.lock(); } return; } openDoor(door); return; }
   if (room.gate && room.gate.open < .7){ if (manual){ msg('철창이 문을 막고 있다 — 레버를 찾아'); audio.sfx.lock(); } return; }
   if (door.locked){ if (room.type === 'library'){ if (manual) openPadlock(room); else audio.sfx.lock(); return; }
     if (P.key){ P.key = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); renderSlots(); msg('열쇠로 문을 열었다'); shareEv('unlock', room.i); }
     else { if (manual){ msg('잠겨 있다. 열쇠가 필요해'); audio.sfx.lock(); } return; } }
   openDoor(door); }
-function openDoor(door, remote){ if (!remote) shareEv(door.edoor ? 'edoor' : 'door', door.room.i); door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
+function openDoor(door, remote){ if (!remote) shareEv(door.edoor ? 'edoor' : door.side ? 'sdoor' : door.skull ? 'kdoor' : 'door', door.room.i); door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
 function toggleDrawer(dr){ dr.target = dr.target ? 0 : 1; audio.sfx.drawer(); if (dr.target && !dr.looted){ dr.looted = true;
     // 서랍 거미 — 가끔 물건 대신 튀어나온다 (열쇠 서랍은 제외)
     if (!dr.key && P.room >= 3 && Math.random() < .035){ setTimeout(()=>{ if (P.dead) return; audio.sfx.spider(); flashScare('spider', .5); hurt(5, 'spider'); msg('🕷 서랍 속에 거미가!', 1800); }, 180); return; }
@@ -1195,6 +1297,8 @@ function pickItem(a){ const k = a.item, m = a.mesh; if (a.sid) shareEv('item', a
   else if (k === 'book'){ const r = rooms[libRoom]; r.books = (r.books || 0) + 1; r.lamps = r.lamps.filter(l=>l.item !== m); const c = r.code[m.userData.ci || 0]; r.known.add(m.userData.ci || 0); msg('📕 책에 적힌 단서: ' + c.sh + ' = ' + c.d + '  (' + r.known.size + '/5)', 3000); setObj(); }
   else if (k === 'paper'){ const r = rooms[libRoom]; r.paper = true; msg('📜 힌트 종이: 자물쇠 순서 ' + r.code.map(c=>c.sh).join(' '), 3600); setObj(); }
   else if (k === 'gold'){ const n = rint(5, 15); P.gold += n; addGold(n); }
+  else if (k === 'skey'){ P.skullKey = true; msg('💀 해골 열쇠를 얻었다 — 해골 그림 문을 찾아', 2600); }
+  else if (k === 'cross'){ P.cross = (P.cross || 0) + 1; msg('✝ 십자가를 얻었다 (괴물을 한 번 막아줌)', 2600); }
   else if (k === 'ekey'){ P.ekey = true; msg('🗝 전기실 열쇠를 얻었다! 창고 왼쪽 안의 전기실로', 2600); setObj(); }
   else if (k === 'switch'){ P.swItems = (P.swItems || 0) + 1; msg('🔧 차단기 스위치를 주웠다 (' + P.swItems + '개 들고 있음)', 2200); setObj(); }
   renderSlots(); }
@@ -1204,7 +1308,8 @@ function hideIn(h){ if (P.hidden) return; if (entity.giant && entity.giant.check
   P.hidden = h; h.target = 1; audio.sfx.wardrobe(); P.yaw = h.yaw + Math.PI; P.pitch = 0; setTimeout(()=>{ if (P.hidden === h) h.target = 0; $('hide').classList.add('on'); }, 350); P.hideT = 0; }
 function unhide(){ const h = P.hidden; if (!h) return; h.target = 1; audio.sfx.wardrobe(); $('hide').classList.remove('on'); P.x = h.out[0]; P.z = h.out[1]; P.hidden = null; setTimeout(()=>{ if (P.hidden !== h) h.target = 0; }, 500); }
 function updateAnims(dt){ for (let i = Math.max(0, P.room - 1); i <= P.room + 2 && i < rooms.length; i++){ const r = rooms[i]; if (!r) continue;
-    const d = r.door; if (d && d.open !== d.target){ d.open = d.target > d.open ? Math.min(d.target, d.open + dt*2.6) : Math.max(d.target, d.open - dt*3); const e = 1 - Math.pow(1 - d.open, 2); d.hinge.rotation.y = e*1.75; }
+    for (const d of [r.door, r.sideDoor]){ if (d && d.open !== d.target){ d.open = d.target > d.open ? Math.min(d.target, d.open + dt*2.6) : Math.max(d.target, d.open - dt*3); const e = 1 - Math.pow(1 - d.open, 2); d.hinge.rotation.y = e*1.75; } }
+    if (r.shelfT !== undefined && r.shelfO < r.shelfT){ r.shelfO = Math.min(1, r.shelfO + dt*.6); r.shelf.position.x = r.shelfX + r.shelfDir*r.shelfO*2.3; if (r.shelfO > .8) r.shelfCol.off = true; }
     for (const dr of r.loot){ if (dr.open !== dr.target){ dr.open = dr.target > dr.open ? Math.min(1, dr.open + dt*5) : Math.max(0, dr.open - dt*5); dr.g.position.z = dr.open*.34; } }
     for (const h of r.hides){ if (h.open !== h.target){ h.open = h.target > h.open ? Math.min(1, h.open + dt*5) : Math.max(0, h.open - dt*5); for (const l of h.leaves) l.hg.rotation.y = -l.sx*h.open*1.6; } }
     if (r.hands) r.hands.forEach((hd, k)=>{ hd.rotation.x = Math.sin(T*6 + k)*.25; hd.position.z = .05 + Math.sin(T*3 + k*2)*.08; });
@@ -1421,6 +1526,11 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   if (r.type === 'final'){ if (entity.seek) endSeek(true); if (!entity.giant) startGiant(r); if (!P.cutFinal){ P.cutFinal = true; libraryCut('DOOR 100', '창고… 그것이 다시 나타났다.', '전기실 열쇠 → 빠진 스위치 3개 → 차단기 퍼즐 → 엘리베이터!'); } }
   if (r.type === 'shop'){ if (entity.rush) endRush(); msg('🛒 제프 상점 — 모은 금화로 장비를 살 수 있어', 2800); }
   if (r.type === 'court') msg('…밖인가? 빗소리가 들린다', 2400);
+  if (r.type === 'libin') msg('이 앞은 도서관… 발소리를 줄이자', 2400);
+  if (r.type === 'secret') msg('…문이 없다? 책장을 살펴보자', 2600);
+  if (r.type === 'infirm') msg('🏥 의무실 — 약장을 뒤져 보자. 해골 그림 문도 있다', 2800);
+  if (r.type === 'restaurant') msg('텅 빈 레스토랑…', 1800);
+  if (r.red) msg('…방이 붉다', 1600);
   if (r.beam) setTimeout(()=>{ if (P.room === i) msg('천장이 무너져 있다 — C로 웅크려서 밑으로 지나가자', 3000); }, 600);
   if (r.gated) setTimeout(()=>{ if (P.room === i) msg('문 앞에 철창이… 어딘가 레버가 있을 거야', 2800); }, 600);
   if (i >= 15 && (r.type === 'room' || r.type === 'hall') && !r.dark && Math.random() < .05) setTimeout(()=>{ if (P.room === i && running && !entity.rush) spawnShadow(r); }, 1400);
@@ -1428,15 +1538,15 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   if (r.type === 'halt'){ if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); startHalt(r); msg('…복도가 유난히 푸르다', 2200); }
   if (r.type === 'chase' && seekRooms.includes(i) && !SH.done.has('seek:' + i)){ shareEv('seek', i); startSeek(i); }
   if (r.type === 'eyes' && Math.random() < .6) audio.sfx.whisper();
-  const special = t=>t === 'library' || t === 'chase' || t === 'chaseEnd' || t === 'eyes' || t === 'final' || t === 'lobby' || t === 'halt' || t === 'shop';
+  const special = t=>t === 'library' || t === 'chase' || t === 'chaseEnd' || t === 'eyes' || t === 'final' || t === 'lobby' || t === 'halt' || t === 'shop' || t === 'libin' || t === 'libout' || t === 'secret' || t === 'infirm';
   if (r.type === 'green' && !(rooms[i - 1] && rooms[i - 1].type === 'green')) msg('🌿 온실… 어둡다. 발밑의 덫을 조심해', 2800);
   const soon = [0, 1, 2, 3].some(k=>rooms[i + k] && special(rooms[i + k].type)) || [1, 2, 3].some(k=>{ const t = roomType_(i + k); return t && special(t); });
   const rr = seeded(Math.imul(runSeed, 2246822519) ^ (i*7919 + 101)), r1 = rr(), r2 = rr(), r3 = rr();   // 같은 호텔이면 같은 방에서 같은 일이
   if (!entity.rush && !entity.seek && !entity.giant && !entity.halt && i >= 4 && i - lastRush >= 4 && !soon && !SH.done.has('rush:' + i) && r1 < Math.min(.3, .1 + i*.002)){ const amb = i > 40 && r2 < .3; shareEv('rush', i, { a:amb ? 1 : 0 }); startRush(amb); }
   const nx = rooms[i + 1]; if (!entity.eyes && nx && i >= 8 && (nx.type === 'room' || nx.type === 'hall') && !SH.done.has('eyes:' + (i + 1)) && r3 < .08){ shareEv('eyes', i + 1); spawnEyes(nx); }
   setObj(); }
-function roomType_(i){ if (i === libRoom) return 'library'; if (i >= FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (haltRooms.includes(i)) return 'halt'; for (const s of seekRooms){ if (i >= s - 3 && i <= s + 3) return 'chase'; } return null; }
-function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'final'){ const mi = missingSw(r); e.textContent = r.power ? '🛗 엘리베이터로 달려!' : (r.eDoor.locked && !P.ekey) ? '🗝 창고에서 전기실 열쇠를 찾아라 · 웅크리면 조용해' : r.eDoor.locked ? '🗝 전기실 문을 열어라' : mi > 0 ? '🔧 빠진 차단기 스위치 ' + mi + '개 (들고 있음 ' + (P.swItems || 0) + ')' : '⚡ 화면의 번호 스위치를 ON/OFF 대로 (' + r.step + '/10)'; return; } if (r && r.gate && !r.gate.target){ e.textContent = '⛓ 레버를 찾아 철창을 올려라'; return; } if (r && r.type === 'library' && r.door && r.door.locked) e.textContent = '📕 단서 ' + (r.known.size ? r.code.filter((c, k)=>r.known.has(k)).map(c=>c.sh + '=' + c.d).join(' ') : '없음') + ' · 📜 순서 ' + (r.paper ? r.code.map(c=>c.sh).join('') : '?') + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
+function roomType_(i){ if (i === libRoom) return 'library'; if (i >= FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (i === libRoom - 1) return 'libin'; if (i === libRoom + 1) return 'libout'; if (i === secretRoom) return 'secret'; if (i === infirmRoom) return 'infirm'; if (haltRooms.includes(i)) return 'halt'; for (const s of seekRooms){ if (i >= s - 3 && i <= s + 3) return 'chase'; } return null; }
+function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'final'){ const mi = missingSw(r); e.textContent = r.power ? '🛗 엘리베이터로 달려!' : (r.eDoor.locked && !P.ekey) ? '🗝 창고에서 전기실 열쇠를 찾아라 · 웅크리면 조용해' : r.eDoor.locked ? '🗝 전기실 문을 열어라' : mi > 0 ? '🔧 빠진 차단기 스위치 ' + mi + '개 (들고 있음 ' + (P.swItems || 0) + ')' : '⚡ 화면의 번호 스위치를 ON/OFF 대로 (' + r.step + '/10)'; return; } if (r && r.gate && !r.gate.target){ e.textContent = '⛓ 레버를 찾아 철창을 올려라'; return; } if (r && r.type === 'secret' && r.shelfT === undefined){ e.textContent = '📚 출구가 없다…? 튀어나온 책을 당겨 봐'; return; } if (r && r.type === 'library' && r.door && r.door.locked) e.textContent = '📕 단서 ' + (r.known.size ? r.code.filter((c, k)=>r.known.has(k)).map(c=>c.sh + '=' + c.d).join(' ') : '없음') + ' · 📜 순서 ' + (r.paper ? r.code.map(c=>c.sh).join('') : '?') + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
 
 // =====================================================================
 //  작은 효과
@@ -1757,7 +1867,7 @@ function clearWorld(){ if (CUT){ CUT = null; document.body.classList.remove('cin
 function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; const r = makeRoom(rooms.length, prev); rooms.push(r); if (SH.open.has(r.i) && r.door){ SH.open.delete(r.i); const d = r.door; d.locked = false; if (d.lock) d.hinge.remove(d.lock); d.target = 1; d.col.off = true; } } }
 function startRun(seed){ audio.unlock(); clearWorld(); winShown = false; LB.on = false; LB.going = false; LB.room = null; ELV.length = 0; lobbyAudioOff(); document.body.classList.remove('inlobby'); $('lobHud').style.display = 'none'; hemi.intensity = .22; P.stayT = 0; $('dread').style.opacity = 0;
   runSeed = seed || NET.pickSeed(); NET.runT = sNow(); resetShare(); planSpecial(); lastRush = -99; screechT = 8; giantAt = 0;
-  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, invT:0 });
+  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, skullKey:false, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, invT:0 });
   if (kit.flash){ P.light = { type:'flash', on:true, battery:100 }; } if (kit.band) P.bandage += 2; if (kit.vit) P.vitamin += 1; if (kit.rev) P.revive = true; if (kit.cross) P.cross = 1; kit = {}; LS.set('hotel_kit', '{}');
   ensureRooms(2); $('door').textContent = 'DOOR 000'; renderSlots(); setObj();
   $('lobby').classList.remove('show'); $('dead').classList.remove('show'); $('win').classList.remove('show'); $('pause').classList.remove('show'); $('hud').classList.remove('off'); $('hide').classList.remove('on');
@@ -1838,6 +1948,9 @@ function applyEv(e, who){ const r = e.r, room = rooms[r], key = e.k + ':' + r + 
     if (it.item === 'book'){ room.books = (room.books || 0) + 1; room.lamps = room.lamps.filter(l=>l.item !== m); const ci = m.userData.ci || 0, c = room.code[ci]; room.known.add(ci); msg('📕 ' + who + ' 이(가) 찾은 단서: ' + c.sh + ' = ' + c.d, 2600); setObj(); }
     else if (it.item === 'paper'){ room.paper = true; msg('📜 ' + who + ' 이(가) 힌트 종이를 주웠다: ' + room.code.map(c=>c.sh).join(' '), 3000); setObj(); }
     else if (it.item === 'ekey') msg('🗝 ' + who + ' 이(가) 전기실 열쇠를 주웠다', 2200); else if (it.item === 'switch') msg('🔧 ' + who + ' 이(가) 차단기 스위치를 주웠다', 1800); }
+  else if (e.k === 'sdoor' || e.k === 'kdoor'){ SH.done.add(key); const d = room && (e.k === 'sdoor' ? room.sideDoor : room.skullDoor); if (d){ d.locked = false; if (d.lock) d.hinge.remove(d.lock); if (d.target < 1) openDoor(d, true); } }
+  else if (e.k === 'secret'){ SH.done.add(key); if (room && room.shelf) openShelf(room, true); }
+  else if (e.k === 'med'){ SH.done.add(key); const c = room && room.meds && room.meds[e.m]; if (c) useMed(c, true); }
   else if (e.k === 'edoor'){ SH.done.add(key); if (room && room.eDoor){ const d = room.eDoor; d.locked = false; if (d.lock) d.hinge.remove(d.lock); if (d.target < 1) openDoor(d, true); if (P.room >= FINAL - 1) msg('👥 ' + who + ' 이(가) 전기실 문을 열었다', 2200); } }
   else if (e.k === 'swin'){ SH.done.add(key); if (room && room.sw) insertSwitch(room, e.k2 !== undefined ? e.k2 : e.kk, true); }
   else if (e.k === 'flip'){ SH.done.add(key); if (room && room.sw) flipSwitch(room, e.sk, true); }
@@ -1919,7 +2032,7 @@ function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.m
 // 로비 배경용 방
 buildPreLobby(); P.x = 0; P.z = 9; renderLobby(); setupPost(); requestAnimationFrame(loop);
 $('gfxBtn').style.opacity = bloomOn ? 1 : .45; $('gfxBtn').addEventListener('click', ()=>{ bloomOn = !bloomOn; LS.set('hotel_bloom', bloomOn ? '1' : '0'); setupPost(); $('gfxBtn').style.opacity = bloomOn ? 1 : .45; msg(bloomOn ? '빛 번짐 켜짐' : '빛 번짐 꺼짐 (가벼움)', 1400); });
-window.__H = { openPadlock, padKey, spawnShadow, tickHide, get PL(){ return PL; }, tryDoor, SH, shareEv, get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, swInteract, flipSwitch, insertSwitch, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
+window.__H = { pullBook, openShelf, useMed, get infirmRoom(){ return infirmRoom; }, openPadlock, padKey, spawnShadow, tickHide, get PL(){ return PL; }, tryDoor, SH, shareEv, get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, swInteract, flipSwitch, insertSwitch, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
 })();
 </script>
 <script>
