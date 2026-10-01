@@ -1024,10 +1024,12 @@ const MP = (function () {
         const p = val[k];
         if (!p || !p.ts || (now - p.ts) > PRESENCE_STALE_MS) delete val[k];
       });
+      mpChatPresence(val);
       if (onPlayersCb) onPlayersCb(val);
     }
     playersRef.on('value', snap => {
       lastPlayersSnapshot = snap.val() || {};
+      mpChatScan(lastPlayersSnapshot);
       emitFilteredPlayers();
     });
     // 다른 사람이 아무도 움직이지 않으면(=파이어베이스에 새 쓰기가 없으면) 위 'value' 리스너가
@@ -1035,7 +1037,80 @@ const MP = (function () {
     if (presenceStaleTimer) clearInterval(presenceStaleTimer);
     presenceStaleTimer = setInterval(emitFilteredPlayers, 5000);
     ready = true;
+    mpChatMount();
   }
+
+
+  // =====================================================================
+  //  공용 채팅 (로블록스처럼 왼쪽 위) — 방에 들어간 모든 게임에서 자동으로 뜬다.
+  //  메시지는 각자 플레이어 기록의 chat 필드에 {i, m, t} 로 쓰고, 다른 사람은 i가 바뀌면 읽는다.
+  // =====================================================================
+  const CHAT = { el:null, list:null, input:null, n:0, last:{}, seen:{}, names:{}, sentAt:0, idleT:null, collapsed:false, baseline:false, members:{} };
+  const CHAT_BAD = /(시발|씨발|ㅅㅂ|ㅆㅂ|병신|ㅂㅅ|개새끼|좆|존나|ㅈㄴ|미친놈|fuck|shit)/gi;
+  function chatClean(t){ return String(t || '').replace(/[\u0000-\u001f]/g, '').slice(0, 120).replace(CHAT_BAD, m=>'#'.repeat(m.length)); }
+  function chatEsc(t){ return String(t).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+  function mpChatMount(){
+    if (CHAT.el || typeof document === 'undefined' || !document.body) return;
+    try { CHAT.collapsed = localStorage.getItem('mp_chat_collapsed') === '1'; } catch(e){}
+    const st = document.createElement('style');
+    st.textContent = `
+      #mpChat{position:fixed;left:10px;top:54px;width:min(360px,62vw);z-index:45;font-family:'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif;pointer-events:none;transition:opacity .4s}
+      #mpChat.idle{opacity:.72}
+      #mpChat .bar{display:flex;align-items:center;gap:6px;pointer-events:auto}
+      #mpChat .tg{width:34px;height:30px;border:none;border-radius:8px;background:rgba(20,20,24,.62);color:#fff;font-size:15px;cursor:pointer}
+      #mpChat .ttl{font:800 11px sans-serif;color:rgba(255,255,255,.7);text-shadow:0 1px 2px #000;letter-spacing:.05em}
+      #mpChat .box{margin-top:4px;border-radius:10px;background:rgba(18,18,22,.42);padding:6px 8px 6px;transition:background .4s}
+      #mpChat.idle .box{background:rgba(18,18,22,.18)}
+      #mpChat.collapsed .box{display:none}
+      #mpChat .list{max-height:min(24vh,170px);overflow-y:auto;display:flex;flex-direction:column;gap:2px;scrollbar-width:none;pointer-events:none}
+      #mpChat .list::-webkit-scrollbar{display:none}
+      #mpChat .ln{font-size:13.5px;line-height:1.35;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.8);word-break:break-all}
+      #mpChat .ln b{font-weight:800} #mpChat .ln.sys{color:#ffe38a;font-size:12.5px} #mpChat .ln.me b{text-decoration:underline}
+      #mpChat input{margin-top:5px;width:100%;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#fff;padding:0 9px;font-size:13.5px;outline:none;pointer-events:auto;font-family:inherit}
+      #mpChat input:focus{background:rgba(10,10,12,.85);border-color:rgba(255,255,255,.55)}
+      #mpChat input::placeholder{color:rgba(255,255,255,.55)}
+      @media (max-width:640px){#mpChat{top:50px;width:min(300px,70vw)} #mpChat .ln{font-size:12.5px} #mpChat .list{max-height:18vh}}`;
+    document.head.appendChild(st);
+    const el = document.createElement('div'); el.id = 'mpChat';
+    el.innerHTML = '<div class="bar"><button class="tg" type="button" title="채팅 접기/펴기">💬</button><span class="ttl">채팅</span></div><div class="box"><div class="list"></div><input type="text" maxlength="120" placeholder="채팅하려면 여기를 누르거나 / 키" enterkeyhint="send" autocomplete="off"></div>';
+    document.body.appendChild(el); CHAT.el = el; CHAT.list = el.querySelector('.list'); CHAT.input = el.querySelector('input');
+    if (CHAT.collapsed) el.classList.add('collapsed');
+    el.querySelector('.tg').addEventListener('click', ev=>{ ev.stopPropagation(); CHAT.collapsed = !CHAT.collapsed; el.classList.toggle('collapsed', CHAT.collapsed); try { localStorage.setItem('mp_chat_collapsed', CHAT.collapsed ? '1' : '0'); } catch(e){} });
+    const inp = CHAT.input; const stop = ev=>ev.stopPropagation();
+    ['keyup', 'keypress', 'mousedown', 'pointerdown', 'touchstart', 'click', 'wheel'].forEach(t=>inp.addEventListener(t, stop));
+    inp.addEventListener('keydown', ev=>{ ev.stopPropagation(); if (ev.key === 'Enter'){ ev.preventDefault(); const m = inp.value; inp.value = ''; if (m.trim()) chatSend(m); inp.blur(); } else if (ev.key === 'Escape'){ inp.value = ''; inp.blur(); } });
+    inp.addEventListener('focus', ()=>{ window.MPChatOpen = true; chatWake(); try { if (document.pointerLockElement) document.exitPointerLock(); } catch(e){} });
+    inp.addEventListener('blur', ()=>{ setTimeout(()=>{ window.MPChatOpen = false; }, 120); chatWake(); });
+    ['pointerdown', 'touchstart', 'mousedown', 'click'].forEach(t=>CHAT.list.addEventListener(t, stop));
+    // "/" 키로 바로 채팅
+    window.addEventListener('keydown', ev=>{ if (ev.key !== '/' || document.activeElement === inp) return; const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+      ev.preventDefault(); ev.stopPropagation(); if (CHAT.collapsed){ CHAT.collapsed = false; el.classList.remove('collapsed'); } inp.focus(); }, true);
+    chatSys('채팅에 들어왔어요 · / 키로 말하기');
+    chatWake(); chatPlace(); setInterval(chatPlace, 1500); addEventListener('resize', chatPlace); }
+  // 게임마다 왼쪽 위에 이미 있는 UI(생존 수 · 버튼 · 돈 등)를 피해서 그 아래로 내려간다
+  function chatPlace(){ const el = CHAT.el; if (!el) return; const W = el.offsetWidth;
+    const all = [...document.body.querySelectorAll('body > *, body > * > *, body > * > * > *')].filter(e=>{ if (e === el || el.contains(e) || e.tagName === 'CANVAS' || e.tagName === 'SCRIPT' || e.tagName === 'STYLE') return false; const r = e.getBoundingClientRect(); if (r.width < 4 || r.height < 4 || r.top > 320 || r.bottom < 40) return false; if (r.width > innerWidth*.6 || r.height > innerHeight*.45) return false;
+      const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false; return !!((e.textContent || '').trim() || e.tagName === 'BUTTON' || e.tagName === 'A'); }).map(e=>e.getBoundingClientRect());
+    const topFor = L=>{ let b = 0; for (const r of all){ if (r.top > 200 || r.left > L + W || r.right < L) continue; b = Math.max(b, r.bottom); } return Math.max(54, Math.round(b + 8)); };
+    let L = 10, top = topFor(10);
+    if (top > 140){ let right = 0; for (const r of all) if (r.left < 120 && r.top < 320) right = Math.max(right, r.right); const L2 = Math.min(220, Math.round(right + 8)), t2 = topFor(L2); if (t2 <= 140){ L = L2; top = t2; } }
+    top = Math.min(Math.round(innerHeight*.4), top);
+    if (Math.abs(top - (CHAT.top || 0)) > 2 || L !== CHAT.left){ CHAT.top = top; CHAT.left = L; el.style.top = top + 'px'; el.style.left = L + 'px'; } }
+  function chatWake(){ if (!CHAT.el) return; CHAT.el.classList.remove('idle'); clearTimeout(CHAT.idleT); CHAT.idleT = setTimeout(()=>{ if (document.activeElement !== CHAT.input) CHAT.el.classList.add('idle'); }, 9000); }
+  function chatLine(html, cls){ if (!CHAT.list) return; const d = document.createElement('div'); d.className = 'ln' + (cls ? ' ' + cls : ''); d.innerHTML = html; CHAT.list.appendChild(d);
+    while (CHAT.list.children.length > 60) CHAT.list.removeChild(CHAT.list.firstChild); CHAT.list.scrollTop = CHAT.list.scrollHeight; chatWake(); }
+  function chatSys(t){ chatLine(chatEsc(t), 'sys'); }
+  function chatName(u, name){ const c = '#' + ('000000' + (colorForUid(u) >>> 0).toString(16)).slice(-6); return '<b style="color:' + c + '">' + chatEsc(String(name || '플레이어').slice(0, 16)) + '</b>'; }
+  function chatSend(raw){ const m = chatClean(raw).trim(); if (!m || !ready || !myRef) return; const now = Date.now(); if (now - CHAT.sentAt < 700){ chatSys('너무 빨라요! 잠깐만요'); return; } CHAT.sentAt = now;
+    CHAT.n = (CHAT.n || 0) + 1; const i = Date.now().toString(36) + CHAT.n; try { myRef.update({ chat:{ i, m, t:firebase.database.ServerValue.TIMESTAMP } }); } catch(e){}
+    chatLine(chatName(uid, getDisplayName()) + ': ' + chatEsc(m), 'me'); }
+  function mpChatScan(all){ if (!CHAT.el) return; const now = serverNow();
+    Object.keys(all || {}).forEach(u=>{ if (u === uid) return; const p = all[u]; if (!p) return; if (p.name) CHAT.names[u] = p.name; const c = p.chat; if (!c || !c.i || CHAT.last[u] === c.i) return; const first = !(u in CHAT.last); CHAT.last[u] = c.i;
+      if (first && c.t && now - c.t > 20000) return; chatLine(chatName(u, p.name) + ': ' + chatEsc(chatClean(c.m))); }); }
+  function mpChatPresence(val){ if (!CHAT.el) return; const cur = {}; Object.keys(val || {}).forEach(u=>{ cur[u] = (val[u] && val[u].name) || CHAT.names[u] || '플레이어'; });
+    if (CHAT.baseline){ Object.keys(cur).forEach(u=>{ if (!CHAT.members[u]) chatSys(cur[u] + '님이 들어왔어요'); }); Object.keys(CHAT.members).forEach(u=>{ if (!cur[u]) chatSys(CHAT.members[u] + '님이 나갔어요'); }); }
+    CHAT.members = cur; CHAT.baseline = true; }
+  function chatOpen(){ return !!window.MPChatOpen; }
 
   function handleAuthChange(user) {
     authReady = true;
@@ -1641,6 +1716,7 @@ const MP = (function () {
     fetchLeaderboard,
     fetchMyScore,
     setPresence,
+    chatSend, chatSys, chatOpen,
     serverNow,
     onGamePresence,
     addXP,

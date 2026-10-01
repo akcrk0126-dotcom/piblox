@@ -1092,6 +1092,105 @@ MG.chairs = { name:'의자 뺏기', icon:'🪑', desc:'음악이 멈추면 원�
     };
     return A; } };
 
+// ---------- 16. 차오르는 용암 ----------
+MG.lava = { name:'차오르는 용암', icon:'🌋', desc:'바닥부터 용암이 차올라요! 발판을 타고 위로 위로!<br>용암에 닿으면 탈락 — 꼭대기까지 올라가면 안전해요.', dur:75, elim:true,
+  build(seed){
+    const grp = new THREE.Group(), R = rng(seed), plats = [];
+    box(grp, 'arena', AX, -1, AZ, 36, 2, 36, mat(0x6a5a50, 'stud', 10));
+    const cols = [0xff5a4a, 0xffa23a, 0xffe04a, 0x4ad68a, 0x4aa8ff, 0xa66bff];
+    // 3갈래 나선 계단 + 흩어진 발판
+    const NK = 16, DY = 1.6;
+    for (let arm=0; arm<3; arm++){ for (let k=0;k<NK;k++){ const a = arm*Math.PI*2/3 + k*0.5 + R()*0.06, r = 7.6, y = 1.1 + k*DY, x = AX + Math.cos(a)*r, z = AZ + Math.sin(a)*r, w = 3.1 - Math.min(0.8, k*0.04);
+      const m = box(grp, 'arena', x, y - 0.35, z, w, 0.7, w, mat(cols[(arm*2 + k) % cols.length], 'stud', 1), { shadow:true }); plats.push({ x, y, z, w, arm, k, m }); } }
+    const top = 1.1 + NK*DY; const tm = box(grp, 'arena', AX, top - 0.5, AZ, 5, 1, 5, mat(0xffd84a, 'stud', 2), { shadow:true }); plats.push({ x:AX, y:top, z:AZ, w:5, arm:-1, k:NK, m:tm });
+    // 무너지는 발판 일정 (모두에게 같게): 12초부터 1.4초마다 하나씩 흔들리다 떨어짐, 꼭대기는 55초에
+    const fallAt = new Map(); { let t = 12; const pool = plats.slice(0, -1).map((p, i)=>i).sort(()=>R() - .5); for (const i of pool){ fallAt.set(i, t); t += 1.4; if (t > 70) break; } fallAt.set(plats.length - 1, 55); }
+    const WARNF = 1.1, isGone = (i, el)=>{ const t = fallAt.get(i); return t !== undefined && el >= t + WARNF; }, isWarn = (i, el)=>{ const t = fallAt.get(i); return t !== undefined && el >= t && el < t + WARNF; };
+    const flag = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.4, 4), matB(0xff3a3a)); flag.position.set(AX, top + 2.6, AZ); grp.add(flag); cyl(grp, AX, top + 1.2, AZ, 0.08, 0.08, 2.6, mat(0xffffff));
+    const lavaH = el => -2.5 + Math.max(0, el - 6)*0.43;
+    const lm = new THREE.MeshBasicMaterial({ color:0xff5a10, transparent:true, opacity:.88 }); const lava = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 60), lm); lava.position.set(AX, -3, AZ); grp.add(lava);
+    const glow = new THREE.PointLight(0xff6a20, 2, 26); grp.add(glow);
+    const A = { grp, voidY:-30, plats, lavaH,
+      spawns:n=>circleSpawns(n, 13),
+      update(dt, el){ const h = lavaH(Math.max(0, el)); lava.position.y = h - 0.2;
+        plats.forEach((p, i)=>{ const gone = el > 0 && isGone(i, el), warn = el > 0 && isWarn(i, el); if (p.m.userData.col) p.m.userData.col.off = gone; if (gone){ if (!p.fell){ p.fell = true; if (Math.hypot(me.x - p.x, me.z - p.z) < 25) audio.sfx.pop(); } p.vy = (p.vy || 0) - 30*dt; p.m.position.y = Math.max(-40, p.m.position.y + p.vy*dt); p.m.visible = p.m.position.y > -38; }
+          else { p.fell = false; p.vy = 0; p.m.visible = true; p.m.position.set(p.x + (warn ? Math.sin(el*60)*0.12 : 0), p.y - (p.arm < 0 ? 0.5 : 0.35), p.z); } }); glow.position.set(AX, h + 2, AZ); lm.color.setHSL(0.04 + Math.sin(el*3)*0.01, 1, 0.5 + Math.sin(el*5)*0.04);
+        if (el > 0 && isAlive(MY_ID) && me.y < h - 0.05){ knock(me, 0, 0, 0, 30); audio.sfx.hit(); outMe('🌋 용암에 빠졌어요!'); } },
+      host(dt, el){ const h = lavaH(Math.max(0, el)); for (const b of BS.values()) if (isAlive(b.id) && b.y < h - 0.05){ knock(b, 0, 0, 0, 30); hostOut(b.id); } },
+      over(el){ return lavaH(el) > top + 0.5; }, isGone, isWarn,
+      banner(el){ if (el < 0) return null; const h = lavaH(el); const gap = me.y - h; return { html:'🌋 용암 높이 ' + Math.max(0, h + 2.5).toFixed(1) + 'm · 내 위로 ' + gap.toFixed(1) + 'm', col:gap < 3 ? '#ff5a3a' : null }; },
+      bot(b, el, dt){ if (el < 0) return { mx:0, mz:0 };
+        // 지금 서 있는 발판 → 같은 갈래의 다음 발판 (꼭대기 다음은 가운데)
+        if (b.grounded){ const on = plats.find((p, i)=>!isGone(i, el) && Math.abs(b.y - p.y) < 0.35 && Math.abs(b.x - p.x) < p.w/2 + 0.3 && Math.abs(b.z - p.z) < p.w/2 + 0.3); if (on){ b.cur = on; } else if (b.y < 0.6) b.cur = null; }
+        const ok = p=> p && !isGone(plats.indexOf(p), el) && !isWarn(plats.indexOf(p), el);
+        let g; if (!b.cur){ if (b.arm == null) b.arm = Math.floor(Math.random()*3); g = plats.find(p=>p.arm === b.arm && p.k === 0); }
+        else if (b.cur.arm < 0){ if (!isWarn(plats.length - 1, el)) return { mx:0, mz:0 }; g = plats.filter(ok).sort((a, c)=>c.y - a.y)[0] || b.cur; }
+        else { const cands = [b.cur.k >= NK - 1 ? plats[plats.length - 1] : null].concat([0, 1, 2].map(a=>plats.find(p=>p.arm === a && p.k === b.cur.k + 1)), [0, 1, 2].map(a=>plats.find(p=>p.arm === a && p.k === b.cur.k))).filter(p=>p && p !== b.cur && ok(p) && Math.hypot(p.x - b.cur.x, p.z - b.cur.z) < 6.5 && p.y >= b.cur.y - 0.2);
+          g = cands[0] || b.cur; if (g === b.cur && !isWarn(plats.indexOf(b.cur), el)) return { mx:0, mz:0 }; }
+        // 용암이 아직 멀면 가끔 머뭇거림 (봇 실수)
+        if (b.wait > 0){ b.wait -= dt; return { mx:0, mz:0 }; } if (Math.random() < dt*0.2*(b.slow || 0)*4 && b.y > lavaH(el) + 4) b.wait = rnd(0.5, 1.5);
+        const s = seek(b, g.x, g.z, 0.25), d = Math.hypot(g.x - b.x, g.z - b.z); if (g.y > b.y + 0.3 && d < g.w/2 + 2.4 && b.grounded) s.jump = true; return s; },
+    };
+    return A; } };
+// ---------- 17. 굴러오는 공 ----------
+MG.balls = { name:'굴러오는 공', icon:'🎳', desc:'사방에서 거대한 공이 굴러와요!<br>맞으면 멀리 날아가요 — 판 밖으로 떨어지면 탈락!', dur:70, elim:true,
+  build(seed){
+    const grp = new THREE.Group(), HALF = 17, R = rng(seed);
+    box(grp, 'arena', AX, -1, AZ, HALF*2, 2, HALF*2, mat(0xe8d8b0, 'stud', 10));
+    for (const [x, z, w, d] of [[AX, AZ - HALF, HALF*2, 0.3], [AX, AZ + HALF, HALF*2, 0.3], [AX - HALF, AZ, 0.3, HALF*2], [AX + HALF, AZ, 0.3, HALF*2]]){ const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), matB(0xff3a3a)); m.position.set(x, 0.04, z); grp.add(m); }
+    const list = []; let t = 1.5, i = 0; while (t < 75){ const side = Math.floor(R()*4), off = (R()*2 - 1)*(HALF - 3), big = R() < 0.25 + Math.min(0.25, i*0.006), r = big ? 3 : 1.8, spd = 9 + R()*4 + Math.min(8, i*0.12);
+      list.push({ t, side, off, r, spd, col:[0xff5a6a, 0x4aa8ff, 0xffd84a, 0x4ad68a, 0xa66bff][i % 5] }); t += Math.max(0.55, 2.2 - i*0.04); i++; }
+    const pos = (bl, el)=>{ const s = el - bl.t; if (s < 0) return null; const dist = -HALF - 6 + s*bl.spd; if (dist > HALF + 6) return null; const x = bl.side === 0 ? AX + dist : bl.side === 1 ? AX - dist : AX + bl.off, z = bl.side === 2 ? AZ + dist : bl.side === 3 ? AZ - dist : AZ + bl.off; return { x, z, dx:bl.side === 0 ? 1 : bl.side === 1 ? -1 : 0, dz:bl.side === 2 ? 1 : bl.side === 3 ? -1 : 0 }; };
+    const geoS = new THREE.SphereGeometry(1, 20, 14);
+    function hitTest(p, el, id){ for (const bl of list){ const q = pos(bl, el); if (!q) continue; if (Math.hypot(p.x - q.x, p.z - q.z) < bl.r + RAD && p.y < bl.r*1.7){ const k = bl.hit || (bl.hit = {}); if (k[id] && el - k[id] < 0.6) continue; k[id] = el; knock(p, q.dx || (p.x - q.x > 0 ? 1 : -1)*0.3, q.dz || (p.z - q.z > 0 ? 1 : -1)*0.3, 26 + bl.r*4, 18); return true; } } return false; }
+    const A = { grp, voidY:-20,
+      spawns:n=>gridSpawns(n, 8),
+      update(dt, el){ for (const bl of list){ const q = el > 0 ? pos(bl, el) : null;
+          if (q && !bl.m){ bl.m = new THREE.Mesh(geoS, mat(bl.col, 'stripe', 1)); bl.m.scale.setScalar(bl.r); bl.m.castShadow = true; grp.add(bl.m); bl.warn = null; }
+          if (!q && bl.m){ grp.remove(bl.m); bl.m = null; }
+          if (bl.m){ bl.m.position.set(q.x, bl.r, q.z); bl.m.rotation.x += (q.dz*bl.spd/bl.r)*dt; bl.m.rotation.z -= (q.dx*bl.spd/bl.r)*dt; } }
+        if (el > 0 && isAlive(MY_ID) && hitTest(me, el, MY_ID)) audio.sfx.hit(); },
+      host(dt, el){ if (el <= 0) return; for (const b of BS.values()) if (isAlive(b.id)) hitTest(b, el, b.id); },
+      banner(el){ return el < 0 ? null : { html:'🎳 공을 피하세요! 큰 공은 더 멀리 날려요' }; },
+      bot(b, el, dt){ if (el < 0) return { mx:0, mz:0 }; let fx = 0, fz = 0, danger = false;
+        for (const bl of list){ const q = pos(bl, el); if (!q) continue; const ahead = (b.x - q.x)*q.dx + (b.z - q.z)*q.dz; if (ahead < -1 || ahead > 14) continue; const lat = q.dx ? b.z - q.z : b.x - q.x; if (Math.abs(lat) < bl.r + 2){ danger = true; const sgn = lat >= 0 ? 1 : -1; if (q.dx) fz += sgn; else fx += sgn; } }
+        const cx = AX - b.x, cz = AZ - b.z; if (danger && Math.random() > (b.slow || 0)){ fx += cx*0.03; fz += cz*0.03; const l = Math.hypot(fx, fz) || 1; return { mx:fx/l, mz:fz/l }; }
+        const d0 = Math.hypot(cx, cz); if (d0 > 9) return seek(b, AX, AZ, 1); return { mx:0, mz:0 }; },
+    };
+    return A; } };
+// ---------- 18. 꼬리잡기 ----------
+MG.tail = { name:'꼬리잡기', icon:'🦊', desc:'꼬리를 단 사람에게 닿으면 꼬리를 뺏어요!<br>꼬리를 오래 달고 있을수록 점수 — 끝날 때 꼬리가 있으면 보너스!', dur:60, elim:false,
+  build(seed){
+    const grp = new THREE.Group(), HALF = 20, R = rng(seed);
+    box(grp, 'arena', AX, -1, AZ, HALF*2, 2, HALF*2, mat(0x9ad06a, 'stud', 12)); fence(grp, HALF, 3);
+    for (let i=0;i<8;i++){ const x = AX + (R()*2 - 1)*13, z = AZ + (R()*2 - 1)*13; box(grp, 'arena', x, 0.9, z, 3, 1.8, 3, mat([0xffd83a, 0xff9ac8, 0x6ab8ff, 0xff7a3a][i % 4], 'stud', 1), { shadow:true }); }
+    const tails = new Map();
+    const tailMesh = ()=>{ const g = new THREE.Group(); const c = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.8, 10), mat(0xff8a2a)); c.rotation.x = -Math.PI/2 - 0.5; c.position.set(0, 0, -0.9); g.add(c); const tip = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), mat(0xffffff)); tip.position.set(0, -0.45, -1.75); g.add(tip); scene.add(g); return g; };
+    const holders = ()=> (state.G && state.G.x && state.G.x.tl) || {};
+    const A = { grp, voidY:-30,
+      spawns:n=>circleSpawns(n, 13),
+      speedMul:id=> holders()[id] ? 0.94 : 1.04,
+      dispose(){ for (const g of tails.values()) scene.remove(g); tails.clear(); },
+      update(dt, el){ const hs = holders();
+        for (const [id, g] of tails) if (!hs[id]){ scene.remove(g); tails.delete(id); }
+        for (const id in hs){ if (!hs[id]) continue; let g = tails.get(id); if (!g){ g = tailMesh(); tails.set(id, g); } const a = actors.get(id); const p = id === MY_ID ? me : a; if (!p) continue; const ry = a ? (a.g ? a.g.rotation.y : 0) : 0; g.position.set(p.x, p.y + 1.25, p.z); g.rotation.y = ry; g.children[0].rotation.z = Math.sin(el*10)*0.3; }
+        const mine = !!hs[MY_ID]; if (mine !== A.had){ if (A.had !== undefined){ if (mine){ bigMsg('🦊 꼬리를 뺏었다!', '도망쳐요!', '#ff8a2a', 1400); audio.sfx.coin(); } else { bigMsg('😱 꼬리를 뺏겼다!', '다시 뺏어 와요!', '#ff5a5a', 1400); audio.sfx.pop(); } } A.had = mine; } },
+      host(dt, el){ if (el <= 0) return; const X = H.x; X.tl = X.tl || {}; X.cc = X.cc || {}; X.cd = X.cd || {};
+        if (!X.init){ X.init = 1; const ids = H.parts.slice().sort(()=>Math.random() - 0.5); ids.slice(0, Math.max(1, Math.floor(ids.length/2))).forEach(id=>{ X.tl[id] = 1; }); }
+        X.acc = (X.acc || 0) + dt; if (X.acc >= 0.5){ X.acc -= 0.5; for (const id in X.tl) if (X.tl[id]) X.cc[id] = +((X.cc[id] || 0) + 0.5).toFixed(1); }
+        const now = el*1000;
+        for (const id of H.parts){ if (X.tl[id]) continue; const p = posOf(id); if (!p) continue;
+          for (const hid in X.tl){ if (!X.tl[hid] || (X.cd[hid] && now - X.cd[hid] < 1500)) continue; const q = posOf(hid); if (!q) continue; if (Math.hypot(p.x - q.x, p.z - q.z) < 2.1 && Math.abs(p.y - q.y) < 2.4){ X.tl[hid] = 0; X.tl[id] = 1; X.cd[id] = now; break; } } }
+        if (el >= MG.tail.dur - 0.3 && !X.bonus){ X.bonus = 1; for (const id in X.tl) if (X.tl[id]) X.cc[id] = (X.cc[id] || 0) + 10; } },
+      banner(el){ if (el < 0) return null; const hs = holders(), cc = (state.G.x && state.G.x.cc) || {}; return { html:(hs[MY_ID] ? '<span style="color:#ff8a2a">🦊 꼬리 있음! 도망쳐요</span>' : '😼 꼬리를 뺏어요!') + ' · 점수 <b>' + (cc[MY_ID] || 0) + '</b>' }; },
+      bot(b, el, dt){ if (el < 0) return { mx:0, mz:0 }; const X = H.x, tl = X.tl || {};
+        if (tl[b.id]){ let near = null, nd = 1e9; for (const id of H.parts){ if (id === b.id || tl[id]) continue; const p = posOf(id); if (!p) continue; const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < nd){ nd = d; near = p; } }
+          if (near && nd < 10){ let fx = b.x - near.x, fz = b.z - near.z; const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l; fx += (AX - b.x)*0.03; fz += (AZ - b.z)*0.03; const l2 = Math.hypot(fx, fz) || 1; return unstick(b, { mx:fx/l2, mz:fz/l2, jump:nd < 3 && Math.random() < 0.04 }, dt); }
+          const s = seek(b, AX + Math.sin(el*0.5 + b.id.length)*10, AZ + Math.cos(el*0.4)*10, 0.5); s.mx *= 0.5; s.mz *= 0.5; return unstick(b, s, dt); }
+        let best = null, bd = 1e9; for (const id in tl){ if (!tl[id]) continue; const p = posOf(id); if (!p) continue; const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < bd){ bd = d; best = p; } }
+        return best ? unstick(b, seek(b, best.x, best.z, 0), dt) : { mx:0, mz:0 }; },
+    };
+    return A; } };
 const GAME_IDS = Object.keys(MG).filter(id=>!MG[id].finale);
 function seek(b, x, z, stop){ const dx = x - b.x, dz = z - b.z, d = Math.hypot(dx, dz); if (d < (stop || 0.3)) return { mx:0, mz:0 }; return { mx:dx/d, mz:dz/d }; }
 let myCoins = 0;
