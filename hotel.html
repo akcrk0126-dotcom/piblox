@@ -655,7 +655,7 @@ function buildRoom(room){
   if (type === 'eyes') addWallEyes(room, g);
   if (room.snareN) placeSnares(room, g, room.snareN);
   // 그림자 받는 물체 업데이트
-  g.updateMatrixWorld(true);
+  g.updateMatrixWorld(true); room.built = true;
 }
 function scaleUV(geo, a, b){ const uv = geo.attributes.uv; for (let k=0;k<uv.count;k++) uv.setXY(k, uv.getX(k)*a, uv.getY(k)*b); uv.needsUpdate = true; }
 function wallSlots(room){ const { L, xl, xr, exitKind:ek, exLocal } = room; const out = [];
@@ -769,10 +769,12 @@ function drawFinalSign(room){ const c = room.elvSign.c, g2 = c.getContext('2d');
   g2.fillStyle = room.power ? '#7affb0' : '#3a2a20'; g2.fillText(room.power ? '▲ 비상 엘리베이터' : '전원 없음', 256, 66); room.elvSign.t.needsUpdate = true; }
 function finalInteract(room){ if (room.power) return;
   if (room.fuseIn < 3){ const n = Math.min(P.fuses || 0, 3 - room.fuseIn); if (!n){ msg('퓨즈가 없어… 상자와 선반 위를 찾아봐 (' + room.fuseIn + '/3)'); audio.sfx.lock(); return; }
-    P.fuses -= n; for (let k=0;k<n;k++){ const s0 = room.fuseSlots[room.fuseIn]; s0.sl.visible = true; s0.led.material.color.set(0xffc040); room.fuseIn++; } audio.sfx.clank(); renderSlots();
+    P.fuses -= n; setFuseIn(room, room.fuseIn + n); shareEv('fuse', room.i, { f:room.fuseIn }); audio.sfx.clank(); renderSlots();
     room.breakerHit.userData.inter.label = room.fuseIn >= 3 ? '레버 당기기' : '차단기 — 퓨즈 ' + room.fuseIn + '/3'; msg(room.fuseIn >= 3 ? '퓨즈를 다 끼웠다. 레버를 당기자!' : '퓨즈 ' + room.fuseIn + '/3', 2200); setObj(); return; }
   // 레버
-  room.power = true; audio.sfx.lever(); P.shake = .6; room.breakerHit.userData.inter.label = '전원 켜짐'; room.leverT = 0;
+  shareEv('power', room.i); powerOn(room); }
+function setFuseIn(room, n){ n = Math.min(3, n); while (room.fuseIn < n){ const s0 = room.fuseSlots[room.fuseIn]; s0.sl.visible = true; s0.led.material.color.set(0xffc040); room.fuseIn++; } room.breakerHit.userData.inter.label = room.fuseIn >= 3 ? '레버 당기기' : '차단기 — 퓨즈 ' + room.fuseIn + '/3'; setObj(); }
+function powerOn(room){ if (room.power) return; room.power = true; audio.sfx.lever(); P.shake = .6; room.breakerHit.userData.inter.label = '전원 켜짐'; room.leverT = 0;
   for (const s0 of room.fuseSlots) s0.led.material.color.set(0x60ff90);
   setTimeout(()=>{ if (!running) return; audio.sfx.alarm(); room.flicker = false; for (const l of room.lamps){ if (l.emergency){ l.col = 0xfff0d8; l.bulbMat.color.set(0xfff0d8); l.base = 9; } } room.cabLight.material.color.set(0xfff4d0); drawFinalSign(room);
     if (entity.giant){ entity.giant.enraged = true; audio.sfx.roar(entity.giant.x, entity.giant.z); } msg('전원이 들어왔다! 그것이 소리를 들었다 — 엘리베이터가 열리면 뛰어!', 3200); room.elvAt = T + 5; setObj(); }, 700); }
@@ -850,7 +852,7 @@ function buildGate(room, g){ const { L, xl, xr, exitKind:ek, exLocal:[exx, exz] 
   const hit = new THREE.Mesh(new THREE.BoxGeometry(.6, .9, .5), new THREE.MeshBasicMaterial({ visible:false })); hit.position.set(lx, 1.4, .3); g.add(hit);
   room.gate = { bars, col, open:0, target:0, hdl, hit }; hit.userData.inter = { kind:'lever', room, label:'레버 당기기' }; interacts.push(hit); room.inters.push(hit);
   const glow = new THREE.Sprite(MAT.glow); glow.scale.set(.6, .6, 1); glow.position.set(lx, 1.55, .3); g.add(glow); }
-function pullLever(room){ const gt = room.gate; if (!gt || gt.target) return; gt.target = 1; gt.hit.userData.inter = null; audio.sfx.lever(); setTimeout(()=>audio.sfx.gate(), 250); msg('철창이 올라간다', 1800); setObj(); }
+function pullLever(room, remote){ const gt = room.gate; if (!gt || gt.target) return; if (!remote) shareEv('gate', room.i); gt.target = 1; gt.hit.userData.inter = null; audio.sfx.lever(); setTimeout(()=>audio.sfx.gate(), 250); msg('철창이 올라간다', 1800); setObj(); }
 function tickGates(dt){ for (let i = Math.max(0, P.room - 1); i <= P.room + 1 && i < rooms.length; i++){ const r = rooms[i]; if (!r || !r.gate) continue; const gt = r.gate; if (gt.open === gt.target) continue;
   gt.open = Math.min(1, gt.open + dt*.7); gt.bars.position.y = gt.open*(DH - .3); gt.hdl.rotation.x = .7 - Math.min(1, gt.open*4)*1.4; if (gt.open > .7) gt.col.off = true; } }
 
@@ -923,9 +925,9 @@ function itemMesh(kind){ const gr = new THREE.Group();
   else if (kind === 'fuse'){ const f = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .3, 10), MAT.fuse); f.rotation.z = Math.PI/2; f.position.y = .07; gr.add(f); for (const sx of [-1, 1]) B(gr, MAT.brass, sx*.17, .07, 0, .05, .16, .16); const sp = new THREE.Sprite(MAT.glow); sp.scale.set(1.1, 1.1, 1); sp.position.y = .1; gr.add(sp);
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(.08, .2, 3.5, 10, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 1.8; gr.add(beam); }
   gr.traverse(o=>{ if (o.isMesh) o.castShadow = false; }); return gr; }
-function regItem(room, m, kind){ const hit = new THREE.Mesh(new THREE.SphereGeometry(kind === 'book' ? .3 : .18, 8, 6), new THREE.MeshBasicMaterial({ visible:false })); m.add(hit);
+function regItem(room, m, kind){ const sid = room.built ? null : room.i + ':' + (room.itemN = (room.itemN || 0) + 1); const hit = new THREE.Mesh(new THREE.SphereGeometry(kind === 'book' ? .3 : .18, 8, 6), new THREE.MeshBasicMaterial({ visible:false })); m.add(hit);
   const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기', fuse:'퓨즈 줍기' };
-  hit.userData.inter = { kind:'item', item:kind, mesh:m, label:labels[kind] || '줍기' }; interacts.push(hit); room.inters.push(hit); return hit; }
+  hit.userData.inter = { kind:'item', item:kind, mesh:m, label:labels[kind] || '줍기', sid, room }; interacts.push(hit); room.inters.push(hit); return hit; }
 function disposeRoom(room){ scene.remove(room.g); room.g.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material.map.image && o.material !== MAT.door && o.material.map !== TX.plate) {} });
   for (const m of room.inters){ const k = interacts.indexOf(m); if (k >= 0) interacts.splice(k, 1); } if (room.door){ const k = interacts.indexOf(room.door.leaf); if (k >= 0) interacts.splice(k, 1); room.door.leaf.material && 0; } room.disposed = true; }
 
@@ -1075,10 +1077,10 @@ function interact(){ if ((!running && !LB.on) || P.dead || paused || CUT || T - 
 function tryDoor(door, manual){ if (door.open > 0 || door.target > 0) return;
   const room = door.room; if (room.gate && room.gate.open < .7){ if (manual){ msg('철창이 문을 막고 있다 — 레버를 찾아'); audio.sfx.lock(); } return; }
   if (door.locked){ if (room.type === 'library'){ if (manual) msg('잠겨 있다… 책 ' + (room.books || 0) + '/' + BOOKS_NEED); audio.sfx.lock(); return; }
-    if (P.key){ P.key = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); renderSlots(); msg('열쇠로 문을 열었다'); }
+    if (P.key){ P.key = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); renderSlots(); msg('열쇠로 문을 열었다'); shareEv('unlock', room.i); }
     else { if (manual){ msg('잠겨 있다. 열쇠가 필요해'); audio.sfx.lock(); } return; } }
   openDoor(door); }
-function openDoor(door){ door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
+function openDoor(door, remote){ if (!remote) shareEv('door', door.room.i); door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
 function toggleDrawer(dr){ dr.target = dr.target ? 0 : 1; audio.sfx.drawer(); if (dr.target && !dr.looted){ dr.looted = true;
     // 서랍 거미 — 가끔 물건 대신 튀어나온다 (열쇠 서랍은 제외)
     if (!dr.key && P.room >= 3 && Math.random() < .035){ setTimeout(()=>{ if (P.dead) return; audio.sfx.spider(); flashScare('spider', .5); hurt(5, 'spider'); msg('🕷 서랍 속에 거미가!', 1800); }, 180); return; }
@@ -1091,7 +1093,7 @@ function rollLoot(dr){ let kind = null; const r = R();
   const m = itemMesh(kind); m.position.set(rnd(-.2, .2), -.1, 0); dr.g.add(m); dr.item = m;
   if (kind === 'gold'){ setTimeout(()=>{ if (!m.parent) return; const n = rint(3, 12) + Math.floor(P.room/10)*2; P.gold += n; addGold(n); audio.sfx.coin(); msg('🪙 금화 +' + n); m.parent.remove(m); }, 380); }
   else regItem(dr.room, m, kind); }
-function pickItem(a){ const k = a.item, m = a.mesh; if (m.parent) m.parent.remove(m); const idx = interacts.indexOf(a.mesh.children.find(c=>c.userData.inter) || a.mesh); if (idx >= 0) interacts.splice(idx, 1);
+function pickItem(a){ const k = a.item, m = a.mesh; if (a.sid) shareEv('item', a.room.i, { id:a.sid }); if (m.parent) m.parent.remove(m); const idx = interacts.indexOf(a.mesh.children.find(c=>c.userData.inter) || a.mesh); if (idx >= 0) interacts.splice(idx, 1);
   for (const c of m.children){ const j = interacts.indexOf(c); if (j >= 0) interacts.splice(j, 1); }
   audio.sfx.pick();
   if (k === 'bandage'){ P.bandage++; msg('🩹 반창고 (1키로 사용)'); } else if (k === 'vitamin'){ P.vitamin++; msg('💊 비타민 (2키로 사용 · 빨라짐)'); }
@@ -1134,8 +1136,8 @@ let rushTex = null, smokeTex = null;
 function rushMesh(){ if (!rushTex){ rushTex = faceTex('rush'); smokeTex = ctex(64, 64, g=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(20,20,24,.9)'); gr.addColorStop(1, 'rgba(10,10,12,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }); }
   const gr = new THREE.Group(); const face = new THREE.Sprite(new THREE.SpriteMaterial({ map:rushTex, transparent:true, depthWrite:false, fog:false })); face.scale.set(3.4, 3.4, 1); gr.add(face); gr.userData.face = face;
   gr.userData.smoke = []; for (let k=0;k<18;k++){ const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:smokeTex, transparent:true, depthWrite:false, fog:false })); s.scale.setScalar(rnd(1.5, 3.5)); s.position.set(rnd(-1.8, 1.8), rnd(-1.5, 1.5), rnd(-1, 2)); gr.add(s); gr.userData.smoke.push(s); } scene.add(gr); return gr; }
-function startRush(amb){ lastRush = P.room; entity.rush = { phase:'warn', t:0, delay:rnd(4.5, 7), amb, passes:amb ? rint(2, 3) : 1, snd:audio.loops.rush(), start:Math.max(0, P.room - 2) };
-  for (let i = Math.max(0, P.room - 1); i <= P.room + 2 && i < rooms.length; i++) if (rooms[i]) rooms[i].flicker = true; audio.sfx.buzz(P.x, P.z, .4); }
+function startRush(amb, at){ const base = at === undefined ? P.room : at; lastRush = base; entity.rush = { phase:'warn', t:0, delay:rnd(4.5, 7), amb, passes:amb ? rint(2, 3) : 1, snd:audio.loops.rush(), start:Math.max(0, Math.min(base, P.room) - 2) };
+  for (let i = Math.max(0, Math.min(base, P.room) - 1); i <= Math.max(base, P.room) + 2 && i < rooms.length; i++) if (rooms[i]) rooms[i].flicker = true; audio.sfx.buzz(P.x, P.z, .4); }
 function rushPath(a, b){ const pts = []; for (let i=a;i<=b;i++){ const r = rooms[i]; if (!r) continue; pts.push([r.entry[0], r.entry[1]]); pts.push(r.center.slice()); pts.push(r.exitPos.slice()); } const segs = []; let tot = 0; for (let k=1;k<pts.length;k++){ const l = Math.hypot(pts[k][0] - pts[k-1][0], pts[k][1] - pts[k-1][1]); segs.push(l); tot += l; } return { pts, segs, tot }; }
 function pathAt(p, d){ d = clamp(d, 0, p.tot); for (let k=0;k<p.segs.length;k++){ if (d <= p.segs[k] || k === p.segs.length - 1){ const t = p.segs[k] ? clamp(d/p.segs[k], 0, 1) : 0; return [lerp(p.pts[k][0], p.pts[k+1][0], t), lerp(p.pts[k][1], p.pts[k+1][1], t)]; } d -= p.segs[k]; } return p.pts[p.pts.length - 1]; }
 function pathProj(p, x, z){ let best = 1e9, bd = 0, acc = 0; for (let k=0;k<p.segs.length;k++){ const a = p.pts[k], b = p.pts[k+1], vx = b[0] - a[0], vz = b[1] - a[1], L2 = vx*vx + vz*vz || 1, t = clamp(((x - a[0])*vx + (z - a[1])*vz)/L2, 0, 1), px = a[0] + vx*t, pz = a[1] + vz*t, d = Math.hypot(x - px, z - pz); if (d < best){ best = d; bd = acc + p.segs[k]*t; } acc += p.segs[k]; } return bd; }
@@ -1234,10 +1236,26 @@ function bfs(N, a, b){ const nx = N.nx, start = a[0] + a[1]*nx; let goal = b[0] 
   const prev = new Int32Array(N.g.length).fill(-1); const q = [start]; prev[start] = start; let qi = 0;
   while (qi < q.length){ const c = q[qi++]; if (c === goal) break; const cx = c % nx, cz = Math.floor(c/nx); for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){ const x = cx + dx, z = cz + dz; if (x < 0 || z < 0 || x >= nx || z >= N.nz) continue; const n = x + z*nx; if (prev[n] !== -1 || N.g[n]) continue; if (dx && dz && (N.g[cx + dx + cz*nx] || N.g[cx + (cz + dz)*nx])) continue; prev[n] = c; q.push(n); } }
   if (prev[goal] === -1) return []; const path = []; let c = goal; while (c !== start){ path.push([N.x0 + (c % nx + .5)*N.cs, N.z0 + (Math.floor(c/nx) + .5)*N.cs]); c = prev[c]; } return path.reverse(); }
+function giantMates(e){ const out = []; if (!NET.on) return out; for (const u in NET.players){ const p = NET.players[u]; if (freshP(u) && p.run && p.seed === runSeed && !p.dead && (p.room || 0) === e.room.i) out.push([u, p]); } return out; }
+function giantAuth(e){ if (!NET.on) return true; for (const [u] of giantMates(e)) if (u < NET.uid) return false; return true; }
 function tickGiant(dt){ const e = entity.giant; if (!e) return; e.t += dt; if (P.room !== e.room.i && P.room > e.room.i){ scene.remove(e.m.g); entity.giant = null; setObj(); return; }
-  const N = e.grid; const dP = Math.hypot(P.x - e.x, P.z - e.z);
+  const N = e.grid; let dP = Math.hypot(P.x - e.x, P.z - e.z);
+  e.auth = giantAuth(e);
+  if (!e.auth){ // 진행자 화면의 거인을 따라 그린다 (잡히는 판정은 내 화면에서)
+    let src = null; for (const [, p] of giantMates(e)) if (p.gi && p.gi.r === e.room.i){ src = p.gi; break; }
+    if (src){ const ox = e.x, oz = e.z; if (Math.hypot(src.x - e.x, src.z - e.z) > 6){ e.x = src.x; e.z = src.z; } else { const k = 1 - Math.exp(-6*dt); e.x += (src.x - e.x)*k; e.z += (src.z - e.z)*k; }
+      let dd = src.y - e.yaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); e.yaw += dd*Math.min(1, dt*6); if (src.en) e.enraged = true;
+      const sp = Math.hypot(e.x - ox, e.z - oz)/Math.max(dt, 1e-3); if (sp > .4){ e.step += dt*sp*.7; const s = Math.sin(e.step*Math.PI); e.m.legL.rotation.x = s*.5; e.m.legR.rotation.x = -s*.5; e.m.armL.rotation.x = -s*.3; e.m.armR.rotation.x = s*.3; if (Math.floor(e.step) !== e.lastStep){ e.lastStep = Math.floor(e.step); audio.sfx.stomp(e.x, e.z); P.shake = Math.max(P.shake, clamp(1 - Math.hypot(P.x - e.x, P.z - e.z)/14, 0, 1)*.5); } }
+      if (src.h && e.state !== 'hunt') audio.sfx.roar(e.x, e.z); e.state = src.h ? 'hunt' : 'wander'; }
+    e.m.g.position.set(e.x, Math.abs(Math.sin(e.step*Math.PI))*.08, e.z); e.m.g.rotation.y = e.yaw; e.m.head.rotation.x = Math.sin(T*1.7)*.08;
+    dP = Math.hypot(P.x - e.x, P.z - e.z); e.heartT -= dt; if (dP < 14 && e.heartT <= 0){ e.heartT = .35 + dP*.06; audio.sfx.heart(clamp(1 - dP/14, .2, 1)); }
+    if (!P.hidden && dP < 2.3 && P.invT <= 0 && e.t > 2) die('giant'); return; }
+  // 다른 사람 발소리도 듣는다 / 분노하면 가장 가까운 사람을 쫓는다
+  for (const [, p] of giantMates(e)){ if (p.hid) continue; const d = Math.hypot(p.x - e.x, p.z - e.z); if ((p.nz || 0) > 0 && d < p.nz*1.45){ if (e.state !== 'hunt') audio.sfx.roar(e.x, e.z); e.state = 'hunt'; e.target = [p.x, p.z]; e.repath = 0; }
+    if (e.enraged && d < dP){ dP = d; e.chase = [p.x, p.z]; } }
   if (e.stun > 0){ e.stun -= dt; e.m.head.rotation.y = Math.sin(T*9)*.4; return; }
-  if (e.enraged){ e.state = 'hunt'; if (!e.target || Math.hypot(e.target[0] - P.x, e.target[1] - P.z) > 1.5){ e.target = [P.x, P.z]; e.repath = Math.min(e.repath, .15); } }
+  if (e.enraged){ e.state = 'hunt'; const ch = (e.chase && Math.hypot(e.chase[0] - e.x, e.chase[1] - e.z) < Math.hypot(P.x - e.x, P.z - e.z)) ? e.chase : [P.x, P.z]; e.chase = null; if (!e.target || Math.hypot(e.target[0] - ch[0], e.target[1] - ch[1]) > 1.5){ e.target = ch; e.repath = Math.min(e.repath, .15); } }
+  dP = Math.hypot(P.x - e.x, P.z - e.z);
   // 듣기
   if (P.noise > 0 && dP < P.noise*1.45 && !P.hidden){ if (e.state !== 'hunt'){ audio.sfx.roar(e.x, e.z); } e.state = 'hunt'; e.target = [P.x, P.z]; e.repath = 0; e.lost = 0; }
   if (e.state === 'sniff'){ e.sniff -= dt; e.m.head.rotation.y = Math.sin(T*3)*.6; if (e.sniff <= 0){ e.state = 'wander'; e.target = null; } }
@@ -1313,12 +1331,13 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   if (r.gated) setTimeout(()=>{ if (P.room === i) msg('문 앞에 철창이… 어딘가 레버가 있을 거야', 2800); }, 600);
   P.stayT = 0;
   if (r.type === 'halt'){ if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); startHalt(r); msg('…복도가 유난히 푸르다', 2200); }
-  if (r.type === 'chase' && seekRooms.includes(i)) startSeek(i);
+  if (r.type === 'chase' && seekRooms.includes(i) && !SH.done.has('seek:' + i)){ shareEv('seek', i); startSeek(i); }
   if (r.type === 'eyes' && Math.random() < .6) audio.sfx.whisper();
   const special = t=>t === 'library' || t === 'chase' || t === 'chaseEnd' || t === 'eyes' || t === 'final' || t === 'lobby' || t === 'halt' || t === 'shop';
   const soon = [0, 1, 2, 3].some(k=>rooms[i + k] && special(rooms[i + k].type)) || [1, 2, 3].some(k=>{ const t = roomType_(i + k); return t && special(t); });
-  if (!entity.rush && !entity.seek && !entity.giant && !entity.halt && i >= 4 && i - lastRush >= 4 && !soon && Math.random() < Math.min(.3, .1 + i*.002)) startRush(i > 40 && Math.random() < .3);
-  const nx = rooms[i + 1]; if (!entity.eyes && nx && i >= 8 && (nx.type === 'room' || nx.type === 'hall') && Math.random() < .08) spawnEyes(nx);
+  const rr = seeded(Math.imul(runSeed, 2246822519) ^ (i*7919 + 101)), r1 = rr(), r2 = rr(), r3 = rr();   // 같은 호텔이면 같은 방에서 같은 일이
+  if (!entity.rush && !entity.seek && !entity.giant && !entity.halt && i >= 4 && i - lastRush >= 4 && !soon && !SH.done.has('rush:' + i) && r1 < Math.min(.3, .1 + i*.002)){ const amb = i > 40 && r2 < .3; shareEv('rush', i, { a:amb ? 1 : 0 }); startRush(amb); }
+  const nx = rooms[i + 1]; if (!entity.eyes && nx && i >= 8 && (nx.type === 'room' || nx.type === 'hall') && !SH.done.has('eyes:' + (i + 1)) && r3 < .08){ shareEv('eyes', i + 1); spawnEyes(nx); }
   setObj(); }
 function roomType_(i){ if (i === libRoom) return 'library'; if (i >= FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (haltRooms.includes(i)) return 'halt'; for (const s of seekRooms){ if (i >= s - 3 && i <= s + 3) return 'chase'; } return null; }
 function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'final'){ e.textContent = r.power ? '🛗 엘리베이터로 달려!' : r.fuseIn >= 3 ? '⚡ 차단기 레버를 당겨라' : '🔌 퓨즈 ' + (r.fuseIn + (P.fuses || 0)) + '/3 · 차단기에 끼우기 · 웅크리면 조용해'; return; } if (r && r.gate && !r.gate.target){ e.textContent = '⛓ 레버를 찾아 철창을 올려라'; return; } if (r && r.type === 'library') e.textContent = '📕 빛나는 책을 찾아라 ' + (r.books || 0) + '/' + BOOKS_NEED + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
@@ -1616,9 +1635,9 @@ function escapeCut(done){ const r = rooms[FINAL]; if (!r){ done(); return; } con
 let running = false, paused = false, runStart = 0;
 function clearWorld(){ if (CUT){ CUT = null; document.body.classList.remove('cine'); setCineText(''); } for (const r of rooms) if (r && !r.disposed) disposeRoom(r); rooms.length = 0; interacts.length = 0; extraLights.length = 0;
   if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); if (entity.screech){ scene.remove(entity.screech.sp); entity.screech = null; } if (entity.seek) endSeek(false); if (entity.giant){ scene.remove(entity.giant.m.g); entity.giant = null; } endHalt(); for (const d of drips) scene.remove(d.m); drips.length = 0; }
-function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; rooms.push(makeRoom(rooms.length, prev)); } }
+function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; const r = makeRoom(rooms.length, prev); rooms.push(r); if (SH.open.has(r.i) && r.door){ SH.open.delete(r.i); const d = r.door; d.locked = false; if (d.lock) d.hinge.remove(d.lock); d.target = 1; d.col.off = true; } } }
 function startRun(seed){ audio.unlock(); clearWorld(); winShown = false; LB.on = false; LB.going = false; LB.room = null; ELV.length = 0; lobbyAudioOff(); document.body.classList.remove('inlobby'); $('lobHud').style.display = 'none'; hemi.intensity = .22; P.stayT = 0; $('dread').style.opacity = 0;
-  runSeed = seed || NET.pickSeed(); NET.runT = sNow(); planSpecial(); lastRush = -99; screechT = 8; giantAt = 0;
+  runSeed = seed || NET.pickSeed(); NET.runT = sNow(); resetShare(); planSpecial(); lastRush = -99; screechT = 8; giantAt = 0;
   Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, invT:0 });
   if (kit.flash){ P.light = { type:'flash', on:true, battery:100 }; } if (kit.band) P.bandage += 2; if (kit.vit) P.vitamin += 1; if (kit.rev) P.revive = true; if (kit.cross) P.cross = 1; kit = {}; LS.set('hotel_kit', '{}');
   ensureRooms(2); $('door').textContent = 'DOOR 000'; renderSlots(); setObj();
@@ -1684,10 +1703,30 @@ function nameTag(t){ const c = document.createElement('canvas'); c.width = 256; 
     });
   } catch(e){}
 })();
+// ---- 같은 호텔 사람끼리 사건 공유: 문 열기 · 열쇠 · 레버 · 아이템 · 몬스터 등장 · 차단기 ----
+const SH = { done:new Set(), evs:[], n:0, seen:{}, open:new Set() };
+function shareEv(k, r, extra){ SH.done.add(k + ':' + r + (extra && extra.id ? ':' + extra.id : '')); if (!NET.on || !running) return; SH.evs.push(Object.assign({ n:++SH.n, k, r }, extra || {})); if (SH.evs.length > 40) SH.evs.shift(); NET.sendT = 0; }
+function resetShare(){ SH.done.clear(); SH.evs = []; SH.seen = {}; SH.open.clear(); }
+function processEvents(u, p){ const key = u + ':' + runSeed; let last = SH.seen[key] || 0; const raw = Array.isArray(p.ev) ? p.ev : Object.values(p.ev || {});
+  const list = raw.filter(e=>e && e.n > last).sort((a, b)=>a.n - b.n); for (const e of list){ last = e.n; try { applyEv(e, p.name || '친구'); } catch(err){} } SH.seen[key] = last; }
+function remoteOpen(r){ const room = rooms[r]; if (!room || room.disposed || !room.door){ SH.open.add(r); return; } const d = room.door; if (d.locked){ d.locked = false; if (d.lock) d.hinge.remove(d.lock); } if (d.target < 1) openDoor(d, true); }
+function applyEv(e, who){ const r = e.r, room = rooms[r], key = e.k + ':' + r + (e.id ? ':' + e.id : '');
+  if (e.k === 'door'){ if (r <= P.room + 3) remoteOpen(r); else SH.open.add(r); SH.done.add(key); return; }
+  if (SH.done.has(key)) return;
+  if (e.k === 'unlock'){ SH.done.add(key); remoteOpen(r); if (Math.abs(r - P.room) <= 2) msg('👥 ' + who + ' 이(가) 열쇠로 문을 열었다', 2200); }
+  else if (e.k === 'gate'){ SH.done.add(key); if (room && !room.disposed) pullLever(room, true); if (Math.abs(r - P.room) <= 1) msg('👥 ' + who + ' 이(가) 레버를 당겼다', 2000); }
+  else if (e.k === 'item'){ SH.done.add(key); if (!room || room.disposed) return; const hit = room.inters.find(h=>h.userData.inter && h.userData.inter.sid === e.id); if (!hit) return; const it = hit.userData.inter, m = it.mesh; if (m.parent) m.parent.remove(m); hit.userData.inter = null; const j = interacts.indexOf(hit); if (j >= 0) interacts.splice(j, 1);
+    if (it.item === 'book'){ room.books = (room.books || 0) + 1; room.lamps = room.lamps.filter(l=>l.item !== m); msg('📕 ' + who + ' 이(가) 책을 찾았다 ' + room.books + '/' + BOOKS_NEED, 2000); if (room.books >= BOOKS_NEED && room.door && room.door.locked){ room.door.locked = false; audio.sfx.unlock(); msg('📕 책 ' + BOOKS_NEED + '권! 출구 문이 열렸다', 3000); } setObj(); }
+    else if (it.item === 'fuse') msg('🔌 ' + who + ' 이(가) 퓨즈를 주웠다', 1800); }
+  else if (e.k === 'fuse'){ if (room && room.fuseSlots) setFuseIn(room, e.f || 0); }
+  else if (e.k === 'power'){ SH.done.add(key); if (room && room.fuseSlots){ setFuseIn(room, 3); powerOn(room); } }
+  else if (e.k === 'rush'){ if (entity.rush || entity.seek || P.dead || Math.abs(r - P.room) > 3) return; SH.done.add(key); startRush(!!e.a, r); }
+  else if (e.k === 'eyes'){ if (entity.eyes || !room || room.disposed || P.room > r) return; SH.done.add(key); spawnEyes(room); }
+  else if (e.k === 'seek'){ if (entity.seek || P.dead || P.room < r - 2 || P.room > r + 2) return; SH.done.add(key); ensureRooms(r + 4); startSeek(r); } }
 function netSend(dt){
   if (!NET.on) return; NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = .15; NET.fullT -= .15;
   const s = { name:NET.name, x:+P.x.toFixed(2), y:0, z:+P.z.toFixed(2), ry:+P.yaw.toFixed(2), run:running ? 1 : 0, seed:running ? runSeed : 0, st:running ? (NET.runT || 0) : 0,
-    room:P.room || 0, lob:LB.on ? 1 : 0, elv:LB.on ? LB.elv : -1, elvT:LB.on ? LB.elvT : 0, dead:P.dead ? 1 : 0, hid:P.hidden ? 1 : 0, cr:P.crouch > .5 ? 1 : 0, lt:(P.light && P.light.type && P.light.on) ? 1 : 0 };
+    room:P.room || 0, nz:+(P.noise || 0).toFixed(1), ev:running ? SH.evs : null, gi:(running && entity.giant && entity.giant.auth) ? { r:entity.giant.room.i, x:+entity.giant.x.toFixed(2), z:+entity.giant.z.toFixed(2), y:+entity.giant.yaw.toFixed(2), h:entity.giant.state === 'hunt' ? 1 : 0, en:entity.giant.enraged ? 1 : 0 } : null, lob:LB.on ? 1 : 0, elv:LB.on ? LB.elv : -1, elvT:LB.on ? LB.elvT : 0, dead:P.dead ? 1 : 0, hid:P.hidden ? 1 : 0, cr:P.crouch > .5 ? 1 : 0, lt:(P.light && P.light.type && P.light.on) ? 1 : 0 };
   if (NET.fullT <= 0){ s.avatarLoadout = NET.avatar || null; NET.fullT = 3; }
   try { MP.update(s); } catch(e){}
 }
@@ -1701,6 +1740,7 @@ function updateGhosts(dt){
       gh.light.position.set(.3, 1.2, .3); gh.root.add(gh.light); gh.root.position.set(p.x || 0, 0, p.z || 0); scene.add(gh.root); NET.ghosts[u] = gh; }
     const alive = freshP(u); if (alive && !p.run) lobby++;
     const sameRun = alive && running && p.run && p.seed === runSeed;
+    if (sameRun && p.ev) processEvents(u, p);
     if (sameRun) same++;
     const vis = (sameRun && !p.dead && !p.hid && Math.abs((p.room || 0) - P.room) <= 2) || (alive && LB.on && !running && p.lob && !p.run);
     gh.root.visible = vis; gh.light.intensity = vis && p.lt ? .9 : 0;
@@ -1756,7 +1796,7 @@ function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.m
 // 로비 배경용 방
 buildPreLobby(); P.x = 0; P.z = 9; renderLobby(); setupPost(); requestAnimationFrame(loop);
 $('gfxBtn').style.opacity = bloomOn ? 1 : .45; $('gfxBtn').addEventListener('click', ()=>{ bloomOn = !bloomOn; LS.set('hotel_bloom', bloomOn ? '1' : '0'); setupPost(); $('gfxBtn').style.opacity = bloomOn ? 1 : .45; msg(bloomOn ? '빛 번짐 켜짐' : '빛 번짐 꺼짐 (가벼움)', 1400); });
-window.__H = { get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, finalInteract, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
+window.__H = { tryDoor, SH, shareEv, get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, finalInteract, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
 })();
 </script>
 <script>
