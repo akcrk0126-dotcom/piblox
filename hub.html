@@ -2843,8 +2843,10 @@
   try { const t = (window.MP && MP.levelRewardTable) ? MP.levelRewardTable() : {}; Object.keys(t).forEach(lv=>{ if (t[lv].unlock) REWARD_LEVEL[t[lv].unlock] = +lv; }); } catch(e){}
 
   function localOwned(){ try { return JSON.parse(localStorage.getItem('mp_owned_items')||'[]')||[]; } catch(e){ return []; } }
+  const HUB_EMOTES = (window.MP && MP.EMOTES) || [];
   function ownsId(id){
     if (FACE_PRICE[id] === 0) return true;
+    if (String(id).indexOf('emote_') === 0){ const em = HUB_EMOTES.find(x=>x.id===id); if (em && !em.price) return true; return (window.MP && MP.isOwned) ? MP.isOwned(id) : localOwned().indexOf(id) >= 0; }
     const it = HUB_AVATAR_CATALOG.find(x=>x.id===id) || HUB_FACES.find(x=>x.id===id);
     if (it && it.secret) return (window.MP && MP.hasSecret) ? MP.hasSecret(it.secret) : false;
     return (window.MP && MP.isOwned) ? MP.isOwned(id) : localOwned().indexOf(id) >= 0;
@@ -2870,10 +2872,11 @@
       if (!FACE_PRICE[f.id]) return;
       out.push({ id:f.id, slot:'face', name:f.name+' 얼굴', icon:f.icon, color:0xF5CD30, rar:FACE_RAR[f.id]||'c', price:FACE_PRICE[f.id] });
     });
+    HUB_EMOTES.forEach(em=>{ out.push({ id:em.id, slot:'emote', name:em.name, icon:em.icon, color:0x8a7a5a, rar:em.rar || 'c', price:em.price || 0, free:!em.price }); });
     return out;
   }
   function featuredEntry(){
-    const pool = marketEntries().filter(e=>!e.reward && !e.special && e.price >= 150);
+    const pool = marketEntries().filter(e=>!e.reward && !e.special && !e.free && e.price >= 150);
     if (!pool.length) return null;
     let h = dayKey(); h = (h * 2654435761) >>> 0;
     return pool[h % pool.length];
@@ -2884,7 +2887,7 @@
   let avView = 'market';          // 'market' | 'custom'
   let mkCat = 'all', mkSel = null, tryLoadout = null, buyArmed = false, buyArmT = null;
   const MK_CATS = [ { id:'all', label:'전체' }, { id:'head', label:'🧢 모자' }, { id:'acc', label:'🕶 장신구' }, { id:'top', label:'👕 상의' },
-                    { id:'bottom', label:'👖 하의' }, { id:'back', label:'🎒 후면' }, { id:'face', label:'🙂 얼굴' } ];
+                    { id:'bottom', label:'👖 하의' }, { id:'back', label:'🎒 후면' }, { id:'face', label:'🙂 얼굴' }, { id:'emote', label:'💃 이모트' } ];
   let activeSlotTab = 'head';
   function renderAvatarTabs(){
     const wrap = document.getElementById('avatarTabs');
@@ -3003,7 +3006,7 @@
   document.querySelectorAll('.avMainTab').forEach(b=>b.addEventListener('click', ()=>setAvView(b.dataset.v)));
   document.getElementById('avSort').addEventListener('change', renderMarket);
   function avToast(msg){ const t = document.getElementById('avToast'); t.textContent = msg; t.classList.add('on'); clearTimeout(avToast._t); avToast._t = setTimeout(()=>t.classList.remove('on'), 1600); }
-  function clearTryOn(){ mkSel = null; buyArmed = false; if (tryLoadout){ tryLoadout = null; if (avatarScene) refreshPreview(); } document.getElementById('avDetail').classList.remove('on'); }
+  function clearTryOn(){ if (avatarGroup && window.MP && MP.previewEmote) MP.previewEmote(avatarGroup, null); mkSel = null; buyArmed = false; if (tryLoadout){ tryLoadout = null; if (avatarScene) refreshPreview(); } document.getElementById('avDetail').classList.remove('on'); }
   function swatch(e, size){
     const bg = '#' + (e.color||0x888888).toString(16).padStart(6,'0') + '26';
     return `<span style="display:flex;align-items:center;justify-content:center;width:${size||'100%'};height:${size||'100%'};border-radius:10px;background:${bg};font-size:26px;">${e.icon}</span>`;
@@ -3047,9 +3050,10 @@
     });
     renderDetail();
   }
-  function isWearing(e){ return e.slot === 'face' ? avatarLoadout.face === e.id : avatarLoadout[e.slot] === e.id; }
+  function isWearing(e){ if (e.slot === 'emote') return false; return e.slot === 'face' ? avatarLoadout.face === e.id : avatarLoadout[e.slot] === e.id; }
   function selectMarket(e){
     if (mkSel === e.id){ clearTryOn(); renderMarket(); return; }
+    if (e.slot === 'emote'){ mkSel = e.id; buyArmed = false; if (tryLoadout){ tryLoadout = null; refreshPreview(); } if (window.MP && MP.previewEmote) MP.previewEmote(avatarGroup, e.id); renderMarket(); return; }
     mkSel = e.id; buyArmed = false;
     tryLoadout = Object.assign({}, avatarLoadout); tryLoadout[e.slot === 'face' ? 'face' : e.slot] = e.id;
     refreshPreview(); renderMarket();
@@ -3061,11 +3065,12 @@
     d.classList.add('on');
     document.getElementById('avDIcon').innerHTML = swatch(e, '52px');
     document.getElementById('avDName').textContent = e.name;
-    const slotName = { head:'모자', acc:'장신구', top:'상의', bottom:'하의', back:'후면', face:'얼굴' }[e.slot];
-    document.getElementById('avDMeta').innerHTML = `<span style="color:${RARITY[e.rar].color};font-weight:900">${RARITY[e.rar].name}</span> · ${slotName} · 미리 입어보는 중`;
+    const slotName = { head:'모자', acc:'장신구', top:'상의', bottom:'하의', back:'후면', face:'얼굴', emote:'이모트' }[e.slot];
+    document.getElementById('avDMeta').innerHTML = `<span style="color:${RARITY[e.rar].color};font-weight:900">${RARITY[e.rar].name}</span> · ${slotName} · ${e.slot === 'emote' ? '미리 보는 중 — 게임에서 . 키나 💃 버튼, 채팅 /e 로 사용' : '미리 입어보는 중'}`;
     const btn = document.getElementById('avBuyBtn'), own = ownsId(e.id), p = priceOf(e);
     btn.disabled = false;
-    if (own) btn.textContent = isWearing(e) ? '✓ 착용 중' : '착용하기';
+    if (own && e.slot === 'emote') btn.textContent = '✓ 보유 중 — 게임에서 사용 가능';
+    else if (own) btn.textContent = isWearing(e) ? '✓ 착용 중' : '착용하기';
     else if (e.reward){ btn.textContent = `🔒 레벨 ${e.reward} 보상`; btn.disabled = true; }
     else if (shardBalance < p){ btn.textContent = `샤드 부족 (🔷${p.toLocaleString('ko-KR')})`; btn.disabled = true; }
     else btn.textContent = buyArmed ? `정말 구매? 🔷${p.toLocaleString('ko-KR')}` : `구매 🔷${p.toLocaleString('ko-KR')}`;
@@ -3074,6 +3079,7 @@
   document.getElementById('avBuyBtn').addEventListener('click', ()=>{
     const e = mkSel && marketEntries().find(x=>x.id===mkSel); if (!e) return;
     const key = e.slot === 'face' ? 'face' : e.slot;
+    if (ownsId(e.id) && e.slot === 'emote'){ avToast(e.icon + ' ' + e.name + ' — 게임에서 . 키나 💃 버튼으로!'); return; }
     if (ownsId(e.id)){ avatarLoadout[key] = e.id; clearTryOn(); applyAvatarChange(); avToast(e.name + ' 착용!'); return; }
     if (e.reward) return;
     const p = priceOf(e);
@@ -3082,6 +3088,7 @@
     buyArmed = false;
     shardBalance -= p; saveShardBalance(shardBalance); updateShardUI();
     addOwned(e.id);
+    if (e.slot === 'emote'){ renderMarket(); avToast('🎉 ' + e.icon + ' ' + e.name + ' 구매 완료! 게임에서 . 키로 써 보세요'); return; }
     avatarLoadout[key] = e.id; clearTryOn(); applyAvatarChange();
     avToast('🎉 ' + e.name + ' 구매 완료! 바로 착용했어요');
   });

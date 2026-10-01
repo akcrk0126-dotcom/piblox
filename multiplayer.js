@@ -380,7 +380,7 @@ function mpBuildR6Avatar(colors){
   }
 
   group.userData = { legTopY, torsoCenterY, headCenterY, torsoW, torsoH, torsoD, headW, headH, headD, legW, legH,
-                     skinHex, shirtHex, pantsHex };
+                     skinHex, shirtHex, pantsHex, parts:{ legL, legR, torso, armL, armR, head } };
   return group;
 }
 
@@ -698,6 +698,7 @@ function mpAttachAvatarItem(avatarGroup, item){
       hilt.rotation.z = 0.5; g.add(hilt);
     }
   }
+  g.userData.slot = item.slot;
   avatarGroup.add(g);
   return g;
 }
@@ -715,6 +716,7 @@ function mpBuildAvatar(loadout){
       if (item) mpAttachAvatarItem(group, item);
     }
   });
+  try { emoRegister(group, loadout); } catch (e) {}
   return group;
 }
 
@@ -783,6 +785,83 @@ function mpAvatarShot(loadout, mode){
   return url;
 }
 
+
+// ================= 이모트 (마켓플레이스에서 사서 모든 게임에서 사용) =================
+// 아바타 그룹(mpBuildAvatar로 만든 것)을 기억해 두었다가, 렌더 직전에 이모트 자세를 입히고 렌더 직후 원래대로 돌려놓는다.
+// 그래서 게임마다 따로 애니메이션 코드를 고치지 않아도 모든 게임에서 똑같이 춤춘다.
+const EMO_S = Math.sin, EMO_C = Math.cos;
+const EMOTES = [
+  { id:'emote_wave',   name:'손 흔들기', icon:'👋', price:0, dur:2.6, alias:['wave','hi','손','안녕'], pose:t=>({ armR:[0, 0, 2.7 + EMO_S(t*11)*.35], head:[0, 0, -.12] }) },
+  { id:'emote_point',  name:'가리키기', icon:'👉', price:0, dur:2.4, alias:['point','가리키기'], pose:t=>({ armR:[-1.55, 0, 0], head:[.05, 0, 0] }) },
+  { id:'emote_cheer',  name:'환호', icon:'🙌', price:0, dur:2.8, alias:['cheer','환호','만세'], pose:t=>{ const k = Math.abs(EMO_S(t*8)); return { armL:[-2.9 - k*.2, 0, -.25], armR:[-2.9 - k*.2, 0, .25], dy:k*.35, head:[-.25, 0, 0] }; } },
+  { id:'emote_laugh',  name:'웃기', icon:'😂', price:0, dur:2.8, alias:['laugh','웃기','ㅋㅋ'], pose:t=>({ head:[-.35 + EMO_S(t*26)*.1, 0, 0], armL:[-.5, 0, .45], armR:[-.5, 0, -.45], dy:Math.abs(EMO_S(t*13))*.08, rx:-.12 }) },
+  { id:'emote_dance',  name:'기본 춤', icon:'🕺', price:0, dur:0, alias:['dance','dance1','춤','기본춤'], pose:t=>{ const b = t*7; return { armL:[-1.2 + EMO_S(b)*1.2, 0, -.3], armR:[-1.2 - EMO_S(b)*1.2, 0, .3], legL:[EMO_S(b)*.45, 0, 0], legR:[-EMO_S(b)*.45, 0, 0], dy:Math.abs(EMO_S(b))*.25, ry:EMO_S(t*1.75)*.5, head:[0, EMO_S(b)*.2, 0] }; } },
+  { id:'emote_clap',   name:'박수', icon:'👏', price:80, rar:'c', dur:2.6, alias:['clap','박수'], pose:t=>{ const k = (EMO_S(t*16) + 1)/2; return { armL:[-1.35, 0, -.1 - k*.45], armR:[-1.35, 0, .1 + k*.45] }; } },
+  { id:'emote_salute', name:'경례', icon:'🫡', price:90, rar:'c', dur:2.6, alias:['salute','경례'], pose:t=>({ armR:[-2.35, 0, -.6], head:[-.08, 0, 0] }) },
+  { id:'emote_shrug',  name:'으쓱', icon:'🤷', price:70, rar:'c', dur:2.2, alias:['shrug','으쓱'], pose:t=>{ const k = Math.min(1, t*4); return { armL:[-.3*k, 0, -.7*k], armR:[-.3*k, 0, .7*k], head:[0, 0, .2*k], dy:.06*k }; } },
+  { id:'emote_sit',    name:'앉기', icon:'🪑', price:60, rar:'c', dur:0, alias:['sit','앉기'], pose:t=>({ legL:[-1.5, 0, -.05], legR:[-1.5, 0, .05], armL:[-.35, 0, -.1], armR:[-.35, 0, .1], sit:true }) },
+  { id:'emote_bow',    name:'인사', icon:'🙇', price:90, rar:'c', dur:2.4, alias:['bow','인사'], pose:t=>{ const k = Math.min(1, t*3)*(t > 1.7 ? Math.max(0, 1 - (t - 1.7)*3) : 1); return { rx:.7*k, armL:[.15*k, 0, 0], armR:[.15*k, 0, 0] }; } },
+  { id:'emote_spin',   name:'빙글빙글', icon:'🌀', price:200, rar:'r', dur:2.6, alias:['spin','빙글'], pose:t=>({ ry:t*9, armL:[0, 0, -1.55], armR:[0, 0, 1.55], dy:Math.abs(EMO_S(t*5))*.2 }) },
+  { id:'emote_jacks',  name:'팔벌려뛰기', icon:'🤸', price:220, rar:'r', dur:0, alias:['jacks','팔벌려뛰기','점핑잭'], pose:t=>{ const k = (1 - EMO_C(t*8))/2; return { armL:[0, 0, -2.9*k], armR:[0, 0, 2.9*k], legL:[0, 0, -.35*k], legR:[0, 0, .35*k], dy:k*.4 }; } },
+  { id:'emote_dance2', name:'스윙 춤', icon:'💃', price:250, rar:'r', dur:0, alias:['dance2','스윙'], pose:t=>{ const b = t*5; return { ry:EMO_S(b)*.7, armL:[-.6, 0, -1.1 - EMO_S(b)*.6], armR:[-.6, 0, 1.1 - EMO_S(b)*.6], legL:[0, 0, EMO_S(b)*.2], legR:[0, 0, EMO_S(b)*.2], dy:Math.abs(EMO_C(b))*.15, head:[0, -EMO_S(b)*.4, 0] }; } },
+  { id:'emote_tpose',  name:'T 포즈', icon:'✝️', price:300, rar:'r', dur:0, alias:['tpose','t포즈','티포즈'], pose:t=>({ armL:[0, 0, -1.57], armR:[0, 0, 1.57] }) },
+  { id:'emote_headbang', name:'헤드뱅잉', icon:'🤘', price:400, rar:'e', dur:0, alias:['headbang','헤드뱅잉','락'], pose:t=>({ head:[.35 + EMO_S(t*18)*.35, 0, 0], armR:[-2.8, 0, .3], armL:[-.8 + EMO_S(t*18)*.15, 0, -.2], rx:.12 + EMO_S(t*18)*.06 }) },
+  { id:'emote_robot',  name:'로봇 춤', icon:'🤖', price:500, rar:'e', dur:0, alias:['robot','dance3','로봇'], pose:t=>{ const st = Math.floor(t*2.2) % 4; const P = [[-1.57, 0, 0, 0, 0, 1.57], [0, 0, -1.57, -1.57, 0, 0], [-3, 0, 0, -1.57, 0, 0], [-1.57, 0, -.3, -1.57, 0, .3]][st]; return { armL:P.slice(0, 3), armR:P.slice(3), ry:[0, .5, 0, -.5][st], head:[0, [0, -.4, 0, .4][st], 0] }; } },
+  { id:'emote_floss',  name:'플로스', icon:'🧵', price:700, rar:'e', dur:0, alias:['floss','플로스'], pose:t=>{ const k = EMO_S(t*10); return { armL:[k > 0 ? .5 : -.5, 0, -.25 + k*.55], armR:[k > 0 ? -.5 : .5, 0, .25 + k*.55], ry:-k*.15, legL:[0, 0, -k*.12], legR:[0, 0, -k*.12] }; } },
+  { id:'emote_break',  name:'브레이크 댄스', icon:'🔥', price:1200, rar:'l', dur:0, alias:['break','breakdance','브레이크'], pose:t=>{ const ph = t % 4;
+      if (ph < 1.5) return { ry:ph*10, armL:[0, 0, -1.6], armR:[0, 0, 1.6], legL:[-.5, 0, -.3], legR:[.5, 0, .3], dy:-.35 };
+      if (ph < 2.5){ const k = ph - 1.5; return { armL:[-3, 0, 0], armR:[-3, 0, 0], legL:[EMO_S(k*20)*.6, 0, 0], legR:[-EMO_S(k*20)*.6, 0, 0], dy:Math.abs(EMO_S(k*6))*.6 }; }
+      return { armL:[-1.2 + EMO_S(t*12), 0, -.3], armR:[-1.2 - EMO_S(t*12), 0, .3], dy:Math.abs(EMO_S(t*12))*.2, ry:EMO_S(t*3) }; } },
+];
+const EMOTE_MAP = {}; EMOTES.forEach(e=>{ EMOTE_MAP[e.id] = e; });
+function emoFind(q){ q = String(q || '').trim().toLowerCase().replace(/\s+/g, ''); if (!q) return null; if (EMOTE_MAP[q]) return EMOTE_MAP[q]; if (EMOTE_MAP['emote_' + q]) return EMOTE_MAP['emote_' + q];
+  return EMOTES.find(e=>e.alias.indexOf(q) >= 0 || e.name.replace(/\s+/g, '') === q) || null; }
+// 상태: self = 내 이모트, remote[uid] = 남의 이모트 { id, t(서버시각), x, z }
+const EMO = { groups:new Set(), loUid:new WeakMap(), self:null, remote:{}, pos:{}, selfPos:null, now:()=>Date.now(), installed:false };
+function emoRegister(g, lo){ EMO.groups.add(g); if (lo && typeof lo === 'object' && EMO.loUid.has(lo)) g.userData.uid = EMO.loUid.get(lo); emoInstall(); }
+// three.js 의 렌더러는 render 를 인스턴스마다 따로 갖고 있어서, 만들어지는 렌더러를 감싸 준다.
+// (모듈 버전 three 처럼 감쌀 수 없는 경우엔 게임이 MP.hookRenderer(renderer) 를 한 번 불러 준다)
+function emoHook(r){ if (!r || r.__emo || typeof r.render !== 'function') return r; r.__emo = true; const orig = r.render;
+  r.render = function(scene, cam){ let undo = null; try { undo = emoApply(scene); } catch(e){ undo = null; } try { return orig.call(this, scene, cam); } finally { if (undo) emoRestore(undo); } }; return r; }
+function emoInstall(){ const T = window.THREE; if (EMO.installed || !T || !T.WebGLRenderer) return; EMO.installed = true;
+  try { const Orig = T.WebGLRenderer; if (Orig.__emoWrapped) return; const W = function(params){ return emoHook(new Orig(params)); }; W.prototype = Orig.prototype; W.__emoWrapped = true; Object.keys(Orig).forEach(k=>{ try { W[k] = Orig[k]; } catch(e){} }); T.WebGLRenderer = W; } catch(e){} }
+try { emoInstall(); } catch(e){}
+function emoRoot(o){ while (o.parent) o = o.parent; return o; }
+function emoActive(){ const out = {}; const now = EMO.now();
+  if (EMO.self){ const e = EMOTE_MAP[EMO.self.id]; const t = (now - EMO.self.t)/1000; if (e && (!e.dur || t < e.dur)) out.self = { e, t }; else EMO.self = null; }
+  for (const u in EMO.remote){ const r = EMO.remote[u]; const e = r && EMOTE_MAP[r.id]; if (!e) continue; const t = (now - r.t)/1000; if (t < -1 || (e.dur && t > e.dur) || t > 300) continue; out[u] = { e, t:Math.max(0, t) }; }
+  return out; }
+let emoLastClean = 0;
+function emoApply(scene){ if (!scene || !EMO.groups.size) return null; const now = Date.now();
+  if (now - emoLastClean > 3000){ emoLastClean = now; for (const g of EMO.groups){ if (!emoRoot(g).isScene){ g.userData._off = (g.userData._off || 0) + 1; if (g.userData._off > 3) EMO.groups.delete(g); } else g.userData._off = 0; } }
+  const act = emoActive(); const keys = Object.keys(act); let any = keys.length > 0;
+  const gs = []; for (const g of EMO.groups){ if (g.userData.emote) any = true; } if (!any) return null;
+  for (const g of EMO.groups) if (g.visible !== false && emoRoot(g) === scene) gs.push(g); if (!gs.length) return null;
+  const undo = [], used = new Set();
+  // 1) 미리보기(허브 마켓) 그룹
+  for (const g of gs){ const pv = g.userData.emote; if (!pv) continue; const e = EMOTE_MAP[pv.id]; if (!e) continue; let t = (now - pv.t0)/1000; if (e.dur) t = t % (e.dur + .6); emoPose(g, e, t, undo); used.add(g); }
+  // 2) uid로 표시된 그룹 → 없으면 가까운 위치의 표시 안 된 그룹
+  for (const u of keys){ let hit = gs.filter(g=>!used.has(g) && g.userData.uid === u);
+    if (!hit.length){ const p = u === 'self' ? EMO.selfPos : EMO.pos[u]; if (p){ let best = null, bd = 1.3; const v = new window.THREE.Vector3();
+        for (const g of gs){ if (used.has(g) || g.userData.uid) continue; g.getWorldPosition(v); const d = Math.hypot(v.x - p[0], v.z - p[1]); if (d < bd){ bd = d; best = g; } } if (best) hit = [best]; } }
+    if (u === 'self' && hit.length && EMO.self){ const v = new window.THREE.Vector3(); hit[0].getWorldPosition(v); if (!EMO.self.gp) EMO.self.gp = [v.x, v.z]; else if (Math.hypot(v.x - EMO.self.gp[0], v.z - EMO.self.gp[1]) > .9){ if (EMO.onSelfStop) EMO.onSelfStop(); continue; } }
+    for (const g of hit){ emoPose(g, act[u].e, act[u].t, undo); used.add(g); } }
+  return undo.length ? undo : null; }
+function emoRestore(undo){ for (let i = undo.length - 1; i >= 0; i--){ const [o, rx, ry, rz, pos, ord] = undo[i]; if (ord) o.rotation.order = ord; o.rotation.set(rx, ry, rz); if (pos) o.position.copy(pos); } }
+function emoPose(g, e, t, undo){ const P = g.userData.parts, u = g.userData; if (!P) return; const q = e.pose(t) || {}; const T = window.THREE;
+  const save = (o, withPos)=>undo.push([o, o.rotation.x, o.rotation.y, o.rotation.z, withPos ? o.position.clone() : null, o.rotation.order]);
+  // 팔다리: 피벗(게임이 감싼 그룹)이 있으면 그걸 돌리고, 없으면 윗부분을 축으로 메쉬를 직접 돌린다
+  const limb = (m, rot, hTop)=>{ if (!m || !rot) return; const piv = (m.parent && m.parent !== g) ? m.parent : null;
+    if (piv){ save(piv, false); piv.rotation.set(rot[0], rot[1], rot[2]); return; }
+    save(m, true); const top = new T.Vector3(m.position.x, m.position.y + hTop, m.position.z); m.rotation.set(rot[0], rot[1], rot[2]); const off = new T.Vector3(0, -hTop, 0).applyEuler(m.rotation); m.position.copy(top).add(off); };
+  const lh = (u.legH || 1.24)/2;
+  limb(P.armL, q.armL, lh); limb(P.armR, q.armR, lh); limb(P.legL, q.legL, lh); limb(P.legR, q.legR, lh);
+  if (q.head && P.head){ const hh = (u.headH || .62)/2, neck = new T.Vector3(0, P.head.position.y - hh, 0); const eu = new T.Euler(q.head[0], q.head[1], q.head[2]);
+    const turn = o=>{ save(o, true); const base = o === P.head ? new T.Vector3(o.position.x, o.position.y, o.position.z) : o.position.clone(); const rel = base.clone().sub(neck); o.rotation.set(o.rotation.x + eu.x, o.rotation.y + eu.y, o.rotation.z + eu.z); if (o === P.head){ o.position.copy(neck).add(new T.Vector3(0, hh, 0).applyEuler(eu)); } else { o.position.copy(neck).add(rel.applyEuler(eu)).sub(new T.Vector3(0, 0, 0)); } };
+    turn(P.head); for (const c of g.children) if (c.userData && (c.userData.slot === 'head' || c.userData.slot === 'acc')) turn(c); }
+  const sc = g.scale.y || 1; let dy = q.dy || 0; if (q.sit) dy -= (u.legH || 1.24)*.92;
+  if (dy || q.ry || q.rx){ save(g, true); g.position.y += dy*sc; if (q.rx){ g.rotation.order = 'YXZ'; g.rotation.x += q.rx; } if (q.ry) g.rotation.y += q.ry; } }
+
 const MP = (function () {
   let app = null, auth = null, db = null;
   let uid = null;
@@ -838,6 +917,7 @@ const MP = (function () {
   }
   let serverOffset = 0;
   function serverNow() { return Date.now() + serverOffset; }
+  EMO.now = serverNow;
 
   function getRoomFromURL() {
     try {
@@ -945,17 +1025,17 @@ const MP = (function () {
 
   // ---------- 아바타 꾸미기 (로컬 캐시 + 계정에 영구 저장, 방에 있으면 즉시 다른 플레이어에게도 반영) ----------
   function getLocalAvatarLoadout() {
-    if (myAvatarLoadout) return myAvatarLoadout;
+    if (myAvatarLoadout){ EMO.loUid.set(myAvatarLoadout, 'self'); return myAvatarLoadout; }
     try {
       const raw = localStorage.getItem('mp_avatar_loadout');
       // 예전 저장본에는 face/색상 항목이 없다 — 기본값과 합쳐서 올려준다
-      if (raw) { myAvatarLoadout = Object.assign(mpDefaultLoadout(), JSON.parse(raw)); return myAvatarLoadout; }
+      if (raw) { myAvatarLoadout = Object.assign(mpDefaultLoadout(), JSON.parse(raw)); EMO.loUid.set(myAvatarLoadout, 'self'); return myAvatarLoadout; }
     } catch (e) {}
-    myAvatarLoadout = mpDefaultLoadout();
+    myAvatarLoadout = mpDefaultLoadout(); EMO.loUid.set(myAvatarLoadout, 'self');
     return myAvatarLoadout;
   }
   function setAvatarLoadout(loadout, cb) {
-    myAvatarLoadout = loadout;
+    myAvatarLoadout = loadout; if (loadout && typeof loadout === 'object') EMO.loUid.set(loadout, 'self');
     try { localStorage.setItem('mp_avatar_loadout', JSON.stringify(loadout)); } catch (e) {}
     // 방에 접속 중이면 다른 플레이어에게 바로 보이도록 즉시 반영
     if (myRef) { try { myRef.update({ avatarLoadout: loadout }); } catch (e) {} }
@@ -972,7 +1052,7 @@ const MP = (function () {
       const remote = snap.val();
       if (remote) {
         // 이 업데이트 이전에 저장된 계정에는 face/색상이 없다 — 기본값과 합쳐 올려준다
-        myAvatarLoadout = Object.assign(mpDefaultLoadout(), remote);
+        myAvatarLoadout = Object.assign(mpDefaultLoadout(), remote); EMO.loUid.set(myAvatarLoadout, 'self');
         try { localStorage.setItem('mp_avatar_loadout', JSON.stringify(myAvatarLoadout)); } catch (e) {}
         cb && cb(myAvatarLoadout);
       } else {
@@ -1024,6 +1104,7 @@ const MP = (function () {
         const p = val[k];
         if (!p || !p.ts || (now - p.ts) > PRESENCE_STALE_MS) delete val[k];
       });
+      emoScanPlayers(val);
       mpChatPresence(val);
       if (onPlayersCb) onPlayersCb(val);
     }
@@ -1037,7 +1118,7 @@ const MP = (function () {
     if (presenceStaleTimer) clearInterval(presenceStaleTimer);
     presenceStaleTimer = setInterval(emitFilteredPlayers, 5000);
     ready = true;
-    mpChatMount();
+    mpChatMount(); if (CHAT.el) CHAT.el.classList.remove('offline');
   }
 
 
@@ -1069,12 +1150,25 @@ const MP = (function () {
       #mpChat input{margin-top:5px;width:100%;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#fff;padding:0 9px;font-size:13.5px;outline:none;pointer-events:auto;font-family:inherit}
       #mpChat input:focus{background:rgba(10,10,12,.85);border-color:rgba(255,255,255,.55)}
       #mpChat input::placeholder{color:rgba(255,255,255,.55)}
-      @media (max-width:640px){#mpChat{top:50px;width:min(300px,70vw)} #mpChat .ln{font-size:12.5px} #mpChat .list{max-height:18vh}}`;
+      #mpChat .emo{display:none;margin-top:4px;padding:6px;border-radius:10px;background:rgba(18,18,22,.86);grid-template-columns:repeat(6,1fr);gap:4px;pointer-events:auto;max-width:360px}
+      #mpChat .emo.on{display:grid}
+      #mpChat .emo button{border:none;border-radius:8px;background:rgba(255,255,255,.08);color:#fff;padding:4px 2px 3px;cursor:pointer;font-family:inherit}
+      #mpChat .emo button:hover{background:rgba(255,255,255,.2)} #mpChat .emo button.lk{opacity:.45}
+      #mpChat .emo span{display:block;font-size:20px;line-height:1.1} #mpChat .emo small{display:block;font-size:9.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #mpChat .emo .hint{grid-column:1/-1;font-size:10.5px;color:rgba(255,255,255,.6);text-align:center;padding-top:2px}
+      #mpChat.offline .box,#mpChat.offline .ttl,#mpChat.offline .tg:not(.em){display:none}
+      @media (max-width:640px){#mpChat{top:50px;width:min(300px,70vw)} #mpChat .ln{font-size:12.5px} #mpChat .list{max-height:18vh} #mpChat .emo{grid-template-columns:repeat(5,1fr)}}`;
     document.head.appendChild(st);
     const el = document.createElement('div'); el.id = 'mpChat';
-    el.innerHTML = '<div class="bar"><button class="tg" type="button" title="채팅 접기/펴기">💬</button><span class="ttl">채팅</span></div><div class="box"><div class="list"></div><input type="text" maxlength="120" placeholder="채팅하려면 여기를 누르거나 / 키" enterkeyhint="send" autocomplete="off"></div>';
+    el.innerHTML = '<div class="bar"><button class="tg" type="button" title="채팅 접기/펴기">💬</button><button class="tg em" type="button" title="이모트 (. 키)">💃</button><span class="ttl">채팅</span></div><div class="emo"></div><div class="box"><div class="list"></div><input type="text" maxlength="120" placeholder="채팅하려면 여기를 누르거나 / 키" enterkeyhint="send" autocomplete="off"></div>';
     document.body.appendChild(el); CHAT.el = el; CHAT.list = el.querySelector('.list'); CHAT.input = el.querySelector('input');
     if (CHAT.collapsed) el.classList.add('collapsed');
+    const emBtn = el.querySelector('.em'), emBox = el.querySelector('.emo');
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(t=>{ emBtn.addEventListener(t, ev=>ev.stopPropagation()); emBox.addEventListener(t, ev=>ev.stopPropagation()); });
+    emBtn.addEventListener('click', ()=>emoMenu());
+    emBox.addEventListener('click', ev=>{ const b = ev.target.closest('[data-e]'); if (!b) return; playEmote(b.dataset.e); });
+    window.addEventListener('keydown', ev=>{ const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+      if (ev.key === '.'){ ev.preventDefault(); ev.stopPropagation(); emoMenu(); } else if (ev.key === 'Escape' && emBox.classList.contains('on')){ emoMenu(false); } }, true);
     el.querySelector('.tg').addEventListener('click', ev=>{ ev.stopPropagation(); CHAT.collapsed = !CHAT.collapsed; el.classList.toggle('collapsed', CHAT.collapsed); try { localStorage.setItem('mp_chat_collapsed', CHAT.collapsed ? '1' : '0'); } catch(e){} });
     const inp = CHAT.input; const stop = ev=>ev.stopPropagation();
     ['keyup', 'keypress', 'mousedown', 'pointerdown', 'touchstart', 'click', 'wheel'].forEach(t=>inp.addEventListener(t, stop));
@@ -1083,9 +1177,9 @@ const MP = (function () {
     inp.addEventListener('blur', ()=>{ setTimeout(()=>{ window.MPChatOpen = false; }, 120); chatWake(); });
     ['pointerdown', 'touchstart', 'mousedown', 'click'].forEach(t=>CHAT.list.addEventListener(t, stop));
     // "/" 키로 바로 채팅
-    window.addEventListener('keydown', ev=>{ if (ev.key !== '/' || document.activeElement === inp) return; const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+    window.addEventListener('keydown', ev=>{ if (ev.key !== '/' || document.activeElement === inp || el.classList.contains('offline')) return; const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
       ev.preventDefault(); ev.stopPropagation(); if (CHAT.collapsed){ CHAT.collapsed = false; el.classList.remove('collapsed'); } inp.focus(); }, true);
-    chatSys('채팅에 들어왔어요 · / 키로 말하기');
+    chatSys('채팅에 들어왔어요 · / 키로 말하기 · . 키(또는 💃)로 이모트');
     chatWake(); chatPlace(); setInterval(chatPlace, 1500); addEventListener('resize', chatPlace); }
   // 게임마다 왼쪽 위에 이미 있는 UI(생존 수 · 버튼 · 돈 등)를 피해서 그 아래로 내려간다
   function chatPlace(){ const el = CHAT.el; if (!el) return; const W = el.offsetWidth;
@@ -1101,7 +1195,8 @@ const MP = (function () {
     while (CHAT.list.children.length > 60) CHAT.list.removeChild(CHAT.list.firstChild); CHAT.list.scrollTop = CHAT.list.scrollHeight; chatWake(); }
   function chatSys(t){ chatLine(chatEsc(t), 'sys'); }
   function chatName(u, name){ const c = '#' + ('000000' + (colorForUid(u) >>> 0).toString(16)).slice(-6); return '<b style="color:' + c + '">' + chatEsc(String(name || '플레이어').slice(0, 16)) + '</b>'; }
-  function chatSend(raw){ const m = chatClean(raw).trim(); if (!m || !ready || !myRef) return; const now = Date.now(); if (now - CHAT.sentAt < 700){ chatSys('너무 빨라요! 잠깐만요'); return; } CHAT.sentAt = now;
+  function chatSend(raw){ const m = chatClean(raw).trim(); if (!m || !ready || !myRef) return;
+    if (/^\/(e|emote|이모트)(\s|$)/i.test(m)){ const q = m.replace(/^\/\S+\s*/, ''); if (!q){ emoMenu(true); return; } if (!playEmote(q)) chatSys('그런 이모트는 없어요 — 💃 버튼을 눌러 보세요'); return; } const now = Date.now(); if (now - CHAT.sentAt < 700){ chatSys('너무 빨라요! 잠깐만요'); return; } CHAT.sentAt = now;
     CHAT.n = (CHAT.n || 0) + 1; const i = Date.now().toString(36) + CHAT.n; try { myRef.update({ chat:{ i, m, t:firebase.database.ServerValue.TIMESTAMP } }); } catch(e){}
     chatLine(chatName(uid, getDisplayName()) + ': ' + chatEsc(m), 'me'); }
   function mpChatScan(all){ if (!CHAT.el) return; const now = serverNow();
@@ -1111,6 +1206,32 @@ const MP = (function () {
     if (CHAT.baseline){ Object.keys(cur).forEach(u=>{ if (!CHAT.members[u]) chatSys(cur[u] + '님이 들어왔어요'); }); Object.keys(CHAT.members).forEach(u=>{ if (!cur[u]) chatSys(CHAT.members[u] + '님이 나갔어요'); }); }
     CHAT.members = cur; CHAT.baseline = true; }
   function chatOpen(){ return !!window.MPChatOpen; }
+
+  // ---------- 이모트: 상태 동기화 · 재생 · 메뉴 ----------
+  function emoScanPlayers(val){ const seen = {};
+    Object.keys(val || {}).forEach(k=>{ const p = val[k]; if (!p) return; seen[k] = 1; if (p.avatarLoadout && typeof p.avatarLoadout === 'object') EMO.loUid.set(p.avatarLoadout, k);
+      const x = +p.x, z = +p.z; if (isFinite(x) && isFinite(z)) EMO.pos[k] = [x, z];
+      const em = p.emote, cur = EMO.remote[k];
+      if (!em || !em.id || !EMOTE_MAP[em.id]){ delete EMO.remote[k]; return; }
+      const t = +em.t || serverNow(); if (EMO.dead && EMO.dead[k] === t) return;
+      if (!cur || cur.t !== t || cur.id !== em.id){ EMO.remote[k] = { id:em.id, t, x, z }; return; }
+      if (isFinite(x) && isFinite(cur.x) && Math.hypot(x - cur.x, z - cur.z) > .9){ EMO.dead = EMO.dead || {}; EMO.dead[k] = t; delete EMO.remote[k]; } });
+    Object.keys(EMO.remote).forEach(k=>{ if (!seen[k]) delete EMO.remote[k]; }); }
+  function ownsEmote(id){ const e = EMOTE_MAP[id]; if (!e) return false; return !e.price || isOwned(id); }
+  function playEmote(q){ const e = emoFind(q); if (!e) return false;
+    if (!ownsEmote(e.id)){ chatSys('🔒 ' + e.icon + ' ' + e.name + ' — 허브 → 아바타 → 마켓플레이스에서 살 수 있어요 (🔷' + e.price + ')'); return true; }
+    EMO.self = { id:e.id, t:serverNow(), x:EMO.selfPos ? EMO.selfPos[0] : null, z:EMO.selfPos ? EMO.selfPos[1] : null, g:null };
+    if (ready && myRef){ try { myRef.update({ emote:{ id:e.id, t:firebase.database.ServerValue.TIMESTAMP } }); } catch (err) {} }
+    emoInstall(); emoMenu(false); return true; }
+  function stopEmote(){ if (!EMO.self) return; EMO.self = null; if (ready && myRef){ try { myRef.update({ emote:null }); } catch (err) {} } }
+  EMO.onSelfStop = stopEmote;
+  // 방에 안 들어간(혼자 하는) 게임에서도 아바타가 보이면 💃 버튼만 띄운다
+  if (typeof window !== 'undefined') setInterval(()=>{ try { if (CHAT.el || document.getElementById('avatarOverlay') || !document.body) return; let vis = false; for (const g of EMO.groups) if (emoRoot(g).isScene){ vis = true; break; } if (!vis) return; mpChatMount(); if (CHAT.el && !ready) CHAT.el.classList.add('offline'); } catch (e) {} }, 3000);
+  function previewEmote(group, id){ if (!group) return; group.userData.emote = id && EMOTE_MAP[id] ? { id, t0:Date.now() } : null; EMO.groups.add(group); emoInstall(); }
+  function emoMenu(open){ const el = CHAT.el; if (!el) return; const box = el.querySelector('.emo'); if (!box) return; if (open === undefined) open = !box.classList.contains('on');
+    box.classList.toggle('on', open); window.MPChatOpen = open || document.activeElement === CHAT.input;
+    if (!open) return; try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
+    box.innerHTML = EMOTES.map(e=>{ const own = ownsEmote(e.id); return '<button type="button" data-e="' + e.id + '" class="' + (own ? '' : 'lk') + '" title="/e ' + e.alias[0] + '"><span>' + e.icon + '</span><small>' + (own ? e.name : '🔒 🔷' + e.price) + '</small></button>'; }).join('') + '<div class="hint">/e 이름 으로도 쓸 수 있어요 · 움직이면 멈춰요 · 더 많은 이모트는 허브 마켓플레이스</div>'; }
 
   function handleAuthChange(user) {
     authReady = true;
@@ -1175,6 +1296,8 @@ const MP = (function () {
   function onAuthStateChange(cb) { onAuthCb = cb; }
 
   function update(state) {
+    if (state && isFinite(+state.x) && isFinite(+state.z)){ EMO.selfPos = [+state.x, +state.z];
+      if (EMO.self){ if (EMO.self.x == null){ EMO.self.x = +state.x; EMO.self.z = +state.z; } else if (Math.hypot(+state.x - EMO.self.x, +state.z - EMO.self.z) > .9) stopEmote(); } }
     if (!ready || !myRef) return;
     myRef.update(Object.assign({ ts: firebase.database.ServerValue.TIMESTAMP }, state));
   }
@@ -1717,6 +1840,7 @@ const MP = (function () {
     fetchMyScore,
     setPresence,
     chatSend, chatSys, chatOpen,
+    EMOTES, playEmote, stopEmote, previewEmote, ownsEmote, hookRenderer:emoHook,
     serverNow,
     onGamePresence,
     addXP,
