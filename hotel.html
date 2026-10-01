@@ -194,7 +194,7 @@
   <button class="small" id="pLobby" type="button">포기하고 로비로</button>
 </div></div>
 <div id="win" class="scr"><div class="wrap" style="margin:auto">
-  <h2>탈출 성공</h2>
+  <h2>호텔 탈출</h2>
   <div id="winS" class="rec"></div>
   <button class="big" id="wAgain" type="button">로비로 돌아가기</button>
   <a class="small" href="hub.html">⌂ 허브로</a>
@@ -317,6 +317,7 @@ const audio = (function(){
     clank(){ noise(.25, .4, 'bandpass', 700, 0, 0, 3); tone('triangle', 330, 300, .3, .08); },
     gate(){ noise(1.3, .25, 'bandpass', 500, 0, 0, 1.5); for (let i=0;i<7;i++) noise(.05, .2, 'highpass', 2500, now() + i*.18); tone('sine', 90, 60, 1.2, .12); },
     cashier(){ const t = now(); [1568, 2093, 2637].forEach((f, i)=>tone('sine', f, f, .4, .06, t + i*.07)); },
+    snap(){ const t = now(); noise(.5, .9, 'highpass', 1600, t); tone('sawtooth', 320, 50, .9, .25, t); noise(2.5, .6, 'lowpass', 300, t + .2); tone('sine', 60, 25, 2.5, .4, t + .2); },
     elvDoor(){ noise(1.1, .14, 'bandpass', 380, 0, 0, 1); tone('sine', 220, 200, 1, .03); },
     coin(){ const t = now(); [1568, 2093, 2637].forEach((f, i)=>tone('sine', f, f, .35, .05, t + i*.05)); noise(.08, .05, 'highpass', 6000, t); },
     pick(){ tone('triangle', 660, 990, .12, .06); tone('sine', 1320, 1320, .2, .04, now() + .08); },
@@ -742,44 +743,76 @@ function buildFinal(room, g){ const { L, H, xl, xr } = room; room.fuseIn = 0; ro
   B(g, MAT.brass, 0, EH + .15, L - .2, EW + .5, .25, .12, { noShadow:true }); for (const sx of [-1, 1]) B(g, MAT.brass, sx*(EW/2 + .15), EH/2, L - .2, .2, EH + .3, .12, { noShadow:true });
   const sc = document.createElement('canvas'); sc.width = 512; sc.height = 128; room.elvSign = { c:sc, t:new THREE.CanvasTexture(sc) };
   const sgn = new THREE.Mesh(new THREE.PlaneGeometry(3, .75), new THREE.MeshBasicMaterial({ map:room.elvSign.t })); sgn.position.set(0, EH + .75, L - .18); sgn.rotation.y = Math.PI; g.add(sgn); drawFinalSign(room);
-  // 차단기 (퓨즈 3칸 + 레버)
-  const bk = new THREE.Group(); bk.position.set(-5.5, 0, L - .25); bk.rotation.y = Math.PI; g.add(bk); room.breaker = bk;
-  B(bk, MAT.metal, 0, 1.55, 0, 1.1, 1.4, .3); B(bk, MAT.iron, 0, 1.55, .16, .95, 1.25, .02, { noShadow:true });
-  room.fuseSlots = []; for (let k=0;k<3;k++){ const sl = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .3, 10), MAT.fuse); sl.position.set(-.3 + k*.3, 1.75, .2); sl.visible = false; bk.add(sl); const led = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), new THREE.MeshBasicMaterial({ color:0x401010 })); led.position.set(-.3 + k*.3, 2.05, .2); bk.add(led); room.fuseSlots.push({ sl, led }); }
-  const lv = new THREE.Group(); lv.position.set(.62, 1.4, .1); bk.add(lv); B(lv, MAT.red, 0, .25, 0, .07, .5, .07); B(lv, MAT.iron, 0, .52, 0, .16, .08, .1); room.lever = lv;
-  const bh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.6, .5), new THREE.MeshBasicMaterial({ visible:false })); bh.position.set(.1, 1.55, .2); bk.add(bh);
-  bh.userData.inter = { kind:'breaker', room, label:'차단기 — 퓨즈 0/3' }; interacts.push(bh); room.inters.push(bh); room.breakerHit = bh; addCol(room, -5.5, L - .25, 1.2, .5, 0, 2.3);
-  sign(g, 6.5, 5.2, L - .2, 'DOOR 100 · 전기실', '#ff9a7a', Math.PI);
+  // 전기실: 창고 왼쪽 안 구석에 따로 있는 잠긴 방 (전기실 열쇠 필요)
+  const ex0 = -6, ez0 = L - 8;
+  wallRun(room, g, 'z', ex0, ez0, L, L - 4, MAT.concrete, H); wallRun(room, g, 'x', ez0, xl, ex0, null, MAT.concrete, H);
+  const ed = makeDoor(room, g, ex0, L - 4, Math.PI/2, 100); ed.edoor = true; ed.locked = true; room.eDoor = ed;
+  { const lk = new THREE.Group(); lk.position.set(DW - .18, 1.0, .12); ed.hinge.add(lk); B(lk, MAT.iron, 0, 0, 0, .16, .14, .06); const sh = new THREE.Mesh(new THREE.TorusGeometry(.05, .014, 6, 12, Math.PI), MAT.iron); sh.position.y = .07; lk.add(sh); ed.lock = lk; }
+  const es = sign(g, ex0 + .16, 3.5, L - 4, '전기실', '#ffd77a', Math.PI/2); es.scale.set(.7, .7, 1);
+  { const l = addLamp(room, g, -9, H - .5, L - 4, 'ceil', 4); l.col = 0xff3a20; l.bulbMat.color.set(0xff3a20); l.emergency = true; }
+  // 차단기 패널 (스위치 10개 · 지시 화면)
+  const bk = new THREE.Group(); bk.position.set(-9, 0, L - .25); bk.rotation.y = Math.PI; g.add(bk); room.breaker = bk;
+  B(bk, MAT.metal, 0, 1.75, 0, 2.4, 2.3, .3); B(bk, MAT.iron, 0, 1.6, .16, 2.2, 1.7, .02, { noShadow:true }); addCol(room, -9, L - .25, 2.5, .5, 0, 3);
+  const dc = document.createElement('canvas'); dc.width = 512; dc.height = 192; room.pDisp = { c:dc, t:new THREE.CanvasTexture(dc) };
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .6), new THREE.MeshBasicMaterial({ map:room.pDisp.t })); disp.position.set(0, 2.55, .17); bk.add(disp);
+  const ord = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].sort(()=>R() - .5), miss = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].sort(()=>R() - .5).slice(0, 3);
+  room.order = ord; room.step = 0; room.sw = [];
+  for (let k=0;k<10;k++){ const col = k % 5, row = Math.floor(k/5), x = -.8 + col*.4, y = 1.95 - row*.65;
+    B(bk, MAT.iron, x, y, .17, .26, .44, .03, { noShadow:true }); const num = new THREE.Mesh(new THREE.PlaneGeometry(.2, .1), new THREE.MeshBasicMaterial({ map:TX.plate(k + 1) })); num.position.set(x, y + .29, .18); bk.add(num);
+    const hg = new THREE.Group(); hg.position.set(x, y, .19); bk.add(hg); B(hg, MAT.white, 0, .1, .02, .08, .2, .06, { noShadow:true }); B(hg, MAT.red, 0, .2, .04, .1, .05, .08, { noShadow:true });
+    const led = new THREE.Mesh(new THREE.SphereGeometry(.025, 8, 6), new THREE.MeshBasicMaterial({ color:0x301010 })); led.position.set(x + .1, y - .17, .19); bk.add(led);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(.36, .6, .3), new THREE.MeshBasicMaterial({ visible:false })); hit.position.set(x, y, .25); bk.add(hit);
+    const init = R() < .5, has = !miss.includes(k); const sw = { k, init, on:init, has, hg, led, hit, rot:init ? -.6 : .6 }; hg.rotation.x = sw.rot; hg.visible = has; room.sw.push(sw);
+    hit.userData.inter = { kind:'sw', room, k, label:'' }; interacts.push(hit); room.inters.push(hit); }
+  drawPanel(room);
+  sign(g, 6.5, 5.2, L - .2, 'DOOR 100 · 창고', '#ff9a7a', Math.PI);
   // 상자 더미 (거인을 피해 숨어 다니는 통로가 된다)
-  const spots = []; for (const gx of [-8.5, -4.2, 4.2, 8.5]) for (const gz of [5, 10, 15, 20]){ if (R() < .18) continue; const h = rint(1, 3), w = rnd(1.3, 1.9), d = rnd(1.3, 1.9);
+  const spots = []; for (const gx of [-8.5, -4.2, 4.2, 8.5]) for (const gz of [5, 10, 15, 20]){ if (R() < .18 || (gx < -5 && gz > L - 10)) continue; const h = rint(1, 3), w = rnd(1.3, 1.9), d = rnd(1.3, 1.9);
     for (let k=0;k<h;k++){ const c = B(g, MAT.crate, gx, .65 + k*1.3, gz, w - k*.08, 1.3, d - k*.08); c.rotation.y = rnd(-.08, .08); }
     addCol(room, gx, gz, w, d, 0, h*1.3); spots.push([gx, h*1.3 + .02, gz]); }
   // 벽 선반
-  for (const sx of [-1, 1]) for (const z of [6, 14, 22]){ const x = sx*(room.W/2 - .55); for (let k=0;k<4;k++) B(g, MAT.metal, x, .3 + k*.75, z, .9, .05, 3); for (const dz of [-1.45, 1.45]) B(g, MAT.metal, x, 1.4, z + dz, .9, 2.8, .06); addCol(room, x, z, 1, 3, 0, 2.8);
+  for (const sx of [-1, 1]) for (const z of [6, 14, 22]){ if (sx < 0 && z > L - 9) continue; const x = sx*(room.W/2 - .55); for (let k=0;k<4;k++) B(g, MAT.metal, x, .3 + k*.75, z, .9, .05, 3); for (const dz of [-1.45, 1.45]) B(g, MAT.metal, x, 1.4, z + dz, .9, 2.8, .06); addCol(room, x, z, 1, 3, 0, 2.8);
     for (let k=0;k<5;k++) if (R() < .7) B(g, MAT.crate, x, .55 + Math.floor(R()*3)*.75, z + rnd(-1.1, 1.1), .6, .45, .6); spots.push([x, .37 + rint(1, 2)*.75, z + rnd(-.8, .8)]); }
   // 천장 배관 · 늘어진 전선
   for (const x of [-6, -2.5, 3, 7]){ const pp = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, L, 10), MAT.metal); pp.rotation.x = Math.PI/2; pp.position.set(x, H - .5, L/2); g.add(pp); }
   room.cables = []; for (let k=0;k<6;k++){ const x = rnd(-9, 9), z = rnd(3, L - 3), len = rnd(1.2, 2.6); const c = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, len, 5), MAT.iron); c.position.set(x, H - .5 - len/2, z); c.rotation.z = rnd(-.2, .2); g.add(c); room.cables.push(L2W(room, x, z).concat([H - .5 - len])); }
   // 비상등 (붉게 깜빡임) → 전원이 들어오면 하얗게
   for (const [x, z] of [[-7, 6], [7, 6], [-7, 16], [7, 16], [0, 11], [0, 23]]){ const l = addLamp(room, g, x, H - .4, z, 'ceil', 5); l.col = 0xff3a20; l.bulbMat.color.set(0xff3a20); l.emergency = true; }
-  // 퓨즈 3개를 상자 · 선반 위에
-  const pick3 = spots.slice().sort(()=>R() - .5).slice(0, 3); for (const [x, y, z] of pick3){ const m = itemMesh('fuse'); m.position.set(x, y, z); g.add(m); regItem(room, m, 'fuse'); }
+  // 전기실 열쇠 1개 + 빠진 차단기 스위치 3개를 상자 · 선반 위에
+  const pick4 = spots.slice().sort(()=>R() - .5).slice(0, 4); pick4.forEach(([x, y, z], k)=>{ const kind = k === 0 ? 'ekey' : 'switch'; const m = itemMesh(kind); m.position.set(x, y, z); g.add(m); regItem(room, m, kind); });
 }
 function drawFinalSign(room){ const c = room.elvSign.c, g2 = c.getContext('2d'); g2.fillStyle = '#0a0806'; g2.fillRect(0, 0, 512, 128); g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.font = '900 54px "Noto Sans KR", sans-serif';
   g2.fillStyle = room.power ? '#7affb0' : '#3a2a20'; g2.fillText(room.power ? '▲ 비상 엘리베이터' : '전원 없음', 256, 66); room.elvSign.t.needsUpdate = true; }
-function finalInteract(room){ if (room.power) return;
-  if (room.fuseIn < 3){ const n = Math.min(P.fuses || 0, 3 - room.fuseIn); if (!n){ msg('퓨즈가 없어… 상자와 선반 위를 찾아봐 (' + room.fuseIn + '/3)'); audio.sfx.lock(); return; }
-    P.fuses -= n; setFuseIn(room, room.fuseIn + n); shareEv('fuse', room.i, { f:room.fuseIn }); audio.sfx.clank(); renderSlots();
-    room.breakerHit.userData.inter.label = room.fuseIn >= 3 ? '레버 당기기' : '차단기 — 퓨즈 ' + room.fuseIn + '/3'; msg(room.fuseIn >= 3 ? '퓨즈를 다 끼웠다. 레버를 당기자!' : '퓨즈 ' + room.fuseIn + '/3', 2200); setObj(); return; }
-  // 레버
-  shareEv('power', room.i); powerOn(room); }
-function setFuseIn(room, n){ n = Math.min(3, n); while (room.fuseIn < n){ const s0 = room.fuseSlots[room.fuseIn]; s0.sl.visible = true; s0.led.material.color.set(0xffc040); room.fuseIn++; } room.breakerHit.userData.inter.label = room.fuseIn >= 3 ? '레버 당기기' : '차단기 — 퓨즈 ' + room.fuseIn + '/3'; setObj(); }
-function powerOn(room){ if (room.power) return; room.power = true; audio.sfx.lever(); P.shake = .6; room.breakerHit.userData.inter.label = '전원 켜짐'; room.leverT = 0;
-  for (const s0 of room.fuseSlots) s0.led.material.color.set(0x60ff90);
+const missingSw = room => room.sw.filter(x=>!x.has).length;
+function drawPanel(room){ const c = room.pDisp.c, g2 = c.getContext('2d'), w = 512, h = 192, mi = missingSw(room); g2.fillStyle = '#060a06'; g2.fillRect(0, 0, w, h); g2.textAlign = 'center'; g2.textBaseline = 'middle';
+  const err = room.errT && T - room.errT < 1.2;
+  if (room.power){ g2.fillStyle = '#7affb0'; g2.font = '900 64px monospace'; g2.fillText('POWER ON', w/2, h/2); }
+  else if (err){ g2.fillStyle = '#ff4a3a'; g2.font = '900 70px monospace'; g2.fillText('ERROR', w/2, h/2 - 10); g2.font = '700 26px monospace'; g2.fillText('RESET', w/2, h - 30); }
+  else if (mi > 0){ g2.fillStyle = '#ffb03a'; g2.font = '900 44px monospace'; g2.fillText('MISSING ' + mi, w/2, 70); g2.font = '700 26px monospace'; g2.fillText('스위치 ' + mi + '개 없음', w/2, 140); }
+  else { const k = room.order[room.step], tgt = !room.sw[k].init; g2.fillStyle = '#d8ffd8'; g2.font = '900 96px monospace'; g2.fillText(String(k + 1).padStart(2, '0'), w*.36, 86);
+    g2.fillStyle = tgt ? '#40ff70' : '#ff4030'; g2.beginPath(); g2.arc(w*.72, 86, 44, 0, 7); g2.fill(); g2.fillStyle = '#000'; g2.font = '900 26px monospace'; g2.fillText(tgt ? 'ON' : 'OFF', w*.72, 88);
+    for (let q=0;q<10;q++){ g2.fillStyle = q < room.step ? '#40ff70' : '#1a2a1a'; g2.fillRect(76 + q*36, 160, 26, 14); } }
+  room.pDisp.t.needsUpdate = true;
+  for (const sw of room.sw){ sw.hit.userData.inter.label = !sw.has ? '빠진 스위치 끼우기' : room.power ? '전원 켜짐' : (sw.k + 1) + '번 스위치 ' + (sw.on ? '내리기' : '올리기'); sw.led.material.color.set(!sw.has ? 0x100808 : sw.on ? 0x40ff70 : 0x501010); } }
+function swInteract(room, k){ const sw = room.sw[k]; if (room.power) return; if (!sw.has){ insertSwitch(room, k); return; } flipSwitch(room, k); }
+function insertSwitch(room, k, remote){ const sw = room.sw[k]; if (sw.has) return;
+  if (!remote){ if (!(P.swItems > 0)){ msg('스위치가 빠져 있다… 창고 상자 위에서 찾아와 (' + missingSw(room) + '개 없음)', 2400); audio.sfx.lock(); return; } P.swItems--; shareEv('swin', room.i, { id:'s' + k, k2:k }); renderSlots(); }
+  sw.has = true; sw.on = sw.init; sw.rot = sw.init ? -.6 : .6; sw.hg.rotation.x = sw.rot; sw.hg.visible = true; audio.sfx.clank(); room.step = 0; drawPanel(room); setObj();
+  if (!missingSw(room)) msg('스위치를 다 끼웠다! 화면에 나오는 번호의 스위치를 ON/OFF 대로 맞춰', 3200); }
+function flipSwitch(room, k, remote){ const sw = room.sw[k]; if (!sw.has || room.power) return; if (!remote) shareEv('flip', room.i, { id:'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), sk:k });
+  sw.on = !sw.on; sw.rot = sw.on ? -.6 : .6; audio.sfx.lever();
+  if (missingSw(room)) { drawPanel(room); return; }
+  const cur = room.order[room.step];
+  if (k === cur && sw.on === !sw.init){ room.step++; audio.sfx.pick(); if (room.step >= 10){ if (!remote) shareEv('power', room.i); powerOn(room); } }
+  else { room.errT = T; room.step = 0; audio.sfx.buzz(P.x, P.z, .5); audio.sfx.bad && audio.sfx.bad(); for (const s0 of room.sw) if (s0.has){ s0.on = s0.init; s0.rot = s0.init ? -.6 : .6; } msg('틀렸다! 차단기가 처음으로 돌아갔다', 2000); setTimeout(()=>drawPanel(room), 1250); }
+  drawPanel(room); setObj(); }
+function powerOn(room){ if (room.power) return; room.power = true; room.step = 10; audio.sfx.lever(); P.shake = .6; drawPanel(room);
   setTimeout(()=>{ if (!running) return; audio.sfx.alarm(); room.flicker = false; for (const l of room.lamps){ if (l.emergency){ l.col = 0xfff0d8; l.bulbMat.color.set(0xfff0d8); l.base = 9; } } room.cabLight.material.color.set(0xfff4d0); drawFinalSign(room);
-    if (entity.giant){ entity.giant.enraged = true; audio.sfx.roar(entity.giant.x, entity.giant.z); } msg('전원이 들어왔다! 그것이 소리를 들었다 — 엘리베이터가 열리면 뛰어!', 3200); room.elvAt = T + 5; setObj(); }, 700); }
+    if (entity.giant){ entity.giant.enraged = true; audio.sfx.roar(entity.giant.x, entity.giant.z); } msg('전원 복구! 경보가 울린다 — 그것이 소리를 들었다. 엘리베이터로 뛰어!', 3400); room.elvAt = T + 5; setObj(); }, 700); }
 function tickFinal(dt){ const r = rooms[FINAL]; if (!r || P.room < FINAL - 1) return;
-  if (r.leverT !== undefined && r.leverT < 1){ r.leverT = Math.min(1, r.leverT + dt*4); r.lever.rotation.x = r.leverT*1.6; }
+  for (const sw of r.sw) sw.hg.rotation.x += (sw.rot - sw.hg.rotation.x)*Math.min(1, dt*14);
+  const d0 = r.eDoor; if (d0 && d0.open !== d0.target){ d0.open = d0.target > d0.open ? Math.min(d0.target, d0.open + dt*2.6) : Math.max(d0.target, d0.open - dt*3); d0.hinge.rotation.y = (1 - Math.pow(1 - d0.open, 2))*1.75; }
+  if (r.errT && T - r.errT > 1.3 && T - r.errT < 1.4) drawPanel(r);
   if (r.elvAt && T >= r.elvAt){ r.elvAt = 0; r.elvTarget = 1; audio.sfx.ding(); audio.sfx.elvDoor(); msg('엘리베이터가 열렸다! 들어가!', 2400); }
   if (r.elvOpen !== r.elvTarget){ r.elvOpen = r.elvTarget > r.elvOpen ? Math.min(1, r.elvOpen + dt*.9) : Math.max(0, r.elvOpen - dt*.9); const e = r.elvOpen; for (const d of r.elvDoors) d.m.position.x = d.sx*(3.4/4 + e*3.4/2*.92); r.elvCol.off = e > .6; }
   if (Math.random() < dt*.8 && r.cables.length){ const c = pick(r.cables); sparks(c[0], c[2], c[1]); audio.sfx.zap(c[0], c[1]); }
@@ -922,11 +955,15 @@ function itemMesh(kind){ const gr = new THREE.Group();
   else if (kind === 'book'){ const bm = new THREE.MeshStandardMaterial({ color:0xc07a20, emissive:0xffb040, emissiveIntensity:2.2, roughness:.5 }); B(gr, bm, 0, 0, 0, .3, .42, .09); const s = new THREE.Sprite(MAT.glow); s.scale.set(1.8, 1.8, 1); gr.add(s); gr.userData.glow = s;
     // 책장 위로 솟는 빛기둥 — 도서관 어디서든 보이게
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(.14, .3, 5, 12, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.28, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 2.3; gr.add(beam); gr.userData.beam = beam; }
+  else if (kind === 'ekey' || kind === 'switch'){ if (kind === 'ekey'){ const km = new THREE.MeshStandardMaterial({ color:0xff7a3a, emissive:0xff4a10, emissiveIntensity:1.2, roughness:.3, metalness:.6 }); const r0 = new THREE.Mesh(new THREE.TorusGeometry(.05, .014, 6, 14), km); r0.rotation.x = Math.PI/2; r0.position.set(-.1, .02, 0); gr.add(r0); B(gr, km, .05, .02, 0, .2, .02, .02); B(gr, km, .13, .02, .02, .02, .02, .05); const tag = B(gr, MAT.red, -.2, .02, 0, .1, .02, .14); }
+    else { B(gr, MAT.metal, 0, .05, 0, .14, .1, .2); B(gr, MAT.white, 0, .14, 0, .05, .12, .05); B(gr, MAT.red, 0, .21, 0, .07, .03, .07); }
+    const sp = new THREE.Sprite(MAT.glow); sp.scale.set(1.1, 1.1, 1); sp.position.y = .1; gr.add(sp);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(.08, .2, 3.5, 10, 1, true), new THREE.MeshBasicMaterial({ color:kind === 'ekey' ? 0xff8a4a : 0x9affb0, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 1.8; gr.add(beam); }
   else if (kind === 'fuse'){ const f = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .3, 10), MAT.fuse); f.rotation.z = Math.PI/2; f.position.y = .07; gr.add(f); for (const sx of [-1, 1]) B(gr, MAT.brass, sx*.17, .07, 0, .05, .16, .16); const sp = new THREE.Sprite(MAT.glow); sp.scale.set(1.1, 1.1, 1); sp.position.y = .1; gr.add(sp);
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(.08, .2, 3.5, 10, 1, true), new THREE.MeshBasicMaterial({ color:0xffc860, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); beam.position.y = 1.8; gr.add(beam); }
   gr.traverse(o=>{ if (o.isMesh) o.castShadow = false; }); return gr; }
 function regItem(room, m, kind){ const sid = room.built ? null : room.i + ':' + (room.itemN = (room.itemN || 0) + 1); const hit = new THREE.Mesh(new THREE.SphereGeometry(kind === 'book' ? .3 : .18, 8, 6), new THREE.MeshBasicMaterial({ visible:false })); m.add(hit);
-  const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기', fuse:'퓨즈 줍기' };
+  const labels = { gold:'금화 줍기', bandage:'반창고 줍기', battery:'건전지 줍기', vitamin:'비타민 줍기', lighter:'라이터 줍기', key:'열쇠 줍기', book:'책 줍기', fuse:'퓨즈 줍기', ekey:'전기실 열쇠 줍기', switch:'차단기 스위치 줍기' };
   hit.userData.inter = { kind:'item', item:kind, mesh:m, label:labels[kind] || '줍기', sid, room }; interacts.push(hit); room.inters.push(hit); return hit; }
 function disposeRoom(room){ scene.remove(room.g); room.g.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material.map.image && o.material !== MAT.door && o.material.map !== TX.plate) {} });
   for (const m of room.inters){ const k = interacts.indexOf(m); if (k >= 0) interacts.splice(k, 1); } if (room.door){ const k = interacts.indexOf(room.door.leaf); if (k >= 0) interacts.splice(k, 1); room.door.leaf.material && 0; } room.disposed = true; }
@@ -956,7 +993,7 @@ function updateLights(dt){ const cand = [];
 // =====================================================================
 //  플레이어
 // =====================================================================
-const P = { x:0, z:2, yaw:Math.PI, pitch:0, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, stepSign:1, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, lookT:0, invT:0 };
+const P = { x:0, z:2, yaw:Math.PI, pitch:0, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, stepSign:1, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, lookT:0, invT:0 };
 const keys = {}; const mv = { x:0, y:0 };
 let locked = false;
 function wantLock(){ if (isTouch || (!running && !LB.on) || paused || LB.desk) return; try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } catch(e){} }
@@ -1070,17 +1107,19 @@ function interact(){ if ((!running && !LB.on) || P.dead || paused || CUT || T - 
   else if (a.kind === 'hide') hideIn(a.hide);
   else if (a.kind === 'item') pickItem(a);
   else if (a.kind === 'dupe') openDupe(a.dupe);
-  else if (a.kind === 'breaker') finalInteract(a.room);
+  else if (a.kind === 'sw') swInteract(a.room, a.k);
   else if (a.kind === 'lever') pullLever(a.room);
   else if (a.kind === 'jshop') openJShop();
   else if (a.kind === 'shop') openDesk(); }
 function tryDoor(door, manual){ if (door.open > 0 || door.target > 0) return;
-  const room = door.room; if (room.gate && room.gate.open < .7){ if (manual){ msg('철창이 문을 막고 있다 — 레버를 찾아'); audio.sfx.lock(); } return; }
+  const room = door.room;
+  if (door.edoor && door.locked){ if (P.ekey){ door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); msg('전기실 문을 열었다', 1800); setObj(); } else { if (manual){ msg('전기실이다… 잠겨 있다. 창고 어딘가에 열쇠가 있을 거야', 2400); audio.sfx.lock(); } return; } openDoor(door); return; }
+  if (room.gate && room.gate.open < .7){ if (manual){ msg('철창이 문을 막고 있다 — 레버를 찾아'); audio.sfx.lock(); } return; }
   if (door.locked){ if (room.type === 'library'){ if (manual) msg('잠겨 있다… 책 ' + (room.books || 0) + '/' + BOOKS_NEED); audio.sfx.lock(); return; }
     if (P.key){ P.key = false; door.locked = false; if (door.lock) door.hinge.remove(door.lock); audio.sfx.unlock(); renderSlots(); msg('열쇠로 문을 열었다'); shareEv('unlock', room.i); }
     else { if (manual){ msg('잠겨 있다. 열쇠가 필요해'); audio.sfx.lock(); } return; } }
   openDoor(door); }
-function openDoor(door, remote){ if (!remote) shareEv('door', door.room.i); door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
+function openDoor(door, remote){ if (!remote) shareEv(door.edoor ? 'edoor' : 'door', door.room.i); door.target = 1; door.col.off = true; const p = L2W(door.room, door.g.position.x, door.g.position.z); audio.sfx.creak(p[0], p[1]); ensureRooms(door.room.i + 2); }
 function toggleDrawer(dr){ dr.target = dr.target ? 0 : 1; audio.sfx.drawer(); if (dr.target && !dr.looted){ dr.looted = true;
     // 서랍 거미 — 가끔 물건 대신 튀어나온다 (열쇠 서랍은 제외)
     if (!dr.key && P.room >= 3 && Math.random() < .035){ setTimeout(()=>{ if (P.dead) return; audio.sfx.spider(); flashScare('spider', .5); hurt(5, 'spider'); msg('🕷 서랍 속에 거미가!', 1800); }, 180); return; }
@@ -1102,7 +1141,8 @@ function pickItem(a){ const k = a.item, m = a.mesh; if (a.sid) shareEv('item', a
   else if (k === 'key'){ P.key = true; msg('🗝 열쇠를 얻었다'); }
   else if (k === 'book'){ const r = rooms[libRoom]; r.books = (r.books || 0) + 1; r.lamps = r.lamps.filter(l=>l.item !== m); msg('📕 책 ' + r.books + '/' + BOOKS_NEED); if (r.books >= BOOKS_NEED){ r.door.locked = false; msg('📕 책 ' + BOOKS_NEED + '권! 출구 문이 열렸다', 3000); audio.sfx.unlock(); } setObj(); }
   else if (k === 'gold'){ const n = rint(5, 15); P.gold += n; addGold(n); }
-  else if (k === 'fuse'){ P.fuses = (P.fuses || 0) + 1; const r = rooms[FINAL]; msg('🔌 퓨즈 ' + ((P.fuses || 0) + (r ? r.fuseIn : 0)) + '/3 — 차단기에 꽂자', 2200); setObj(); }
+  else if (k === 'ekey'){ P.ekey = true; msg('🗝 전기실 열쇠를 얻었다! 창고 왼쪽 안의 전기실로', 2600); setObj(); }
+  else if (k === 'switch'){ P.swItems = (P.swItems || 0) + 1; msg('🔧 차단기 스위치를 주웠다 (' + P.swItems + '개 들고 있음)', 2200); setObj(); }
   renderSlots(); }
 function hideIn(h){ if (P.hidden) return; if (entity.giant && entity.giant.checking === h){ return; }
   // 옷장 속 얼굴 — 아주 가끔 먼저 들어가 있는 게 있다 (한 번 나오면 그 옷장은 비어 있음)
@@ -1324,7 +1364,7 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   if (i > bestRoom){ bestRoom = i; LS.set('hotel_best', bestRoom); }
   if (r.type === 'library' || r.type === 'chase' || r.type === 'final'){ if (entity.rush) endRush(); if (entity.eyes) despawnEyes(); }
   if (r.type === 'library'){ if (!entity.giant) startGiant(r); giantAt = 0; if (!P.cutLib){ P.cutLib = true; libraryCut(); } }
-  if (r.type === 'final'){ if (entity.seek) endSeek(true); if (!entity.giant) startGiant(r); if (!P.cutFinal){ P.cutFinal = true; libraryCut('DOOR 100', '전기실… 그것이 다시 나타났다.', '퓨즈 3개를 찾아 차단기에 끼우고, 비상 엘리베이터로!'); } }
+  if (r.type === 'final'){ if (entity.seek) endSeek(true); if (!entity.giant) startGiant(r); if (!P.cutFinal){ P.cutFinal = true; libraryCut('DOOR 100', '창고… 그것이 다시 나타났다.', '전기실 열쇠 → 빠진 스위치 3개 → 차단기 퍼즐 → 엘리베이터!'); } }
   if (r.type === 'shop'){ if (entity.rush) endRush(); msg('🛒 제프 상점 — 모은 금화로 장비를 살 수 있어', 2800); }
   if (r.type === 'court') msg('…밖인가? 빗소리가 들린다', 2400);
   if (r.beam) setTimeout(()=>{ if (P.room === i) msg('천장이 무너져 있다 — C로 웅크려서 밑으로 지나가자', 3000); }, 600);
@@ -1340,7 +1380,7 @@ function onEnterRoom(i){ const r = rooms[i]; P.maxRoom = i; $('door').textConten
   const nx = rooms[i + 1]; if (!entity.eyes && nx && i >= 8 && (nx.type === 'room' || nx.type === 'hall') && !SH.done.has('eyes:' + (i + 1)) && r3 < .08){ shareEv('eyes', i + 1); spawnEyes(nx); }
   setObj(); }
 function roomType_(i){ if (i === libRoom) return 'library'; if (i >= FINAL) return 'final'; if (i === shopRoom) return 'shop'; if (haltRooms.includes(i)) return 'halt'; for (const s of seekRooms){ if (i >= s - 3 && i <= s + 3) return 'chase'; } return null; }
-function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'final'){ e.textContent = r.power ? '🛗 엘리베이터로 달려!' : r.fuseIn >= 3 ? '⚡ 차단기 레버를 당겨라' : '🔌 퓨즈 ' + (r.fuseIn + (P.fuses || 0)) + '/3 · 차단기에 끼우기 · 웅크리면 조용해'; return; } if (r && r.gate && !r.gate.target){ e.textContent = '⛓ 레버를 찾아 철창을 올려라'; return; } if (r && r.type === 'library') e.textContent = '📕 빛나는 책을 찾아라 ' + (r.books || 0) + '/' + BOOKS_NEED + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
+function setObj(){ const r = rooms[P.room]; const e = $('obj'); if (r && r.type === 'final'){ const mi = missingSw(r); e.textContent = r.power ? '🛗 엘리베이터로 달려!' : (r.eDoor.locked && !P.ekey) ? '🗝 창고에서 전기실 열쇠를 찾아라 · 웅크리면 조용해' : r.eDoor.locked ? '🗝 전기실 문을 열어라' : mi > 0 ? '🔧 빠진 차단기 스위치 ' + mi + '개 (들고 있음 ' + (P.swItems || 0) + ')' : '⚡ 화면의 번호 스위치를 ON/OFF 대로 (' + r.step + '/10)'; return; } if (r && r.gate && !r.gate.target){ e.textContent = '⛓ 레버를 찾아 철창을 올려라'; return; } if (r && r.type === 'library') e.textContent = '📕 빛나는 책을 찾아라 ' + (r.books || 0) + '/' + BOOKS_NEED + ' · 웅크리면 조용해'; else if (r && r.locked && r.door && r.door.locked) e.textContent = '🗝 열쇠를 찾아라'; else e.textContent = ''; }
 
 // =====================================================================
 //  작은 효과
@@ -1400,7 +1440,7 @@ function winGame(){ if (winShown) return; winShown = true; running = false; audi
 function winGame2(){
   bestRoom = 100; LS.set('hotel_best', 100); const wins = (parseInt(LS.get('hotel_wins', '0'), 10) || 0) + 1; LS.set('hotel_wins', wins); addGold(100);
   if (document.pointerLockElement) document.exitPointerLock();
-  const sec = Math.round((performance.now() - runStart)/1000); $('winS').innerHTML = '100개의 문을 지나 호텔을 빠져나왔다.<br>걸린 시간 <b>' + Math.floor(sec/60) + '분 ' + (sec % 60) + '초</b> · 금화 🪙 ' + (P.gold + 100) + ' (탈출 보너스 +100) · 탈출 ' + wins + '회';
+  const sec = Math.round((performance.now() - runStart)/1000); $('winS').innerHTML = '100개의 문을 지나 호텔을 빠져나왔다… 엘리베이터는 추락했지만 살아남았다.<br>다음 층: <b>광산</b> (준비 중)<br>걸린 시간 <b>' + Math.floor(sec/60) + '분 ' + (sec % 60) + '초</b> · 금화 🪙 ' + (P.gold + 100) + ' (탈출 보너스 +100) · 탈출 ' + wins + '회';
   $('win').classList.add('show'); $('hud').classList.add('off'); submitBest(); try { if (window.MP && MP.submitScore) MP.submitScore('hotel_wins', wins, 'desc'); } catch(e){} }
 
 // =====================================================================
@@ -1627,8 +1667,11 @@ function escapeCut(done){ const r = rooms[FINAL]; if (!r){ done(); return; } con
     { dur:1.2, p0:e0.p, p1:W(0, 1.6, L + 2.6), l0:eyeLook(4), l1:W(0, 1.4, L - 8), t:'', s:'' },
     { dur:2.4, p0:W(0, 1.6, L + 2.6), l0:W(0, 1.4, L - 8), l1:W(0, 1.9, L - 3), t:'', s:'닫혀라… 닫혀라!', shake:.02, start:()=>{ r.elvTarget = 0; audio.sfx.elvDoor(); if (gi) audio.sfx.roar(gi.x, gi.z); },
       on:k=>{ r.elvOpen = 1 - k; for (const d of r.elvDoors) d.m.position.x = d.sx*(3.4/4 + (1 - k)*3.4/2*.92); if (gi && g0){ const q = Math.min(1, k*1.15); gi.x = g0[0] + (gEnd[0] - g0[0])*q; gi.z = g0[1] + (gEnd[2] - g0[1])*q; gi.m.g.position.set(gi.x, 0, gi.z); gi.m.g.rotation.y = Math.atan2(gEnd[0] - g0[0], gEnd[2] - g0[1]); gi.step += .3; const s2 = Math.sin(gi.step); gi.m.legL.rotation.x = s2*.6; gi.m.legR.rotation.x = -s2*.6; gi.m.armL.rotation.x = -1.2; gi.m.armR.rotation.x = -1.2; } } },
-    { dur:3.0, p0:W(0, 1.6, L + 2.6), l0:W(0, 1.7, L), t:'탈출', s:'쾅! — 엘리베이터가 위로, 위로. 100개의 문을 지나 살아남았다.', col:'#5a4630', shake:.05, start:()=>{ audio.sfx.slam(P.x, P.z); audio.sfx.rumble(3); P.shake = 1; $('cine').classList.add('day'); }, on:k=>{ wf.style.opacity = Math.max(0, (k - .25)/.75).toFixed(3); } },
-  ], { end:()=>{ $('cine').classList.remove('day'); wf.style.opacity = '1'; done(); setTimeout(()=>{ wf.style.transition = 'opacity 1.6s'; wf.style.opacity = '0'; setTimeout(()=>{ wf.style.transition = ''; }, 1700); }, 200); } }); }
+    { dur:2.4, p0:W(0, 1.6, L + 2.6), l0:W(0, 1.7, L), t:'', s:'쾅! …엘리베이터가 움직인다', shake:.03, start:()=>{ audio.sfx.slam(P.x, P.z); audio.sfx.rumble(2.6); P.shake = 1; } },
+    { dur:1.1, p0:W(0, 1.6, L + 2.6), l0:W(0, 1.7, L), l1:W(0, 3.2, L + 1), t:'', s:'콰직— 케이블이 끊어졌다!', col:'#ff6a5a', shake:.12, start:()=>{ audio.sfx.snap(); r.cabLight.material.color.set(0xff2a10); } },
+    { dur:1.8, p0:W(0, 1.5, L + 2.6), l0:W(0, 3.2, L + 1), l1:W(0, 4.2, L + 1.6), t:'', s:'', shake:.2, on:k=>{ $('blackF').style.opacity = Math.min(1, k*1.3).toFixed(3); r.cabLight.material.color.set(Math.random() < .5 ? 0xff2a10 : 0x200000); } },
+    { dur:3.4, p0:W(0, 1.5, L + 2.6), l0:W(0, 4.2, L + 1.6), t:'다음 층: 광산', s:'THE MINES — 아래에서 무언가가 기다린다 (준비 중)', col:'#e8c878', start:()=>{ $('blackF').style.opacity = '1'; audio.sfx.thump && audio.sfx.thump(); } },
+  ], { end:()=>{ $('cine').classList.remove('day'); done(); const bf = $('blackF'); setTimeout(()=>{ bf.style.transition = 'opacity 1.6s'; bf.style.opacity = '0'; setTimeout(()=>{ bf.style.transition = ''; }, 1700); }, 200); } }); }
 // =====================================================================
 //  게임 흐름
 // =====================================================================
@@ -1638,7 +1681,7 @@ function clearWorld(){ if (CUT){ CUT = null; document.body.classList.remove('cin
 function ensureRooms(n){ n = Math.min(n, FINAL); while (rooms.length <= n){ const prev = rooms[rooms.length - 1]; const r = makeRoom(rooms.length, prev); rooms.push(r); if (SH.open.has(r.i) && r.door){ SH.open.delete(r.i); const d = r.door; d.locked = false; if (d.lock) d.hinge.remove(d.lock); d.target = 1; d.col.off = true; } } }
 function startRun(seed){ audio.unlock(); clearWorld(); winShown = false; LB.on = false; LB.going = false; LB.room = null; ELV.length = 0; lobbyAudioOff(); document.body.classList.remove('inlobby'); $('lobHud').style.display = 'none'; hemi.intensity = .22; P.stayT = 0; $('dread').style.opacity = 0;
   runSeed = seed || NET.pickSeed(); NET.runT = sNow(); resetShare(); planSpecial(); lastRush = -99; screechT = 8; giantAt = 0;
-  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, invT:0 });
+  Object.assign(P, { x:0, z:2.2, yaw:Math.PI, pitch:-.05, vx:0, vz:0, crouch:0, hp:100, vitT:0, bob:0, hidden:null, dead:false, room:0, maxRoom:0, light:{ type:null, on:false, battery:100 }, bandage:0, vitamin:0, key:false, gold:0, fuses:0, ekey:false, swItems:0, cutFinal:false, revive:false, cross:0, snared:0, noise:0, chaseBoost:false, shake:0, invT:0 });
   if (kit.flash){ P.light = { type:'flash', on:true, battery:100 }; } if (kit.band) P.bandage += 2; if (kit.vit) P.vitamin += 1; if (kit.rev) P.revive = true; if (kit.cross) P.cross = 1; kit = {}; LS.set('hotel_kit', '{}');
   ensureRooms(2); $('door').textContent = 'DOOR 000'; renderSlots(); setObj();
   $('lobby').classList.remove('show'); $('dead').classList.remove('show'); $('win').classList.remove('show'); $('pause').classList.remove('show'); $('hud').classList.remove('off'); $('hide').classList.remove('on');
@@ -1717,9 +1760,11 @@ function applyEv(e, who){ const r = e.r, room = rooms[r], key = e.k + ':' + r + 
   else if (e.k === 'gate'){ SH.done.add(key); if (room && !room.disposed) pullLever(room, true); if (Math.abs(r - P.room) <= 1) msg('👥 ' + who + ' 이(가) 레버를 당겼다', 2000); }
   else if (e.k === 'item'){ SH.done.add(key); if (!room || room.disposed) return; const hit = room.inters.find(h=>h.userData.inter && h.userData.inter.sid === e.id); if (!hit) return; const it = hit.userData.inter, m = it.mesh; if (m.parent) m.parent.remove(m); hit.userData.inter = null; const j = interacts.indexOf(hit); if (j >= 0) interacts.splice(j, 1);
     if (it.item === 'book'){ room.books = (room.books || 0) + 1; room.lamps = room.lamps.filter(l=>l.item !== m); msg('📕 ' + who + ' 이(가) 책을 찾았다 ' + room.books + '/' + BOOKS_NEED, 2000); if (room.books >= BOOKS_NEED && room.door && room.door.locked){ room.door.locked = false; audio.sfx.unlock(); msg('📕 책 ' + BOOKS_NEED + '권! 출구 문이 열렸다', 3000); } setObj(); }
-    else if (it.item === 'fuse') msg('🔌 ' + who + ' 이(가) 퓨즈를 주웠다', 1800); }
-  else if (e.k === 'fuse'){ if (room && room.fuseSlots) setFuseIn(room, e.f || 0); }
-  else if (e.k === 'power'){ SH.done.add(key); if (room && room.fuseSlots){ setFuseIn(room, 3); powerOn(room); } }
+    else if (it.item === 'ekey') msg('🗝 ' + who + ' 이(가) 전기실 열쇠를 주웠다', 2200); else if (it.item === 'switch') msg('🔧 ' + who + ' 이(가) 차단기 스위치를 주웠다', 1800); }
+  else if (e.k === 'edoor'){ SH.done.add(key); if (room && room.eDoor){ const d = room.eDoor; d.locked = false; if (d.lock) d.hinge.remove(d.lock); if (d.target < 1) openDoor(d, true); if (P.room >= FINAL - 1) msg('👥 ' + who + ' 이(가) 전기실 문을 열었다', 2200); } }
+  else if (e.k === 'swin'){ SH.done.add(key); if (room && room.sw) insertSwitch(room, e.k2 !== undefined ? e.k2 : e.kk, true); }
+  else if (e.k === 'flip'){ SH.done.add(key); if (room && room.sw) flipSwitch(room, e.sk, true); }
+  else if (e.k === 'power'){ SH.done.add(key); if (room && room.sw){ for (const s0 of room.sw) s0.has = true; powerOn(room); } }
   else if (e.k === 'rush'){ if (entity.rush || entity.seek || P.dead || Math.abs(r - P.room) > 3) return; SH.done.add(key); startRush(!!e.a, r); }
   else if (e.k === 'eyes'){ if (entity.eyes || !room || room.disposed || P.room > r) return; SH.done.add(key); spawnEyes(room); }
   else if (e.k === 'seek'){ if (entity.seek || P.dead || P.room < r - 2 || P.room > r + 2) return; SH.done.add(key); ensureRooms(r + 4); startSeek(r); } }
@@ -1796,7 +1841,7 @@ function loop(now){ requestAnimationFrame(loop); const dt = Math.min(.05, Math.m
 // 로비 배경용 방
 buildPreLobby(); P.x = 0; P.z = 9; renderLobby(); setupPost(); requestAnimationFrame(loop);
 $('gfxBtn').style.opacity = bloomOn ? 1 : .45; $('gfxBtn').addEventListener('click', ()=>{ bloomOn = !bloomOn; LS.set('hotel_bloom', bloomOn ? '1' : '0'); setupPost(); $('gfxBtn').style.opacity = bloomOn ? 1 : .45; msg(bloomOn ? '빛 번짐 켜짐' : '빛 번짐 꺼짐 (가벼움)', 1400); });
-window.__H = { tryDoor, SH, shareEv, get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, finalInteract, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
+window.__H = { tryDoor, SH, shareEv, get paused(){ return paused; }, get dead(){ return P.dead; }, enterLobby, ELV, LB, get courtRoom(){ return courtRoom; }, get shopRoom(){ return shopRoom; }, swInteract, flipSwitch, insertSwitch, pullLever, openJShop, get T(){ return T; }, get CUT(){ return CUT; }, skipCut:()=>{ if (CUT) CUT.age = 9; skipCut(); }, get composer(){ return composer; }, NET, get runSeed(){ return runSeed; }, P, rooms, entity, frame, startRun, ensureRooms, startRush, spawnEyes, startSeek, startGiant, onEnterRoom, get running(){ return running; }, interact, findAim:()=>{ findAim(); return aim; }, camera, die, revive, keys, winGame, setSeek:(a)=>{ seekRooms = a; }, get libRoom(){ return libRoom; }, tickScreech, set screechT(v){ screechT = v; }, renderer, scene, set noRender(v){ noRender = v; }, get haltRooms(){ return haltRooms; }, setHalt:(a)=>{ haltRooms = a; }, useCross, openDupe, startHalt, toLocal, setPause:(v)=>{ paused = v; } };
 })();
 </script>
 <script>
