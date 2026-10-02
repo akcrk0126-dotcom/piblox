@@ -2211,11 +2211,18 @@ function drawLobbyBoard(G){
 // =====================================================================
 //  네트워크
 // =====================================================================
-let sendT = 0, lastSend = '', lastSendAt = 0;
+let sendT = 0, lastSend = '', lastSendAt = 0, lastGS = '', lastGAt = 0;
 function netSend(dt){
-  if (!mpOn || !window.MP || !MP.update) return; sendT -= dt; if (sendT > 0) return; sendT = state.isHost ? 0.1 : 0.09;
-  const d = { x:+me.x.toFixed(2), y:+me.y.toFixed(2), z:+me.z.toFixed(2), ry:+me.facing.toFixed(2), an:(!me.grounded ? 2 : me.moving ? 1 : 0), jt:state.myJT, w:wins, ev:myEv.slice(-10), g:state.isHost ? JSON.parse(JSON.stringify(H)) : null };
-  const s = JSON.stringify(d), now = performance.now(); if (s === lastSend && now - lastSendAt < 2500) return; lastSend = s; lastSendAt = now; MP.update(d);
+  if (!mpOn || !window.MP || !MP.update) return; sendT -= dt; if (sendT > 0) return; sendT = state.isHost ? 0.1 : (others.size > 7 ? 0.16 : 0.09);   // 사람이 많으면 일반 참가자는 조금 덜 자주 보낸다
+  const d = { x:+me.x.toFixed(2), y:+me.y.toFixed(2), z:+me.z.toFixed(2), ry:+me.facing.toFixed(2), an:(!me.grounded ? 2 : me.moving ? 1 : 0), jt:state.myJT, w:wins, ev:myEv.slice(-10), g:null, gb:null };
+  const now = performance.now();
+  // 호스트 상태: 매번 바뀌는 봇 위치(gb)만 매번 보내고, 나머지(g)는 바뀌었을 때만 보낸다 (안 보내면 서버에 이전 값이 남아 있음)
+  if (state.isHost && H){ const g = JSON.parse(JSON.stringify(H)); d.gb = g.bots || {}; delete g.bots; delete g.seen; const gs = JSON.stringify(g);
+    if (gs !== lastGS || now - lastGAt > 3000){ d.g = g; lastGS = gs; lastGAt = now; } else delete d.g; }
+  else lastGS = '';
+  const s = JSON.stringify(d); if (s === lastSend && now - lastSendAt < 2500) return; lastSend = s; lastSendAt = now;
+  // JSON으로 한 번 거른 값을 보낸다: NaN·Infinity·undefined 가 섞이면 파이어베이스가 쓰기를 통째로 거부하고 오류를 낸다
+  try { MP.update(JSON.parse(s)); } catch(e){ console.warn('[jam] 전송 실패', e); }
 }
 function electHost(){
   if (!mpOn){ state.isHost = true; return; }
@@ -2234,10 +2241,10 @@ function onPlayers(players){
     Object.assign(o, { x:p.x||0, y:p.y||0, z:p.z||0, ry:p.ry||0, an:p.an|0, jt:p.jt||0, w:p.w|0, name:p.name||'플레이어', lo:p.avatarLoadout||{} });
     const evs = Array.isArray(p.ev) ? p.ev : []; const last = seenEv.get(uid) || 0; let mx = last;
     for (const ev of evs){ if (!ev || ev.n <= last) continue; mx = Math.max(mx, ev.n); if (sNow() - (ev.ts||0) > 8000) continue; visualEvent(uid, ev); if (state.isHost) hostEvent(ev); }
-    seenEv.set(uid, mx); o.g = p.g || null; }
+    seenEv.set(uid, mx); o.g = p.g || null; o.gb = p.gb || null; }
   for (const uid of [...others.keys()]) if (!seen.has(uid)){ others.delete(uid); removeActor(uid); }
   electHost();
-  if (!state.isHost){ const h = others.get(state.hostId); if (h && h.g) applyG(h.g); }
+  if (!state.isHost){ const h = others.get(state.hostId); if (h && h.g) applyG(h.gb ? Object.assign({}, h.g, { bots:h.gb }) : h.g); }
 }
 if (mpOn){
   MP.onPlayersUpdate(onPlayers);
