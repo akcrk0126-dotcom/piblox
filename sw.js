@@ -7,7 +7,7 @@ const VERSION = 'playhub-v1';
 const CORE = [
   './', 'hub.html', 'multiplayer.js', 'manifest.json',
   'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png',
-  'steal-it.html', 'hotel.html', 'ambo.html', 'jamboree.html', 'mannequin.html', 'fruit.html', 'isle.html', 'tech-obby.html', 'pro-tower.html', 'grow-garden.html', 'wordchain.html', 'account.html', 'backrooms.html', 'jumpmap.html', 'exit8.html', 'exit8-ojisan.js', 'exit8-ojisan.glb',
+  'steal-it.html', 'hotel.html', 'ambo.html', 'jamboree.html', 'mannequin.html', 'fruit.html', 'isle.html', 'tech-obby.html', 'pro-tower.html', 'grow-garden.html', 'wordchain.html', 'account.html', 'backrooms.html', 'jumpmap.html', 'exit8.html', 'exit8-ojisan.js', 'exit8-ojisan.glb', 'aot.html', 'redline.html',
   'aura-battle-3.html', 'forest-strike.html', 'nightfall.html', 'protocol-range.html',
 ];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|www\.gstatic\.com\/firebasejs|fonts\.googleapis\.com|fonts\.gstatic\.com)/;
