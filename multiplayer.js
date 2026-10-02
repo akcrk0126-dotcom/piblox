@@ -113,13 +113,16 @@ const AVATAR_CATALOG = [
   { id:'dittonubs',  slot:'head', name:'메타몽 뿔',     icon:'🫠', color:0xB79CD4, secret:'ditto' },
   // ---- 개인 전용 (EXCLUSIVE_REWARDS 참고) ----
   // ---- 로블록스 클래식 감성 (mpRbxItem 에서 만든다) ----
-  { id:'rbx_rainbowshaggy', slot:'hair', name:'레인보우 샤기',     icon:'🌈', color:0xFF4FA0, rbx:true },
-  { id:'rbx_blackmessy',    slot:'hair', name:'블랙 메시 헤어',    icon:'🖤', color:0x17161A, rbx:true },
-  { id:'rbx_pal',           slot:'hair', name:'팔 헤어',          icon:'🤎', color:0x6B4226, rbx:true },
-  { id:'rbx_trueblue',      slot:'hair', name:'트루 블루 헤어',    icon:'💙', color:0x2F6FE0, rbx:true },
-  { id:'rbx_pigtails',      slot:'hair', name:'블론드 양갈래',     icon:'💛', color:0xF2CF6A, rbx:true },
-  { id:'rbx_longred',       slot:'hair', name:'긴 빨강 머리',      icon:'❤️', color:0xB5361D, rbx:true },
-  { id:'rbx_beautiful',     slot:'hair', name:'뷰티풀 헤어',       icon:'🤍', color:0x4A2E1A, rbx:true },
+  { id:'rbx_m_fluffy',      slot:'hair', name:'푹신한 지저분한 머리', icon:'🖤', color:0x17171C, rbx:true },
+  { id:'rbx_m_twotone',     slot:'hair', name:'블랙&화이트 울프컷',  icon:'🐺', color:0x8A8C94, rbx:true },
+  { id:'rbx_m_white',       slot:'hair', name:'화이트 메시 애니',    icon:'🤍', color:0xE8EAF0, rbx:true },
+  { id:'rbx_m_idol',        slot:'hair', name:'블랙 아이돌 컷',      icon:'🎤', color:0x16161C, rbx:true },
+  { id:'rbx_f_anime',       slot:'hair', name:'애니메이션 소녀 헤어', icon:'🌙', color:0x15151B, rbx:true },
+  { id:'rbx_f_layered',     slot:'hair', name:'층이 달린 웨이브',    icon:'🤎', color:0x7A5A42, rbx:true },
+  { id:'rbx_f_wolf',        slot:'hair', name:'울프컷 소녀 머리',    icon:'🕊️', color:0xDCDBE0, rbx:true },
+  { id:'rbx_f_pink',        slot:'hair', name:'핑크 지저분한 애니',  icon:'🌸', color:0xF09AB9, rbx:true },
+  { id:'rbx_f_cat',         slot:'hair', name:'검은 고양이 소녀',    icon:'🐈‍⬛', color:0x15151B, rbx:true },
+  { id:'rbx_rainbowshaggy', slot:'hair', name:'레인보우 샤기',       icon:'🌈', color:0xFF4FA0, rbx:true },
   { id:'rbx_toon_crown',    slot:'head', name:'카투니 레인보우 크라운', icon:'👑', color:0x121216, rbx:true },
   { id:'rbx_toon_halo',     slot:'head', name:'카투니 레인보우 헤일로', icon:'😇', color:0x121216, rbx:true },
   { id:'rbx_toon_tophat',   slot:'head', name:'카투니 레인보우 탑햇',   icon:'🎩', color:0x121216, rbx:true },
@@ -1208,6 +1211,113 @@ function mpSmoothNormals(geo){ const g = geo.clone(), P = g.attributes.position,
   const key = i=>Math.round(P.getX(i)*1e3) + '_' + Math.round(P.getY(i)*1e3) + '_' + Math.round(P.getZ(i)*1e3);
   for (let i=0;i<P.count;i++){ const k = key(i); const a = map[k] || (map[k] = [0, 0, 0]); a[0] += N.getX(i); a[1] += N.getY(i); a[2] += N.getZ(i); }
   for (let i=0;i<P.count;i++){ const a = map[key(i)], l = Math.hypot(a[0], a[1], a[2]) || 1; N.setXYZ(i, a[0]/l, a[1]/l, a[2]/l); } N.needsUpdate = true; return g; }
+// ---- 헤어스타일 레시피: 두피 어디서(뿌리) 어느 쪽으로(d0) 얼마나 길게(L) 기르는지 ----
+// th: 방위각(0=얼굴 앞), ph: 정수리에서 내려온 각. 헤어라인은 앞 .78 · 옆 1.3 · 뒤 1.9 쯤
+function mpHairline(th){ const f = Math.abs(th)/Math.PI, s = (a, b, v)=>{ const t = Math.max(0, Math.min(1, (v - a)/(b - a))); return t*t*(3 - 2*t); }; return .8 + .5*s(.16, .4, f) + .58*s(.55, .9, f); }
+function mpHairRoots(c, o){ o = o || {}; const out = [];
+  for (let ph=o.ph0 || .07; ph<1.95; ph+=o.step || .11){ const n = Math.max(1, Math.round(Math.sin(ph)*(o.dens || 28)));
+    for (let i=0;i<n;i++){ let th = (i + (c.rnd() - .5)*.7)/n*Math.PI*2 + ph*2.3; th = Math.atan2(Math.sin(th), Math.cos(th));
+      if (ph > (o.phMax || mpHairline)(th) + (o.extra || 0)) continue; out.push({ th, ph, f:Math.abs(th)/Math.PI, s:Math.sin(th) >= 0 ? 1 : -1, p:c.scalp(th, ph) }); } }
+  return out; }
+// 요즘 로블록스 UGC 헤어 느낌: 머리보다 훨씬 크게 부풀고, 가는 다발이 여러 겹(안쪽 겹은 어둡게) 쌓이고,
+// 끝은 바깥으로 뻗치며, 정수리에 잔머리(가는 곡선 몇 가닥)가 날린다
+function mpHairLayers(c, o){
+  const L = o.layers || [{ off:[.04, .03], shade:.5, len:1, w:1 }, { off:[.12, .07], shade:.78, len:.92, w:.9 }, { off:[.21, .11], shade:1, len:.8, w:.85 }];
+  L.forEach((ly, li)=>{ for (const r of mpHairRoots(c, { dens:(o.dens || 22)*1.2*(ly.dens || 1), step:o.step || .11, extra:o.extra || 0 })){
+    // 길이: 뿌리 높이에서 그 자리의 '컷 라인'까지 — 정수리 쪽 다발도 끝까지 내려와서 위가 비늘처럼 안 보인다
+    const by = o.bottom(r, li); let len = Math.max(.14, (r.p.y - by)*1.22 + .1)*(.9 + c.rnd()*.2); if (!(len > .05)) continue;
+    let d = o.dir(r, li), root = r.p;
+    // 바깥 겹은 정수리(또는 가르마)에서 시작해 그 자리까지 흘러온다 → 윗머리가 매끈한 결로 보인다
+    if (li > 0 && r.ph > .3){ const src = o.part ? c.V3(r.s*.025, c.HH + .1, Math.max(-.3, Math.min(.3, r.p.z))) : c.V3(...MP_CROWN).add(c.V3((c.rnd() - .5)*.08, 0, (c.rnd() - .5)*.08));
+      const q = src.clone(); for (let k=0;k<20;k++){ const sdv = c.sdHead(q.x, q.y, q.z); if (Math.abs(sdv) < .002) break; q.addScaledVector(c.normal(q), -sdv); }
+      const hop = q.distanceTo(r.p); if (hop > .05){ const t0 = c.tangentTo(q, r.p.clone().sub(q)); const blend = d.clone().normalize().multiplyScalar(.25).add(t0); root = q; d = blend; len += hop; } }
+    c.lock(root, c.tangentTo(root, d), { L:len, w:(o.w || .15)*.85*ly.w*(.75 + c.rnd()*.5), grav:o.grav == null ? .9 : o.grav, off0:ly.off[0], off1:ly.off[1], shade:ly.shade*(.92 + c.rnd()*.16),
+      flick:o.flick ? o.flick(r, li) : 0, tipPow:o.tipPow || 1.2, wave:o.wave || 0, waveF:o.waveF || 8, wph:c.rnd()*6, th:.026, behind:o.front ? !o.front(r) : true, stopY:o.stopY ? o.stopY(r, li) : null, cols:o.cols ? o.cols(r) : null }); } }); }
+// 정수리 잔머리: 가늘고 길게 휘어 올라가는 몇 가닥
+// 얼굴 옆으로 내려오는 앞머리 다발 (긴 머리용) — 나머지 긴 머리는 전부 등 뒤로
+function mpFrameLocks(c, bottom, n){ for (const s of [-1, 1]) for (let k=0;k<(n || 3);k++){ const p = c.scalp(s*(.75 + k*.14), .55 + k*.08);
+  c.lock(p, c.tangentTo(p, c.V3(s*.2, -1, .45)), { L:(p.y - bottom)*1.15 + .1, w:.13 - k*.015, grav:1.4, hug:.6, off0:.09, off1:.05, behind:false, tipPow:1.25, th:.026, shade:.85 + k*.08, wave:.3, waveF:7 }); } }
+function mpFlyaways(c, n, o){ o = o || {}; for (let i=0;i<n;i++){ const th = (c.rnd() - .5)*2.6 + (o.th || 0), ph = .12 + c.rnd()*.45, p = c.scalp(th, ph);
+  const d = c.normal(p).multiplyScalar(1.2).add(c.V3((c.rnd() - .5)*1.2, .2, (c.rnd() - .5)*1.2));
+  c.lock(p, d, { L:.22 + c.rnd()*.22, w:.03 + c.rnd()*.025, grav:.9, hug:0, off0:.15, off1:.15, wave:1.6, waveF:6, wph:c.rnd()*6, tipPow:1.2, th:.012, shade:1.05 }); } }
+const MP_CROWN = [0, .42, -.12];
+const MP_HAIR = {
+  // ---------- 남자 ----------
+  // 푹신한 지저분한 머리: 머리 전체를 크게 덮고 앞머리가 눈썹까지, 옆·뒤는 끝이 살짝 뻗친다
+  rbx_m_fluffy:{ root:0x0a0a0d, mid:0x17171c, tip:0x2a2a33, ring:.22, back:-.18, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .06 : r.f < .62 ? -.08 : -.2) + li*.05, dens:22, w:.16, grav:.95,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.4, -.55, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : r.f < .62 ? .44 : .46, stopY:(r)=>r.f < .3 ? .07 + c.rnd()*.06 : null,
+      flick:(r, li)=>li === 2 && r.f > .3 ? .7 : 0 });
+    mpFlyaways(c, 7); } },
+  // 블랙&화이트 투톤 울프컷: 왼쪽은 검정, 오른쪽은 흰색 · 뒷머리가 길게 뻗친다
+  rbx_m_twotone:{ root:0x101014, mid:0x1c1c22, tip:0x2e2e38, ring:.2, back:-.25, build(c){ const C = c.V3(...MP_CROWN), T = c.T;
+    const B = [new T.Color(0x0c0c10), new T.Color(0x18181e), new T.Color(0x2c2c36)], W = [new T.Color(0xc9ccd4), new T.Color(0xeceef3), new T.Color(0xffffff)];
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .05 : r.f < .62 ? -.12 : -.34) + li*.06, dens:22, w:.16, grav:.9, cols:(r)=>r.p.x < -.02 ? B : W,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.5, -.5, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : r.f < .62 ? .48 : .62, stopY:(r)=>r.f < .3 ? .05 + c.rnd()*.07 : null,
+      flick:(r, li)=>r.f > .5 ? .9 : r.f > .3 && li > 0 ? .5 : 0 });
+    mpFlyaways(c, 6); } },
+  // 화이트 메시 애니: 은백색, 잔머리 많고 끝이 날카롭다
+  rbx_m_white:{ root:0xb9bdc8, mid:0xe8eaf0, tip:0xffffff, ring:.12, back:-.18, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .05 : r.f < .62 ? -.08 : -.2) + li*.05, dens:22, w:.15, grav:.85, tipPow:1.2,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.6, -.5, .3)); return d; },
+      len:(r)=>r.f < .3 ? .44 : r.f < .62 ? .46 : .5, stopY:(r)=>r.f < .3 ? .04 + c.rnd()*.08 : null,
+      flick:(r, li)=>li === 2 ? .8 : 0 });
+    mpFlyaways(c, 10); } },
+  // 블랙 아이돌 컷: 가운데 가르마 커튼 앞머리, 차분하게 내려온 볼륨
+  rbx_m_idol:{ root:0x0b0b0f, mid:0x16161c, tip:0x26262f, ring:.3, back:-.16, build(c){
+    mpHairLayers(c, { part:true, bottom:(r, li)=>(r.f < .32 ? .02 : r.f < .65 ? -.12 : -.18) + li*.04, dens:24, w:.16, grav:1.1, layers:[{ off:[.04, .03], shade:.55, len:1, w:1 }, { off:[.09, .055], shade:.85, len:.92, w:1 }, { off:[.12, .075], shade:1, len:.8, w:.95 }],
+      dir:(r)=>r.f < .32 ? c.V3(r.s*.55, -.45, 1) : c.V3(r.s*.9, -.5, r.f > .7 ? -.5 : .05),
+      len:(r)=>r.f < .32 ? .5 : r.f < .65 ? .42 : .44, stopY:(r)=>r.f < .32 ? .02 + Math.abs(r.p.x)*.2 : null,
+      flick:(r, li)=>li === 2 && r.f > .35 ? .4 : 0 });
+    mpFlyaways(c, 3); } },
+  // ---------- 여자 ----------
+  // 애니메이션 소녀 헤어: 길고 층진 흑발, 가운데 가르마 + 가는 앞머리 + 얼굴 옆 긴 머리
+  rbx_f_anime:{ root:0x0a0a0d, mid:0x15151b, tip:0x2a2a34, ring:.3, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 6); } },
+  // 아름다운 층이 달린 머리: 브라운 웨이브, 커튼 앞머리, 끝이 바깥으로 말린다
+  rbx_f_layered:{ root:0x4a3122, mid:0x7a5a42, tip:0xb08a68, ring:.35, back:-.3, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .28 && r.f < .5, part:true, bottom:(r, li)=>r.f < .28 ? -.12 : -.85 + li*.16, dens:24, w:.18, grav:1.3, wave:.5, waveF:8,
+      dir:(r)=>r.f < .28 ? c.V3(r.s*.8, -.35, .9) : c.V3(r.s*.75, -.7, -.4),
+      len:(r, li)=>r.f < .28 ? .6 : (li === 2 ? .75 : 1.1), stopY:(r)=>r.f < .28 ? -.05 : null,
+      flick:()=>.75 });
+    mpFlyaways(c, 2); } },
+  // 울프컷 소녀 머리: 애쉬 화이트, 많이 층진 중단발, 끝이 크게 뻗친다
+  rbx_f_wolf:{ root:0xa9a6ad, mid:0xdcdbe0, tip:0xf7f7fa, ring:.15, back:-.25, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>r.f < .28 ? .14 : [-.5, -.32, -.16][li], dens:24, w:.16, grav:1.05, tipPow:1.25,
+      dir:(r)=>{ if (r.f < .28) return c.V3((c.rnd() - .5)*.5, -.5, 1); const d = r.p.clone().sub(C); d.y -= .4; return d; },
+      len:(r, li)=>r.f < .28 ? .5 : (li === 0 ? .78 : li === 1 ? .6 : .45), stopY:(r)=>r.f < .28 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .28 ? .9 : 0 });
+    mpFlyaways(c, 8); } },
+  // 핑크 지저분한 애니: 긴 핑크, 뿌리는 짙고 끝은 연하게, 잔머리 가득
+  rbx_f_pink:{ root:0xc25d86, mid:0xf09ab9, tip:0xffd9e6, ring:.2, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 9); } },
+  // 검은 고양이 소녀: 긴 흑발 + 고양이 귀
+  rbx_f_cat:{ root:0x0a0a0d, mid:0x15151b, tip:0x26262f, ring:.25, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 4); },
+    extra(e){ for (const s of [-1, 1]){ const g = new e.T.Group(); g.position.set(s*.27, .5, -.02); g.rotation.set(-.15, 0, -s*.32); e.H.add(g);
+      const ear = e.mesh(new e.T.ConeGeometry(.15, .3, 4, 1), e.M(0x111116, { roughness:.5 }), 0, .15, 0, g); ear.rotation.y = Math.PI/4; ear.scale.z = .45;
+      const inn = e.mesh(new e.T.ConeGeometry(.09, .2, 4, 1), e.M(0xd9d4dc, { roughness:.8 }), 0, .12, .03, g); inn.rotation.y = Math.PI/4; inn.scale.z = .25; } } },
+  // ---------- 레인보우 ----------
+  rbx_rainbowshaggy:{ root:0xffffff, rainbow:true, back:-.15, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .06 : -.12) + li*.05, dens:22, w:.16, grav:.95,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3(.3, -.5, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : .46, stopY:(r)=>r.f < .3 ? .07 + c.rnd()*.06 : null, flick:(r, li)=>li === 2 ? .7 : 0 });
+    mpFlyaways(c, 5); } },
+};
 function mpRbxItem(c){
   const { T, item, u, anchor, mesh, M, headR, HT, P } = c;
   const top = HT, now = ()=>performance.now()/1000, V3 = (x, y, z)=>new T.Vector3(x, y, z);
@@ -1217,49 +1327,64 @@ function mpRbxItem(c){
     tg.computeVertexNormals(); const o = mesh(tg, m, 0, 0, 0, parent); mesh(new T.SphereGeometry(r, 12, 10), m, pts[0][0], pts[0][1], pts[0][2], parent); return o; };
 
   // ---------------- 헤어 ----------------
+  // 납작한 리본 다발(끝이 뾰족하게 가늘어짐)을 두피에서 '길러서' 만든다.
+  //  · 머리·몸통 모양(SDF)을 따라 흘러내리고 어깨에 닿으면 미끄러져 떨어진다
+  //  · 다발마다 뿌리→끝 색 그라데이션 + 정수리 윤기 띠(엔젤링)
+  //  · 다발 수십 개를 한 메시로 합쳐 그린다 (드로우콜 1개)
   if (item.slot === 'hair'){
     const H = anchor('head', 0, u.headCenterY || 0, 0);
-    const rainbow = item.id === 'rbx_rainbowshaggy';
-    const hm = rainbow ? mpRainbowMat({ lit:true }) : M(item.color, { roughness:.5, metalness:0 });
-    if (rainbow) H.add(tick(hm));
-    // 정수리 캡 + 옆·뒤로 늘어지는 머리 (앞은 비워 둔다)
-    // bottom: 옆·뒷머리가 내려오는 높이 (머리 중심 기준)
-    const cap = (bottom)=>{ const R = headR; mesh(new T.LatheGeometry([[R + .06, top - .22], [R + .055, top - .06], [R*.93, top + .06], [R*.6, top + .115], [0, top + .125]].map(p=>new T.Vector2(p[0], p[1])), 48), hm, 0, 0, 0, H);
-      const h = (top - .06) - bottom; const d = mesh(new T.CylinderGeometry(headR + .055, headR + .07, h, 40, 1, true, 1.05, Math.PI*2 - 2.1), hm, 0, top - .06 - h/2, 0, H);
-      const rim = mesh(new T.TorusGeometry(headR + .065, .045, 8, 40, Math.PI*2 - 2.1), hm, 0, bottom, 0, H); rim.rotation.set(Math.PI/2, 0, Math.PI/2 + 1.05); };
-    const ring = (n, y0, r0, y1, r1, y2, r2, rad, skipFront, twist, taper)=>{ for (let i=0;i<n;i++){ const a = i/n*Math.PI*2 + (i%2)*.08; if (skipFront && Math.cos(a) > skipFront) continue; const b = a + (twist || 0);
-      tube([[Math.sin(a)*r0, y0, Math.cos(a)*r0], [Math.sin(a)*r1, y1, Math.cos(a)*r1], [Math.sin(b)*r2, y2 - (i%3)*.04, Math.cos(b)*r2]], rad, hm, H, taper); } };
-    const fringe = (list, rad)=>{ for (const l of list) tube(l, rad, hm, H, .85); };
-    const R = headR;
-    if (rainbow){ // 레인보우 샤기: 덥수룩한 층 + 옆으로 쓸린 앞머리 + 위로 뻗친 끝
-      cap(-.12); ring(16, top + .1, .18, top - .08, R + .1, -.2, R + .12, .1, .5, .35, .85); ring(10, top + .14, .1, top + .04, R*.9, top - .25, R + .16, .09, .6, -.4, .9);
-      for (let i=0;i<7;i++){ const a = i/7*Math.PI*2 + .4; tube([[Math.sin(a)*.2, top + .12, Math.cos(a)*.2], [Math.sin(a)*.38, top + .2, Math.cos(a)*.38], [Math.sin(a + .3)*.52, top + .22, Math.cos(a + .3)*.52]], .07, hm, H, .95); }
-      fringe([-.22, -.11, 0, .11, .22].map(x=>[[x*.5, top + .12, .12], [x + .05, top - .02, R + .1], [x + .15, .17, R + .07]]), .085);
-    } else if (item.id === 'rbx_blackmessy'){ // 블랙 메시: 사방으로 뻗친 뾰족한 다발
-      cap(.06);
-      for (let i=0;i<16;i++){ const a = i/16*Math.PI*2, up = .12 + (i%3)*.07; tube([[Math.sin(a)*.12, top + .1, Math.cos(a)*.12], [Math.sin(a)*.34, top + .14 + up*.5, Math.cos(a)*.34], [Math.sin(a + .2)*.56, top + .1 + up, Math.cos(a + .2)*.56]], .095, hm, H, .97); }
-      ring(12, top - .02, R*.8, top - .2, R + .12, .02, R + .2, .085, .55, .2, .97);
-      fringe([[-.22, .2], [-.08, .16], [.06, .19], [.2, .15]].map(([x, y])=>[[x*.4, top + .1, .14], [x, top - .04, R + .12], [x + .06, y, R + .16]]), .085);
-    } else if (item.id === 'rbx_pal'){ // 팔 헤어: 깔끔한 뒷머리 + 한쪽으로 크게 넘긴 앞머리
-      cap(-.06); ring(14, top + .06, .2, top - .14, R + .08, -.12, R + .06, .085, .45, .1, .7);
-      for (let k=0;k<5;k++){ const z = k*.035; tube([[-.25 + k*.04, top + .12, .02 + z], [-.05 + k*.03, top + .02 + k*.01, R + .12], [.22 + k*.04, .18 + k*.015, R + .1 - k*.01], [.38, .1 + k*.03, R - .02]], .1 - k*.008, hm, H, .8); }
-    } else if (item.id === 'rbx_trueblue'){ // 트루 블루: 위로 솟았다가 옆으로 넘어가는 큰 앞머리
-      cap(-.04); ring(14, top + .06, .2, top - .14, R + .08, -.1, R + .08, .09, .45, .2, .8);
-      for (let k=0;k<4;k++){ const x = -.24 + k*.14; tube([[x*.5, top + .08, -.18], [x*.7, top + .3, .1], [x + .2, top + .24, R + .14], [x + .36, top + .02, R + .14], [x + .42, .16, R + .06]], .14 - k*.012, hm, H, .9); }
-    } else if (item.id === 'rbx_pigtails'){ // 블론드 양갈래: 일자 앞머리 + 분홍 끈 + 등 뒤로 흐르는 두 갈래
-      cap(.02); ring(12, top + .06, .2, top - .1, R + .07, .02, R + .07, .08, .4, .15, .7);
-      fringe([-.24, -.12, 0, .12, .24].map(x=>[[x*.6, top + .12, .12], [x, top - .06, R + .09], [x, .17, R + .07]]), .075);
-      for (const s of [-1, 1]){ const tie = mesh(new T.TorusGeometry(.085, .035, 10, 24), M(0xFF6FAE, { roughness:.4 }), s*.42, .2, -.12, H); tie.rotation.y = Math.PI/2; tie.rotation.x = .4;
-        mesh(new T.SphereGeometry(.06, 12, 10), M(0xFF6FAE, { roughness:.4 }), s*.46, .25, -.08, H);
-        for (let k=0;k<3;k++){ const o = (k - 1)*.05; tube([[s*.42, .2, -.12 + o], [s*(.56 + o), -.05, -.3], [s*(.58 + o*.5), -.45, -.42], [s*(.52 + o), -.85, -.42], [s*(.6 + o), -1.0, -.36]], .1 - Math.abs(o)*.3, hm, H, .9); } }
-    } else if (item.id === 'rbx_longred' || item.id === 'rbx_beautiful'){ // 긴 머리: 등까지 내려오는 물결 다발 + 얼굴 옆 머리
-      const beau = item.id === 'rbx_beautiful', L = beau ? -.62 : -1.05;
-      cap(-.22); ring(12, top + .06, .2, top - .14, R + .08, -.2, R + .08, .085, .45, .1, .6);
-      for (let i=-4;i<=4;i++){ const x = i*.085, w = Math.sin(i*1.7)*.03; tube([[x*.8, top - .02, -.28], [x*1.1, -.12, -(R + .08)], [x*1.15 + w, -.5, -.42], [x*1.1 - w, L, -.42 + Math.abs(i)*.01], [x*1.2, L - .1, -.38]], .085, hm, H, .75); }
-      for (const s of [-1, 1]) tube([[s*.34, top - .12, .12], [s*.43, -.05, .1], [s*.42, -.3, .1]], .08, hm, H, .8);
-      if (beau){ tube([[.12, top + .14, .08], [-.1, top + .03, R + .12], [-.3, .14, R + .05], [-.42, -.08, R - .1]], .12, hm, H, .8); fringe([[[.0, top + .12, .1], [.14, top - .02, R + .1], [.26, .2, R + .06]], [[.08, top + .12, .1], [.24, top - .04, R + .08], [.34, .16, R + .03]]], .085); }
-      else fringe([-.2, -.07, .07, .2].map(x=>[[x*.5, top + .12, .12], [x, top - .06, R + .09], [x + .03, .19, R + .07]]), .08);
-    }
+    const st = MP_HAIR[item.id]; if (!st) return;
+    const R = headR, HH = top, rr = .13, lin = !!T.SRGBColorSpace;
+    let seed = 0; for (const ch of item.id) seed = (seed*31 + ch.charCodeAt(0)) >>> 0; const rnd = ()=>((seed = (seed*1664525 + 1013904223) >>> 0)/4294967296);
+    const sdHead = (x, y, z)=>{ const q0 = Math.hypot(x, z/.96) - (R - rr), q1 = Math.abs(y) - (HH - rr); return Math.min(Math.max(q0, q1), 0) + Math.hypot(Math.max(q0, 0), Math.max(q1, 0)) - rr; };
+    const sdTorso = (x, y, z)=>{ const qx = Math.abs(x) - .56, qy = Math.abs(y + .97) - .56, qz = Math.abs(z) - .25; return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - .06; };
+    const sd = (x, y, z)=>Math.min(sdHead(x, y, z), sdTorso(x, y, z));
+    const grad = (p)=>{ const e = .004; const v = V3(sd(p.x + e, p.y, p.z) - sd(p.x - e, p.y, p.z), sd(p.x, p.y + e, p.z) - sd(p.x, p.y - e, p.z), sd(p.x, p.y, p.z + e) - sd(p.x, p.y, p.z - e)); return v.lengthSq() > 1e-12 ? v.normalize() : V3(0, 1, 0); };
+    // 두피 위 한 점: 방위각 th(0=앞) · 정수리에서 내려온 각 ph
+    const scalp = (th, ph)=>{ const dir = V3(Math.sin(ph)*Math.sin(th), Math.cos(ph), Math.sin(ph)*Math.cos(th)), c = V3(0, -.05, 0); let lo = 0, hi = 1.2;
+      for (let i=0;i<22;i++){ const m = (lo + hi)/2, p = c.clone().addScaledVector(dir, m); if (sdHead(p.x, p.y, p.z) < 0) lo = m; else hi = m; } return c.addScaledVector(dir, hi); };
+    const tangentTo = (p, v)=>{ const n = grad(p); const t = v.clone().addScaledVector(n, -v.dot(n)); return t.lengthSq() > 1e-8 ? t.normalize() : V3(0, -1, 0); };
+    const pos = [], col = [], idx = []; const cRoot = new T.Color(st.root), cMid = new T.Color(st.mid || st.root), cTip = new T.Color(st.tip || st.mid || st.root), tmpC = new T.Color();
+    // 한 다발: root 에서 d0 방향으로 길이 L 만큼 자란다
+    const lock = (root, d0, o)=>{ const ds = .022, n = Math.max(4, Math.ceil(o.L/ds)), P = [], N = []; const p = root.clone(), d = d0.clone().normalize(); const side = V3().crossVectors(d, grad(p)).normalize();
+      for (let i=0;i<=n;i++){ const t = i/n, off = (o.off0 == null ? .05 : o.off0)*(1 - t) + (o.off1 == null ? .03 : o.off1)*t;
+        let s = sd(p.x, p.y, p.z); if (s < off){ const g = grad(p); p.addScaledVector(g, off - s); s = off; }
+        P.push(p.clone()); N.push(grad(p));
+        if (o.to && p.distanceTo(o.to) < .03) break;
+        if (o.stopY != null && p.y < o.stopY && i > 3) break;   // 앞머리 일자 컷
+        // 방향: 처음엔 뻣뻣하게, 갈수록 중력 · 웨이브 · 끝 뻗침
+        d.y -= (o.grav == null ? 1 : o.grav)*ds*4*(.35 + t);
+        // 머리에 붙어 흐르도록 표면 쪽으로 당긴다 (뿌리 근처일수록 세게)
+        if (s - off < .16){ const gg = grad(p); d.addScaledVector(gg, -(o.hug == null ? 1 : o.hug)*ds*14*(1 - (s - off)/.16)*(1 - t*.6)); }
+        if (o.to){ d.lerp(o.to.clone().sub(p).normalize(), .25); }
+        if (o.wave) d.addScaledVector(side, Math.sin(t*o.waveF + (o.wph || 0))*o.wave*ds*6);
+        if (o.flick && t > .72) d.addScaledVector(grad(p), o.flick*ds*8);
+        if (p.y < -.25 && o.behind !== false && p.z > -.33) d.z -= ds*6;
+        if (p.y < -.3 && o.behind === false && p.z < .34) d.z += ds*5;   // 목 아래로 내려온 긴 머리는 몸 뒤쪽으로
+        const g = grad(p); if (s < off + .015){ const dn = d.dot(g); if (dn < 0) d.addScaledVector(g, -dn); }
+        if (d.lengthSq() < 1e-4) d.set(p.x*.3, -.1, o.behind === false ? 1 : -1);   // 어깨에 걸리면 앞(가슴) 또는 등 뒤로 넘긴다
+        d.normalize(); p.addScaledVector(d, ds); }
+      const m = P.length; if (m < 3) return; const base = pos.length/3, W = o.w || .11, CS = [-1, -.55, 0, .55, 1];
+      for (let i=0;i<m;i++){ const t = i/(m - 1), a = P[Math.max(0, i - 1)], b = P[Math.min(m - 1, i + 1)], tg = b.clone().sub(a).normalize();
+        let wv = V3().crossVectors(tg, N[i]); if (wv.lengthSq() < 1e-6) wv.crossVectors(tg, V3(0, 1, 0)); wv.normalize(); const nv = V3().crossVectors(wv, tg).normalize();
+        const tipK = o.blunt ? (t > .96 ? 1 - (t - .96)*10 : 1) : 1 - Math.pow(t, o.tipPow || 1.7);
+        const w = W*(t < .08 ? .55 + t*5.6 : 1)*Math.max(.02, tipK);
+        const hl = 1 + (st.ring == null ? .32 : st.ring)*Math.exp(-Math.pow((P[i].y - (HH + .02 - (st.ringDrop || 0)))/.05, 2))*(t < .6 ? 1 : 0);
+        const cs3 = o.cols || [cRoot, cMid, cTip]; tmpC.copy(t < .5 ? cs3[0] : cs3[1]).lerp(t < .5 ? cs3[1] : cs3[2], t < .5 ? t*2 : (t - .5)*2).multiplyScalar(o.shade == null ? 1 : o.shade);
+        for (const cs of CS){ const q = P[i].clone().addScaledVector(wv, cs*w*.5).addScaledVector(nv, (1 - cs*cs)*(o.th || .028)*(w/W));
+          pos.push(q.x, q.y, q.z); const e = (.82 + .18*(1 - Math.abs(cs)))*hl; let r = tmpC.r*e, gg = tmpC.g*e, bb = tmpC.b*e;
+          if (lin){ const L = v=>v <= .04045 ? v/12.92 : Math.pow((v + .055)/1.055, 2.4); r = L(Math.min(1, r)); gg = L(Math.min(1, gg)); bb = L(Math.min(1, bb)); } col.push(r, gg, bb); } }
+      for (let i=0;i<m - 1;i++) for (let k=0;k<4;k++){ const a = base + i*5 + k, b = a + 5; idx.push(a, b, a + 1, b, b + 1, a + 1); } };
+    const ctx = { V3, scalp, tangentTo, lock, rnd, R, HH, normal:grad, T, sdHead };
+    // 두피가 비치지 않게 깔리는 밑바탕 (뿌리 색)
+    const capM = new T.MeshStandardMaterial({ color:new T.Color(st.root).multiplyScalar(.8), roughness:.6 });
+    mesh(new T.LatheGeometry([[R + .03, HH - .2], [R + .03, HH - .06], [R*.9, HH + .04], [R*.55, HH + .075], [0, HH + .08]].map(p=>new T.Vector2(p[0], p[1])), 40), capM, 0, 0, 0, H).scale.z = .97;
+    if (st.back){ const bg = new T.CylinderGeometry(R + .03, R + .03, HH - st.back + .02, 32, 1, true, 1.2, Math.PI*2 - 2.4); mesh(bg, new T.MeshStandardMaterial({ color:new T.Color(st.root).multiplyScalar(.8), roughness:.6, side:T.DoubleSide }), 0, (HH - .2 + st.back)/2, 0, H); }
+    st.build(ctx);
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+    let hm; if (st.rainbow){ hm = mpRainbowMat({ lit:true }); H.add(tick(hm)); } else hm = new T.MeshStandardMaterial({ vertexColors:true, roughness:.62, metalness:0, side:T.DoubleSide });
+    hm.side = T.DoubleSide; mesh(g, hm, 0, 0, 0, H);
+    if (st.extra) st.extra({ T, mesh, M, H, V3 });
     return; }
 
   // ---------------- 카투니 레인보우 (검정 + 무지개 외곽선) ----------------
@@ -1336,7 +1461,8 @@ function mpRbxItem(c){
 // loadout: { head, acc, top, bottom, back } (각 값은 AVATAR_CATALOG의 id 또는 null)
 // 옛 three(r128)는 색 숫자를 그대로 선형값으로 써서 화면에 허옇게 바래 보인다 → sRGB 로 보정 (새 three 는 알아서 함)
 // 렌더러가 sRGB 로 내보낼 때만(색 보정을 켠 게임) 한 번 바꾼다 — 보정을 안 켠 게임은 원래 색 그대로가 맞다
-function mpLinearize(root){ const T = window.THREE; if (!T || T.SRGBColorSpace) return; root.traverse(o=>{ const ms = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms){ if (!m || !m.userData || m.userData.mpLin) continue; m.userData.mpLin = true; if (m.color) m.color.convertSRGBToLinear(); if (m.emissive) m.emissive.convertSRGBToLinear(); if (m.map && T.sRGBEncoding && m.map.encoding !== T.sRGBEncoding){ m.map.encoding = T.sRGBEncoding; m.map.needsUpdate = true; } m.needsUpdate = true; } }); }
+function mpLinearize(root){ const T = window.THREE; if (!T || T.SRGBColorSpace) return; root.traverse(o=>{ const ms = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms){ if (!m || !m.userData || m.userData.mpLin) continue; m.userData.mpLin = true; if (m.color) m.color.convertSRGBToLinear(); if (m.emissive) m.emissive.convertSRGBToLinear(); if (m.map && T.sRGBEncoding && m.map.encoding !== T.sRGBEncoding){ m.map.encoding = T.sRGBEncoding; m.map.needsUpdate = true; } m.needsUpdate = true; }
+  const ca = o.geometry && o.geometry.attributes && o.geometry.attributes.color; if (ca && !o.geometry.userData.mpLin){ o.geometry.userData.mpLin = true; const L = v=>v <= .04045 ? v/12.92 : Math.pow((v + .055)/1.055, 2.4); for (let i=0;i<ca.array.length;i++) ca.array[i] = L(Math.min(1, ca.array[i])); ca.needsUpdate = true; } }); }
 function mpBuildAvatar(loadout){
   const lo = loadout || {};
   // 색과 얼굴은 몸을 지을 때 바로 반영한다(부착물이 아니라 몸 자체의 성질이라서).
