@@ -1106,12 +1106,21 @@ const MP = (function () {
       });
       emoScanPlayers(val);
       mpChatPresence(val);
-      if (onPlayersCb) onPlayersCb(val);
+      // 게임 쪽 콜백에서 오류가 나도 파이어베이스 이벤트 처리가 끊기지 않게 ("Exception was thrown by user callback")
+      if (onPlayersCb) { try { onPlayersCb(val); } catch (e) { console.warn('[MP] onPlayersUpdate 콜백 오류', e); } }
     }
-    playersRef.on('value', snap => {
-      lastPlayersSnapshot = snap.val() || {};
-      mpChatScan(lastPlayersSnapshot);
+    // 사람이 많으면 'value'가 1초에 수십~수백 번 온다(사람 수 × 초당 전송 수). 매번 방 전체를
+    // snap.val()로 풀고 게임 콜백까지 돌리면 렉이 걸리므로, 마지막 스냅샷만 기억했다가 최대 초당 20번만 처리한다.
+    let pendingSnap = null, emitTimer = null, lastEmitAt = 0;
+    const flushPlayers = () => {
+      emitTimer = null; if (!pendingSnap) return; const sn = pendingSnap; pendingSnap = null; lastEmitAt = Date.now();
+      lastPlayersSnapshot = sn.val() || {};
+      try { mpChatScan(lastPlayersSnapshot); } catch (e) { console.warn('[MP] chat', e); }
       emitFilteredPlayers();
+    };
+    playersRef.on('value', snap => {
+      pendingSnap = snap;
+      if (!emitTimer) emitTimer = setTimeout(flushPlayers, Math.max(0, 50 - (Date.now() - lastEmitAt)));
     });
     // 다른 사람이 아무도 움직이지 않으면(=파이어베이스에 새 쓰기가 없으면) 위 'value' 리스너가
     // 다시 안 불려서 낡은 유령이 그대로 남아있을 수 있음 - 5초마다 타이머로 강제 재검사해서 걸러냄
