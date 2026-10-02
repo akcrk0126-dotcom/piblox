@@ -1575,6 +1575,16 @@ const EMOTES = [
       if (ph < 1.5) return { ry:ph*10, armL:[0, 0, -1.6], armR:[0, 0, 1.6], legL:[-.5, 0, -.3], legR:[.5, 0, .3], dy:-.35 };
       if (ph < 2.5){ const k = ph - 1.5; return { armL:[-3, 0, 0], armR:[-3, 0, 0], legL:[EMO_S(k*20)*.6, 0, 0], legR:[-EMO_S(k*20)*.6, 0, 0], dy:Math.abs(EMO_S(k*6))*.6 }; }
       return { armL:[-1.2 + EMO_S(t*12), 0, -.3], armR:[-1.2 - EMO_S(t*12), 0, .3], dy:Math.abs(EMO_S(t*12))*.2, ry:EMO_S(t*3) }; } },
+  // ---- 포레스트 스트라이크 전용 (포레스트 상점에서 골드로 산다 · 허브 마켓에는 안 나온다) ----
+  // 티배깅: 빠르게 앉았다 일어났다
+  { id:'emote_teabag', name:'티배깅', icon:'🫖', price:2500, rar:'e', forest:true, dur:0, alias:['teabag','tbag','티배깅','티백'], pose:t=>{ const k = (1 - EMO_C(t*15))/2;
+      return { legL:[-1.45*k, 0, -.06], legR:[-1.45*k, 0, .06], armL:[-.5*k, 0, -.12], armR:[-.5*k, 0, .12], dy:-.95*k, rx:.12*k, head:[-.15*k, 0, 0] }; } },
+  // L을 가져가: 이마에 L 손 + 양옆으로 다리 차며 콩콩
+  { id:'emote_takel', name:'L을 가져가', icon:'🫵', price:6000, rar:'l', forest:true, dur:0, alias:['takel','l','takethel','엘','L'], pose:t=>{ const b = t*6.5, s = EMO_S(b);
+      return { armR:[-2.6, -.2, -.75], armL:[-.2 + s*.25, 0, -.35 - Math.abs(s)*.2], legL:[0, 0, -Math.max(0, s)*.85], legR:[0, 0, Math.max(0, -s)*.85], dy:Math.abs(EMO_S(b))*.28, ry:s*.25, head:[.1, -s*.2, s*.1] }; } },
+  // 크리스크로스: 팔을 가슴 앞에서 X 자로 교차 + 다리 꼬며 점프
+  { id:'emote_crisscross', name:'크리스크로스', icon:'❌', price:4000, rar:'e', forest:true, dur:0, alias:['crisscross','criss','크리스크로스','크크'], pose:t=>{ const b = t*8, s = EMO_S(b), k = s > 0 ? 1 : -.55;
+      return { armL:[-1.15, 0, 1.0*k], armR:[-1.15, 0, -1.0*k], legL:[0, 0, .32*Math.max(0, s)], legR:[0, 0, -.32*Math.max(0, s)], dy:Math.abs(EMO_C(b))*.3, ry:EMO_S(b*.5)*.15, head:[.08, 0, s*.12] }; } },
 ];
 const EMOTE_MAP = {}; EMOTES.forEach(e=>{ EMOTE_MAP[e.id] = e; });
 function emoFind(q){ q = String(q || '').trim().toLowerCase().replace(/\s+/g, ''); if (!q) return null; if (EMOTE_MAP[q]) return EMOTE_MAP[q]; if (EMOTE_MAP['emote_' + q]) return EMOTE_MAP['emote_' + q];
@@ -1992,7 +2002,7 @@ const MP = (function () {
     Object.keys(EMO.remote).forEach(k=>{ if (!seen[k]) delete EMO.remote[k]; }); }
   function ownsEmote(id){ const e = EMOTE_MAP[id]; if (!e) return false; return !e.price || isOwned(id); }
   function playEmote(q){ const e = emoFind(q); if (!e) return false;
-    if (!ownsEmote(e.id)){ chatSys('🔒 ' + e.icon + ' ' + e.name + ' — 허브 → 아바타 → 마켓플레이스에서 살 수 있어요 (🔷' + e.price + ')'); return true; }
+    if (!ownsEmote(e.id)){ chatSys('🔒 ' + e.icon + ' ' + e.name + (e.forest ? ' — 포레스트 스트라이크 상점 전용 (🪙' + e.price + ')' : ' — 허브 → 아바타 → 마켓플레이스에서 살 수 있어요 (🔷' + e.price + ')')); return true; }
     EMO.self = { id:e.id, t:serverNow(), x:EMO.selfPos ? EMO.selfPos[0] : null, z:EMO.selfPos ? EMO.selfPos[1] : null, g:null };
     if (ready && myRef){ try { myRef.update({ emote:{ id:e.id, t:firebase.database.ServerValue.TIMESTAMP } }); } catch (err) {} }
     emoInstall(); emoMenu(false); return true; }
@@ -2004,7 +2014,7 @@ const MP = (function () {
   function emoMenu(open){ const el = CHAT.el; if (!el) return; const box = el.querySelector('.emo'); if (!box) return; if (open === undefined) open = !box.classList.contains('on');
     box.classList.toggle('on', open); window.MPChatOpen = open || document.activeElement === CHAT.input;
     if (!open) return; try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
-    box.innerHTML = EMOTES.map(e=>{ const own = ownsEmote(e.id); return '<button type="button" data-e="' + e.id + '" class="' + (own ? '' : 'lk') + '" title="/e ' + e.alias[0] + '"><span>' + e.icon + '</span><small>' + (own ? e.name : '🔒 🔷' + e.price) + '</small></button>'; }).join('') + '<div class="hint">/e 이름 으로도 쓸 수 있어요 · 움직이면 멈춰요 · 더 많은 이모트는 허브 마켓플레이스</div>'; }
+    box.innerHTML = EMOTES.filter(e=>!e.forest || ownsEmote(e.id)).map(e=>{ const own = ownsEmote(e.id); return '<button type="button" data-e="' + e.id + '" class="' + (own ? '' : 'lk') + '" title="/e ' + e.alias[0] + '"><span>' + e.icon + '</span><small>' + (own ? e.name : '🔒 🔷' + e.price) + '</small></button>'; }).join('') + '<div class="hint">/e 이름 으로도 쓸 수 있어요 · 움직이면 멈춰요 · 더 많은 이모트는 허브 마켓플레이스</div>'; }
 
   function handleAuthChange(user) {
     authReady = true;
