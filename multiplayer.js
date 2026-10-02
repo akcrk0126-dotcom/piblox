@@ -1217,49 +1217,58 @@ function mpRbxItem(c){
     tg.computeVertexNormals(); const o = mesh(tg, m, 0, 0, 0, parent); mesh(new T.SphereGeometry(r, 12, 10), m, pts[0][0], pts[0][1], pts[0][2], parent); return o; };
 
   // ---------------- 헤어 ----------------
+  // 가는 가닥 대신 '조각한 한 덩어리' — 머리를 감싸는 두꺼운 껍데기를 큰 다발 모양으로 깎는다.
+  //  · 아래 끝선이 다발마다 둥글게/뾰족하게 내려오고(tooth) · 다발 사이에 홈(bulge) · 길이를 따라 살짝 비틀어(sweep) 흐름을 준다
   if (item.slot === 'hair'){
     const H = anchor('head', 0, u.headCenterY || 0, 0);
     const rainbow = item.id === 'rbx_rainbowshaggy';
-    const hm = rainbow ? mpRainbowMat({ lit:true }) : M(item.color, { roughness:.5, metalness:0 });
-    if (rainbow) H.add(tick(hm));
-    // 정수리 캡 + 옆·뒤로 늘어지는 머리 (앞은 비워 둔다)
-    // bottom: 옆·뒷머리가 내려오는 높이 (머리 중심 기준)
-    const cap = (bottom)=>{ const R = headR; mesh(new T.LatheGeometry([[R + .06, top - .22], [R + .055, top - .06], [R*.93, top + .06], [R*.6, top + .115], [0, top + .125]].map(p=>new T.Vector2(p[0], p[1])), 48), hm, 0, 0, 0, H);
-      const h = (top - .06) - bottom; const d = mesh(new T.CylinderGeometry(headR + .055, headR + .07, h, 40, 1, true, 1.05, Math.PI*2 - 2.1), hm, 0, top - .06 - h/2, 0, H);
-      const rim = mesh(new T.TorusGeometry(headR + .065, .045, 8, 40, Math.PI*2 - 2.1), hm, 0, bottom, 0, H); rim.rotation.set(Math.PI/2, 0, Math.PI/2 + 1.05); };
-    const ring = (n, y0, r0, y1, r1, y2, r2, rad, skipFront, twist, taper)=>{ for (let i=0;i<n;i++){ const a = i/n*Math.PI*2 + (i%2)*.08; if (skipFront && Math.cos(a) > skipFront) continue; const b = a + (twist || 0);
-      tube([[Math.sin(a)*r0, y0, Math.cos(a)*r0], [Math.sin(a)*r1, y1, Math.cos(a)*r1], [Math.sin(b)*r2, y2 - (i%3)*.04, Math.cos(b)*r2]], rad, hm, H, taper); } };
-    const fringe = (list, rad)=>{ for (const l of list) tube(l, rad, hm, H, .85); };
-    const R = headR;
-    if (rainbow){ // 레인보우 샤기: 덥수룩한 층 + 옆으로 쓸린 앞머리 + 위로 뻗친 끝
-      cap(-.12); ring(16, top + .1, .18, top - .08, R + .1, -.2, R + .12, .1, .5, .35, .85); ring(10, top + .14, .1, top + .04, R*.9, top - .25, R + .16, .09, .6, -.4, .9);
-      for (let i=0;i<7;i++){ const a = i/7*Math.PI*2 + .4; tube([[Math.sin(a)*.2, top + .12, Math.cos(a)*.2], [Math.sin(a)*.38, top + .2, Math.cos(a)*.38], [Math.sin(a + .3)*.52, top + .22, Math.cos(a + .3)*.52]], .07, hm, H, .95); }
-      fringe([-.22, -.11, 0, .11, .22].map(x=>[[x*.5, top + .12, .12], [x + .05, top - .02, R + .1], [x + .15, .17, R + .07]]), .085);
-    } else if (item.id === 'rbx_blackmessy'){ // 블랙 메시: 사방으로 뻗친 뾰족한 다발
-      cap(.06);
-      for (let i=0;i<16;i++){ const a = i/16*Math.PI*2, up = .12 + (i%3)*.07; tube([[Math.sin(a)*.12, top + .1, Math.cos(a)*.12], [Math.sin(a)*.34, top + .14 + up*.5, Math.cos(a)*.34], [Math.sin(a + .2)*.56, top + .1 + up, Math.cos(a + .2)*.56]], .095, hm, H, .97); }
-      ring(12, top - .02, R*.8, top - .2, R + .12, .02, R + .2, .085, .55, .2, .97);
-      fringe([[-.22, .2], [-.08, .16], [.06, .19], [.2, .15]].map(([x, y])=>[[x*.4, top + .1, .14], [x, top - .04, R + .12], [x + .06, y, R + .16]]), .085);
-    } else if (item.id === 'rbx_pal'){ // 팔 헤어: 깔끔한 뒷머리 + 한쪽으로 크게 넘긴 앞머리
-      cap(-.06); ring(14, top + .06, .2, top - .14, R + .08, -.12, R + .06, .085, .45, .1, .7);
-      for (let k=0;k<5;k++){ const z = k*.035; tube([[-.25 + k*.04, top + .12, .02 + z], [-.05 + k*.03, top + .02 + k*.01, R + .12], [.22 + k*.04, .18 + k*.015, R + .1 - k*.01], [.38, .1 + k*.03, R - .02]], .1 - k*.008, hm, H, .8); }
-    } else if (item.id === 'rbx_trueblue'){ // 트루 블루: 위로 솟았다가 옆으로 넘어가는 큰 앞머리
-      cap(-.04); ring(14, top + .06, .2, top - .14, R + .08, -.1, R + .08, .09, .45, .2, .8);
-      for (let k=0;k<4;k++){ const x = -.24 + k*.14; tube([[x*.5, top + .08, -.18], [x*.7, top + .3, .1], [x + .2, top + .24, R + .14], [x + .36, top + .02, R + .14], [x + .42, .16, R + .06]], .14 - k*.012, hm, H, .9); }
-    } else if (item.id === 'rbx_pigtails'){ // 블론드 양갈래: 일자 앞머리 + 분홍 끈 + 등 뒤로 흐르는 두 갈래
-      cap(.02); ring(12, top + .06, .2, top - .1, R + .07, .02, R + .07, .08, .4, .15, .7);
-      fringe([-.24, -.12, 0, .12, .24].map(x=>[[x*.6, top + .12, .12], [x, top - .06, R + .09], [x, .17, R + .07]]), .075);
-      for (const s of [-1, 1]){ const tie = mesh(new T.TorusGeometry(.085, .035, 10, 24), M(0xFF6FAE, { roughness:.4 }), s*.42, .2, -.12, H); tie.rotation.y = Math.PI/2; tie.rotation.x = .4;
-        mesh(new T.SphereGeometry(.06, 12, 10), M(0xFF6FAE, { roughness:.4 }), s*.46, .25, -.08, H);
-        for (let k=0;k<3;k++){ const o = (k - 1)*.05; tube([[s*.42, .2, -.12 + o], [s*(.56 + o), -.05, -.3], [s*(.58 + o*.5), -.45, -.42], [s*(.52 + o), -.85, -.42], [s*(.6 + o), -1.0, -.36]], .1 - Math.abs(o)*.3, hm, H, .9); } }
-    } else if (item.id === 'rbx_longred' || item.id === 'rbx_beautiful'){ // 긴 머리: 등까지 내려오는 물결 다발 + 얼굴 옆 머리
-      const beau = item.id === 'rbx_beautiful', L = beau ? -.62 : -1.05;
-      cap(-.22); ring(12, top + .06, .2, top - .14, R + .08, -.2, R + .08, .085, .45, .1, .6);
-      for (let i=-4;i<=4;i++){ const x = i*.085, w = Math.sin(i*1.7)*.03; tube([[x*.8, top - .02, -.28], [x*1.1, -.12, -(R + .08)], [x*1.15 + w, -.5, -.42], [x*1.1 - w, L, -.42 + Math.abs(i)*.01], [x*1.2, L - .1, -.38]], .085, hm, H, .75); }
-      for (const s of [-1, 1]) tube([[s*.34, top - .12, .12], [s*.43, -.05, .1], [s*.42, -.3, .1]], .08, hm, H, .8);
-      if (beau){ tube([[.12, top + .14, .08], [-.1, top + .03, R + .12], [-.3, .14, R + .05], [-.42, -.08, R - .1]], .12, hm, H, .8); fringe([[[.0, top + .12, .1], [.14, top - .02, R + .1], [.26, .2, R + .06]], [[.08, top + .12, .1], [.24, top - .04, R + .08], [.34, .16, R + .03]]], .085); }
-      else fringe([-.2, -.07, .07, .2].map(x=>[[x*.5, top + .12, .12], [x, top - .06, R + .09], [x + .03, .19, R + .07]]), .08);
-    }
+    const hm = rainbow ? mpRainbowMat({ lit:true }) : M(item.color, { roughness:.42, metalness:0 });
+    hm.side = T.DoubleSide; if (rainbow) H.add(tick(hm));
+    const R = headR, PI2 = Math.PI*2, frac = v=>v - Math.floor(v), sm = (a, b, v)=>{ const t = Math.max(0, Math.min(1, (v - a)/(b - a))); return t*t*(3 - 2*t); };
+    // 길이: 앞 F · 옆 S · 뒤 B (머리 중심 기준 y) + 좌우 비대칭 d
+    const lenFn = (F, S, B, d)=>{ const b = (F - B)/2, c = (F + B - 2*S)/4, a = S + c; return th=>a + b*Math.cos(th) + c*Math.cos(2*th) + (d || 0)*Math.sin(th); };
+    const shell = (o)=>{ const U = 120, V = 34, cy = top - .17, n = 3.4, pos = [], idx = [];
+      const tooth = (az)=>{ const f = frac(az*o.chunks/PI2 + (o.phase || 0)); return Math.pow(1 - Math.abs(2*f - 1), o.sharp || 1.6); };
+      const build = (inner)=>{ const base = pos.length/3;
+        for (let j=0;j<=V;j++){ const t = j/V;
+          for (let i=0;i<=U;i++){ const th0 = i/U*PI2, az = th0 + (o.sweep || 0)*t*t*(o.sweepFn ? o.sweepFn(th0) : 1);
+            const azEnd = th0 + (o.sweep || 0)*(o.sweepFn ? o.sweepFn(th0) : 1), bottom = o.len(azEnd) - o.amp*tooth(azEnd);
+            const f = frac(az*o.chunks/PI2 + (o.phase || 0)), bulge = (o.bulge == null ? .035 : o.bulge)*Math.sin(Math.PI*f);
+            const spike = o.spike ? o.spike*Math.pow(tooth(az*1.0 + .5), 3)*sm(.55, 0, t) : 0;
+            const vol = (o.vol ? o.vol(th0) : 0);
+            const thick = (o.thick || .07)*(1 - t*.55);
+            let Rr = R + thick + vol + bulge + spike*.6, Hr = top + .06 + (o.lift || 0) + spike - cy + (o.liftFn ? o.liftFn(th0) : 0);
+            if (inner){ Rr = R + .004; Hr = top + .004 - cy; }
+            // 단면 경로: 정수리 → (둥근 사각) → 옆면 → 아래로 곧게
+            const arcLen = (Rr + Hr)*.8, down = Math.max(0, cy - bottom), L = arcLen + down;
+            let d = t*L, pr, py;
+            if (bottom > cy){ const am = Math.acos(Math.min(1, Math.max(0, (bottom - cy)/Hr))); const a = t*am; pr = Rr*Math.pow(Math.sin(a), 2/n); py = cy + Hr*Math.pow(Math.cos(a), 2/n); }
+            else if (d < arcLen){ const a = d/arcLen*Math.PI/2; pr = Rr*Math.pow(Math.sin(a), 2/n); py = cy + Hr*Math.pow(Math.cos(a), 2/n); }
+            else { const e = d - arcLen; pr = Rr + (o.flare || .06)*e; py = cy - e; }
+            if (inner) pr = Math.min(pr, R + .004 + (py < cy ? (cy - py)*.02 : 0));
+            let x = Math.sin(az)*pr, z = Math.cos(az)*pr*.97, y = py;
+            // 긴 머리는 목 아래에서 몸통 뒤로 흘려 보낸다
+            if (o.backFlow && y < -.26){ x = Math.max(-.5, Math.min(.5, x)); z = Math.min(z, -.36 - .05*(1 - Math.min(1, (x/.5)*(x/.5)))); }
+            pos.push(x, y, z); } }
+        for (let j=0;j<V;j++) for (let i=0;i<U;i++){ const a = base/3 + j*(U + 1) + i, b = a + U + 1;
+          if (inner) idx.push(a, a + 1, b, b, a + 1, b + 1); else idx.push(a, b, a + 1, b, b + 1, a + 1); } };
+      build(false);
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+      return mesh(g, hm, 0, 0, 0, H); };
+    // 굵게 조각한 꽁지 (양갈래)
+    const tail = (pts, r)=>{ const cv = new T.CatmullRomCurve3(pts.map(p=>V3(p[0], p[1], p[2]))), seg = 40, rad = 14, tg = new T.TubeGeometry(cv, seg, r, rad, false), p = tg.attributes.position;
+      for (let i=0;i<p.count;i++){ const ring = Math.floor(i/(rad + 1)), k0 = ring/seg, ang = (i%(rad + 1))/rad*PI2, cc = cv.getPoint(k0);
+        const k = (k0 < .12 ? .75 + k0*2 : 1 - Math.pow((k0 - .12)/.88, 1.6)*.92)*(1 + .1*Math.cos(ang*5)); p.setXYZ(i, cc.x + (p.getX(i) - cc.x)*k, cc.y + (p.getY(i) - cc.y)*k, cc.z + (p.getZ(i) - cc.z)*k); }
+      tg.computeVertexNormals(); mesh(tg, hm, 0, 0, 0, H); };
+    if (rainbow) shell({ len:lenFn(.26, -.1, -.24), chunks:13, amp:.13, sharp:1.4, sweep:.45, lift:.1, bulge:.045, spike:.05 });
+    else if (item.id === 'rbx_blackmessy') shell({ len:lenFn(.27, .02, -.1), chunks:15, amp:.17, sharp:2.6, sweep:.25, lift:.08, bulge:.03, spike:.17, thick:.06 });
+    else if (item.id === 'rbx_pal') shell({ len:lenFn(.24, -.06, -.12, -.05), chunks:9, amp:.08, sharp:1.2, sweep:.9, lift:.07, bulge:.04, vol:th=>.04*Math.max(0, Math.cos(th)) });
+    else if (item.id === 'rbx_trueblue') shell({ len:lenFn(.26, -.05, -.1, .06), chunks:8, amp:.12, sharp:1.8, sweep:1.1, lift:.06, bulge:.05, liftFn:th=>.16*Math.pow(Math.max(0, Math.cos(th - .3)), 2), vol:th=>.06*Math.pow(Math.max(0, Math.cos(th)), 2) });
+    else if (item.id === 'rbx_pigtails'){ shell({ len:lenFn(.17, .0, -.06), chunks:14, amp:.04, sharp:1, sweep:0, lift:.05, bulge:.02 });
+      for (const s of [-1, 1]){ const tie = mesh(new T.TorusGeometry(.1, .04, 10, 24), M(0xFF6FAE, { roughness:.35 }), s*.44, .12, -.16, H); tie.rotation.set(.5, Math.PI/2, 0);
+        tail([[s*.42, .14, -.16], [s*.6, -.05, -.3], [s*.62, -.45, -.42], [s*.55, -.82, -.42]], .15); } }
+    else if (item.id === 'rbx_longred') shell({ len:lenFn(.25, -.32, -1.05), chunks:14, amp:.12, sharp:1.3, sweep:.2, lift:.07, bulge:.04, backFlow:true, flare:.08 });
+    else if (item.id === 'rbx_beautiful') shell({ len:lenFn(.2, -.4, -.62, .05), chunks:11, amp:.11, sharp:1.3, sweep:.7, lift:.08, bulge:.045, backFlow:true, flare:.07 });
     return; }
 
   // ---------------- 카투니 레인보우 (검정 + 무지개 외곽선) ----------------
