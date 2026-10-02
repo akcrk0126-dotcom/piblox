@@ -952,6 +952,20 @@ body:not(.started) #pass-panel{background:#060807}
 .ps-hint{margin-top:8px;font-size:10px;color:#6f776d}
 body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body.mobile-mode .ri{transform:scale(.8)}
 @media (max-height:560px){ #ps-head{gap:6px} .ps-tierbox{width:44px;height:44px} .ps-tierbox b{font-size:22px} #ps-bottom{max-height:34vh} }
+/* 승리 세리머니 */
+#cele{position:fixed;left:0;right:0;bottom:28px;z-index:40;display:none;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+#cele.show{display:flex}
+#cele-top{font:900 15px/1 inherit;letter-spacing:.12em;color:#fff;text-shadow:0 2px 8px #000;background:linear-gradient(90deg,#1d7a3a,#2fb35a);padding:8px 16px;border-radius:999px;box-shadow:0 4px 18px rgba(47,179,90,.45)}
+#cele-top b{color:#ffe066;margin-left:8px}
+#cele-bar{display:flex;gap:8px;pointer-events:auto}
+#cele-bar button{position:relative;width:86px;padding:9px 4px 7px;border-radius:14px;border:1px solid rgba(255,255,255,.25);background:rgba(10,14,12,.72);color:#fff;font:inherit;cursor:pointer;backdrop-filter:blur(4px)}
+#cele-bar button span{display:block;font-size:26px;line-height:1.1}
+#cele-bar button small{display:block;font-size:11px;font-weight:800;margin-top:3px;white-space:nowrap}
+#cele-bar button i{position:absolute;left:7px;top:5px;font-style:normal;font-size:11px;font-weight:900;color:#ffe066}
+#cele-bar button.on{border-color:#ffe066;box-shadow:0 0 0 2px #ffe066 inset,0 0 16px rgba(255,224,102,.5)}
+#cele-bar button.lk{opacity:.55}
+.emo-head{margin:14px 0 4px;font-weight:900;font-size:14px;color:#ffe066}.emo-head small{font-weight:600;color:#aab;margin-left:6px;font-size:11px}
+.emo-card .wi{font-size:28px}.emo-key{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:#ffe06633;color:#ffe066;margin-left:4px}
 </style>
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
@@ -1258,6 +1272,7 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
 
 <div id="killfeed"></div>
 
+<div id="cele"><div id="cele-top">🎉 라운드 승리를 만끽하세요 <b id="cele-t">4.8s</b></div><div id="cele-bar"></div></div>
 <div id="victory"><div id="vs-box">
   <div id="vs-crown">👑</div>
   <div id="vs-result">승리</div>
@@ -3675,6 +3690,15 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
     const hint=document.createElement("div"); hint.className="bag-hint";
     hint.textContent="이기면 골드를 받아요. 산 무기는 가방에서 슬롯에 넣으면 바로 쓸 수 있어요.";
     page.append(hint);
+
+    // 포레스트 전용 이모트 — 라운드를 이기면 4.8초 동안 쓸 수 있다
+    const eh=document.createElement("div"); eh.className="emo-head"; eh.innerHTML="🎉 포레스트 전용 승리 이모트 <small>라운드 승리 후 4.8초 · 키 1~3</small>"; page.append(eh);
+    FOREST_EMOTES.filter(f=>!f.free).forEach(f=>{ const e=emoteDef(f.id); if (!e) return; const have=ownsForestEmote(f.id);
+      const row=document.createElement("div"); row.className="wcard emo-card";
+      row.innerHTML="<div class='wi'>"+e.icon+"</div><div class='wt'><div class='wn'>"+e.name+" <span class='emo-key'>"+f.key+"</span></div><div class='wd'>"+f.desc+"</div></div>";
+      const btn=document.createElement("button"); btn.type="button"; btn.className="wbuy"+(have?" have":"");
+      if (have){ btn.textContent="보유 중"; btn.disabled=true; } else { btn.textContent=e.price.toLocaleString()+" G"; btn.disabled=state.gold<e.price; btn.addEventListener("click",()=>buyForestEmote(f.id)); }
+      row.append(btn); page.append(row); });
 
     // 가진 것 먼저, 그다음 싼 순서로
     const sorted=[...weapons].sort((a,b)=>{
@@ -6599,6 +6623,7 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
     { id:"special",   name:"특수 장비",     ids:["shield","fists","knife","shiv","karambit"] }
   ];
   function openLoadoutPhase(isFirst){
+    endCelebration();
     state.phase="loadout";
     state.loadoutLocked=false;
     state.loadoutEnd=performance.now()+(isFirst?LOADOUT_FIRST_MS:LOADOUT_NEXT_MS);
@@ -6805,6 +6830,103 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
     state.roundEndsAt=performance.now()+MATCH.ROUND_SECONDS*1000;
     updateHUD(); if (!silent) renderScoreboard();
   }
+  // ---------- 라운드 승리 세리머니 (포레스트 전용 이모트) ----------
+  // 라운드를 이기면 4.8초 동안 3인칭으로 바뀌고, 걸어 다니면서 1~4 키(또는 화면 버튼)로 이모트를 쓴다.
+  // 이모트는 multiplayer.js 이모트 엔진으로 재생돼서 상대 화면에도 그대로 보인다(쓰러진 상대 위에서 티배깅 가능).
+  const FOREST_EMOTES = [
+    { id:"emote_teabag", key:"1", desc:"빠르게 앉았다 일어났다 — 쓰러진 상대 위에서 써 보세요" },
+    { id:"emote_crisscross", key:"2", desc:"팔을 X 자로 교차하며 다리 꼬아 점프" },
+    { id:"emote_takel", key:"3", desc:"이마에 L 을 붙이고 다리 차며 콩콩" },
+    { id:"emote_dance", key:"4", desc:"기본 춤 (무료)", free:true }
+  ];
+  const CELE_MS = 4800;
+  const CELE = { on:false, until:0, avatar:null, k:0, confetti:null, playing:null };
+  function emoteDef(id){ return ((window.MP && MP.EMOTES) || []).find(e=>e.id===id) || null; }
+  function ownsForestEmote(id){
+    const e=emoteDef(id); if (!e) return false; if (!e.price) return true;
+    try { if (window.MP && MP.ownsEmote) return MP.ownsEmote(id); } catch(err){}
+    try { return (JSON.parse(localStorage.getItem("mp_owned_items")||"[]")||[]).indexOf(id)>=0; } catch(err){ return false; }
+  }
+  function buyForestEmote(id){
+    const e=emoteDef(id); if (!e || ownsForestEmote(id) || state.gold<e.price) return;
+    state.gold-=e.price; saveProgress();
+    if (window.MP && MP.addOwnedItem) MP.addOwnedItem(id);
+    else { try { const l=JSON.parse(localStorage.getItem("mp_owned_items")||"[]")||[]; if (l.indexOf(id)<0){ l.push(id); localStorage.setItem("mp_owned_items",JSON.stringify(l)); } } catch(err){} }
+    document.querySelector("#gold-amt").textContent=state.gold.toLocaleString();
+    if (state.soundOn) sfx.levelUp();
+    showToast(e.icon+" "+e.name+" 획득! 라운드를 이기면 쓸 수 있어요");
+    renderShop(); syncRpgHud(); renderCeleBar();
+  }
+  function renderCeleBar(){
+    const bar=document.querySelector("#cele-bar"); if (!bar) return;
+    bar.innerHTML=FOREST_EMOTES.map(f=>{ const e=emoteDef(f.id); if (!e) return "";
+      const own=ownsForestEmote(f.id), on=CELE.playing===f.id;
+      return "<button type='button' data-e='"+f.id+"' class='"+(own?"":"lk")+(on?" on":"")+"'><i>"+f.key+"</i><span>"+e.icon+"</span><small>"+(own?e.name:"🔒 "+e.price.toLocaleString()+" G")+"</small></button>"; }).join("");
+    bar.querySelectorAll("button").forEach(b=>{ const go=ev=>{ ev.preventDefault(); ev.stopPropagation(); celePlay(b.dataset.e); }; b.addEventListener("click",go); b.addEventListener("touchstart",go,{ passive:false }); });
+  }
+  function celePlay(id){
+    if (!CELE.on) return;
+    if (!ownsForestEmote(id)){ const e=emoteDef(id); showToast("🔒 "+(e?e.name:"이모트")+" — 무기고(상점)에서 골드로 살 수 있어요"); if (state.soundOn) sfx.empty(); return; }
+    if (CELE.playing===id){ if (window.MP && MP.stopEmote) MP.stopEmote(); CELE.playing=null; renderCeleBar(); return; }
+    // 이모트 중엔 제자리에 서서 춘다 (움직이면 이모트 엔진이 알아서 멈춘다)
+    state.vel.x=0; state.vel.z=0;
+    if (window.MP && MP.playEmote) MP.playEmote(id);
+    CELE.playing=id; renderCeleBar();
+    if (state.soundOn) sfx.whoosh();
+  }
+  function startCelebration(ms){
+    endCelebration(true);
+    CELE.on=true; CELE.until=performance.now()+ms; CELE.k=0; CELE.playing=null;
+    // 내 아바타 — 허브에서 꾸민 그 로드아웃 객체를 그대로 써야 이모트 엔진이 '나'로 알아본다
+    const lo=(window.MP && MP.getLocalAvatarLoadout && MP.getLocalAvatarLoadout()) || MPX.myAvatar || null;
+    CELE.avatar=buildAvatarFor(lo,{ shirt:0x2f6fd0, pants:0x22314a, hat:"cap" });
+    CELE.avatar.userData.walkT=0; scene.add(CELE.avatar);
+    weaponRig.visible=false;
+    spawnConfetti();
+    document.querySelector("#cele").classList.add("show"); renderCeleBar();
+  }
+  function endCelebration(silent){
+    if (!CELE.on && !CELE.avatar) return;
+    CELE.on=false;
+    if (CELE.playing && window.MP && MP.stopEmote) MP.stopEmote();
+    CELE.playing=null;
+    if (CELE.avatar){ scene.remove(CELE.avatar); CELE.avatar=null; }
+    if (CELE.confetti){ scene.remove(CELE.confetti.mesh); CELE.confetti.mesh.geometry.dispose(); CELE.confetti.mesh.material.dispose(); CELE.confetti=null; }
+    weaponRig.visible=true; camera.position.set(0,0,0);
+    const c=document.querySelector("#cele"); if (c) c.classList.remove("show");
+  }
+  // 색종이: 한 번에 그리는 작은 사각형 수백 개
+  function spawnConfetti(){
+    const N=260, g=new THREE.BufferGeometry(), pos=new Float32Array(N*3), col=new Float32Array(N*3), vel=[];
+    const cs=[0xff4d6d,0xffd166,0x06d6a0,0x4cc9f0,0xb388ff,0xffffff].map(c=>new THREE.Color(c));
+    const o=yaw.position;
+    for (let i=0;i<N;i++){ const a=Math.random()*6.283, r=Math.random()*1.4;
+      pos[i*3]=o.x+Math.cos(a)*r; pos[i*3+1]=o.y+.6+Math.random()*.6; pos[i*3+2]=o.z+Math.sin(a)*r;
+      vel.push(new THREE.Vector3(Math.cos(a)*(1.5+Math.random()*3.5), 6+Math.random()*7, Math.sin(a)*(1.5+Math.random()*3.5)));
+      const c=cs[i%cs.length]; col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+    g.setAttribute("position",new THREE.BufferAttribute(pos,3)); g.setAttribute("color",new THREE.BufferAttribute(col,3));
+    const m=new THREE.Points(g,new THREE.PointsMaterial({ size:.07, vertexColors:true, transparent:true, opacity:1, depthWrite:false }));
+    m.frustumCulled=false; scene.add(m); CELE.confetti={ mesh:m, vel, t:0 };
+  }
+  function updateCelebration(delta,now){
+    if (!CELE.on) return;
+    if (now>CELE.until || (state.phase!=="roundend" && state.phase!=="matchend")){ endCelebration(); return; }
+    CELE.k=Math.min(1,CELE.k+delta*3.5);
+    // 3인칭 어깨너머 시점 (마우스로 돌려 볼 수 있다)
+    const e=1-Math.pow(1-CELE.k,3);
+    camera.position.x+=.45*e; camera.position.y+=.75*e; camera.position.z+=5.6*e;
+    const a=CELE.avatar;
+    if (a){ a.position.set(yaw.position.x, yaw.position.y-1.7, yaw.position.z); a.rotation.y=yaw.rotation.y+Math.PI;
+      const sp=Math.hypot(state.vel.x,state.vel.z); if (sp>.5 && CELE.playing){ CELE.playing=null; renderCeleBar(); }
+      a.userData.walkT+=delta; if (!CELE.playing) animateR6(a, sp>.5?1:0, a.userData.walkT); }
+    const left=Math.max(0,(CELE.until-now)/1000);
+    const tEl=document.querySelector("#cele-t"); if (tEl) tEl.textContent=left.toFixed(1)+"s";
+    const cf=CELE.confetti;
+    if (cf){ cf.t+=delta; const p=cf.mesh.geometry.attributes.position;
+      for (let i=0;i<cf.vel.length;i++){ const v=cf.vel[i]; v.y-=9*delta; v.multiplyScalar(1-delta*1.6); if (v.y<-2.2) v.y=-2.2;
+        p.setXYZ(i, p.getX(i)+v.x*delta+Math.sin(cf.t*6+i)*.01, p.getY(i)+v.y*delta, p.getZ(i)+v.z*delta); }
+      p.needsUpdate=true; cf.mesh.material.opacity=Math.max(0,1-Math.max(0,cf.t-3.2)/1.4); }
+  }
   function endRound(winner){
     if (state.phase!=="live"||state.roundOver) return;
     state.roundOver=true; state.phase="roundend";
@@ -6827,8 +6949,11 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
       showBanner(won?"라운드 승리":"라운드 패배", state.blueScore+" : "+state.redScore, won?"#9fe6a8":"#ff8d7a",2400);
     }
     state.roundEndAt=performance.now()+(suddenDeath?3600:3200);
+    // 이긴 쪽은 4.8초 동안 승리를 만끽한다 (3인칭 + 이모트)
+    if (won && !isSoloMode()){ state.roundEndAt=Math.max(state.roundEndAt, performance.now()+CELE_MS); startCelebration(CELE_MS); }
   }
   function endMatch(){
+    endCelebration();
     state.phase="matchend"; state.matchOver=true;
     state.aiming=false; if (touchEl.aim) touchEl.aim.classList.remove("active");
     const won=state.blueScore>state.redScore;
@@ -7541,6 +7666,7 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
           selectSlot(melees[(cur+1)%melees.length]);
         }
       }
+      if (CELE.on && /^Digit[1-4]$/.test(e.code)){ const f=FOREST_EMOTES.find(x=>x.key===e.code.slice(-1)); if (f) celePlay(f.id); return; }
       if (/^Digit[1-5]$/.test(e.code)) selectSlot(Number(e.code.slice(-1))-1);
       if (e.code==="Enter" && !state.chatOpen) openChatInput();
       if (e.code==="KeyQ"){
@@ -9020,7 +9146,7 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
     setCombatHudVisible(state.started && (state.phase==="live"||state.phase==="countdown"||inCombatPhase()));
     { const cb=document.querySelector("#catalog-btn");
       if (cb) cb.style.display = (state.started && state.phase==="lobby") ? "block" : "none"; }
-    updateEffects(delta,now); updateWeapon(delta,now); updateShake(delta); updateDamageNumbers(delta); updateChatFade(now);
+    updateEffects(delta,now); updateWeapon(delta,now); updateShake(delta); updateCelebration(delta,now); updateDamageNumbers(delta); updateChatFade(now);
     updateDeathCam(delta,now); updateDamageDirs(now); updatePings(now); updateMinimap(); updateBackstabCue();
     renderer.render(scene,camera); requestAnimationFrame(loop);
   }
@@ -9028,6 +9154,7 @@ body.mobile-mode .ps-col{width:86px} body.mobile-mode .ps-cell{height:84px} body
   // (예전엔 "훈련 시작"을 눌러야 불러와서, 그 전에 카탈로그를 열면
   //  빈 상태가 보이고 거기서 스킨을 바꾸면 기존 기록이 덮어써졌다)
   loadProgress();
+  window.__FS = { get state(){ return state; }, endRound, startCelebration, celePlay, buyForestEmote, beginGame, get yaw(){ return yaw; }, CELE };   // 테스트용
   setupScene(); renderWeaponWheel(); renderQuestMini(); bindControls();
   renderShop(); renderBag(); renderQuests(); syncRpgHud(); renderScoreboard(); updateHUD();
   el.timer.textContent="--:--";
