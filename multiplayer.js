@@ -113,13 +113,15 @@ const AVATAR_CATALOG = [
   { id:'dittonubs',  slot:'head', name:'메타몽 뿔',     icon:'🫠', color:0xB79CD4, secret:'ditto' },
   // ---- 개인 전용 (EXCLUSIVE_REWARDS 참고) ----
   // ---- 로블록스 클래식 감성 (mpRbxItem 에서 만든다) ----
-  { id:'rbx_m_wolf',        slot:'hair', name:'울프컷',            icon:'🐺', color:0x18181F, rbx:true },
-  { id:'rbx_m_part',        slot:'hair', name:'가르마 펌',          icon:'💇‍♂️', color:0x3D2A1F, rbx:true },
-  { id:'rbx_m_spiky',       slot:'hair', name:'실버 스파이크',       icon:'⚡', color:0xE4E8F0, rbx:true },
-  { id:'rbx_f_hime',        slot:'hair', name:'히메컷 롱',          icon:'🖤', color:0x15151C, rbx:true },
-  { id:'rbx_f_pony',        slot:'hair', name:'하이 포니테일',       icon:'🎀', color:0x6E3A26, rbx:true },
-  { id:'rbx_f_wavy',        slot:'hair', name:'웨이브 롱',          icon:'🌾', color:0xD2B682, rbx:true },
-  { id:'rbx_f_twin',        slot:'hair', name:'핑크 트윈테일',       icon:'💗', color:0xFF8FC0, rbx:true },
+  { id:'rbx_m_fluffy',      slot:'hair', name:'푹신한 지저분한 머리', icon:'🖤', color:0x17171C, rbx:true },
+  { id:'rbx_m_twotone',     slot:'hair', name:'블랙&화이트 울프컷',  icon:'🐺', color:0x8A8C94, rbx:true },
+  { id:'rbx_m_white',       slot:'hair', name:'화이트 메시 애니',    icon:'🤍', color:0xE8EAF0, rbx:true },
+  { id:'rbx_m_idol',        slot:'hair', name:'블랙 아이돌 컷',      icon:'🎤', color:0x16161C, rbx:true },
+  { id:'rbx_f_anime',       slot:'hair', name:'애니메이션 소녀 헤어', icon:'🌙', color:0x15151B, rbx:true },
+  { id:'rbx_f_layered',     slot:'hair', name:'층이 달린 웨이브',    icon:'🤎', color:0x7A5A42, rbx:true },
+  { id:'rbx_f_wolf',        slot:'hair', name:'울프컷 소녀 머리',    icon:'🕊️', color:0xDCDBE0, rbx:true },
+  { id:'rbx_f_pink',        slot:'hair', name:'핑크 지저분한 애니',  icon:'🌸', color:0xF09AB9, rbx:true },
+  { id:'rbx_f_cat',         slot:'hair', name:'검은 고양이 소녀',    icon:'🐈‍⬛', color:0x15151B, rbx:true },
   { id:'rbx_rainbowshaggy', slot:'hair', name:'레인보우 샤기',       icon:'🌈', color:0xFF4FA0, rbx:true },
   { id:'rbx_toon_crown',    slot:'head', name:'카투니 레인보우 크라운', icon:'👑', color:0x121216, rbx:true },
   { id:'rbx_toon_halo',     slot:'head', name:'카투니 레인보우 헤일로', icon:'😇', color:0x121216, rbx:true },
@@ -1217,49 +1219,104 @@ function mpHairRoots(c, o){ o = o || {}; const out = [];
     for (let i=0;i<n;i++){ let th = (i + (c.rnd() - .5)*.7)/n*Math.PI*2 + ph*2.3; th = Math.atan2(Math.sin(th), Math.cos(th));
       if (ph > (o.phMax || mpHairline)(th) + (o.extra || 0)) continue; out.push({ th, ph, f:Math.abs(th)/Math.PI, s:Math.sin(th) >= 0 ? 1 : -1, p:c.scalp(th, ph) }); } }
   return out; }
+// 요즘 로블록스 UGC 헤어 느낌: 머리보다 훨씬 크게 부풀고, 가는 다발이 여러 겹(안쪽 겹은 어둡게) 쌓이고,
+// 끝은 바깥으로 뻗치며, 정수리에 잔머리(가는 곡선 몇 가닥)가 날린다
+function mpHairLayers(c, o){
+  const L = o.layers || [{ off:[.04, .03], shade:.5, len:1, w:1 }, { off:[.12, .07], shade:.78, len:.92, w:.9 }, { off:[.21, .11], shade:1, len:.8, w:.85 }];
+  L.forEach((ly, li)=>{ for (const r of mpHairRoots(c, { dens:(o.dens || 22)*1.2*(ly.dens || 1), step:o.step || .11, extra:o.extra || 0 })){
+    // 길이: 뿌리 높이에서 그 자리의 '컷 라인'까지 — 정수리 쪽 다발도 끝까지 내려와서 위가 비늘처럼 안 보인다
+    const by = o.bottom(r, li); let len = Math.max(.14, (r.p.y - by)*1.22 + .1)*(.9 + c.rnd()*.2); if (!(len > .05)) continue;
+    let d = o.dir(r, li), root = r.p;
+    // 바깥 겹은 정수리(또는 가르마)에서 시작해 그 자리까지 흘러온다 → 윗머리가 매끈한 결로 보인다
+    if (li > 0 && r.ph > .3){ const src = o.part ? c.V3(r.s*.025, c.HH + .1, Math.max(-.3, Math.min(.3, r.p.z))) : c.V3(...MP_CROWN).add(c.V3((c.rnd() - .5)*.08, 0, (c.rnd() - .5)*.08));
+      const q = src.clone(); for (let k=0;k<20;k++){ const sdv = c.sdHead(q.x, q.y, q.z); if (Math.abs(sdv) < .002) break; q.addScaledVector(c.normal(q), -sdv); }
+      const hop = q.distanceTo(r.p); if (hop > .05){ const t0 = c.tangentTo(q, r.p.clone().sub(q)); const blend = d.clone().normalize().multiplyScalar(.25).add(t0); root = q; d = blend; len += hop; } }
+    c.lock(root, c.tangentTo(root, d), { L:len, w:(o.w || .15)*.85*ly.w*(.75 + c.rnd()*.5), grav:o.grav == null ? .9 : o.grav, off0:ly.off[0], off1:ly.off[1], shade:ly.shade*(.92 + c.rnd()*.16),
+      flick:o.flick ? o.flick(r, li) : 0, tipPow:o.tipPow || 1.2, wave:o.wave || 0, waveF:o.waveF || 8, wph:c.rnd()*6, th:.026, behind:o.front ? !o.front(r) : true, stopY:o.stopY ? o.stopY(r, li) : null, cols:o.cols ? o.cols(r) : null }); } }); }
+// 정수리 잔머리: 가늘고 길게 휘어 올라가는 몇 가닥
+// 얼굴 옆으로 내려오는 앞머리 다발 (긴 머리용) — 나머지 긴 머리는 전부 등 뒤로
+function mpFrameLocks(c, bottom, n){ for (const s of [-1, 1]) for (let k=0;k<(n || 3);k++){ const p = c.scalp(s*(.75 + k*.14), .55 + k*.08);
+  c.lock(p, c.tangentTo(p, c.V3(s*.2, -1, .45)), { L:(p.y - bottom)*1.15 + .1, w:.13 - k*.015, grav:1.4, hug:.6, off0:.09, off1:.05, behind:false, tipPow:1.25, th:.026, shade:.85 + k*.08, wave:.3, waveF:7 }); } }
+function mpFlyaways(c, n, o){ o = o || {}; for (let i=0;i<n;i++){ const th = (c.rnd() - .5)*2.6 + (o.th || 0), ph = .12 + c.rnd()*.45, p = c.scalp(th, ph);
+  const d = c.normal(p).multiplyScalar(1.2).add(c.V3((c.rnd() - .5)*1.2, .2, (c.rnd() - .5)*1.2));
+  c.lock(p, d, { L:.22 + c.rnd()*.22, w:.03 + c.rnd()*.025, grav:.9, hug:0, off0:.15, off1:.15, wave:1.6, waveF:6, wph:c.rnd()*6, tipPow:1.2, th:.012, shade:1.05 }); } }
+const MP_CROWN = [0, .42, -.12];
 const MP_HAIR = {
   // ---------- 남자 ----------
-  rbx_m_wolf:{ root:0x0c0c10, mid:0x18181f, tip:0x2c2c38, ring:.4, back:-.15, build(c){ const crown = c.V3(0, .42, -.14);
-    for (const r of mpHairRoots(c, { dens:30, step:.1 })){ const d = r.p.clone().sub(crown); if (r.f < .3) d.add(c.V3(0, -.35, .2));
-      let L = r.f < .3 ? .3 : r.f < .62 ? .36 : .56; L *= .78 + c.rnd()*.44;
-      c.lock(r.p, c.tangentTo(r.p, d), { L, w:.1 + c.rnd()*.045, grav:.7, off0:.035 + Math.max(0, 1.2 - r.ph)*.055, off1:.03, flick:r.f > .6 ? .9 : r.f > .3 ? .35 : 0, tipPow:1.45 }); } } },
-  rbx_m_part:{ root:0x2a1d16, mid:0x3d2a1f, tip:0x5c4230, ring:.38, back:-.1, build(c){
-    for (const r of mpHairRoots(c, { dens:30, step:.1 })){ const s = r.s; let v;
-      if (r.f < .34) v = c.V3(s*.65, -.25, 1); else v = c.V3(s, -.2, r.f > .7 ? -.6 : 0);
-      const L = (r.f < .34 ? .42 : r.f < .7 ? .33 : .4)*(.9 + c.rnd()*.2);
-      c.lock(r.p, c.tangentTo(r.p, v), { L, w:.11 + c.rnd()*.03, grav:.75, off0:.04 + Math.max(0, 1.2 - r.ph)*.045, off1:.028, wave:.22, waveF:7, wph:c.rnd()*6, tipPow:1.6 }); } } },
-  rbx_m_spiky:{ root:0x9aa3b4, mid:0xe4e8f0, tip:0x5aa0ff, ring:.25, back:-.08, build(c){ const crown = c.V3(0, .44, -.06);
-    for (const r of mpHairRoots(c, { dens:16, step:.14 })){ let d;
-      if (r.f < .3 && r.ph > .35) d = c.tangentTo(r.p, c.V3(r.p.x*1.5, -.6, 1));
-      else d = c.tangentTo(r.p, c.V3(r.p.x*.8, .15, -1)).addScaledVector(c.normal(r.p), .55);
-      c.lock(r.p, d, { L:(.34 + c.rnd()*.16)*(r.f > .6 ? 1.2 : 1), w:.19, grav:.4, off0:.05, off1:.04, tipPow:1.05, hug:.3 }); } } },
+  // 푹신한 지저분한 머리: 머리 전체를 크게 덮고 앞머리가 눈썹까지, 옆·뒤는 끝이 살짝 뻗친다
+  rbx_m_fluffy:{ root:0x0a0a0d, mid:0x17171c, tip:0x2a2a33, ring:.22, back:-.18, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .06 : r.f < .62 ? -.08 : -.2) + li*.05, dens:22, w:.16, grav:.95,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.4, -.55, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : r.f < .62 ? .44 : .46, stopY:(r)=>r.f < .3 ? .07 + c.rnd()*.06 : null,
+      flick:(r, li)=>li === 2 && r.f > .3 ? .7 : 0 });
+    mpFlyaways(c, 7); } },
+  // 블랙&화이트 투톤 울프컷: 왼쪽은 검정, 오른쪽은 흰색 · 뒷머리가 길게 뻗친다
+  rbx_m_twotone:{ root:0x101014, mid:0x1c1c22, tip:0x2e2e38, ring:.2, back:-.25, build(c){ const C = c.V3(...MP_CROWN), T = c.T;
+    const B = [new T.Color(0x0c0c10), new T.Color(0x18181e), new T.Color(0x2c2c36)], W = [new T.Color(0xc9ccd4), new T.Color(0xeceef3), new T.Color(0xffffff)];
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .05 : r.f < .62 ? -.12 : -.34) + li*.06, dens:22, w:.16, grav:.9, cols:(r)=>r.p.x < -.02 ? B : W,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.5, -.5, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : r.f < .62 ? .48 : .62, stopY:(r)=>r.f < .3 ? .05 + c.rnd()*.07 : null,
+      flick:(r, li)=>r.f > .5 ? .9 : r.f > .3 && li > 0 ? .5 : 0 });
+    mpFlyaways(c, 6); } },
+  // 화이트 메시 애니: 은백색, 잔머리 많고 끝이 날카롭다
+  rbx_m_white:{ root:0xb9bdc8, mid:0xe8eaf0, tip:0xffffff, ring:.12, back:-.18, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .05 : r.f < .62 ? -.08 : -.2) + li*.05, dens:22, w:.15, grav:.85, tipPow:1.2,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3((c.rnd() - .5)*.6, -.5, .3)); return d; },
+      len:(r)=>r.f < .3 ? .44 : r.f < .62 ? .46 : .5, stopY:(r)=>r.f < .3 ? .04 + c.rnd()*.08 : null,
+      flick:(r, li)=>li === 2 ? .8 : 0 });
+    mpFlyaways(c, 10); } },
+  // 블랙 아이돌 컷: 가운데 가르마 커튼 앞머리, 차분하게 내려온 볼륨
+  rbx_m_idol:{ root:0x0b0b0f, mid:0x16161c, tip:0x26262f, ring:.3, back:-.16, build(c){
+    mpHairLayers(c, { part:true, bottom:(r, li)=>(r.f < .32 ? .02 : r.f < .65 ? -.12 : -.18) + li*.04, dens:24, w:.16, grav:1.1, layers:[{ off:[.04, .03], shade:.55, len:1, w:1 }, { off:[.09, .055], shade:.85, len:.92, w:1 }, { off:[.12, .075], shade:1, len:.8, w:.95 }],
+      dir:(r)=>r.f < .32 ? c.V3(r.s*.55, -.45, 1) : c.V3(r.s*.9, -.5, r.f > .7 ? -.5 : .05),
+      len:(r)=>r.f < .32 ? .5 : r.f < .65 ? .42 : .44, stopY:(r)=>r.f < .32 ? .02 + Math.abs(r.p.x)*.2 : null,
+      flick:(r, li)=>li === 2 && r.f > .35 ? .4 : 0 });
+    mpFlyaways(c, 3); } },
   // ---------- 여자 ----------
-  rbx_f_hime:{ root:0x0b0b10, mid:0x15151c, tip:0x232838, ring:.45, back:-.3, build(c){
-    for (const r of mpHairRoots(c, { dens:30, step:.1 })){ const s = r.s;
-      if (r.f < .27) c.lock(r.p, c.tangentTo(r.p, c.V3(0, -.35, 1)), { L:.6, stopY:.15 + Math.abs(r.p.x)*.12, w:.11, grav:1.1, off0:.035, off1:.03, blunt:true });
-      else if (r.f < .48) c.lock(r.p, c.tangentTo(r.p, c.V3(s*.25, -1, .25)), { L:.6, w:.11, grav:1.6, off0:.035, off1:.03, blunt:true });
-      else c.lock(r.p, c.tangentTo(r.p, c.V3(s*.6, -.7, -.4)), { L:1.35 + c.rnd()*.08, w:.16, grav:1.6, off0:.04, off1:.035, tipPow:4 }); } } },
-  rbx_f_pony:{ root:0x4a2418, mid:0x6e3a26, tip:0xa8683f, ring:.42, build(c){ const tie = c.V3(0, .2, -.45);
-    for (const r of mpHairRoots(c, { dens:26, step:.11, extra:-.04 })){ if (r.p.distanceTo(tie) < .12) continue;
-      c.lock(r.p, c.tangentTo(r.p, tie.clone().sub(r.p)), { L:r.p.distanceTo(tie)*1.4, to:tie, w:.12, grav:.05, off0:.022, off1:.02, tipPow:5 }); }
-    for (let i=0;i<40;i++){ const j = c.V3((c.rnd() - .5)*.08, (c.rnd() - .5)*.07, 0); c.lock(tie.clone().add(j), c.V3(j.x*1.2, .45, -1), { L:.85 + c.rnd()*.3, w:.12, grav:1.7, off0:.05, off1:.03, hug:0, wave:.3, waveF:7, wph:c.rnd()*6, tipPow:1.5 }); }
-    for (let k=-2;k<=2;k++) c.lock(c.scalp(k*.15, .58), c.tangentTo(c.scalp(k*.15, .58), c.V3(k*.25, -.4, 1)), { L:.3, w:.075, grav:1, off0:.03, off1:.03, tipPow:1.3 });
-    for (const s of [-1, 1]){ const p = c.scalp(s*1.05, .95); c.lock(p, c.V3(s*.1, -1, .25), { L:.55, w:.065, grav:1.3, off0:.03, off1:.03, wave:.7, waveF:12, tipPow:1.4 }); } },
-    extra(e){ const sc = e.mesh(new e.T.TorusGeometry(.07, .045, 12, 24), e.M(0xF2EEE8, { roughness:.85 }), 0, .2, -.47, e.H); sc.rotation.x = .35; } },
-  rbx_f_wavy:{ root:0x8e7046, mid:0xd2b682, tip:0xf3e2b8, ring:.3, back:-.25, build(c){
-    for (const r of mpHairRoots(c, { dens:30, step:.1 })){ const s = r.s;
-      if (r.f < .3) c.lock(r.p, c.tangentTo(r.p, c.V3(s*.9, -.3, .8)), { L:.55, stopY:.0, w:.11, grav:1, off0:.04, off1:.03, wave:.3, waveF:8, tipPow:1.5 });
-      else c.lock(r.p, c.tangentTo(r.p, c.V3(s*.8, -.6, -.35)), { L:1.1 + c.rnd()*.18, w:.16, grav:1.4, off0:.045, off1:.035, wave:.55, waveF:9, wph:c.rnd()*6, tipPow:1.8 }); } } },
-  rbx_f_twin:{ root:0xd95c94, mid:0xff8fc0, tip:0xffd2e6, ring:.35, build(c){ const ties = [c.V3(-.37, .28, -.18), c.V3(.37, .28, -.18)];
-    for (const r of mpHairRoots(c, { dens:26, step:.11, extra:-.04 })){ const t = ties[r.p.x < 0 ? 0 : 1]; if (r.f < .28 && r.ph > .3) continue; if (r.p.distanceTo(t) < .1) continue;
-      c.lock(r.p, c.tangentTo(r.p, t.clone().sub(r.p)), { L:r.p.distanceTo(t)*1.4, to:t, w:.12, grav:.05, off0:.022, off1:.02, tipPow:5 }); }
-    for (let k=-3;k<=3;k++){ const p = c.scalp(k*.13, .52); c.lock(p, c.tangentTo(p, c.V3(k*.12, -.4, 1)), { L:.33, w:.08, grav:1.1, off0:.03, off1:.03, tipPow:1.4 }); }
-    for (const t of ties){ const s = Math.sign(t.x); for (let i=0;i<26;i++){ const j = c.V3(0, (c.rnd() - .5)*.07, (c.rnd() - .5)*.07); c.lock(t.clone().add(j), c.V3(s*.45, .15, -.25), { L:.9 + c.rnd()*.25, w:.11, grav:1.8, off0:.05, off1:.03, hug:0, wave:.35, waveF:8, wph:c.rnd()*6, tipPow:1.6 }); } } },
-    extra(e){ for (const s of [-1, 1]){ const t = e.mesh(new e.T.TorusGeometry(.065, .04, 12, 24), e.M(0xFFFFFF, { roughness:.8 }), s*.38, .28, -.18, e.H); t.rotation.y = s*.9; } } },
+  // 애니메이션 소녀 헤어: 길고 층진 흑발, 가운데 가르마 + 가는 앞머리 + 얼굴 옆 긴 머리
+  rbx_f_anime:{ root:0x0a0a0d, mid:0x15151b, tip:0x2a2a34, ring:.3, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 6); } },
+  // 아름다운 층이 달린 머리: 브라운 웨이브, 커튼 앞머리, 끝이 바깥으로 말린다
+  rbx_f_layered:{ root:0x4a3122, mid:0x7a5a42, tip:0xb08a68, ring:.35, back:-.3, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .28 && r.f < .5, part:true, bottom:(r, li)=>r.f < .28 ? -.12 : -.85 + li*.16, dens:24, w:.18, grav:1.3, wave:.5, waveF:8,
+      dir:(r)=>r.f < .28 ? c.V3(r.s*.8, -.35, .9) : c.V3(r.s*.75, -.7, -.4),
+      len:(r, li)=>r.f < .28 ? .6 : (li === 2 ? .75 : 1.1), stopY:(r)=>r.f < .28 ? -.05 : null,
+      flick:()=>.75 });
+    mpFlyaways(c, 2); } },
+  // 울프컷 소녀 머리: 애쉬 화이트, 많이 층진 중단발, 끝이 크게 뻗친다
+  rbx_f_wolf:{ root:0xa9a6ad, mid:0xdcdbe0, tip:0xf7f7fa, ring:.15, back:-.25, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>r.f < .28 ? .14 : [-.5, -.32, -.16][li], dens:24, w:.16, grav:1.05, tipPow:1.25,
+      dir:(r)=>{ if (r.f < .28) return c.V3((c.rnd() - .5)*.5, -.5, 1); const d = r.p.clone().sub(C); d.y -= .4; return d; },
+      len:(r, li)=>r.f < .28 ? .5 : (li === 0 ? .78 : li === 1 ? .6 : .45), stopY:(r)=>r.f < .28 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .28 ? .9 : 0 });
+    mpFlyaways(c, 8); } },
+  // 핑크 지저분한 애니: 긴 핑크, 뿌리는 짙고 끝은 연하게, 잔머리 가득
+  rbx_f_pink:{ root:0xc25d86, mid:0xf09ab9, tip:0xffd9e6, ring:.2, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 9); } },
+  // 검은 고양이 소녀: 긴 흑발 + 고양이 귀
+  rbx_f_cat:{ root:0x0a0a0d, mid:0x15151b, tip:0x26262f, ring:.25, back:-.32, build(c){
+    mpHairLayers(c, { front:(r)=>r.f >= .32 && r.f < .52, part:true, bottom:(r, li)=>r.f < .24 ? .14 : r.f < .45 ? -.7 + li*.12 : -1.0 + li*.18, dens:24, w:.17, grav:1.35,
+      dir:(r)=>r.f < .24 ? c.V3((c.rnd() - .5)*.4, -.5, 1) : r.f < .45 ? c.V3(r.s*.35, -1, .3) : c.V3(r.s*.7, -.7, -.5),
+      len:(r, li)=>r.f < .24 ? .5 : r.f < .45 ? (li === 2 ? .7 : 1.0) : (li === 2 ? .8 : 1.25), stopY:(r)=>r.f < .24 ? .13 + c.rnd()*.05 : null,
+      flick:(r, li)=>r.f > .24 ? .45 : 0 });
+    mpFlyaways(c, 4); },
+    extra(e){ for (const s of [-1, 1]){ const g = new e.T.Group(); g.position.set(s*.27, .5, -.02); g.rotation.set(-.15, 0, -s*.32); e.H.add(g);
+      const ear = e.mesh(new e.T.ConeGeometry(.15, .3, 4, 1), e.M(0x111116, { roughness:.5 }), 0, .15, 0, g); ear.rotation.y = Math.PI/4; ear.scale.z = .45;
+      const inn = e.mesh(new e.T.ConeGeometry(.09, .2, 4, 1), e.M(0xd9d4dc, { roughness:.8 }), 0, .12, .03, g); inn.rotation.y = Math.PI/4; inn.scale.z = .25; } } },
   // ---------- 레인보우 ----------
-  rbx_rainbowshaggy:{ root:0xffffff, rainbow:true, back:-.1, build(c){ const crown = c.V3(0, .42, -.12);
-    for (const r of mpHairRoots(c, { dens:28, step:.11 })){ const d = r.p.clone().sub(crown); if (r.f < .3) d.add(c.V3(.25, -.3, .2));
-      c.lock(r.p, c.tangentTo(r.p, d), { L:(r.f < .3 ? .33 : r.f < .62 ? .38 : .5)*(.8 + c.rnd()*.4), w:.11 + c.rnd()*.04, grav:.7, off0:.04 + Math.max(0, 1.2 - r.ph)*.05, off1:.03, flick:r.f > .55 ? .7 : 0, tipPow:1.45 }); } } },
+  rbx_rainbowshaggy:{ root:0xffffff, rainbow:true, back:-.15, build(c){ const C = c.V3(...MP_CROWN);
+    mpHairLayers(c, { bottom:(r, li)=>(r.f < .3 ? .06 : -.12) + li*.05, dens:22, w:.16, grav:.95,
+      dir:(r)=>{ const d = r.p.clone().sub(C); if (r.f < .3) d.add(c.V3(.3, -.5, .25)); return d; },
+      len:(r)=>r.f < .3 ? .42 : .46, stopY:(r)=>r.f < .3 ? .07 + c.rnd()*.06 : null, flick:(r, li)=>li === 2 ? .7 : 0 });
+    mpFlyaways(c, 5); } },
 };
 function mpRbxItem(c){
   const { T, item, u, anchor, mesh, M, headR, HT, P } = c;
@@ -1302,8 +1359,10 @@ function mpRbxItem(c){
         if (o.to){ d.lerp(o.to.clone().sub(p).normalize(), .25); }
         if (o.wave) d.addScaledVector(side, Math.sin(t*o.waveF + (o.wph || 0))*o.wave*ds*6);
         if (o.flick && t > .72) d.addScaledVector(grad(p), o.flick*ds*8);
+        if (p.y < -.25 && o.behind !== false && p.z > -.33) d.z -= ds*6;
+        if (p.y < -.3 && o.behind === false && p.z < .34) d.z += ds*5;   // 목 아래로 내려온 긴 머리는 몸 뒤쪽으로
         const g = grad(p); if (s < off + .015){ const dn = d.dot(g); if (dn < 0) d.addScaledVector(g, -dn); }
-        if (d.lengthSq() < 1e-4){ d.set(p.x, 0, p.z); if (d.lengthSq() < 1e-6) d.set(0, 0, -1); }
+        if (d.lengthSq() < 1e-4) d.set(p.x*.3, -.1, o.behind === false ? 1 : -1);   // 어깨에 걸리면 앞(가슴) 또는 등 뒤로 넘긴다
         d.normalize(); p.addScaledVector(d, ds); }
       const m = P.length; if (m < 3) return; const base = pos.length/3, W = o.w || .11, CS = [-1, -.55, 0, .55, 1];
       for (let i=0;i<m;i++){ const t = i/(m - 1), a = P[Math.max(0, i - 1)], b = P[Math.min(m - 1, i + 1)], tg = b.clone().sub(a).normalize();
@@ -1311,19 +1370,19 @@ function mpRbxItem(c){
         const tipK = o.blunt ? (t > .96 ? 1 - (t - .96)*10 : 1) : 1 - Math.pow(t, o.tipPow || 1.7);
         const w = W*(t < .08 ? .55 + t*5.6 : 1)*Math.max(.02, tipK);
         const hl = 1 + (st.ring == null ? .32 : st.ring)*Math.exp(-Math.pow((P[i].y - (HH + .02 - (st.ringDrop || 0)))/.05, 2))*(t < .6 ? 1 : 0);
-        tmpC.copy(t < .5 ? cRoot : cMid).lerp(t < .5 ? cMid : cTip, t < .5 ? t*2 : (t - .5)*2);
+        const cs3 = o.cols || [cRoot, cMid, cTip]; tmpC.copy(t < .5 ? cs3[0] : cs3[1]).lerp(t < .5 ? cs3[1] : cs3[2], t < .5 ? t*2 : (t - .5)*2).multiplyScalar(o.shade == null ? 1 : o.shade);
         for (const cs of CS){ const q = P[i].clone().addScaledVector(wv, cs*w*.5).addScaledVector(nv, (1 - cs*cs)*(o.th || .028)*(w/W));
           pos.push(q.x, q.y, q.z); const e = (.82 + .18*(1 - Math.abs(cs)))*hl; let r = tmpC.r*e, gg = tmpC.g*e, bb = tmpC.b*e;
           if (lin){ const L = v=>v <= .04045 ? v/12.92 : Math.pow((v + .055)/1.055, 2.4); r = L(Math.min(1, r)); gg = L(Math.min(1, gg)); bb = L(Math.min(1, bb)); } col.push(r, gg, bb); } }
       for (let i=0;i<m - 1;i++) for (let k=0;k<4;k++){ const a = base + i*5 + k, b = a + 5; idx.push(a, b, a + 1, b, b + 1, a + 1); } };
-    const ctx = { V3, scalp, tangentTo, lock, rnd, R, HH, normal:grad };
+    const ctx = { V3, scalp, tangentTo, lock, rnd, R, HH, normal:grad, T, sdHead };
     // 두피가 비치지 않게 깔리는 밑바탕 (뿌리 색)
     const capM = new T.MeshStandardMaterial({ color:new T.Color(st.root).multiplyScalar(.8), roughness:.6 });
     mesh(new T.LatheGeometry([[R + .03, HH - .2], [R + .03, HH - .06], [R*.9, HH + .04], [R*.55, HH + .075], [0, HH + .08]].map(p=>new T.Vector2(p[0], p[1])), 40), capM, 0, 0, 0, H).scale.z = .97;
     if (st.back){ const bg = new T.CylinderGeometry(R + .03, R + .03, HH - st.back + .02, 32, 1, true, 1.2, Math.PI*2 - 2.4); mesh(bg, new T.MeshStandardMaterial({ color:new T.Color(st.root).multiplyScalar(.8), roughness:.6, side:T.DoubleSide }), 0, (HH - .2 + st.back)/2, 0, H); }
     st.build(ctx);
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
-    let hm; if (st.rainbow){ hm = mpRainbowMat({ lit:true }); H.add(tick(hm)); } else hm = new T.MeshStandardMaterial({ vertexColors:true, roughness:.36, metalness:.04, side:T.DoubleSide });
+    let hm; if (st.rainbow){ hm = mpRainbowMat({ lit:true }); H.add(tick(hm)); } else hm = new T.MeshStandardMaterial({ vertexColors:true, roughness:.62, metalness:0, side:T.DoubleSide });
     hm.side = T.DoubleSide; mesh(g, hm, 0, 0, 0, H);
     if (st.extra) st.extra({ T, mesh, M, H, V3 });
     return; }
