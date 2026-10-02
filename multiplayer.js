@@ -166,6 +166,8 @@ const AVATAR_SLOTS = ['face','hair','head','acc','top','bottom','back','body']; 
 const AVATAR_PALETTE = {
   skin:  [
     { id:'skin_classic', name:'클래식',   color:0xF5CD30 },
+    { id:'skin_white',   name:'화이트',   color:0xFFF4EC },
+    { id:'skin_porcelain', name:'뽀얀 피부', color:0xFBE3D6 },
     { id:'skin_light',   name:'라이트',   color:0xF2C9A0 },
     { id:'skin_tan',     name:'탠',       color:0xD79A63 },
     { id:'skin_brown',   name:'브라운',   color:0x9C6340 },
