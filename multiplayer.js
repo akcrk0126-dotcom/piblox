@@ -1310,9 +1310,27 @@ const MP = (function () {
   }
 
   // ---------- 이메일/비밀번호 로그인·회원가입 ----------
-  function signUp(email, password, nickname, cb) {
-    if (!isConfigured()) { cb && cb(null, 'no-config'); return; }
-    ensureApp();
+  // 이 Firebase 프로젝트는 "이메일 열거 보호"가 켜져 있어서, 비밀번호가 틀리거나 가입 안 된 이메일이면
+  // 서버가 INVALID_LOGIN_CREDENTIALS 를 돌려준다. 옛 SDK(8.10.1)는 이 코드를 몰라서 'auth/internal-error'
+  // 로 바꿔 버리므로(화면에 이상한 오류가 뜸), 알아들을 수 있는 코드로 고쳐서 넘긴다.
+  function fixAuthErr(err) {
+    if (!err) return err;
+    const raw = String(err.message || '') + ' ' + String(err.code || '');
+    let code = err.code;
+    if (/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/.test(raw)) code = 'auth/invalid-credential';
+    else if (/TOO_MANY_ATTEMPTS/.test(raw)) code = 'auth/too-many-requests';
+    else if (/USER_DISABLED/.test(raw)) code = 'auth/user-disabled';
+    else if (/EMAIL_EXISTS/.test(raw)) code = 'auth/email-already-in-use';
+    else if (/INVALID_EMAIL/.test(raw)) code = 'auth/invalid-email';
+    else if (/WEAK_PASSWORD/.test(raw)) code = 'auth/weak-password';
+    if (code === err.code) return err;
+    return { code, message: err.message, original: err };
+  }
+  const cleanEmail = e => String(e || '').trim().toLowerCase();
+  function signUp(email, password, nickname, cb0) {
+    if (!isConfigured()) { cb0 && cb0(null, 'no-config'); return; }
+    ensureApp(); email = cleanEmail(email);
+    const cb = (u, e) => cb0 && cb0(u, fixAuthErr(e));
     const finalNick = (nickname || getNickname()).trim().slice(0,12);
     const finish = (user) => {
       setNickname(finalNick);
@@ -1342,9 +1360,10 @@ const MP = (function () {
     }
   }
 
-  function signIn(email, password, cb) {
-    if (!isConfigured()) { cb && cb(null, 'no-config'); return; }
-    ensureApp();
+  function signIn(email, password, cb0) {
+    if (!isConfigured()) { cb0 && cb0(null, 'no-config'); return; }
+    ensureApp(); email = cleanEmail(email);
+    const cb = (u, e, info) => cb0 && cb0(u, fixAuthErr(e), info);
     auth.signInWithEmailAndPassword(email, password).then(res => {
       // 게스트로 쌓인 이 기기의 캐시가 계정 데이터에 섞이지 않게 비우고, 계정 데이터를 다시 받는다
       clearLocalCaches();
@@ -1373,9 +1392,10 @@ const MP = (function () {
       cb && cb({ name: u.displayName || u.nickname || null, accountName: u.nickname || null, level: typeof u.xp === 'number' ? levelFromXP(u.xp).level : (u.level || 1), items: Object.keys(u.ownedItems || {}).length, avatar: u.avatarLoadout || null, email: u.email || (auth.currentUser && auth.currentUser.email) || null });
     }).catch(err => { console.error('[MP] 계정 데이터 불러오기 실패', err && err.code || err); cb && cb(null, err); });
   }
-  function resetPassword(email, cb) {
-    if (!isConfigured()) { cb && cb(false, 'no-config'); return; }
-    ensureApp();
+  function resetPassword(email, cb0) {
+    if (!isConfigured()) { cb0 && cb0(false, 'no-config'); return; }
+    ensureApp(); email = cleanEmail(email);
+    const cb = (ok, e) => cb0 && cb0(ok, fixAuthErr(e));
     auth.sendPasswordResetEmail(email).then(() => cb && cb(true)).catch(err => cb && cb(false, err));
   }
 
