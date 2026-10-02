@@ -97,6 +97,7 @@
   .mkCard.locked { opacity:.55; }
   .mkRar { position:absolute; left:6px; top:6px; width:7px; height:7px; border-radius:50%; }
   .mkPrice { font-size:11.5px; font-weight:900; color:#fff; }
+  .mkPro { position:absolute; left:16px; top:4px; font-size:8px; font-weight:900; letter-spacing:.06em; color:#fff; background:linear-gradient(90deg,#ff3d7f,#8b5cf6); border-radius:6px; padding:1px 5px; box-shadow:0 0 8px #ff3d7f88; }
   .mkSale { position:absolute; right:5px; top:5px; font-size:9px; font-weight:900; color:#1a1200; background:#ffd76b; border-radius:6px; padding:1px 5px; }
   #avDetail { position:sticky; bottom:-14px; margin:14px -14px -14px; padding:14px; display:none; gap:12px; align-items:center;
     background:var(--bg-surface); border-top:1px solid var(--divider); box-shadow:0 -8px 20px rgba(0,0,0,.35); }
@@ -2935,6 +2936,7 @@
     r:{ name:'레어',     color:'#4C86D6', ord:1 },
     e:{ name:'에픽',     color:'#9B59D0', ord:2 },
     l:{ name:'레전더리', color:'#E8A33D', ord:3 },
+    p:{ name:'프리미엄', color:'#FF3D7F', ord:4 },
   };
   const ITEM_PRICE = {
     crown:['l',1500], wizardhat:['e',600], catears:['r',250], helmet:['r',300], beanie:['c',110], horns:['e',550],
@@ -2945,6 +2947,10 @@
     tuxedo:['l',1200], sweater:['c',160],
     jeans:['c',100], shorts:['c',60], cargo:['c',120], skirt:['r',200], track:['c',110],
     wings:['e',800], backpack:['c',150], guitar:['e',750], angelwings:['l',1800], shield:['e',620],
+    // 프리미엄 컬렉션
+    pro_dominus:['p',3000], pro_neonwings:['p',2800], pro_valkyrie:['p',2600], pro_kabuto:['p',2400], pro_twinblades:['p',2200], pro_fedora:['p',2000],
+    pro_chain:['p',1600], pro_haori:['p',1500], pro_techwear:['p',1400], pro_kitsune:['p',1300], pro_oni:['p',1200], pro_visor:['p',1200],
+    pro_varsity:['p',1100], pro_bomber:['p',1000], pro_hakama:['p',1000], pro_snapback:['p',800], pro_jogger:['p',800],
   };
   const FACE_PRICE = { face_smile:0, face_blank:0, face_grin:60, face_wink:60, face_sad:60, face_cool:120, face_angry:120, face_shock:120, face_robot:250, face_dead:300 };
   const FACE_RAR = { face_grin:'c', face_wink:'c', face_sad:'c', face_cool:'r', face_angry:'r', face_shock:'r', face_robot:'e', face_dead:'e' };
@@ -2995,7 +3001,7 @@
   // ---------- 카탈로그 UI ----------
   let avView = 'market';          // 'market' | 'custom'
   let mkCat = 'all', mkSel = null, tryLoadout = null, buyArmed = false, buyArmT = null;
-  const MK_CATS = [ { id:'all', label:'전체' }, { id:'head', label:'🧢 모자' }, { id:'acc', label:'🕶 장신구' }, { id:'top', label:'👕 상의' },
+  const MK_CATS = [ { id:'all', label:'전체' }, { id:'premium', label:'✨ 프리미엄' }, { id:'head', label:'🧢 모자' }, { id:'acc', label:'🕶 장신구' }, { id:'top', label:'👕 상의' },
                     { id:'bottom', label:'👖 하의' }, { id:'back', label:'🎒 후면' }, { id:'face', label:'🙂 얼굴' }, { id:'emote', label:'💃 이모트' } ];
   let activeSlotTab = 'head';
   function renderAvatarTabs(){
@@ -3118,6 +3124,9 @@
   function clearTryOn(){ if (avatarGroup && window.MP && MP.previewEmote) MP.previewEmote(avatarGroup, null); mkSel = null; buyArmed = false; if (tryLoadout){ tryLoadout = null; if (avatarScene) refreshPreview(); } document.getElementById('avDetail').classList.remove('on'); }
   function swatch(e, size){
     const bg = '#' + (e.color||0x888888).toString(16).padStart(6,'0') + '26';
+    // 프리미엄은 이모지 대신 실제 3D 모습을 찍어서 보여준다
+    if (e.rar === 'p' && window.MP && MP.avatarShot){ let img = null; try { img = MP.avatarShot(avatarLoadout, 'item:' + e.id); } catch(err){}
+      if (img) return `<span style="display:flex;align-items:center;justify-content:center;width:${size||'100%'};height:${size||'100%'};border-radius:10px;background:radial-gradient(circle at 50% 40%,#ff3d7f33,#8b5cf61a 70%);"><img src="${img}" style="width:92%;height:92%;object-fit:contain"></span>`; }
     return `<span style="display:flex;align-items:center;justify-content:center;width:${size||'100%'};height:${size||'100%'};border-radius:10px;background:${bg};font-size:26px;">${e.icon}</span>`;
   }
   function renderFeatured(){
@@ -3136,7 +3145,7 @@
     const chips = document.getElementById('avCatChips'); chips.innerHTML = '';
     MK_CATS.forEach(c=>{ const b = document.createElement('button'); b.type='button'; b.className = 'avatarTabBtn' + (c.id===mkCat ? ' active' : ''); b.textContent = c.label;
       b.addEventListener('click', ()=>{ mkCat = c.id; renderMarket(); }); chips.appendChild(b); });
-    let list = marketEntries().filter(e=> mkCat === 'all' || e.slot === mkCat);
+    let list = marketEntries().filter(e=> mkCat === 'all' || (mkCat === 'premium' ? e.rar === 'p' : e.slot === mkCat));
     const sort = document.getElementById('avSort').value;
     const fid = (featuredEntry()||{}).id;
     list.sort((a,b)=>{
@@ -3152,7 +3161,7 @@
       const card = document.createElement('div');
       card.className = 'mkCard' + (own ? ' owned' : '') + (locked ? ' locked' : '') + (mkSel === e.id ? ' sel' : '');
       const priceTxt = own ? (isWearing(e) ? '✓ 착용 중' : '✓ 보유') : locked ? `🔒 LV ${e.reward} 보상` : `🔷 ${priceOf(e).toLocaleString('ko-KR')}`;
-      card.innerHTML = `<span class="mkRar" style="background:${RARITY[e.rar].color}"></span>${(e.id===fid && !own) ? '<span class="mkSale">-30%</span>' : ''}
+      card.innerHTML = `<span class="mkRar" style="background:${RARITY[e.rar].color}"></span>${(e.id===fid && !own) ? '<span class="mkSale">-30%</span>' : ''}${e.rar === 'p' ? '<span class="mkPro">PREMIUM</span>' : ''}
         <div class="avatarItemSwatch">${swatch(e)}</div><div class="avatarItemName">${e.name}</div><div class="mkPrice">${priceTxt}</div>`;
       card.addEventListener('click', ()=>selectMarket(e));
       grid.appendChild(card);

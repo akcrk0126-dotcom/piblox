@@ -112,6 +112,24 @@ const AVATAR_CATALOG = [
   // ---- 시크릿 ----
   { id:'dittonubs',  slot:'head', name:'메타몽 뿔',     icon:'🫠', color:0xB79CD4, secret:'ditto' },
   // ---- 개인 전용 (EXCLUSIVE_REWARDS 참고) ----
+  // ---- 프리미엄 컬렉션 (mpProItem 에서 만든다) ----
+  { id:'pro_dominus',   slot:'head',   name:'그림자 군주 후드', icon:'🌑', color:0x7DF9FF, pro:true },
+  { id:'pro_valkyrie',  slot:'head',   name:'발키리 헬름',      icon:'🪽', color:0xD7DCE4, pro:true },
+  { id:'pro_kabuto',    slot:'head',   name:'사무라이 투구',    icon:'🏯', color:0x8E1520, pro:true },
+  { id:'pro_fedora',    slot:'head',   name:'스파클 페도라',    icon:'✨', color:0x2B2F6E, pro:true },
+  { id:'pro_snapback',  slot:'head',   name:'스트릿 스냅백',    icon:'🧢', color:0x121216, pro:true },
+  { id:'pro_visor',     slot:'acc',    name:'사이버 바이저',    icon:'🥽', color:0x26E6FF, pro:true },
+  { id:'pro_kitsune',   slot:'acc',    name:'여우 가면',        icon:'🦊', color:0xF6F2EA, pro:true },
+  { id:'pro_oni',       slot:'acc',    name:'오니 마스크',      icon:'👹', color:0x8E1520, pro:true },
+  { id:'pro_chain',     slot:'acc',    name:'아이스드 골드 체인', icon:'⛓️', color:0xF2C14E, pro:true },
+  { id:'pro_bomber',    slot:'top',    name:'MA-1 봄버 재킷',   icon:'🧥', color:0x1B1D20, pro:true, cloth:true },
+  { id:'pro_techwear',  slot:'top',    name:'테크웨어 재킷',    icon:'🦾', color:0x16181C, pro:true, cloth:true },
+  { id:'pro_varsity',   slot:'top',    name:'바시티 재킷',      icon:'🏈', color:0x6E0F1E, pro:true, cloth:true },
+  { id:'pro_haori',     slot:'top',    name:'청해파 하오리',    icon:'🌊', color:0x1C2142, pro:true, cloth:true },
+  { id:'pro_jogger',    slot:'bottom', name:'테크 카고 조거',   icon:'🦿', color:0x1D1F23, pro:true, cloth:true },
+  { id:'pro_hakama',    slot:'bottom', name:'하카마',           icon:'🥋', color:0x24242C, pro:true },
+  { id:'pro_twinblades', slot:'back',  name:'쌍검',             icon:'⚔️', color:0x0E0E12, pro:true },
+  { id:'pro_neonwings', slot:'back',   name:'네온 날개',        icon:'💠', color:0xFF2A6D, pro:true },
   { id:'tero_crown', slot:'head', name:'테로의 보이드 크라운', icon:'⚡', color:0x6D28D9, secret:'tero26', rewardLevel:26, exclusive:'테로 전용' },
 ];
 // ---- 특정 계정 전용 레벨 보상 ----
@@ -366,6 +384,10 @@ function mpRoundBox(w, h, d, r){
     q.set(Math.max(-H[0] + r, Math.min(H[0] - r, v.x)), Math.max(-H[1] + r, Math.min(H[1] - r, v.y)), Math.max(-H[2] + r, Math.min(H[2] - r, v.z)));
     const n = v.clone().sub(q); if (n.lengthSq() > 1e-12){ n.normalize(); v.copy(q).addScaledVector(n, r); NO.setXYZ(i, n.x, n.y, n.z); }
     P.setXYZ(i, v.x, v.y, v.z); }
+  // UV 도 옮긴 위치에 맞춰 다시 편다 (안 그러면 면 가운데 20% 만 늘어나 보여서 옷 무늬·글자가 잘린다)
+  const UV = g.attributes.uv, per = (N + 1)*(N + 1), F = [[2, 1, -1, -1], [2, 1, 1, -1], [0, 2, 1, 1], [0, 2, 1, -1], [0, 1, 1, -1], [0, 1, -1, -1]];
+  for (let i=0;i<P.count;i++){ const f = F[Math.floor(i/per)], c = [P.getX(i), P.getY(i), P.getZ(i)]; UV.setXY(i, (c[f[0]]/f[2] + H[f[0]])/(2*H[f[0]]), 1 - (c[f[1]]/f[3] + H[f[1]])/(2*H[f[1]])); }
+  UV.needsUpdate = true;
   P.needsUpdate = true; NO.needsUpdate = true; g.computeBoundingSphere();
   g.parameters = { width:w, height:h, depth:d };
   mpGeoCache[key] = g; return g; }
@@ -455,7 +477,35 @@ function mpClothTex(id, part, hex){
     if (id === 'vest'){ if (part === 'front'){ x.fillStyle = '#2C3327'; x.fillRect(26, 0, 18, h); x.fillRect(84, 0, 18, h); x.fillStyle = '#3B4433'; for (const px of [10, 46, 82]){ x.fillRect(px, 70, 34, 34); x.strokeStyle = 'rgba(0,0,0,.4)'; x.strokeRect(px, 70, 34, 34); x.fillStyle = '#2C3327'; x.fillRect(px, 70, 34, 9); x.fillStyle = '#3B4433'; } } else { x.fillStyle = 'rgba(0,0,0,.18)'; for (let i=0;i<6;i++) x.fillRect(0, i*22 + 6, w, 4); } }
     if (id === 'tuxedo'){ if (part === 'front'){ x.fillStyle = '#f5f5f5'; x.beginPath(); x.moveTo(40, 0); x.lineTo(88, 0); x.lineTo(64, 110); x.closePath(); x.fill(); x.fillStyle = '#2a2a30'; x.beginPath(); x.moveTo(40, 0); x.lineTo(56, 0); x.lineTo(64, 70); x.lineTo(46, 30); x.closePath(); x.fill(); x.beginPath(); x.moveTo(88, 0); x.lineTo(72, 0); x.lineTo(64, 70); x.lineTo(82, 30); x.closePath(); x.fill();
         x.fillStyle = '#111'; for (let i=0;i<3;i++){ x.beginPath(); x.arc(64, 40 + i*20, 3, 0, 7); x.fill(); } x.fillStyle = '#f5f5f5'; x.fillRect(22, 30, 14, 4); } }
-    if (part === 'sleeve' && id !== 'armortop'){ x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, h - 14, w, 14); if (id === 'tuxedo' || id === 'labcoat'){ x.fillStyle = '#f5f5f5'; x.fillRect(0, h - 10, w, 10); } }
+    // ---- 프리미엄 옷 무늬 ----
+    if (id === 'pro_bomber'){ // 누빈 나일론 + 가운데 지퍼 + 왼가슴 패치
+      for (let yy=8; yy<h; yy+=20){ const gr = x.createLinearGradient(0, yy - 8, 0, yy + 12); gr.addColorStop(0, 'rgba(255,255,255,.07)'); gr.addColorStop(.5, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.18)'); x.fillStyle = gr; x.fillRect(0, yy - 8, w, 20); }
+      if (part === 'front'){ x.fillStyle = '#FF6A13'; x.fillRect(84, 26, 22, 14); x.fillStyle = '#fff'; x.font = '700 7px sans-serif'; x.fillText('MA-1', 86, 36); x.strokeStyle = 'rgba(0,0,0,.4)'; x.lineWidth = 1; x.strokeRect(84, 26, 22, 14);
+        seam(18, 70, 40, 110); seam(110, 70, 88, 110); }
+      if (part === 'back'){ x.fillStyle = 'rgba(255,255,255,.75)'; x.font = '900 14px Arial Black, sans-serif'; x.textAlign = 'center'; x.fillText('FLIGHT CREW', 64, 40); x.fillStyle = '#FF6A13'; x.fillRect(34, 46, 60, 3); } }
+    if (id === 'pro_techwear'){ // 매트한 쉘 + 비대칭 지퍼 + 작은 글자
+      x.fillStyle = 'rgba(255,255,255,.035)'; for (let i=0;i<w;i+=6) x.fillRect(i, 0, 1, h);
+      if (part === 'front'){ x.strokeStyle = '#3a3e45'; x.lineWidth = 3; x.beginPath(); x.moveTo(78, 0); x.lineTo(70, 50); x.lineTo(70, h); x.stroke(); x.fillStyle = '#9aa0a8'; x.fillRect(66, 6, 6, 9);
+        seam(8, 92, 120, 92); x.fillStyle = 'rgba(255,255,255,.7)'; x.font = '700 6px monospace'; x.fillText('PB-07 // SYSTEMS', 10, 118); x.fillStyle = '#FF4A1C'; x.fillRect(10, 104, 18, 4); }
+      if (part === 'back'){ x.fillStyle = 'rgba(255,255,255,.55)'; x.font = '700 9px monospace'; x.fillText('[ RL ] / 07', 36, 30); x.fillStyle = 'rgba(255,255,255,.18)'; for (let i=0;i<5;i++) x.fillRect(20, 50 + i*12, 88, 2); }
+      if (part === 'pant' || part === 'sleeve'){ seam(w*.3, 0, w*.3, h); } }
+    if (id === 'pro_varsity'){ // 울 몸판 + 크림 가죽 소매 + 등 아치 글자
+      if (part === 'sleeve'){ x.fillStyle = '#EDE3D0'; x.fillRect(0, 0, w, h); x.fillStyle = 'rgba(120,90,50,.08)'; for (let i=0;i<180;i++) x.fillRect(Math.random()*w, Math.random()*h, 2, 2); seam(0, 4, w, 4); }
+      else { x.fillStyle = 'rgba(255,255,255,.04)'; for (let i=0;i<400;i++) x.fillRect(Math.random()*w, Math.random()*h, 1, 1); }
+      if (part === 'back'){ x.fillStyle = '#EDE3D0'; x.strokeStyle = '#E2B13C'; x.lineWidth = 3; x.font = '900 15px Georgia, serif'; x.textAlign = 'center';
+        const s = 'PIBLOX'; for (let i=0;i<s.length;i++){ const a = -.6 + i*.24; x.save(); x.translate(64 + Math.sin(a)*70, 92 - Math.cos(a)*70); x.rotate(a); x.strokeText(s[i], 0, 0); x.fillText(s[i], 0, 0); x.restore(); }
+        x.font = '900 40px Georgia, serif'; x.lineWidth = 5; x.strokeText('07', 64, 100); x.fillText('07', 64, 100); }
+      if (part === 'front'){ x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(63, 0, 2, h); } }
+    if (id === 'pro_haori'){ // 남색 바탕에 청해파(물결) 무늬 + 흰 옷깃 + 가문 문장
+      x.strokeStyle = 'rgba(255,255,255,.32)'; x.lineWidth = 1.4; const R = 12;
+      for (let row=-1; row<12; row++) for (let col=-1; col<7; col++){ const cx = col*R*2 + (row%2 ? R : 0), cy = row*R*.9 + R; for (let k=3;k>=1;k--){ x.beginPath(); x.arc(cx, cy, R*k/3, Math.PI, 0); x.stroke(); } }
+      if (part === 'front'){ // 트인 앞섶 사이로 보이는 안쪽 기모노 + 흰 옷깃 + 짙은 깃 단
+        x.fillStyle = '#26262c'; x.beginPath(); x.moveTo(34, 0); x.lineTo(94, 0); x.lineTo(76, h); x.lineTo(52, h); x.closePath(); x.fill();
+        x.lineCap = 'butt'; x.strokeStyle = '#F2EEE4'; x.lineWidth = 9; x.beginPath(); x.moveTo(44, 0); x.lineTo(66, 70); x.moveTo(84, 0); x.lineTo(62, 70); x.stroke();
+        x.strokeStyle = '#0b0b12'; x.lineWidth = 12; x.beginPath(); x.moveTo(30, 0); x.lineTo(50, h); x.moveTo(98, 0); x.lineTo(78, h); x.stroke(); }
+      if (part === 'back'){ x.fillStyle = '#F2EEE4'; x.beginPath(); x.arc(64, 34, 14, 0, 7); x.fill(); x.fillStyle = mpHex(hex); for (let k=0;k<3;k++){ const a = k/3*Math.PI*2; x.beginPath(); x.arc(64 + Math.sin(a)*5, 34 - Math.cos(a)*5, 6, 0, 7); x.fill(); } } }
+    if (id === 'pro_jogger' && part === 'pant'){ x.fillStyle = 'rgba(255,255,255,.035)'; for (let i=0;i<w;i+=6) x.fillRect(i, 0, 1, h); seam(10, 54, 50, 62); seam(78, 54, 118, 62); }
+    if (part === 'sleeve' && id !== 'armortop' && id !== 'pro_varsity' && id !== 'pro_haori'){ x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, h - 14, w, 14); if (id === 'tuxedo' || id === 'labcoat'){ x.fillStyle = '#f5f5f5'; x.fillRect(0, h - 10, w, 10); } }
     // 바지
     if (part === 'pant'){ seam(w*.5, 0, w*.5, h); x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(0, 0, w, 10);
       if (id === 'jeans'){ x.fillStyle = 'rgba(255,255,255,.07)'; for (let i=0;i<40;i++) x.fillRect(Math.random()*w, Math.random()*h, 1, 18); seam(10, 16, 40, 30); x.strokeStyle = '#d4a03a'; x.lineWidth = 1.5; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(6, 0); x.lineTo(6, h); x.moveTo(w - 6, 0); x.lineTo(w - 6, h); x.stroke(); x.setLineDash([]); }
@@ -486,7 +536,9 @@ function mpAttachAvatarItem(avatarGroup, item){
   const FZ = u.headR ? headR*.96 : (u.headD || .62)/2;   // 얼굴 앞면 z
   const lathe = (pts, seg) => new T.LatheGeometry(pts.map(p=>new T.Vector2(p[0], p[1])), seg || 32);
 
-  if (item.slot === 'head'){
+  const proCtx = { T, item, u, anchor, mesh, M, mat, gold, lathe, headR, HT, FZ, P, g };
+  if (item.pro && !item.cloth){ mpProItem(proCtx); }
+  else if (item.slot === 'head'){
     const H = anchor('head', 0, u.headCenterY || 0, 0);
     const top = HT;
     if (item.id === 'crown'){
@@ -633,7 +685,7 @@ function mpAttachAvatarItem(avatarGroup, item){
     const Tt = anchor('torso', 0, u.torsoCenterY || 0, 0);
     const shirt = mpClothMesh(item.id, item.color, TW + .05, TH + .03, TD + .05, .07, 'top'); Tt.add(shirt);
     // 소매: 팔 메쉬에 붙인다 (팔을 흔들면 같이 움직임)
-    const longSleeve = ['hoodie', 'leather', 'checkered', 'labcoat', 'sweater', 'tuxedo', 'armortop'].indexOf(item.id) >= 0;
+    const longSleeve = ['hoodie', 'leather', 'checkered', 'labcoat', 'sweater', 'tuxedo', 'armortop', 'pro_bomber', 'pro_techwear', 'pro_varsity', 'pro_haori'].indexOf(item.id) >= 0;
     if (P && P.armL){ ['armL', 'armR'].forEach(k=>{ const A = anchor(k); const sh = longSleeve ? AH*.8 : AH*.38; const sl = mpClothMesh(item.id, item.color, AW + .04, sh, AW + .04, .07, 'sleeve'); sl.position.y = AH/2 - sh/2 + .015; A.add(sl); }); }
     if (item.id === 'hoodie'){
       const hood = mesh(lathe([[.0, -.02], [.3, 0], [.4, .1], [.42, .2], [.38, .3], [.25, .36], [0, .38]], 28), mat({ roughness:.92, side:T.DoubleSide }), 0, TH/2 - .02, -TD/2 - .02, Tt); hood.scale.set(.9, .75, .5); hood.rotation.x = .5;
@@ -659,6 +711,7 @@ function mpAttachAvatarItem(avatarGroup, item){
       mesh(new T.BoxGeometry(.03, .62, .01), M(0xB9BEC2), 0, -TH/2 - .27, TD/2 + .056, Tt);
       const collar = mesh(new T.TorusGeometry(.33, .05, 8, 24, Math.PI*1.4), mat({ roughness:.9 }), 0, TH/2 + .01, -.02, Tt); collar.rotation.set(Math.PI/2, 0, Math.PI*.8);
     }
+    if (item.pro) mpProItem(proCtx);
   } else if (item.slot === 'bottom'){
     const LW = u.legW || .62, LH = u.legH || 1.24;
     if (item.id === 'skirt'){
@@ -675,6 +728,7 @@ function mpAttachAvatarItem(avatarGroup, item){
       const belt = anchor('torso', 0, u.torsoCenterY || 0, 0); const TH = u.torsoH || 1.24, TW = u.torsoW || 1.24, TD = u.torsoD || .62;
       mesh(mpRoundBox(TW + .06, .09, TD + .06, .03), M(0x2a2420, { roughness:.5 }), 0, -TH/2 + .05, 0, belt);
       mesh(mpRoundBox(.12, .08, .03, .01), M(0xC9C9C9, { metalness:.8, roughness:.25 }), 0, -TH/2 + .05, TD/2 + .04, belt);
+      if (item.pro) mpProItem(proCtx);
     }
   } else if (item.slot === 'back'){
     const TH = u.torsoH || 1.24, TW = u.torsoW || 1.24, TD = u.torsoD || .62;
@@ -740,6 +794,353 @@ function mpAttachAvatarItem(avatarGroup, item){
   return g;
 }
 
+// ---------------------------------------------------------------------
+//  프리미엄 컬렉션 — 하나하나 손으로 다듬은 아이템들
+//  머리·장신구·후면과 하카마는 여기서 통째로 만들고(full),
+//  옷(cloth:true)은 기본 옷 판 위에 디테일(지퍼·버클·립 밴드·소매 등)만 덧붙인다.
+//  반짝임·네온 같은 움직임은 onBeforeRender 로 돌린다 (게임 쪽에서 따로 할 일 없음).
+// ---------------------------------------------------------------------
+function mpProItem(c){
+  const { T, item, u, anchor, mesh, M, mat, gold, lathe, headR, HT, FZ, P } = c;
+  const top = HT, ey = .04;
+  const now = ()=>performance.now()/1000;
+  const glowM = (hex, k, o)=>new T.MeshStandardMaterial(Object.assign({ color:hex, emissive:hex, emissiveIntensity:k || 1.2, roughness:.3, metalness:.1 }, o || {}));
+  const addM = (hex, op)=>new T.MeshBasicMaterial({ color:hex, transparent:true, opacity:op == null ? .5 : op, blending:T.AdditiveBlending, depthWrite:false, side:T.DoubleSide });
+  const ext = (sh, d, b)=>new T.ExtrudeGeometry(sh, { depth:d, bevelEnabled:b != null, bevelThickness:b || 0, bevelSize:b || 0, bevelSegments:2, curveSegments:16 });
+  const tube = (pts, r, m, parent, taper)=>{ const cv = new T.CatmullRomCurve3(pts); const tg = new T.TubeGeometry(cv, pts.length*4, r, 8, false);
+    if (taper){ const p = tg.attributes.position, rs = pts.length*4; for (let i=0;i<p.count;i++){ const t = Math.floor(i/9)/rs, cc = cv.getPoint(Math.min(1, t)), k = 1 - t*taper; p.setXYZ(i, cc.x + (p.getX(i) - cc.x)*k, cc.y + (p.getY(i) - cc.y)*k, cc.z + (p.getZ(i) - cc.z)*k); } tg.computeVertexNormals(); }
+    return mesh(tg, m, 0, 0, 0, parent); };
+  // 머리 앞쪽을 감싸는 띠 (arc 는 앞쪽 반각)
+  const band = (r, h, y, arc, m, parent)=>{ const geo = new T.CylinderGeometry(r, r, h, 48, 1, true, -arc, arc*2); geo.scale(1, 1, .96); return mesh(geo, m, 0, y, 0, parent); };
+  const twinkle = (o, sp, base)=>{ const ph = Math.random()*6.3; o.onBeforeRender = ()=>{ const k = .55 + .45*Math.sin(now()*sp + ph); o.scale.setScalar((base || 1)*(.6 + k*.6)); o.rotation.z = now()*.8 + ph; }; };
+  const star4 = (r)=>{ const s = new T.Shape(); for (let i=0;i<8;i++){ const a = i/8*Math.PI*2, rr = i%2 ? r*.28 : r; s[i ? 'lineTo' : 'moveTo'](Math.sin(a)*rr, Math.cos(a)*rr); } s.closePath(); return s; };
+  const tex = mpCanvasTex;
+  const blackGloss = (o)=>M(0x0d0d10, Object.assign({ metalness:.55, roughness:.22 }, o || {}));
+
+  if (item.slot === 'head'){
+    const H = anchor('head', 0, u.headCenterY || 0, 0);
+    if (item.id === 'pro_dominus'){
+      // 그림자 군주 후드: 깊은 후드 + 검은 가면 + 빛나는 눈 + 금빛 뿔 장식
+      const cloth = M(0x15121c, { roughness:.92, side:T.DoubleSide });
+      const hood = mesh(new T.SphereGeometry(headR*1.3, 40, 24, Math.PI/2 + .78, Math.PI*2 - 1.56, 0, Math.PI*.64), cloth, 0, .06, -.02, H); hood.scale.set(1, 1.18, 1.08);
+      mesh(new T.SphereGeometry(headR*1.03, 32, 12, 0, Math.PI*2, 0, Math.PI*.5), M(0x08070a, { roughness:1 }), 0, .1, 0, H).scale.set(1, .9, .98);
+      const inner = mesh(new T.SphereGeometry(headR*1.24, 32, 18, Math.PI/2 + .8, Math.PI*2 - 1.6, 0, Math.PI*.62), M(0x070609, { roughness:1, side:T.BackSide }), 0, .06, -.02, H); inner.scale.set(1, 1.18, 1.08);
+      // 후드 끝자락이 등 뒤로 늘어진다
+      const tail = mesh(new T.ConeGeometry(.2, .55, 20, 1, true), cloth, 0, -.12, -headR*1.25, H); tail.rotation.x = -2.5; tail.scale.z = .55;
+      // 얼굴을 덮는 가면 (반짝이는 검정)
+      const mask = band(headR + .03, .78, .02, 1.02, blackGloss({ side:T.DoubleSide }), H);
+      // 가면 위 금빛 결 무늬
+      for (const s of [-1, 1]){ tube([new T.Vector3(s*.05, .25, FZ + .055), new T.Vector3(s*.16, .17, FZ + .04), new T.Vector3(s*.27, .2, FZ - .01), new T.Vector3(s*.33, .29, FZ - .08)], .009, gold(), H, .6);
+        tube([new T.Vector3(s*.06, -.2, FZ + .05), new T.Vector3(s*.2, -.12, FZ + .02), new T.Vector3(s*.3, -.18, FZ - .05)], .008, gold(), H, .6); }
+      // 눈: 비스듬한 빛 조각 + 번짐
+      const eyeCol = item.color;
+      for (const s of [-1, 1]){ const sh = new T.Shape(); sh.moveTo(-.075, .018); sh.lineTo(.07, .045); sh.quadraticCurveTo(.085, .005, .05, -.025); sh.lineTo(-.06, -.015); sh.closePath();
+        const e = mesh(ext(sh, .006), glowM(eyeCol, 2.4), s*.135, ey + .005, FZ + .056, H); e.rotation.y = s*.24; if (s < 0) e.scale.x = -1;
+        const halo = mesh(new T.PlaneGeometry(.3, .16), addM(eyeCol, .35), s*.135, ey + .01, FZ + .07, H); halo.rotation.y = s*.24;
+        halo.onBeforeRender = ()=>{ halo.material.opacity = .25 + .12*Math.sin(now()*2.2); }; }
+      // 후드 테두리 금장 + 이마 보석
+      const trim = mesh(new T.TorusGeometry(headR*1.12, .022, 8, 48, Math.PI*1.12), gold(), 0, .02, FZ*.55, H); trim.rotation.z = Math.PI/2 - Math.PI*.56; trim.scale.set(1.04, 1.25, 1);
+      const gem = mesh(new T.OctahedronGeometry(.055, 0), glowM(eyeCol, 1.6, { metalness:.3, roughness:.05 }), 0, .27, FZ + .1, H); gem.scale.set(.8, 1.3, .5);
+      mesh(new T.TorusGeometry(.065, .012, 6, 20), gold(), 0, .27, FZ + .095, H);
+      // 금빛 뿔 두 쌍 (뒤로 휘어 감긴다)
+      for (const s of [-1, 1]){ const pts = []; for (let i=0;i<=12;i++){ const t = i/12; pts.push(new T.Vector3(s*(.36 + Math.sin(t*1.9)*.34), .3 + t*.62 - t*t*.18, .02 - t*.42 + Math.sin(t*3)*.05)); }
+        tube(pts, .065, gold(), H, .92);
+        const p2 = []; for (let i=0;i<=8;i++){ const t = i/8; p2.push(new T.Vector3(s*(.3 + t*.2), .05 + t*.12, -.2 - t*.25)); } tube(p2, .03, gold(), H, .9); }
+    } else if (item.id === 'pro_valkyrie'){
+      // 발키리 헬름: 은빛 투구 + 금 테두리 + 거대한 깃털 날개
+      const steel = M(0xE6EAF0, { metalness:.55, roughness:.22 }), goldM = gold();
+      mesh(new T.SphereGeometry(headR*1.1, 48, 24, 0, Math.PI*2, 0, Math.PI*.56), steel, 0, top - .26, 0, H);
+      band(headR*1.11, .08, top - .26, Math.PI, goldM, H);
+      // 이마에서 정수리로 이어지는 능선
+      const ridge = mesh(new T.TorusGeometry(headR*1.1, .03, 8, 48, Math.PI), goldM, 0, top - .26, 0, H); ridge.rotation.y = Math.PI/2;
+      // 코 가리개 · 볼 가리개
+      const ns = new T.Shape(); ns.moveTo(-.045, 0); ns.lineTo(.045, 0); ns.lineTo(.03, -.2); ns.lineTo(0, -.24); ns.lineTo(-.03, -.2); ns.closePath();
+      mesh(ext(ns, .02, .006), steel, 0, top - .24, FZ + .05, H);
+      for (const s of [-1, 1]){ const ch = mesh(new T.CylinderGeometry(headR*1.1, headR*1.06, .34, 16, 1, true, s > 0 ? .55 : -1.25, .7), M(0xD5DAE2, { metalness:.55, roughness:.25, side:T.DoubleSide }), 0, top - .45, 0, H); ch.scale.z = .98;
+        mesh(new T.SphereGeometry(.025, 10, 8), goldM, s*headR*1.02, top - .34, headR*.5, H); }
+      const gem = mesh(new T.OctahedronGeometry(.05), glowM(0x58A6FF, 1.2, { roughness:.05 }), 0, top - .2, FZ + .08, H); gem.scale.y = 1.4;
+      // 날개: 세 줄의 깃털을 부채꼴로
+      for (const s of [-1, 1]){ const w = new T.Group(); w.position.set(s*headR*1.02, top - .2, -.02); w.rotation.set(-.15, s*.25, 0); w.scale.setScalar(1.45); H.add(w);
+        for (let r=0;r<3;r++) for (let i=0;i<7;i++){ const len = (.48 - r*.1)*(1 - i*.05), wd = .055 - r*.008;
+          const f = new T.Shape(); f.moveTo(0, 0); f.quadraticCurveTo(wd, len*.4, wd*.5, len*.9); f.lineTo(0, len); f.lineTo(-wd*.5, len*.9); f.quadraticCurveTo(-wd, len*.4, 0, 0);
+          const fe = mesh(ext(f, .01, .006), M(r === 2 ? 0xE9EEF5 : 0xFFFFFF, { roughness:.75, emissive:0x223344, emissiveIntensity:.15 }), 0, 0, -r*.012, w);
+          fe.rotation.z = -s*(.1 + i*.2 + r*.08); fe.position.y = r*.03; fe.position.x = s*r*.02;
+          // 깃대
+          const q = mesh(new T.BoxGeometry(.006, len*.95, .006), M(0xC8CCD4), 0, len*.47, .012, fe); q.rotation.z = 0; } }
+    } else if (item.id === 'pro_kabuto'){
+      // 사무라이 투구: 옻칠 사발 + 금 선 + 여러 겹의 목 가리개 + 거대한 초승달 장식
+      const lac = M(0x17131a, { metalness:.35, roughness:.25 }), red = M(0x8E1520, { metalness:.25, roughness:.32, side:T.DoubleSide }), goldM = gold();
+      mesh(new T.SphereGeometry(headR*1.08, 48, 20, 0, Math.PI*2, 0, Math.PI*.52), lac, 0, top - .2, 0, H);
+      for (let i=0;i<16;i++){ const rib = mesh(new T.TorusGeometry(headR*1.085, .007, 4, 32, Math.PI/2), goldM, 0, top - .2, 0, H); rib.rotation.set(0, i/16*Math.PI*2, Math.PI/2); }
+      mesh(new T.CylinderGeometry(.06, .07, .05, 16), goldM, 0, top - .2 + headR*1.08, 0, H);
+      band(headR*1.1, .07, top - .2, Math.PI, goldM, H);
+      // 목 가리개 (시코로): 앞이 트인 네 겹
+      for (let i=0;i<4;i++){ const r0 = headR*(1.1 + i*.1), r1 = r0 + .1, y = top - .26 - i*.1;
+        mesh(new T.CylinderGeometry(r0, r1, .11, 40, 1, true, 1.0, Math.PI*2 - 2.0), red, 0, y, 0, H);
+        mesh(new T.CylinderGeometry(r1 + .003, r1 + .003, .018, 40, 1, true, 1.0, Math.PI*2 - 2.0), M(0xE2B13C, { metalness:.85, roughness:.25, side:T.DoubleSide }), 0, y - .05, 0, H); }
+      // 끈 매듭 (빨강 · 금) 줄
+      for (let i=0;i<9;i++){ const a = 1.2 + i*(Math.PI*2 - 2.4)/8; for (let k=0;k<3;k++) mesh(new T.BoxGeometry(.012, .07, .012), M(0xE8D7A8, { roughness:.8 }), Math.sin(a)*headR*(1.16 + k*.1), top - .3 - k*.1, Math.cos(a)*headR*(1.16 + k*.1), H); }
+      // 귀 옆 접힌 날개 (후키가에시) + 금 문장
+      for (const s of [-1, 1]){ const fk = new T.Shape(); fk.moveTo(0, 0); fk.lineTo(.2, .02); fk.quadraticCurveTo(.26, -.08, .2, -.2); fk.lineTo(0, -.16); fk.closePath();
+        const f = mesh(ext(fk, .02, .008), red, s*headR*.92, top - .2, headR*.62, H); f.rotation.y = s > 0 ? -.5 : Math.PI + .5;
+        const mon = mesh(new T.CylinderGeometry(.045, .045, .012, 20), goldM, s*(headR*.92 + .09), top - .29, headR*.62 + .07, H); mon.rotation.x = Math.PI/2; mon.rotation.z = s*.6; }
+      // 차양
+      const vs = mesh(new T.CylinderGeometry(headR*1.14, headR*1.22, .04, 32, 1, false, -.9, 1.8), lac, 0, top - .22, .03, H); vs.rotation.x = .12;
+      // 초승달 장식 (마에다테)
+      const cr = new T.Shape(); cr.absarc(0, .62, .62, Math.PI + .42, Math.PI*2 - .42, false); cr.absarc(0, .76, .58, Math.PI*2 - .5, Math.PI + .5, true); cr.closePath();
+      const md = mesh(ext(cr, .015, .008), M(0xF2C14E, { metalness:.8, roughness:.18, emissive:0x3a2600, emissiveIntensity:.4 }), 0, top - .22, FZ + .1, H); md.rotation.x = -.2;
+      const base = mesh(new T.CylinderGeometry(.06, .05, .08, 6), goldM, 0, top - .18, FZ + .08, H); base.rotation.x = Math.PI/2;
+    } else if (item.id === 'pro_fedora'){
+      // 스파클 타임 페도라: 접힌 크라운 + 휘어진 챙 + 리본 띠 + 반짝이는 별들
+      const felt = mat({ roughness:.7 });
+      const brim = mesh(lathe([[headR*1.0, .0], [headR*1.5, -.01], [headR*1.82, .015], [headR*1.86, .04], [headR*1.8, .05], [headR*1.5, .025], [headR*.95, .03]], 64), M(item.color, { roughness:.7, side:T.DoubleSide }), 0, top - .14, 0, H);
+      const bp = brim.geometry.attributes.position; for (let i=0;i<bp.count;i++){ const x = bp.getX(i), z = bp.getZ(i), r = Math.hypot(x, z), a = Math.atan2(x, z), k = Math.max(0, (r - headR)/(headR*.9));
+        bp.setY(i, bp.getY(i) + k*k*(.09*Math.sin(a)*Math.sin(a) - .07*Math.max(0, Math.cos(a)))); } brim.geometry.computeVertexNormals();
+      const crown = mesh(lathe([[headR*1.03, 0], [headR*1.07, .02], [headR*1.06, .32], [headR*.94, .4], [headR*.47, .46], [0, .48]], 48), felt, 0, top - .16, 0, H);
+      const cp = crown.geometry.attributes.position; for (let i=0;i<cp.count;i++){ const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), r = Math.hypot(x, z);
+        // 정수리 가운데 골 + 앞쪽을 집은 모양
+        let ny = y - Math.max(0, 1 - Math.abs(x)/(headR*.5))*Math.max(0, (y - .3)/.16)*.1*Math.min(1, r/(headR*.2) + .3); let nx = x;
+        if (z > 0 && y > .2) nx = x*(1 - .18*(z/headR)*((y - .2)/.26));
+        cp.setXYZ(i, nx, ny, z); } crown.geometry.computeVertexNormals();
+      mesh(new T.CylinderGeometry(headR*1.075, headR*1.08, .1, 48, 1, true), M(0x0e0e12, { roughness:.4, side:T.DoubleSide }), 0, top - .09, 0, H);
+      const bow = new T.Shape(); bow.moveTo(0, 0); bow.lineTo(-.09, .05); bow.quadraticCurveTo(-.11, 0, -.09, -.05); bow.closePath();
+      const bw = mesh(ext(bow, .015, .006), M(0x0e0e12, { roughness:.4 }), -headR*1.08, top - .09, -.05, H); bw.rotation.y = -Math.PI/2;
+      // 반짝이 (크기 · 회전이 계속 바뀐다)
+      for (let i=0;i<14;i++){ const a = i/14*Math.PI*2 + Math.random()*.3, r = headR*(1.2 + Math.random()*.9), y = top - .1 + Math.random()*.7;
+        const sp = mesh(new T.ShapeGeometry(star4(.05 + Math.random()*.04)), glowM(i%3 ? 0xFFFFFF : 0x9FE8FF, 2, { side:T.DoubleSide, transparent:true, opacity:.95, depthWrite:false }), Math.sin(a)*r, y, Math.cos(a)*r, H);
+        sp.rotation.y = a; twinkle(sp, 2 + Math.random()*3); }
+    } else if (item.id === 'pro_snapback'){
+      // 스트릿 스냅백: 6쪽 크라운 + 자수 로고 + 평평한 챙 + 금색 스티커 + 뒤 똑딱이 끈
+      const cl = M(item.color, { roughness:.85 });
+      const cr = mesh(new T.SphereGeometry(headR*1.06, 48, 20, 0, Math.PI*2, 0, Math.PI*.5), cl, 0, top - .19, 0, H); cr.scale.set(1, .98, 1.02);
+      for (let i=0;i<6;i++){ const s = mesh(new T.TorusGeometry(headR*1.065, .005, 4, 32, Math.PI/2), M(mpShade(item.color, .55)), 0, top - .19, 0, H); s.rotation.set(0, i/6*Math.PI*2 + Math.PI/6, Math.PI/2); }
+      mesh(new T.SphereGeometry(.04, 12, 8), cl, 0, top - .19 + headR*1.04, 0, H);
+      const logo = tex('snaplogo', 256, 128, (x, w, h)=>{ x.clearRect(0, 0, w, h); x.font = '900 86px Impact, Arial Black, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.lineWidth = 10; x.strokeStyle = '#ff2a4a'; x.strokeText('PB', w/2, h/2 + 4); x.fillStyle = '#ffffff'; x.fillText('PB', w/2, h/2 + 4);
+        x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 1; for (let i=0;i<w;i+=3){ x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 20, h); x.stroke(); } });
+      const lg = new T.CylinderGeometry(headR*1.075, headR*1.075, .2, 32, 1, true, -.55, 1.1); lg.scale(1, 1, 1.02);
+      mesh(lg, new T.MeshStandardMaterial({ map:logo, transparent:true, alphaTest:.05, roughness:.9 }), 0, top - .05, 0, H);
+      const bs = new T.Shape(); bs.moveTo(-headR*.95, 0); bs.quadraticCurveTo(-headR*.95, headR*.95, 0, headR*1.08); bs.quadraticCurveTo(headR*.95, headR*.95, headR*.95, 0); bs.closePath();
+      const brim = new T.Group(); brim.position.set(0, top - .17, headR*.62); brim.rotation.x = Math.PI/2 + .16; H.add(brim);
+      mesh(ext(bs, .028, .008), cl, 0, 0, -.014, brim);
+      mesh(new T.ShapeGeometry(bs), M(0x2E6B3A, { roughness:.9, side:T.DoubleSide }), 0, 0, .03, brim);
+      const stk = tex('snapsticker', 128, 128, (x)=>{ const gr = x.createLinearGradient(0, 0, 128, 128); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.5, '#e2b13c'); gr.addColorStop(1, '#fff3b0'); x.fillStyle = gr; x.beginPath(); x.arc(64, 64, 62, 0, 7); x.fill();
+        x.fillStyle = '#5a4510'; x.font = '900 44px Arial Black, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('7⅜', 64, 60); x.font = '700 14px sans-serif'; x.fillText('AUTHENTIC', 64, 98); });
+      const st = mesh(new T.CircleGeometry(.06, 24), new T.MeshStandardMaterial({ map:stk, metalness:.6, roughness:.25 }), headR*.35, headR*.62, -.016, brim); st.rotation.y = Math.PI;
+      // 뒤 똑딱이 끈 + 구멍
+      mesh(mpRoundBox(.3, .05, .03, .012), M(0x111114, { roughness:.5 }), 0, top - .25, -headR*1.02, H);
+      for (let i=0;i<4;i++) mesh(new T.CylinderGeometry(.012, .012, .035, 10), M(0x111114), -.1 + i*.065, top - .25, -headR*1.03, H).rotation.x = Math.PI/2;
+    }
+  } else if (item.slot === 'acc'){
+    const H = anchor('head', 0, u.headCenterY || 0, 0);
+    if (item.id === 'pro_visor'){
+      // 사이버 바이저: 빛나는 화면 띠 + 검은 테 + 귀 장치 (스캔라인이 흐른다)
+      const scr = tex('visorscr', 512, 64, (x, w, h)=>{ const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0a3a4a'); gr.addColorStop(.5, '#26e6ff'); gr.addColorStop(1, '#0a3a4a'); x.fillStyle = gr; x.fillRect(0, 0, w, h);
+        x.fillStyle = 'rgba(0,0,0,.35)'; for (let y=0;y<h;y+=4) x.fillRect(0, y, w, 1.5); x.fillStyle = 'rgba(255,255,255,.85)'; for (let i=0;i<14;i++) x.fillRect(40 + i*31, h - 14, 14, 3);
+        x.font = '700 13px monospace'; x.fillStyle = 'rgba(255,255,255,.9)'; x.fillText('SYS//ONLINE', 190, 22); x.strokeStyle = 'rgba(255,255,255,.8)'; x.lineWidth = 2; x.strokeRect(120, 14, 22, 22); x.strokeRect(370, 14, 22, 22); });
+      scr.wrapS = T.RepeatWrapping;
+      const sm = new T.MeshBasicMaterial({ map:scr, transparent:true, opacity:.92, side:T.DoubleSide });
+      const vg = new T.CylinderGeometry(headR + .055, headR + .045, .15, 48, 1, true, -1.25, 2.5); vg.scale(1, 1, .98);
+      const vis = mesh(vg, sm, 0, ey + .01, 0, H); vis.onBeforeRender = ()=>{ scr.offset.x = (now()*.15)%1; };
+      const glow = mesh(new T.CylinderGeometry(headR + .08, headR + .07, .26, 48, 1, true, -1.2, 2.4), addM(0x26E6FF, .16), 0, ey + .01, 0, H); glow.scale.z = .98;
+      const fr = blackGloss();
+      band(headR + .065, .022, ey + .09, 1.32, fr, H); band(headR + .062, .02, ey - .07, 1.32, fr, H);
+      for (const s of [-1, 1]){ const ear = mesh(new T.CylinderGeometry(.1, .1, .07, 28), fr, s*(headR + .045), ey, -.02, H); ear.rotation.z = Math.PI/2;
+        const ring = mesh(new T.TorusGeometry(.07, .012, 8, 28), glowM(0x26E6FF, 2), s*(headR + .085), ey, -.02, H); ring.rotation.y = Math.PI/2;
+        const ant = mesh(new T.CylinderGeometry(.008, .012, .22, 8), fr, s*(headR + .07), ey + .14, -.08, H); ant.rotation.z = -s*.25;
+        const tip = mesh(new T.SphereGeometry(.018, 10, 8), glowM(0xFF2A6D, 2.5), s*(headR + .1), ey + .25, -.08, H); tip.onBeforeRender = ()=>{ tip.material.emissiveIntensity = Math.sin(now()*4) > .3 ? 3 : .4; }; }
+    } else if (item.id === 'pro_kitsune'){
+      // 여우 가면: 머리 옆에 비스듬히 걸친 도자기 가면 + 붉은 문양 + 끈 매듭과 술
+      const kg = new T.Group(); kg.position.set(headR*.72, .2, .2); kg.rotation.set(-.15, .72, .2); kg.scale.setScalar(1.45); H.add(kg);
+      const porcelain = M(0xF6F2EA, { roughness:.28, metalness:.05 }), red = M(0xD62839, { roughness:.35, emissive:0x400006, emissiveIntensity:.4 });
+      const face = mesh(new T.SphereGeometry(.23, 32, 20, 0, Math.PI*2, 0, Math.PI*.5), porcelain, 0, 0, 0, kg); face.rotation.x = Math.PI/2; face.scale.set(1, 1, .62); face.scale.y = 1;
+      face.scale.set(1, .62, 1.12);
+      const snout = mesh(lathe([[0, 0], [.1, 0], [.08, .12], [.04, .2], [0, .21]], 24), porcelain, 0, -.07, .08, kg); snout.rotation.x = Math.PI/2; snout.scale.set(1, 1, .75);
+      mesh(new T.SphereGeometry(.028, 12, 10), M(0x111111, { roughness:.2 }), 0, -.065, .3, kg);
+      for (const s of [-1, 1]){ const ear = mesh(new T.ConeGeometry(.08, .2, 4), porcelain, s*.14, .2, .02, kg); ear.rotation.set(0, Math.PI/4, -s*.35); ear.scale.z = .5;
+        const inn = mesh(new T.ConeGeometry(.05, .13, 4), red, s*.135, .185, .05, kg); inn.rotation.set(0, Math.PI/4, -s*.35); inn.scale.z = .3;
+        // 눈: 붉은 테 + 검은 틈
+        const es = new T.Shape(); es.moveTo(-.07, -.01); es.quadraticCurveTo(-.01, .05, .07, .035); es.quadraticCurveTo(.02, -.03, -.07, -.01);
+        const e1 = mesh(ext(es, .008), red, s*.09, .04, .19, kg); e1.rotation.y = s*.35; if (s < 0) e1.scale.x = -1;
+        const e2 = mesh(new T.BoxGeometry(.08, .008, .01), M(0x111111), s*.09, .045, .2, kg); e2.rotation.set(0, s*.35, s*.18);
+        // 볼 무늬 · 수염 선
+        for (let i=0;i<3;i++){ const wl = mesh(new T.BoxGeometry(.09, .01, .008), red, s*(.12 + i*.01), -.03 - i*.03, .17 - i*.01, kg); wl.rotation.set(0, s*.6, s*(.15 - i*.12)); } }
+      const fs = new T.Shape(); fs.moveTo(0, -.03); fs.quadraticCurveTo(.05, .03, 0, .11); fs.quadraticCurveTo(-.05, .03, 0, -.03);
+      mesh(ext(fs, .008), red, 0, .1, .2, kg).rotation.x = -.3;
+      // 끈: 머리를 한 바퀴 + 매듭 + 술
+      const cord = mesh(new T.TorusGeometry(headR + .015, .012, 6, 48), M(0xC1121F, { roughness:.6 }), 0, .14, 0, H); cord.rotation.set(Math.PI/2 - .12, 0, .2);
+      mesh(new T.SphereGeometry(.035, 12, 10), M(0xC1121F, { roughness:.6 }), headR*.9, .26, -.2, H);
+      const ts = new T.Group(); ts.position.set(headR*.98, .2, -.24); H.add(ts);
+      mesh(new T.SphereGeometry(.03, 12, 10), M(0xE2B13C, { metalness:.8, roughness:.25 }), 0, 0, 0, ts);
+      for (let i=0;i<7;i++) mesh(new T.CylinderGeometry(.006, .004, .2, 4), M(0xC1121F, { roughness:.7 }), Math.sin(i)*.015, -.12, Math.cos(i)*.015, ts);
+      ts.onBeforeRender = ()=>{}; const swing = ts.children[1]; if (swing) swing.onBeforeRender = ()=>{ ts.rotation.z = Math.sin(now()*2.4)*.15; };
+    } else if (item.id === 'pro_oni'){
+      // 오니 하프 마스크: 옻칠 붉은 턱 가리개 + 엄니 + 금 장식 못
+      const lac = M(item.color, { metalness:.3, roughness:.22, side:T.DoubleSide });
+      const m = band(headR + .035, .3, -.17, 1.25, lac, H);
+      const lip = mesh(new T.TorusGeometry(headR + .04, .022, 8, 48, 2.5), M(0x150708, { metalness:.4, roughness:.3 }), 0, -.03, 0, H); lip.rotation.set(Math.PI/2, 0, Math.PI/2 - 1.25 + Math.PI); lip.rotation.set(Math.PI/2, 0, -Math.PI/2 - 1.25); lip.scale.y = .96;
+      const nose = mesh(mpRoundBox(.12, .08, .08, .03), lac, 0, .0, FZ + .06, H); nose.rotation.x = .3;
+      for (const s of [-1, 1]) mesh(new T.SphereGeometry(.018, 8, 6), M(0x150708), s*.03, -.02, FZ + .1, H);
+      // 이빨: 윗니 줄 + 아래 엄니 두 개가 위로
+      for (let i=-3;i<=3;i++){ const a = i*.12; const t = mesh(new T.ConeGeometry(.022, .06, 6), M(0xF4EFE2, { roughness:.35 }), Math.sin(a)*(headR + .045), -.075, Math.cos(a)*(headR + .045)*.96, H); t.rotation.x = Math.PI; }
+      for (const s of [-1, 1]){ const f = mesh(new T.ConeGeometry(.035, .16, 8), M(0xF4EFE2, { roughness:.3 }), s*.16, -.16, FZ + .045, H); f.rotation.set(-.15, 0, s*.15);
+        // 볼 근육 주름 + 금 못
+        tube([new T.Vector3(s*.1, -.1, FZ + .055), new T.Vector3(s*.2, -.15, FZ + .02), new T.Vector3(s*.27, -.24, FZ - .04)], .012, M(0x5a0a10, { roughness:.3 }), H, .5);
+        mesh(new T.SphereGeometry(.022, 10, 8), gold(), s*(headR*.82), -.24, headR*.55, H);
+        const strap = mesh(new T.TorusGeometry(headR + .02, .014, 6, 40, Math.PI*.7), M(0x1a1a1e, { roughness:.6 }), 0, -.12, 0, H); strap.rotation.set(Math.PI/2, 0, s > 0 ? -Math.PI*.35 + Math.PI*.15 : Math.PI*.85); }
+    } else if (item.id === 'pro_chain'){
+      // 쿠반 체인 + 아이스드 메달리온 (몸통에 건다)
+      const B = anchor('torso', 0, u.torsoCenterY || 0, 0); const tH = (u.torsoH || 1.24)/2, tD = (u.torsoD || .62)/2;
+      const path = new T.CatmullRomCurve3([new T.Vector3(-.3, tH + .02, -.12), new T.Vector3(-.3, tH + .01, .1), new T.Vector3(-.2, tH - .2, tD + .03), new T.Vector3(0, tH - .44, tD + .05), new T.Vector3(.2, tH - .2, tD + .03), new T.Vector3(.3, tH + .01, .1), new T.Vector3(.3, tH + .02, -.12), new T.Vector3(0, tH + .04, -.22)], true);
+      const goldC = M(0xF2C14E, { metalness:1, roughness:.16 }); const N = 46, lg = new T.TorusGeometry(.026, .011, 6, 14);
+      for (let i=0;i<N;i++){ const t = i/N, p = path.getPoint(t), tg = path.getTangent(t); const l = mesh(lg, goldC, p.x, p.y, p.z, B); l.quaternion.setFromUnitVectors(new T.Vector3(1, 0, 0), tg); l.rotateX(i%2 ? Math.PI/2 : 0); l.scale.set(1.25, 1, 1); }
+      const pd = new T.Group(); pd.position.set(0, tH - .56, tD + .07); B.add(pd);
+      mesh(new T.TorusGeometry(.03, .01, 6, 12), goldC, 0, .12, 0, pd);
+      mesh(new T.CylinderGeometry(.12, .12, .03, 40), goldC, 0, 0, 0, pd).rotation.x = Math.PI/2;
+      mesh(new T.TorusGeometry(.12, .014, 8, 40), M(0xFFE7A0, { metalness:1, roughness:.1 }), 0, 0, .012, pd);
+      // 다이아(아이스드) 박힌 원 + 가운데 루비
+      const ice = new T.MeshStandardMaterial({ color:0xffffff, emissive:0xbfe8ff, emissiveIntensity:.8, metalness:.2, roughness:.02 });
+      for (let i=0;i<14;i++){ const a = i/14*Math.PI*2; const d = mesh(new T.OctahedronGeometry(.017), ice, Math.sin(a)*.09, Math.cos(a)*.09, .022, pd); twinkle(d, 3 + Math.random()*3, 1); }
+      const rb = mesh(new T.OctahedronGeometry(.045), glowM(0xE0102A, .9, { metalness:.2, roughness:.03 }), 0, 0, .03, pd); rb.scale.z = .6;
+      pd.onBeforeRender = ()=>{}; rb.onBeforeRender = ()=>{ pd.rotation.z = Math.sin(now()*1.3)*.06; };
+    }
+  } else if (item.slot === 'top'){
+    // 옷 판은 이미 입혀졌다 — 여기선 입체 디테일
+    const TW = u.torsoW || 1.24, TH = u.torsoH || 1.24, TD = u.torsoD || .62, AW = u.armW || .62, AH = u.armH || 1.24;
+    const Tt = anchor('torso', 0, u.torsoCenterY || 0, 0);
+    const ribTex = (hex, stripe)=>tex('rib_' + hex + '_' + (stripe || 0), 128, 64, (x, w, h)=>{ x.fillStyle = mpHex(hex); x.fillRect(0, 0, w, h); x.fillStyle = 'rgba(0,0,0,.28)'; for (let i=0;i<w;i+=4) x.fillRect(i, 0, 1.6, h);
+      if (stripe){ x.fillStyle = mpHex(stripe); x.fillRect(0, h*.3, w, h*.14); x.fillRect(0, h*.56, w, h*.14); } });
+    const ribM = (hex, stripe)=>new T.MeshStandardMaterial({ map:ribTex(hex, stripe), roughness:.9 });
+    const arms = (fn)=>{ if (P && P.armL) ['armL', 'armR'].forEach(k=>fn(anchor(k), k === 'armL' ? -1 : 1)); };
+    if (item.id === 'pro_bomber'){
+      mesh(mpRoundBox(TW + .12, .14, TD + .12, .05), ribM(0x141518), 0, -TH/2 + .06, 0, Tt);
+      const col = mesh(new T.TorusGeometry(.34, .065, 10, 32), ribM(0x141518), 0, TH/2 + .02, 0, Tt); col.rotation.x = Math.PI/2; col.scale.set(1, .82, 1);
+      const lin = mesh(new T.TorusGeometry(.3, .03, 8, 32, Math.PI*.5), M(0xFF6A13, { roughness:.6 }), 0, TH/2 + .03, .2, Tt); lin.rotation.set(Math.PI/2, 0, Math.PI*.25);
+      mesh(new T.BoxGeometry(.035, TH - .1, .012), M(0xC9CED6, { metalness:.9, roughness:.25 }), 0, -.02, TD/2 + .06, Tt);
+      mesh(mpRoundBox(.035, .08, .02, .008), M(0xC9CED6, { metalness:.9, roughness:.2 }), 0, TH/2 - .14, TD/2 + .08, Tt);
+      for (const s of [-1, 1]){ const fl = mesh(mpRoundBox(.08, .3, .03, .012), M(0x1a1c1f, { roughness:.6 }), s*.38, -.25, TD/2 + .065, Tt); fl.rotation.z = s*.25; }
+      arms((A, s)=>{ mesh(mpRoundBox(AW + .1, .12, AW + .1, .04), ribM(0x141518), 0, AH/2 - AH*.8 - .02, 0, A);
+        if (s < 0){ const pk = mesh(mpRoundBox(.06, .26, .2, .02), M(0x1f2226, { roughness:.6 }), -AW/2 - .05, AH/2 - .45, 0, A); mesh(new T.BoxGeometry(.012, .2, .012), M(0xC9CED6, { metalness:.9 }), -AW/2 - .085, AH/2 - .45, .06, A);
+          for (let i=0;i<3;i++) mesh(new T.BoxGeometry(.01, .025, .025), M(0xC9CED6, { metalness:.9 }), -AW/2 - .085, AH/2 - .35 - i*.04, -.05, A); } });
+    } else if (item.id === 'pro_techwear'){
+      const strapM = M(0x0c0d0f, { roughness:.55 }), metal = M(0x8B9097, { metalness:.9, roughness:.3 }), acc = glowM(0xFF4A1C, .6, { roughness:.5 });
+      const coll = mesh(new T.CylinderGeometry(.33, .36, .2, 32, 1, true), M(0x16181c, { roughness:.75, side:T.DoubleSide }), 0, TH/2 + .08, -.02, Tt); coll.scale.z = .85;
+      mesh(new T.BoxGeometry(.03, .18, .012), M(0x2a2d33, { metalness:.6 }), .07, TH/2 + .08, .28, Tt).rotation.z = -.1;
+      // 대각선 슬링 스트랩 + 버클 + 남은 끈
+      const sl = mesh(mpRoundBox(.1, TH*1.25, .03, .012), strapM, 0, -.02, TD/2 + .05, Tt); sl.rotation.z = .72;
+      const bk = mesh(mpRoundBox(.16, .12, .04, .015), metal, -.1, .06, TD/2 + .075, Tt); bk.rotation.z = .72;
+      mesh(mpRoundBox(.11, .07, .045, .012), strapM, -.1, .06, TD/2 + .09, Tt).rotation.z = .72;
+      const dang = mesh(mpRoundBox(.07, .26, .015, .006), strapM, -.2, -.1, TD/2 + .07, Tt); dang.rotation.z = .2;
+      mesh(mpRoundBox(.075, .05, .02, .008), metal, -.22, -.24, TD/2 + .075, Tt).rotation.z = .2;
+      mesh(mpRoundBox(.06, .03, .02, .008), acc, .32, -.36, TD/2 + .055, Tt);
+      // 가슴 주머니 (벨크로 패치)
+      mesh(mpRoundBox(.26, .22, .05, .02), M(0x1b1e22, { roughness:.75 }), .28, .2, TD/2 + .04, Tt);
+      mesh(mpRoundBox(.2, .06, .01, .005), M(0x2b2f35, { roughness:1 }), .28, .3, TD/2 + .07, Tt);
+      arms((A, s)=>{ mesh(mpRoundBox(AW + .08, .1, AW + .08, .03), strapM, 0, AH/2 - AH*.8 - .02, 0, A);
+        mesh(mpRoundBox(AW + .07, .04, AW + .07, .02), new T.MeshStandardMaterial({ color:0xd8dde4, metalness:.2, roughness:.15, emissive:0x30343a }), 0, AH/2 - .5, 0, A);
+        if (s > 0){ mesh(mpRoundBox(.04, .2, .18, .015), M(0x1b1e22, { roughness:.75 }), AW/2 + .03, AH/2 - .32, 0, A); mesh(mpRoundBox(.012, .05, .12, .004), acc, AW/2 + .055, AH/2 - .25, 0, A); } });
+    } else if (item.id === 'pro_varsity'){
+      mesh(mpRoundBox(TW + .1, .13, TD + .1, .05), ribM(item.color, 0xEDE3D0), 0, -TH/2 + .06, 0, Tt);
+      const col = mesh(new T.TorusGeometry(.33, .06, 10, 32), ribM(item.color, 0xEDE3D0), 0, TH/2 + .02, 0, Tt); col.rotation.x = Math.PI/2; col.scale.set(1, .82, 1);
+      for (let i=0;i<5;i++) mesh(new T.CylinderGeometry(.025, .025, .015, 16), M(0xD8DCE2, { metalness:.9, roughness:.2 }), 0, TH/2 - .2 - i*.2, TD/2 + .04, Tt).rotation.x = Math.PI/2;
+      const L = tex('varsityP', 128, 128, (x)=>{ x.font = '900 112px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+        x.lineWidth = 16; x.strokeStyle = '#E2B13C'; x.strokeText('P', 64, 70); x.lineWidth = 8; x.strokeStyle = '#EDE3D0'; x.strokeText('P', 64, 70); x.fillStyle = mpHex(item.color); x.fillText('P', 64, 70); });
+      mesh(new T.PlaneGeometry(.3, .3), new T.MeshStandardMaterial({ map:L, transparent:true, alphaTest:.05, roughness:.95 }), -.3, .15, TD/2 + .032, Tt);
+      arms((A)=>mesh(mpRoundBox(AW + .09, .12, AW + .09, .04), ribM(item.color, 0xEDE3D0), 0, AH/2 - AH*.8 - .02, 0, A));
+    } else if (item.id === 'pro_haori'){
+      // 하오리: 무릎까지 오는 겉옷 자락 + 넓은 소매 + 하오리 끈
+      const LH = u.legH || 1.24; const skirtL = LH*.82;
+      const sk = mpClothMesh('pro_haori', item.color, TW + .14, skirtL, TD + .14, .05, 'side'); sk.position.y = -TH/2 - skirtL/2 + .02; Tt.add(sk);
+      for (const s of [-1, 1]) mesh(mpRoundBox(.11, TH + skirtL - .02, .02, .01), M(0x0d0e18, { roughness:.6 }), s*.17, -skirtL/2, TD/2 + .08, Tt);
+      mesh(new T.BoxGeometry(.1, skirtL, .012), M(0x0b0b10, { roughness:.9 }), 0, -TH/2 - skirtL/2 + .04, TD/2 + .075, Tt);
+      const himo = M(0xF2EEE4, { roughness:.85 });
+      for (const s of [-1, 1]) mesh(new T.CylinderGeometry(.018, .018, .16, 8), himo, s*.08, .05, TD/2 + .1, Tt).rotation.z = s*1.2;
+      mesh(new T.SphereGeometry(.04, 12, 10), himo, 0, .03, TD/2 + .11, Tt);
+      for (const s of [-1, 1]){ const t = mesh(new T.CylinderGeometry(.02, .035, .14, 10), himo, s*.025, -.07, TD/2 + .11, Tt); t.rotation.z = s*.15; }
+      arms((A, s)=>{ const sl = mpClothMesh('pro_haori', item.color, AW + .26, AH*.82, AW + .34, .06, 'sleeve'); sl.position.set(s*.06, AH/2 - AH*.41 - .02, 0); A.add(sl); });
+    }
+  } else if (item.slot === 'bottom'){
+    const LW = u.legW || .62, LH = u.legH || 1.24, TH = u.torsoH || 1.24, TW = u.torsoW || 1.24, TD = u.torsoD || .62;
+    const legs = (fn)=>{ if (P && P.legL) ['legL', 'legR'].forEach(k=>fn(anchor(k), k === 'legL' ? -1 : 1)); };
+    if (item.id === 'pro_jogger'){
+      const strap = M(0x0c0d0f, { roughness:.55 }), metal = M(0x9AA0A8, { metalness:.9, roughness:.25 });
+      legs((L, s)=>{ mesh(mpRoundBox(LW + .08, .12, LW + .08, .04), new T.MeshStandardMaterial({ color:0x111215, roughness:.95 }), 0, -LH/2 + .07, 0, L);
+        const pk = mesh(mpRoundBox(.08, .3, .3, .03), M(mpShade(item.color, 1.15), { roughness:.85 }), s*(LW/2 + .05), -.02, 0, L);
+        mesh(mpRoundBox(.09, .08, .31, .02), M(mpShade(item.color, .9), { roughness:.85 }), s*(LW/2 + .06), .12, 0, L);
+        mesh(mpRoundBox(.02, .06, .04, .008), metal, s*(LW/2 + .105), .1, .05, L);
+        if (s > 0){ mesh(mpRoundBox(LW + .1, .07, LW + .1, .02), strap, 0, LH/2 - .3, 0, L); mesh(mpRoundBox(.06, .1, .05, .015), metal, LW/2 + .05, LH/2 - .3, .12, L); }
+        mesh(mpRoundBox(.012, LH*.7, .012, .004), new T.MeshStandardMaterial({ color:0xd8dde4, emissive:0x40454c, roughness:.15 }), s*(LW/2 + .028), 0, -.1, L); });
+      const B = anchor('torso', 0, u.torsoCenterY || 0, 0);
+      const ck = mesh(mpRoundBox(.18, .1, .04, .02), metal, 0, -TH/2 + .05, TD/2 + .07, B); mesh(mpRoundBox(.06, .06, .05, .01), M(0x111111), 0, -TH/2 + .05, TD/2 + .08, B);
+      for (const s of [-1, 1]) mesh(mpRoundBox(.02, .14, .02, .008), strap, s*.3, -TH/2 - .04, TD/2 + .05, B);
+    } else if (item.id === 'pro_hakama'){
+      // 하카마: 다리마다 넓게 퍼지는 주름 바지 + 허리띠 + 등 판
+      const cloth = tex('hakama_' + item.color, 128, 256, (x, w, h)=>{ x.fillStyle = mpHex(item.color); x.fillRect(0, 0, w, h); for (let i=0;i<w;i+=16){ x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(i, 0, 3, h); x.fillStyle = 'rgba(255,255,255,.06)'; x.fillRect(i + 5, 0, 2, h); }
+        x.fillStyle = 'rgba(255,255,255,.05)'; for (let i=0;i<300;i++) x.fillRect(Math.random()*w, Math.random()*h, 1, 4); });
+      cloth.wrapS = T.RepeatWrapping; cloth.repeat.x = 4;
+      const cm = new T.MeshStandardMaterial({ map:cloth, roughness:.9, side:T.DoubleSide });
+      // 허리에서 발목까지 한 덩어리로 넓게 퍼지는 주름 치마바지 + 다리에도 같은 천 (다리를 흔들 때 안이 비지 않게)
+      const Tt = anchor('torso', 0, u.torsoCenterY || 0, 0), L0 = LH + .04, pts = [];
+      for (let i=0;i<=10;i++){ const t = i/10; pts.push([TW*.56 + t*t*.36 + t*.06, -t*L0]); } pts.reverse();
+      const gm = lathe(pts, 72); const pp = gm.attributes.position;
+      for (let i=0;i<pp.count;i++){ const a = Math.atan2(pp.getX(i), pp.getZ(i)), d = -pp.getY(i)/L0, k = 1 + Math.sin(a*14)*.035*(.3 + d); pp.setX(i, pp.getX(i)*k); pp.setZ(i, pp.getZ(i)*k*.66); } gm.computeVertexNormals();
+      mesh(gm, cm, 0, -TH/2 + .02, 0, Tt);
+      // 가운데 갈라진 선 (앞 · 뒤)
+      for (const z of [1, -1]) mesh(new T.BoxGeometry(.025, L0*.62, .01), M(mpShade(item.color, .55), { roughness:.9 }), 0, -TH/2 - L0*.69, z*(TW*.56 + .3)*.66, Tt);
+      if (P && P.legL) legs((L)=>{ const pm = mpClothMesh('pro_hakama', item.color, LW + .05, LH, LW + .05, .06, 'pant'); L.add(pm); });
+      const B = Tt;
+      const ob = mesh(mpRoundBox(TW + .1, .16, TD + .1, .04), M(0xF2EEE4, { roughness:.85 }), 0, -TH/2 + .08, 0, B);
+      mesh(mpRoundBox(TW + .12, .07, TD + .12, .03), M(item.color, { roughness:.85 }), 0, -TH/2 + .02, 0, B);
+      mesh(mpRoundBox(.5, .26, .06, .04), M(item.color, { roughness:.85 }), 0, -TH/2 + .12, -TD/2 - .06, B);
+      const kn = mesh(new T.TorusGeometry(.05, .025, 8, 16), M(item.color, { roughness:.85 }), 0, -TH/2 + .1, TD/2 + .09, B);
+      for (const s of [-1, 1]){ const t = mesh(mpRoundBox(.06, .22, .02, .01), M(item.color, { roughness:.85 }), s*.05, -TH/2 - .04, TD/2 + .09, B); t.rotation.z = s*.25; }
+    }
+  } else if (item.slot === 'back'){
+    const TH = u.torsoH || 1.24, TD = u.torsoD || .62;
+    const B = anchor('torso', 0, u.torsoCenterY || 0, 0); const bz = -TD/2;
+    if (item.id === 'pro_twinblades'){
+      // 쌍검: X 자로 멘 두 자루 — 옻칠 칼집, 붉은 끈, 금 장식, 마름모 손잡이 감개
+      const wrapT = tex('tsuka', 64, 256, (x, w, h)=>{ x.fillStyle = '#121214'; x.fillRect(0, 0, w, h); x.fillStyle = '#E9E3D3'; for (let y=-20;y<h;y+=32){ x.beginPath(); x.moveTo(w/2, y); x.lineTo(w, y + 16); x.lineTo(w/2, y + 32); x.lineTo(0, y + 16); x.closePath(); x.fill(); }
+        x.fillStyle = '#121214'; for (let y=-20;y<h;y+=32){ x.beginPath(); x.moveTo(w/2, y + 8); x.lineTo(w*.75, y + 16); x.lineTo(w/2, y + 24); x.lineTo(w*.25, y + 16); x.closePath(); x.fill(); } });
+      const one = (rz, z, sayaCol)=>{ const kg = new T.Group(); kg.position.set(0, .02, bz - z); kg.rotation.z = rz; B.add(kg);
+        const saya = mesh(lathe([[0, -.72], [.03, -.715], [.045, -.68], [.05, .5], [0, .52]], 16), M(sayaCol, { metalness:.4, roughness:.18 }), 0, 0, 0, kg); saya.scale.z = .6;
+        mesh(new T.ConeGeometry(.05, .1, 12), M(0xE2B13C, { metalness:.9, roughness:.2 }), 0, -.73, 0, kg).rotation.x = Math.PI;
+        for (const y of [.32, .1]){ const r = mesh(new T.TorusGeometry(.052, .012, 6, 16), M(0xC1121F, { roughness:.6 }), 0, y, 0, kg); r.rotation.x = Math.PI/2; r.scale.y = .6; }
+        const sg = []; for (let i=0;i<=8;i++){ const t = i/8; sg.push(new T.Vector3(.05 + Math.sin(t*3)*.06, .3 - t*.5, .02 + t*.03)); } tube(sg, .01, M(0xC1121F, { roughness:.6 }), kg);
+        const tsuba = mesh(new T.CylinderGeometry(.1, .1, .025, 8), M(0xE2B13C, { metalness:.9, roughness:.22 }), 0, .53, 0, kg); tsuba.scale.z = .8;
+        mesh(new T.CylinderGeometry(.038, .042, .34, 12), new T.MeshStandardMaterial({ map:wrapT, roughness:.85 }), 0, .72, 0, kg);
+        mesh(new T.CylinderGeometry(.045, .04, .04, 12), M(0xE2B13C, { metalness:.9, roughness:.22 }), 0, .9, 0, kg);
+        const tass = new T.Group(); tass.position.set(0, .92, 0); kg.add(tass); for (let i=0;i<5;i++) mesh(new T.CylinderGeometry(.005, .003, .16, 4), M(0xC1121F), Math.sin(i*1.3)*.012, -.08, Math.cos(i*1.3)*.012 + .02, tass);
+        tass.rotation.x = .5; return kg; };
+      one(.62, .14, 0x0e0e12); one(-.62, .2, 0x3a0a10);
+      // 가슴을 가로지르는 멜빵
+      const st = mesh(mpRoundBox(.08, TH*1.4, .025, .01), M(0x1b1714, { roughness:.6 }), 0, 0, TD/2 + .035, B); st.rotation.z = -.62;
+      mesh(mpRoundBox(.12, .1, .03, .01), M(0xE2B13C, { metalness:.9, roughness:.25 }), -.08, .1, TD/2 + .05, B).rotation.z = -.62;
+    } else if (item.id === 'pro_neonwings'){
+      // 네온 날개: 빛나는 뼈대 + 육각 무늬 막 — 천천히 펄럭이고 숨 쉬듯 빛난다
+      const neon = item.color, mem = tex('hexmem', 256, 256, (x, w, h)=>{ x.clearRect(0, 0, w, h); x.strokeStyle = 'rgba(255,255,255,.85)'; x.lineWidth = 2; const R = 14;
+        for (let row=0; row<14; row++) for (let col=0; col<12; col++){ const cx = col*R*1.73 + (row%2)*R*.86, cy = row*R*1.5; x.beginPath(); for (let k=0;k<6;k++){ const a = k/6*Math.PI*2 + Math.PI/6; x[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a)*R*.9, cy + Math.sin(a)*R*.9); } x.closePath(); x.stroke(); } });
+      const memM = new T.MeshBasicMaterial({ map:mem, color:neon, transparent:true, opacity:.55, blending:T.AdditiveBlending, depthWrite:false, side:T.DoubleSide });
+      const boneM = glowM(neon, 2.2), fillM = new T.MeshBasicMaterial({ color:neon, transparent:true, opacity:.2, depthWrite:false, side:T.DoubleSide });
+      mesh(mpRoundBox(.36, .3, .12, .04), M(0x121318, { metalness:.7, roughness:.3 }), 0, .1, bz - .07, B);
+      mesh(new T.CylinderGeometry(.06, .06, .13, 20), glowM(neon, 1.5), 0, .1, bz - .12, B).rotation.x = Math.PI/2;
+      for (const s of [-1, 1]){ const w = new T.Group(); w.position.set(s*.14, .16, bz - .12); B.add(w); const wi = new T.Group(); wi.scale.setScalar(1.35); w.add(wi);
+        const J = [new T.Vector3(0, 0, 0), new T.Vector3(s*.45, .32, -.08), new T.Vector3(s*1.05, .5, -.14), new T.Vector3(s*1.5, .2, -.18)];
+        tube(J, .028, boneM, wi, .5);
+        const tips = [[s*1.5, .2], [s*1.38, -.22], [s*1.12, -.5], [s*.8, -.62], [s*.46, -.48]];
+        for (const [tx, ty] of tips){ const from = tx === s*1.5 ? J[2] : new T.Vector3(s*Math.min(.95, Math.abs(tx)*.75), .4, -.12); tube([from, new T.Vector3((from.x + tx)/2, (from.y + ty)/2 + .02, -.15), new T.Vector3(tx, ty, -.16)], .014, boneM, wi, .4); }
+        // 막: 뼈 끝을 잇는 부채꼴
+        const sh = new T.Shape(); sh.moveTo(0, 0); sh.lineTo(s*.45, .32); sh.lineTo(s*1.05, .5); sh.lineTo(s*1.5, .2); for (const [tx, ty] of tips.slice(1)) sh.lineTo(tx, ty); sh.closePath();
+        const mg = new T.ShapeGeometry(sh, 12); const uv = mg.attributes.uv, pp = mg.attributes.position; for (let i=0;i<uv.count;i++) uv.setXY(i, pp.getX(i)*.7 + .5, pp.getY(i)*.7 + .5);
+        const m = mesh(mg, memM, 0, 0, -.14, wi); mesh(mg, fillM, 0, 0, -.145, wi);
+        // 끝 불빛
+        for (const [tx, ty] of tips){ const d = mesh(new T.SphereGeometry(.03, 10, 8), glowM(0xffffff, 2), tx, ty, -.16, wi); twinkle(d, 3 + Math.random()*2, 1); }
+        w.rotation.y = s*.35;
+        m.onBeforeRender = ()=>{ const t = now(); w.rotation.y = s*(.35 + Math.sin(t*1.6)*.12); w.rotation.z = s*Math.sin(t*1.6 + .6)*.05; memM.opacity = .42 + Math.sin(t*2.4)*.14; boneM.emissiveIntensity = 1.8 + Math.sin(t*2.4)*.6; }; }
+    }
+  }
+}
+
 // loadout: { head, acc, top, bottom, back } (각 값은 AVATAR_CATALOG의 id 또는 null)
 // 옛 three(r128)는 색 숫자를 그대로 선형값으로 써서 화면에 허옇게 바래 보인다 → sRGB 로 보정 (새 three 는 알아서 함)
 // 렌더러가 sRGB 로 내보낼 때만(색 보정을 켠 게임) 한 번 바꾼다 — 보정을 안 켠 게임은 원래 색 그대로가 맞다
@@ -802,11 +1203,13 @@ function mpAvatarShot(loadout, mode){
     if (isItem){
       const item = AVATAR_CATALOG.find(i => i.id === mode.slice(5)); if (!item) return null;
       g = mpBuildR6Avatar({ skin:lo.skin, shirt:lo.shirt, pants:lo.pants });
-      const n = g.children.length; mpAttachAvatarItem(g, item);
+      const ig = mpAttachAvatarItem(g, item);
       g.updateMatrixWorld(true);
-      const box = new T.Box3(); g.children.slice(n).forEach(ch => box.expandByObject(ch));
-      if (box.isEmpty()) { g.children.slice(0, n).forEach(ch => box.expandByObject(ch)); }
-      else g.children.slice(0, n).forEach(ch => { ch.visible = false; });
+      // 아이템은 몸 부위에 붙어 있을 수 있다 → 그 부착점들까지 모아서 틀을 잡고, 몸은 재질만 숨긴다(자식인 아이템은 그대로 보이게)
+      const roots = ig ? [ig].concat(ig.userData.attached || []) : [], mine = new Set(); roots.forEach(r => r.traverse(o => mine.add(o)));
+      const box = new T.Box3(); roots.forEach(r => box.expandByObject(r));
+      if (box.isEmpty()) box.setFromObject(g);
+      else g.traverse(o => { if (o.isMesh && !mine.has(o)) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.visible = false; }); });
       snapScene.add(g); mpFrame(box, W, H, 1.25, item.slot === 'back' ? Math.PI + 0.5 : 0.5);
     } else {
       g = mpBuildAvatar(lo); snapScene.add(g); g.updateMatrixWorld(true);
