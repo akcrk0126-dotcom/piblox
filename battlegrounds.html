@@ -967,7 +967,10 @@ function pickTarget(f){ let best = null, bs = 1e9; const es = enemiesOf(f);
 function moveList(f){ return f.awakened ? f.ch.awk : f.ch.base; }
 function moveKey(f, i){ return (f.awakened ? 'a' : 'b') + i; }
 function moveReady(f, i){ return (f.cds[moveKey(f, i)] || 0) <= GT; }
-function useMove(f, i){ const list = moveList(f), def = list[i]; if (!def || !moveReady(f, i) || !canAct(f) || f.blocking) return false;
+function useMove(f, i){ const list = moveList(f), def = list[i]; if (!def || !moveReady(f, i)) return false;
+  // 원작처럼 M1 도중에도 기술이 나간다 (M1을 끊고 바로 기술) · 막는 중이면 막기를 풀고 쓴다
+  if (f.act && f.act.def.n === 'M1' && !busy(f)) f.act = null; if (f.blocking && !busy(f)) f.blocking = false;
+  if (!canAct(f)) return false;
   if (startMove(f, def, i)){ f.cds[moveKey(f, i)] = GT + (G.noCd && f === ME ? .6 : (def.cd || 10)); return true; } return false; }
 function aiTick(f, dt){ const B = f.ai; if (!f.alive){ f.input.set(0, 0, 0); return; }
   if (f.dummy){ f.input.set(0, 0, 0); if (G.dummyFight && canAct(f)){ const t = nearestEnemy(f, 4); if (t && Math.random() < dt*1.5) doM1(f); } return; }
@@ -1089,12 +1092,15 @@ function meDash(){ if (!ME || !ME.alive) return; const wasBusy = busy(ME); if (w
 function meJump(){ if (!ME || !ME.alive) return; if (GT - ME.m1Last < .75 && ME.m1i >= 2) return;     // 콤보 중 스페이스 = 어퍼컷 준비
   if (ME.ground && !busy(ME) && !(ME.act && ME.act.lock)){ ME.vel.y = 17; ME.ground = false; } }
 function meMove(i){ if (!ME || !ME.alive) return; if (!isTouch && !ME.act) ME.yaw = CY; else if (isTouch){ const t = nearestEnemy(ME, 18); if (t && !ME.act) faceTo(ME, t.pos); }
-  if (!moveReady(ME, i)){ const left = (ME.cds[moveKey(ME, i)] || 0) - GT; hint(moveList(ME)[i].n + ' ' + left.toFixed(1) + '초', .6); return; } useMove(ME, i); }
+  if (!moveReady(ME, i)){ const left = (ME.cds[moveKey(ME, i)] || 0) - GT; hint(moveList(ME)[i].n + ' ' + left.toFixed(1) + '초', .6); return; }
+  if (!useMove(ME, i)) QUEUE = { i, until:GT + Math.min(1.6, ME.act && ME.act.dur ? Math.max(.5, ME.act.dur - ME.act.t + .25) : .5) }; }   // 다른 기술 · 경직 중에 누르면 0.5초 동안 기억했다가 풀리는 순간 바로 쓴다
+let QUEUE = null;
+function queueTick(){ if (!QUEUE || !ME) return; if (GT > QUEUE.until || !ME.alive){ QUEUE = null; return; } if (useMove(ME, QUEUE.i)) QUEUE = null; }
 function meAwaken(){ if (!ME) return; if (ME.awakened) return; if (ME.awk < 100){ hint('각성 게이지 ' + Math.floor(ME.awk) + '% · 싸워서 채우세요', .9); return; } doAwaken(ME); }
 addEventListener('keydown', e=>{ if (e.code === 'Tab'){ e.preventDefault(); if (!e.repeat){ boardOn = !boardOn; $('board').classList.toggle('hideL', boardOn); } return; }
   if (!G.playing || inMenu() || e.repeat) { if (e.code !== 'Tab') KEYS[e.code] = true; return; } KEYS[e.code] = true;
   if (e.code === 'KeyQ') meDash(); else if (e.code === 'Space'){ e.preventDefault(); meJump(); } else if (e.code === 'KeyG') meAwaken();
-  else if (/^Digit[1-4]$/.test(e.code)) meMove(+e.code[5] - 1); else if (e.code === 'KeyM') openMenu(); else if (e.code === 'KeyE') useMove(ME, 0); });
+  else if (/^(Digit|Numpad)[1-4]$/.test(e.code)) meMove(+e.code.slice(-1) - 1); else if (e.code === 'KeyM') openMenu(); else if (e.code === 'KeyE') useMove(ME, 0); });
 addEventListener('keyup', e=>{ KEYS[e.code] = false; });
 addEventListener('blur', ()=>{ for (const k in KEYS) KEYS[k] = false; m1Held = false; });
 // 터치
@@ -1256,7 +1262,7 @@ function frame(){ requestAnimationFrame(frame); const t = performance.now(); let
   try {
     let dt = rdt; if (SCR.hitstop > 0){ SCR.hitstop -= rdt; dt = rdt*.06; } if (SCR.slow > 0){ SCR.slow -= rdt; dt *= SCR.slowK; }
     if (G.playing && !G.paused){ GT += dt;
-      playerTick(dt);
+      playerTick(dt); queueTick();
       for (const f of F_LIST.slice()) fighterTick(f, dt);
       separate();
       tickProj(dt); tickZones(dt); respawnTick(dt); netTick(rdt); }
