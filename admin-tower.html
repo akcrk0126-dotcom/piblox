@@ -418,12 +418,15 @@
   const COLMAT = { '#7cc56b':'grass', '#cfe9c2':'grass', '#a77b4e':'wood', '#b88a5a':'wood', '#b07a3a':'wood', '#8a5a32':'wood', '#7a5332':'wood', '#d9cfa8':'cobble', '#b7b0a2':'cobble', '#9b8d78':'cobble',
     '#9aa1a8':'diamond', '#59606b':'diamond', '#8a96a8':'diamond', '#3c4350':'metal', '#c8ced6':'metal', '#c0a060':'metal', '#f2b632':'metal', '#d9792b':'metal', '#2f7fd0':'metal',
     '#5a4a8a':'slate', '#2b2140':'slate', '#4a3a7a':'slate', '#f4f8ff':'marble', '#ffffff':'smooth', '#8c8d90':'concrete', '#3f8f45':'grass', '#e5433c':'plastic', '#b02a22':'plastic', '#c0392b':'plastic', '#f5c518':'plastic', '#e8e8e8':'plastic', '#ffd23d':'plastic', '#1d3a24':'grass' };
+  // 탁한 색 → 로블록스 오비처럼 쨍한 단색
+  const BRIGHT = { '#7cc56b':'#4fd65a', '#cfe9c2':'#8ef0a0', '#a77b4e':'#ff9f43', '#b88a5a':'#ffb35c', '#b07a3a':'#ff9f43', '#8a5a32':'#e07b2e', '#7a5332':'#c8611f', '#d9cfa8':'#ffe066', '#b7b0a2':'#d9d9d9', '#9b8d78':'#bdbdbd',
+    '#9aa1a8':'#ffb000', '#59606b':'#4a5568', '#8a96a8':'#4d8dff', '#3c4350':'#2b3a67', '#c8ced6':'#e8eef7', '#c0a060':'#ffd23d', '#f2b632':'#ffc21a', '#d9792b':'#ff6b35', '#2f7fd0':'#2f7fff',
+    '#5a4a8a':'#a066ff', '#2b2140':'#5a189a', '#4a3a7a':'#7b2cbf', '#f4f8ff':'#ffffff', '#8c8d90':'#a3a2a5', '#3f8f45':'#2fb84a', '#1d3a24':'#2fb84a', '#4fb04a':'#3ad66b', '#cfe9c2 ':'#8ef0a0' };
   function applyMat(c, type, opts){ const m = c.mesh.material; if (!m || Array.isArray(m)) return;
-    if (['kill', 'damage', 'conveyor', 'bounce', 'truss', 'timed', 'checkpoint', 'finish', 'crumble', 'ice'].includes(type) && !opts.mat) return;
-    const col = opts.color ? String(opts.color).toLowerCase() : ZONES[CUR_Z].color.toLowerCase(), name = opts.mat || COLMAT[col] || ZONE_MAT[CUR_Z] || 'plastic';
-    if (!opts.color) m.color.set(col);
-    if (name !== 'smooth'){ m.map = matTex(name); worldUV(c.mesh, 4); m.needsUpdate = true; }
-    const pr = MATPROP[name] || MATPROP.plastic; m.roughness = pr.r; m.metalness = pr.m || 0; }
+    if (['kill', 'damage', 'conveyor', 'bounce', 'truss', 'timed', 'checkpoint', 'finish', 'crumble', 'ice'].includes(type)) return;
+    const col0 = opts.color ? String(opts.color).toLowerCase() : ZONES[CUR_Z].color.toLowerCase(), col = BRIGHT[col0] || col0;
+    m.map = null; m.color.set(col); m.roughness = .5; m.metalness = 0; m.needsUpdate = true; return;
+  }
   const ZONE_MAT = ['concrete', 'grass', 'metal', 'diamond', 'marble', 'slate'];
 
   // ---------------- 타워를 넓게: 좌표 변환 ----------------
@@ -450,7 +453,7 @@
   function tree(x, y, z, s){ s = s || 1; deco(CYL(.28*s, .36*s, 2.4*s, 8), '#7a5332', x, y + 1.2*s, z); const leaf = new THREE.Color('#3f9e45').offsetHSL((Math.random() - .5)*.05, 0, (Math.random() - .5)*.08);
     deco(new THREE.SphereGeometry(1.5*s, 10, 8), leaf, x, y + 3.1*s, z); deco(new THREE.SphereGeometry(1.05*s, 10, 8), leaf.clone().offsetHSL(0, 0, .05), x + .6*s, y + 3.9*s, z - .3*s); }
   function lamp(x, y, z, col){ deco(CYL(.08, .1, 3.2, 8), '#30343a', x, y + 1.6, z); deco(new THREE.SphereGeometry(.28, 12, 8), col || '#fff4c8', x, y + 3.3, z, { mat:{ emissive:col || '#fff1b0', emissiveIntensity:.9 } }); }
-  function crate(x, top, z, s, col){ const c = P(x, top, z, s, s, col || '#b07a3a', 'normal', s); c.mesh.material.map = crateTex(); c.mesh.material.color.set('#ffffff'); return c; }
+  function crate(x, top, z, s, col){ return P(x, top, z, s, s, col || '#b07a3a', 'normal', s); }
   let _crateTex = null; function crateTex(){ if (_crateTex) return _crateTex; const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
     g.fillStyle = '#b5803f'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#7a5226'; g.lineWidth = 6; g.strokeRect(3, 3, 58, 58); g.beginPath(); g.moveTo(6, 6); g.lineTo(58, 58); g.stroke(); g.lineWidth = 2; for (let i=16;i<64;i+=16){ g.beginPath(); g.moveTo(0, i); g.lineTo(64, i); g.stroke(); }
     return _crateTex = new THREE.CanvasTexture(cv); }
@@ -490,36 +493,28 @@
     const box = (a0, a1, b0, b1)=>{ if (a1 - a0 < .01 || b1 - b0 < .01) return; const cu = (a0 + a1)/2, cy = (b0 + b1)/2, lu = a1 - a0, ly = b1 - b0;
       const c = axis === 'x' ? addBox(cu, cy, fixed, lu, ly, t, 'wall', opts) : addBox(fixed, cy, cu, t, ly, lu, 'wall', opts); c.noHop = true; return c; };
     for (const h of holes){ box(u, h.u0, y0, y1); box(h.u0, h.u1, y0, h.v0); box(h.u0, h.u1, h.v1, y1); u = h.u1; } box(u, u1, y0, y1); }
+  // 건물 말고 '오비 타워': 무늬 없는 밝은 단색 파트를 층층이 쌓은 느낌 (구역마다 색, 띠마다 밝기 번갈아)
   const BANDS = [
-    { y0:0, y1:17, col:'#d7c4a3', mat:'brick', trim:'#7a5a3a', neon:'#ffd23d' },
-    { y0:17, y1:44.5, col:'#a3a2a5', mat:'concrete', trim:'#f5cd30', neon:'#ffaf00' },
-    { y0:44.5, y1:75.5, col:'#6b7380', mat:'diamond', trim:'#2b2f36', neon:'#ff6a1a' },
-    { y0:75.5, y1:93, col:'#f2f2f2', mat:'marble', trim:'#80bbdb', neon:'#7fd8ff' },
-    { y0:93, y1:TOP_Y, col:'#4b3d75', mat:'slate', trim:'#2a2140', neon:'#b26bff' },
+    { y0:0, y1:17, col:'#ff4d5e', trim:'#c81d33', neon:'#ffd23d' },
+    { y0:17, y1:44.5, col:'#ffc21a', trim:'#e08a00', neon:'#ffffff' },
+    { y0:44.5, y1:75.5, col:'#3a86ff', trim:'#1d4fbf', neon:'#7fe8ff' },
+    { y0:75.5, y1:93, col:'#5ee6ff', trim:'#1fb3d6', neon:'#ffffff' },
+    { y0:93, y1:TOP_Y, col:'#9b5de5', trim:'#6a2fb8', neon:'#ff7ad9' },
   ];
   function towerShell(){ const H = HW1, T = 2, WIN = [];
     const HOLES = { S:[{ u0:-4, u1:4, v0:0, v1:4.6 }], N:[{ u0:-4.4, u1:4.4, v0:67.5, v1:72 }], E:[{ u0:-14.8, u1:-7.2, v0:44.5, v1:49.4 }], W:[] };
-    BANDS.forEach((b, bi)=>{ CUR_Z = Math.min(5, bi + 1); const o = { color:b.col, mat:b.mat };
-      holedWall2('x', H - T/2, -H, H, b.y0, b.y1, HOLES.S, o, T); holedWall2('x', -H + T/2, -H, H, b.y0, b.y1, HOLES.N, o, T);
-      holedWall2('z', H - T/2, -H + T, H - T, b.y0, b.y1, HOLES.E, o, T); holedWall2('z', -H + T/2, -H + T, H - T, b.y0, b.y1, HOLES.W, o, T);
+    BANDS.forEach((b, bi)=>{ CUR_Z = Math.min(5, bi + 1);
+      const n = Math.max(1, Math.round((b.y1 - b.y0)/5.5)); for (let r=0;r<n;r++){ const y0 = b.y0 + (b.y1 - b.y0)*r/n, y1 = b.y0 + (b.y1 - b.y0)*(r + 1)/n;
+        const o = { color:'#' + new THREE.Color(b.col).offsetHSL(0, 0, r%2 ? -.06 : 0).getHexString(), mat:'smooth' };
+        holedWall2('x', H - T/2, -H, H, y0, y1, HOLES.S, o, T); holedWall2('x', -H + T/2, -H, H, y0, y1, HOLES.N, o, T);
+        holedWall2('z', H - T/2, -H + T, H - T, y0, y1, HOLES.E, o, T); holedWall2('z', -H + T/2, -H + T, H - T, y0, y1, HOLES.W, o, T); }
       // 모서리 기둥 (조금 튀어나옴)
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]){ const p = new THREE.Mesh(BOX(2.6, b.y1 - b.y0, 2.6), new THREE.MeshStandardMaterial({ color:b.trim, map:matTex(bi === 1 ? 'metal' : b.mat), roughness:.7 })); p.position.set(sx*(H - .9), (b.y0 + b.y1)/2, sz*(H - .9)); worldUV(p, 4); p.castShadow = p.receiveShadow = true; courseRoot.add(p); }
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]){ const p = new THREE.Mesh(BOX(2.6, b.y1 - b.y0, 2.6), new THREE.MeshStandardMaterial({ color:b.trim, roughness:.5 })); p.position.set(sx*(H - .9), (b.y0 + b.y1)/2, sz*(H - .9)); p.castShadow = p.receiveShadow = true; courseRoot.add(p); }
       // 층 경계 턱 + 네온 줄
       if (b.y0 > 0) for (let k=0;k<4;k++){ const a = k*Math.PI/2, sx = Math.sin(a), sz = Math.cos(a);
-        const ledge = new THREE.Mesh(BOX(2*H + 1.6, .7, .9), new THREE.MeshStandardMaterial({ color:b.trim, roughness:.6 })); ledge.position.set(sx*(H + .2), b.y0 - .35, sz*(H + .2)); ledge.rotation.y = a; ledge.castShadow = true; courseRoot.add(ledge);
+        const ledge = new THREE.Mesh(BOX(2*H + 1.6, .7, .9), new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:.5 })); ledge.position.set(sx*(H + .2), b.y0 - .35, sz*(H + .2)); ledge.rotation.y = a; ledge.castShadow = true; courseRoot.add(ledge);
         const neon = new THREE.Mesh(BOX(2*H + 1.6, .14, .14), new THREE.MeshStandardMaterial({ color:b.neon, emissive:b.neon, emissiveIntensity:1.2 })); neon.position.set(sx*(H + .66), b.y0 - .55, sz*(H + .66)); neon.rotation.y = a; courseRoot.add(neon); }
-      // 창문 자리 (구멍·발판 붙는 곳은 피해서)
-      for (let y = b.y0 + 3.4; y < b.y1 - 2.4; y += 6.5) for (let u = -H + 5; u <= H - 5; u += 6) for (const f of ['S', 'N', 'E', 'W']){
-        const hit = HOLES[f].some(h=>u > h.u0 - 3 && u < h.u1 + 3 && y > h.v0 - 3 && y < h.v1 + 3); if (hit) continue;
-        if (bi === 0 && f === 'S' && Math.abs(u) < 9) continue;   // 정면 간판 자리
-        WIN.push({ f, u, y, bi }); } });
-    // 창문: 창틀(어두운) + 유리(구역 색이 살짝 도는 파란 유리) — 인스턴스 두 개
-    const frameG = BOX(3.4, 3.9, .3), glassG = BOX(2.8, 3.3, .32), frameM = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:.6 }), glassM = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:.08, metalness:.3, emissive:0x1a3f6a, emissiveIntensity:.35 });
-    const fr = new THREE.InstancedMesh(frameG, frameM, WIN.length), gl = new THREE.InstancedMesh(glassG, glassM, WIN.length), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0), C = new THREE.Color();
-    WIN.forEach((w, i)=>{ const a = { S:0, N:Math.PI, E:Math.PI/2, W:-Math.PI/2 }[w.f], sx = Math.sin(a), sz = Math.cos(a), px = w.f === 'S' || w.f === 'N' ? w.u : sx*(H + .1), pz = w.f === 'S' || w.f === 'N' ? sz*(H + .1) : w.u;
-      Q.setFromAxisAngle(Y, a); M4.compose(new THREE.Vector3(px, w.y, pz), Q, S1); fr.setMatrixAt(i, M4); M4.compose(new THREE.Vector3(px + sx*.04, w.y, pz + sz*.04), Q, S1); gl.setMatrixAt(i, M4);
-      fr.setColorAt(i, C.set(BANDS[w.bi].trim)); gl.setColorAt(i, C.set(['#9fd0ff', '#a8c8e8', '#ffb070', '#c8ecff', '#b89aff'][w.bi])); });
-    fr.castShadow = true; courseRoot.add(fr); courseRoot.add(gl);
+    });
     // 정면 간판 + 오너 문
     board(0, 9.5, H + .25, 0, ['ADMIN TOWER', '꼭대기 왕좌까지 올라가세요 · 등급은 상점에서'], { w:16, h:3.6, accent:'#ff4d6d', fs:66 });
     for (const sx of [-1, 1]){ const n = new THREE.Mesh(BOX(.25, 4.2, .25), new THREE.MeshStandardMaterial({ color:'#ff4d6d', emissive:'#ff4d6d', emissiveIntensity:1.2 })); n.position.set(sx*8.3, 9.5, H + .3); courseRoot.add(n); }
