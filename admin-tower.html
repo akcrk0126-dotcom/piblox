@@ -390,13 +390,61 @@
   TEX.damage = stripeTex('#ff6d00', '#1b1b1b', 20);
   let CUR_Z = 0;
   function tierMap(type){ return type === 'wall' ? ZWALL[CUR_Z] : ZTEX[CUR_Z]; }
-  const SPAWN_XZ = [0, 46], SPAWN_TOP = 0.3, HW = 9, TOP_Y = 110;
+  // ---------------- 로블록스 재질 (흑백 무늬 × 파트 색) ----------------
+  // Roblox 처럼 재질 무늬는 회색조이고 파트 색이 곱해진다. UV 는 월드 좌표 기준(4 단위 = 한 장)이라 크기가 달라도 무늬 크기가 같다
+  const MATTEX = {};
+  function matCanvas(name){ const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d'); const rnd2 = mulberry32(name.length*977 + 13);
+    const fill = v=>{ g.fillStyle = `rgb(${v},${v},${v})`; };
+    const noise = (a, b, n, s)=>{ for (let i=0;i<n;i++){ const v = a + rnd2()*(b - a) | 0; fill(v); g.fillRect(rnd2()*S, rnd2()*S, s || 2, s || 2); } };
+    if (name === 'brick'){ fill(176); g.fillRect(0, 0, S, S); const bh = 16, bw = 32; for (let r=0;r<S/bh;r++) for (let c=-1;c<S/bw + 1;c++){ const x = c*bw + (r%2 ? bw/2 : 0); fill(222 + (rnd2()*28 - 14) | 0); g.fillRect(x + 2, r*bh + 2, bw - 4, bh - 4); } noise(190, 245, 900, 2); }
+    else if (name === 'concrete'){ fill(214); g.fillRect(0, 0, S, S); noise(180, 240, 3200, 2); noise(160, 200, 200, 3); }
+    else if (name === 'diamond'){ fill(196); g.fillRect(0, 0, S, S); for (let y=0;y<S;y+=16) for (let x=(y/16)%2 ? 8 : 0;x<S;x+=16){ g.save(); g.translate(x + 8, y + 8); g.rotate(Math.PI/4); fill(240); g.fillRect(-5, -1.6, 10, 3.2); fill(150); g.fillRect(-5, 1.2, 10, 1.4); g.restore(); } noise(180, 215, 600, 1); }
+    else if (name === 'wood'){ fill(205); g.fillRect(0, 0, S, S); for (let i=0;i<4;i++){ const y = i*32; fill(190 + rnd2()*40 | 0); g.fillRect(0, y + 1, S, 30); fill(150); g.fillRect(0, y, S, 2); const off = rnd2()*S; fill(150); g.fillRect(off, y, 2, 32); for (let k=0;k<7;k++){ fill(170 + rnd2()*40 | 0); g.fillRect(0, y + 4 + rnd2()*24, S, 1); } } }
+    else if (name === 'grass'){ fill(200); g.fillRect(0, 0, S, S); noise(150, 250, 5000, 2); for (let i=0;i<500;i++){ fill(140 + rnd2()*80 | 0); g.fillRect(rnd2()*S, rnd2()*S, 1, 3 + rnd2()*3); } }
+    else if (name === 'marble'){ fill(238); g.fillRect(0, 0, S, S); g.strokeStyle = 'rgba(150,150,160,.5)'; g.lineWidth = 1.2; for (let i=0;i<6;i++){ g.beginPath(); let x = rnd2()*S, y = 0; g.moveTo(x, y); while (y < S){ x += (rnd2() - .5)*18; y += 8 + rnd2()*10; g.lineTo(x, y); } g.stroke(); } noise(225, 250, 900, 2); }
+    else if (name === 'slate'){ fill(190); g.fillRect(0, 0, S, S); for (let i=0;i<40;i++){ fill(160 + rnd2()*70 | 0); g.beginPath(); g.ellipse(rnd2()*S, rnd2()*S, 8 + rnd2()*22, 5 + rnd2()*12, rnd2()*3, 0, 7); g.fill(); } g.strokeStyle = 'rgba(90,90,100,.6)'; for (let i=0;i<8;i++){ g.beginPath(); g.moveTo(rnd2()*S, rnd2()*S); g.lineTo(rnd2()*S, rnd2()*S); g.stroke(); } }
+    else if (name === 'cobble'){ fill(140); g.fillRect(0, 0, S, S); for (let i=0;i<46;i++){ fill(185 + rnd2()*60 | 0); g.beginPath(); g.ellipse(rnd2()*S, rnd2()*S, 7 + rnd2()*7, 6 + rnd2()*6, rnd2()*3, 0, 7); g.fill(); } }
+    else if (name === 'metal'){ fill(200); g.fillRect(0, 0, S, S); for (let i=0;i<S;i++){ fill(185 + rnd2()*35 | 0); g.fillRect(0, i, S, 1); } }
+    else { fill(232); g.fillRect(0, 0, S, S); noise(218, 246, 1800, 2); }   // plastic
+    return cv; }
+  function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0)/4294967296; }; }
+  function matTex(name){ if (MATTEX[name]) return MATTEX[name]; const t = new THREE.CanvasTexture(matCanvas(name)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return MATTEX[name] = t; }
+  const MATPROP = { plastic:{ r:.6 }, smooth:{ r:.45 }, brick:{ r:.9 }, concrete:{ r:.95 }, diamond:{ r:.45, m:.35 }, wood:{ r:.85 }, grass:{ r:1 }, marble:{ r:.3 }, slate:{ r:.85 }, cobble:{ r:.95 }, metal:{ r:.4, m:.45 }, neon:{ r:.5 } };
+  // 박스 UV 를 월드 좌표로 다시 깐다 → 무늬가 파트 크기에 맞춰 늘어나지 않는다
+  function worldUV(mesh, tile){ const g = mesh.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, o = mesh.position;
+    for (let i=0;i<P.count;i++){ const x = P.getX(i) + o.x, y = P.getY(i) + o.y, z = P.getZ(i) + o.z, nx = Math.abs(N.getX(i)), ny = Math.abs(N.getY(i));
+      if (nx > .5) U.setXY(i, z/tile, y/tile); else if (ny > .5) U.setXY(i, x/tile, z/tile); else U.setXY(i, x/tile, y/tile); } U.needsUpdate = true; }
+  // 색으로 재질 고르기 (명시 안 했을 때)
+  const COLMAT = { '#7cc56b':'grass', '#cfe9c2':'grass', '#a77b4e':'wood', '#b88a5a':'wood', '#b07a3a':'wood', '#8a5a32':'wood', '#7a5332':'wood', '#d9cfa8':'cobble', '#b7b0a2':'cobble', '#9b8d78':'cobble',
+    '#9aa1a8':'diamond', '#59606b':'diamond', '#8a96a8':'diamond', '#3c4350':'metal', '#c8ced6':'metal', '#c0a060':'metal', '#f2b632':'metal', '#d9792b':'metal', '#2f7fd0':'metal',
+    '#5a4a8a':'slate', '#2b2140':'slate', '#4a3a7a':'slate', '#f4f8ff':'marble', '#ffffff':'smooth', '#8c8d90':'concrete', '#3f8f45':'grass', '#e5433c':'plastic', '#b02a22':'plastic', '#c0392b':'plastic', '#f5c518':'plastic', '#e8e8e8':'plastic', '#ffd23d':'plastic', '#1d3a24':'grass' };
+  function applyMat(c, type, opts){ const m = c.mesh.material; if (!m || Array.isArray(m)) return;
+    if (['kill', 'damage', 'conveyor', 'bounce', 'truss', 'timed', 'checkpoint', 'finish', 'crumble', 'ice'].includes(type) && !opts.mat) return;
+    const col = opts.color ? String(opts.color).toLowerCase() : ZONES[CUR_Z].color.toLowerCase(), name = opts.mat || COLMAT[col] || ZONE_MAT[CUR_Z] || 'plastic';
+    if (!opts.color) m.color.set(col);
+    if (name !== 'smooth'){ m.map = matTex(name); worldUV(c.mesh, 4); m.needsUpdate = true; }
+    const pr = MATPROP[name] || MATPROP.plastic; m.roughness = pr.r; m.metalness = pr.m || 0; }
+  const ZONE_MAT = ['concrete', 'grass', 'metal', 'diamond', 'marble', 'slate'];
+
+  // ---------------- 타워를 넓게: 좌표 변환 ----------------
+  // 원래 설계(가로 18)를 그대로 두고, 타워 안쪽 범위(|v| ≤ 9)는 K배로 늘리고 바깥은 그만큼 밀어낸다.
+  // 이어진 곳은 계속 이어지고(연속 · 단조), 타워 둘레 길은 그대로 바깥으로 따라 나온다
+  const K = 2, HW0 = 9, HW1 = HW0*K;
+  const fx = v=>Math.abs(v) <= HW0 ? v*K : v + Math.sign(v)*(K - 1)*HW0;
+  let XF = false;
+  function mapSpan(c, s){ if (s < 2.4) return [fx(c), s]; const a = fx(c - s/2), b = fx(c + s/2); return [(a + b)/2, b - a]; }
+  const _addBox = addBox;
+  addBox = function(x, y, z, w, h, d, type, opts){ type = type || 'normal'; opts = opts || {}; if (XF){ [x, w] = mapSpan(x, w); [z, d] = mapSpan(z, d); }
+    const c = _addBox(x, y, z, w, h, d, type, opts); if (BUILDING) applyMat(c, type, opts); return c; };
+  let BUILDING = false;
+  const MX = v=>XF ? fx(v) : v;
+  const SPAWN_XZ = [0, 55], SPAWN_TOP = 0.3, HW = 9, TOP_Y = 110;
   const ROUTE = [], CPS = [], SHARDS = [], TORNADOS = [], WINDS = [], RANKDOORS = [], CIRCLERS = [], DECO_TICK = [];
   // 길 위 발판 등록: how = 'j'(점프로 건너감) · 'w'(걸어서) · 's'(특수: 트러스·회오리·엘리베이터 등 — 검사 안 함)
   function R(c, how){ ROUTE.push({ c, how:how || 'j' }); return c; }
   const P = (x, top, z, w, d, col, type, h) => plat(x, top, z, w, d, type || 'normal', h || 1, col ? { color:col } : undefined);
   // 충돌 없는 장식
-  function deco(geo, col, x, y, z, o){ o = o || {}; const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial(Object.assign({ color:col, roughness:.7 }, o.mat || {})));
+  function deco(geo, col, x, y, z, o){ o = o || {}; x = MX(x); z = MX(z); const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial(Object.assign({ color:col, roughness:.7 }, o.mat || {})));
     m.position.set(x, y, z); if (o.ry) m.rotation.y = o.ry; if (o.rx) m.rotation.x = o.rx; if (o.rz) m.rotation.z = o.rz; m.castShadow = o.shadow !== false; m.receiveShadow = true; courseRoot.add(m); return m; }
   const BOX = (w, h, d)=>new THREE.BoxGeometry(w, h, d), CYL = (r1, r2, h, n)=>new THREE.CylinderGeometry(r1, r2, h, n || 16);
   function tree(x, y, z, s){ s = s || 1; deco(CYL(.28*s, .36*s, 2.4*s, 8), '#7a5332', x, y + 1.2*s, z); const leaf = new THREE.Color('#3f9e45').offsetHSL((Math.random() - .5)*.05, 0, (Math.random() - .5)*.08);
@@ -407,7 +455,7 @@
     g.fillStyle = '#b5803f'; g.fillRect(0, 0, 64, 64); g.strokeStyle = '#7a5226'; g.lineWidth = 6; g.strokeRect(3, 3, 58, 58); g.beginPath(); g.moveTo(6, 6); g.lineTo(58, 58); g.stroke(); g.lineWidth = 2; for (let i=16;i<64;i+=16){ g.beginPath(); g.moveTo(0, i); g.lineTo(64, i); g.stroke(); }
     return _crateTex = new THREE.CanvasTexture(cv); }
   // 글자판 (벽에 붙는 표지판) — 사람이 붙여 놓은 듯한 농담 문구들
-  function board(x, y, z, ry, lines, o){ o = o || {}; const W2 = o.w || 4, H2 = o.h || 1.6, cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.round(512*H2/W2); const g = cv.getContext('2d');
+  function board(x, y, z, ry, lines, o){ o = o || {}; x = MX(x); z = MX(z); const W2 = o.w || 4, H2 = o.h || 1.6, cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.round(512*H2/W2); const g = cv.getContext('2d');
     g.fillStyle = o.bg || 'rgba(16,18,28,.92)'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = o.accent || '#ffd23d'; g.fillRect(0, 0, cv.width, 12);
     g.textAlign = 'center'; const n = lines.length; lines.forEach((t, i)=>{ g.fillStyle = i === 0 ? (o.title || '#fff') : '#cfd6e6'; g.font = (i === 0 ? '900 ' + (o.fs || 58) : '700 ' + Math.round((o.fs || 58)*.55)) + 'px "Malgun Gothic","Noto Sans KR",sans-serif';
       g.fillText(t, 256, (i === 0 ? .42 : .42 + i*.24/(Math.max(1, n - 1)*.5 + .5))*cv.height + (i ? 10 : 0)); });
@@ -415,17 +463,17 @@
   // 체크포인트: 발판 위 얇은 패드 + 깃발. 밟으면 저장
   function cp(x, top, z, label, col){ const idx = CPS.length + 1; const c = addBox(x, top + .15, z, 4, .3, 4, 'checkpoint'); c.cp = idx;
     const pole = deco(CYL(.08, .08, 4.4, 8), '#e8e8e8', x + 1.6, top + 2.2, z - 1.6); const fl = deco(BOX(.06, 1.1, 1.7), col || '#ff4d4d', x + 1.6, top + 3.8, z - .75); fl.userData.flag = true;
-    CPS.push({ c, idx, label, pos:new THREE.Vector3(x, top + .31, z), flag:fl }); return c; }
+    CPS.push({ c, idx, label, pos:new THREE.Vector3(MX(x), top + .31, MX(z)), flag:fl }); return c; }
   // 샤드 결정
-  function shard(x, y, z, big){ const m = new THREE.Mesh(new THREE.OctahedronGeometry(big ? .62 : .36), new THREE.MeshStandardMaterial({ color:big ? 0xff7ad9 : 0x6fd3ff, emissive:big ? 0xff3fb8 : 0x2aa8ff, emissiveIntensity:.75, roughness:.15, metalness:.3 }));
+  function shard(x, y, z, big){ x = MX(x); z = MX(z); const m = new THREE.Mesh(new THREE.OctahedronGeometry(big ? .62 : .36), new THREE.MeshStandardMaterial({ color:big ? 0xff7ad9 : 0x6fd3ff, emissive:big ? 0xff3fb8 : 0x2aa8ff, emissiveIntensity:.75, roughness:.15, metalness:.3 }));
     m.position.set(x, y, z); courseRoot.add(m); SHARDS.push({ m, x, y, z, val:big ? 40 : 5, big:!!big, back:0 }); }
   // 회오리: 바닥(x,y0,z)에서 top 까지 빨아올려 target 으로 던진다
-  function tornado(x, y0, z, top, target){ const g = new THREE.Group(); g.position.set(x, y0, z); courseRoot.add(g); const rings = [];
+  function tornado(x, y0, z, top, target){ x = MX(x); z = MX(z); if (XF) target = new THREE.Vector3(fx(target.x), target.y, fx(target.z)); const g = new THREE.Group(); g.position.set(x, y0, z); courseRoot.add(g); const rings = [];
     for (let i=0;i<14;i++){ const k = i/13, r = .9 + k*2.2; const tm = new THREE.Mesh(new THREE.TorusGeometry(r, .07 + k*.05, 6, 28, Math.PI*1.35), new THREE.MeshBasicMaterial({ color:i%2 ? 0xffffff : 0xbfe8ff, transparent:true, opacity:.55 - k*.2, depthWrite:false }));
       tm.rotation.x = Math.PI/2; tm.position.y = k*(top - y0); g.add(tm); rings.push(tm); }
-    const base = deco(CYL(2.4, 2.6, .2, 24), '#dfe9f2', x, y0 + .1, z, { mat:{ emissive:'#9fd8ff', emissiveIntensity:.35 } });
+    const base = new THREE.Mesh(CYL(2.4, 2.6, .2, 24), new THREE.MeshStandardMaterial({ color:'#dfe9f2', emissive:'#9fd8ff', emissiveIntensity:.35 })); base.position.set(x, y0 + .1, z); courseRoot.add(base);
     TORNADOS.push({ x, y0, z, top, r:2.0, target, g, rings, base }); }
-  function wind(x0, x1, y0, y1, z0, z1, px, pz){ WINDS.push({ x0, x1, y0, y1, z0, z1, px, pz, streaks:[] });
+  function wind(x0, x1, y0, y1, z0, z1, px, pz){ x0 = MX(x0); x1 = MX(x1); z0 = MX(z0); z1 = MX(z1); WINDS.push({ x0, x1, y0, y1, z0, z1, px, pz, streaks:[] });
     const w = WINDS[WINDS.length - 1]; for (let i=0;i<14;i++){ const s = deco(BOX(1.6, .05, .05), '#ffffff', 0, 0, 0, { shadow:false, mat:{ transparent:true, opacity:.5, emissive:'#ffffff', emissiveIntensity:.6 } }); s.rotation.y = Math.atan2(-pz, px); w.streaks.push({ s, t:Math.random() }); } }
   // 벽에 구멍 뚫기: 벽을 구멍 기준으로 잘라서 상자 여러 개로 만든다 (u = 벽을 따라가는 좌표)
   function holedWall(axis, fixed, u0, u1, y0, y1, holes, tex){ holes = (holes || []).slice().sort((a, b)=>a.u0 - b.u0); let u = u0;
@@ -436,10 +484,59 @@
     g.fillStyle = '#d9d2c4'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#c8bfae'; g.fillRect(0, 118, 128, 10);
     for (const x of [14, 74]){ g.fillStyle = '#2d4a6e'; g.fillRect(x, 26, 40, 66); g.fillStyle = 'rgba(160,210,255,.45)'; g.fillRect(x + 4, 30, 14, 58); g.strokeStyle = '#efe9dc'; g.lineWidth = 4; g.strokeRect(x, 26, 40, 66); g.beginPath(); g.moveTo(x + 20, 26); g.lineTo(x + 20, 92); g.stroke(); }
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+  // ---------------- 타워 본체 (가로 36 · 구역마다 재질이 다른 층 띠) ----------------
+  // 벽 두께 2, 모서리 기둥, 층마다 튀어나온 턱 + 네온 줄, 창틀 있는 유리창(인스턴스로 한 번에)
+  function holedWall2(axis, fixed, u0, u1, y0, y1, holes, opts, t){ holes = (holes || []).filter(h=>h.v1 > y0 && h.v0 < y1).map(h=>({ u0:h.u0, u1:h.u1, v0:Math.max(y0, h.v0), v1:Math.min(y1, h.v1) })).sort((a, b)=>a.u0 - b.u0); let u = u0;
+    const box = (a0, a1, b0, b1)=>{ if (a1 - a0 < .01 || b1 - b0 < .01) return; const cu = (a0 + a1)/2, cy = (b0 + b1)/2, lu = a1 - a0, ly = b1 - b0;
+      const c = axis === 'x' ? addBox(cu, cy, fixed, lu, ly, t, 'wall', opts) : addBox(fixed, cy, cu, t, ly, lu, 'wall', opts); c.noHop = true; return c; };
+    for (const h of holes){ box(u, h.u0, y0, y1); box(h.u0, h.u1, y0, h.v0); box(h.u0, h.u1, h.v1, y1); u = h.u1; } box(u, u1, y0, y1); }
+  const BANDS = [
+    { y0:0, y1:17, col:'#d7c4a3', mat:'brick', trim:'#7a5a3a', neon:'#ffd23d' },
+    { y0:17, y1:44.5, col:'#a3a2a5', mat:'concrete', trim:'#f5cd30', neon:'#ffaf00' },
+    { y0:44.5, y1:75.5, col:'#6b7380', mat:'diamond', trim:'#2b2f36', neon:'#ff6a1a' },
+    { y0:75.5, y1:93, col:'#f2f2f2', mat:'marble', trim:'#80bbdb', neon:'#7fd8ff' },
+    { y0:93, y1:TOP_Y, col:'#4b3d75', mat:'slate', trim:'#2a2140', neon:'#b26bff' },
+  ];
+  function towerShell(){ const H = HW1, T = 2, WIN = [];
+    const HOLES = { S:[{ u0:-4, u1:4, v0:0, v1:4.6 }], N:[{ u0:-4.4, u1:4.4, v0:67.5, v1:72 }], E:[{ u0:-14.8, u1:-7.2, v0:44.5, v1:49.4 }], W:[] };
+    BANDS.forEach((b, bi)=>{ CUR_Z = Math.min(5, bi + 1); const o = { color:b.col, mat:b.mat };
+      holedWall2('x', H - T/2, -H, H, b.y0, b.y1, HOLES.S, o, T); holedWall2('x', -H + T/2, -H, H, b.y0, b.y1, HOLES.N, o, T);
+      holedWall2('z', H - T/2, -H + T, H - T, b.y0, b.y1, HOLES.E, o, T); holedWall2('z', -H + T/2, -H + T, H - T, b.y0, b.y1, HOLES.W, o, T);
+      // 모서리 기둥 (조금 튀어나옴)
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]){ const p = new THREE.Mesh(BOX(2.6, b.y1 - b.y0, 2.6), new THREE.MeshStandardMaterial({ color:b.trim, map:matTex(bi === 1 ? 'metal' : b.mat), roughness:.7 })); p.position.set(sx*(H - .9), (b.y0 + b.y1)/2, sz*(H - .9)); worldUV(p, 4); p.castShadow = p.receiveShadow = true; courseRoot.add(p); }
+      // 층 경계 턱 + 네온 줄
+      if (b.y0 > 0) for (let k=0;k<4;k++){ const a = k*Math.PI/2, sx = Math.sin(a), sz = Math.cos(a);
+        const ledge = new THREE.Mesh(BOX(2*H + 1.6, .7, .9), new THREE.MeshStandardMaterial({ color:b.trim, roughness:.6 })); ledge.position.set(sx*(H + .2), b.y0 - .35, sz*(H + .2)); ledge.rotation.y = a; ledge.castShadow = true; courseRoot.add(ledge);
+        const neon = new THREE.Mesh(BOX(2*H + 1.6, .14, .14), new THREE.MeshStandardMaterial({ color:b.neon, emissive:b.neon, emissiveIntensity:1.2 })); neon.position.set(sx*(H + .66), b.y0 - .55, sz*(H + .66)); neon.rotation.y = a; courseRoot.add(neon); }
+      // 창문 자리 (구멍·발판 붙는 곳은 피해서)
+      for (let y = b.y0 + 3.4; y < b.y1 - 2.4; y += 6.5) for (let u = -H + 5; u <= H - 5; u += 6) for (const f of ['S', 'N', 'E', 'W']){
+        const hit = HOLES[f].some(h=>u > h.u0 - 3 && u < h.u1 + 3 && y > h.v0 - 3 && y < h.v1 + 3); if (hit) continue;
+        if (bi === 0 && f === 'S' && Math.abs(u) < 9) continue;   // 정면 간판 자리
+        WIN.push({ f, u, y, bi }); } });
+    // 창문: 창틀(어두운) + 유리(구역 색이 살짝 도는 파란 유리) — 인스턴스 두 개
+    const frameG = BOX(3.4, 3.9, .3), glassG = BOX(2.8, 3.3, .32), frameM = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:.6 }), glassM = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:.08, metalness:.3, emissive:0x1a3f6a, emissiveIntensity:.35 });
+    const fr = new THREE.InstancedMesh(frameG, frameM, WIN.length), gl = new THREE.InstancedMesh(glassG, glassM, WIN.length), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0), C = new THREE.Color();
+    WIN.forEach((w, i)=>{ const a = { S:0, N:Math.PI, E:Math.PI/2, W:-Math.PI/2 }[w.f], sx = Math.sin(a), sz = Math.cos(a), px = w.f === 'S' || w.f === 'N' ? w.u : sx*(H + .1), pz = w.f === 'S' || w.f === 'N' ? sz*(H + .1) : w.u;
+      Q.setFromAxisAngle(Y, a); M4.compose(new THREE.Vector3(px, w.y, pz), Q, S1); fr.setMatrixAt(i, M4); M4.compose(new THREE.Vector3(px + sx*.04, w.y, pz + sz*.04), Q, S1); gl.setMatrixAt(i, M4);
+      fr.setColorAt(i, C.set(BANDS[w.bi].trim)); gl.setColorAt(i, C.set(['#9fd0ff', '#a8c8e8', '#ffb070', '#c8ecff', '#b89aff'][w.bi])); });
+    fr.castShadow = true; courseRoot.add(fr); courseRoot.add(gl);
+    // 정면 간판 + 오너 문
+    board(0, 9.5, H + .25, 0, ['ADMIN TOWER', '꼭대기 왕좌까지 올라가세요 · 등급은 상점에서'], { w:16, h:3.6, accent:'#ff4d6d', fs:66 });
+    for (const sx of [-1, 1]){ const n = new THREE.Mesh(BOX(.25, 4.2, .25), new THREE.MeshStandardMaterial({ color:'#ff4d6d', emissive:'#ff4d6d', emissiveIntensity:1.2 })); n.position.set(sx*8.3, 9.5, H + .3); courseRoot.add(n); }
+    { const door = addBox(0, 2.3, H - 1, 8, 4.6, .8, 'normal', { color:'#ffd23d', mat:'metal' }); door.mesh.material.emissive = new THREE.Color('#ffb300'); door.mesh.material.emissiveIntensity = .35; RANKDOORS.push({ c:door, rank:5, mesh:door.mesh });
+      board(0, 5.6, H + .25, 0, ['OWNER ONLY'], { w:5, h:1, accent:'#ffd23d', title:'#ffd23d', fs:70 });
+      const tp = addBox(0, .1, 0, 5, .2, 5, 'normal', { color:'#ffd23d', mat:'smooth' }); tp.tele = new THREE.Vector3(0, TOP_Y + .1, 10); tp.mesh.material.emissive = new THREE.Color('#ffd23d'); tp.mesh.material.emissiveIntensity = .7;
+      const beam = new THREE.Mesh(CYL(2.2, 2.2, 7, 24, 1), new THREE.MeshStandardMaterial({ color:'#fff2a8', transparent:true, opacity:.18, emissive:'#ffe066', emissiveIntensity:.8, side:THREE.DoubleSide })); beam.position.set(0, 3.5, 0); courseRoot.add(beam); }
+    // 지붕 왕관: 금색 톱니 난간
+    for (let k=0;k<4;k++) for (let u = -H + 1.5; u <= H - 1.5; u += 3){ const a = k*Math.PI/2, sx = Math.sin(a), sz = Math.cos(a); if (k === 3 && Math.abs(u + 0) < 6) continue;
+      const m = new THREE.Mesh(BOX(1.6, 1.4, .8), new THREE.MeshStandardMaterial({ color:'#ffc400', metalness:.5, roughness:.35, emissive:'#6a4a00', emissiveIntensity:.25 }));
+      m.position.set(k%2 ? sx*(H - .4) : u, TOP_Y + 3.1, k%2 ? u : sz*(H - .4)); courseRoot.add(m); }
+  }
   // 원을 그리며 도는 발판 (톱니바퀴)
-  function circler(c, cx, cz, r, spd, ph){ CIRCLERS.push({ c, cx, cz, r, spd, ph }); }
+  function circler(c, cx, cz, r, spd, ph){ if (XF && Math.abs(cx) <= HW0 && Math.abs(cz) <= HW0) r *= K; CIRCLERS.push({ c, cx:MX(cx), cz:MX(cz), r, spd, ph }); }
 
   function buildWorld(){
+    XF = true; BUILDING = true;
     // ---------------- 로비 ----------------
     CUR_Z = 0;
     const ground = addBox(0, -.6, 0, 180, 1.2, 180, 'normal', { color:'#5fae4e' }); ground.isBase = true;
@@ -447,7 +544,7 @@
     deco(CYL(15, 15, .06, 48), '#6f6a62', 0, .03, 32, { shadow:false });      // 광장 돌바닥
     deco(CYL(13.4, 13.4, .07, 48), '#7d776e', 0, .04, 32, { shadow:false });
     for (let i=0;i<9;i++) deco(BOX(2.6, .05, 1.6), '#8a8478', 0, .05, 18 + i*-1.9 + 0, { shadow:false });   // 탑으로 가는 길
-    { const sl = addBox(SPAWN_XZ[0], SPAWN_TOP - .15, SPAWN_XZ[1], 4, .3, 4, 'normal', { color:'#8c8d90' }); R(sl, 'w'); }
+    { const sl = addBox(0, SPAWN_TOP - .15, 46, 4, .3, 4, 'normal', { color:'#8c8d90' }); R(sl, 'w'); }
     // 분수
     { const f = addBox(0, .5, 30, 6, 1, 6, 'normal', { color:'#b7b0a2' }); deco(BOX(5, .1, 5), '#4aa8e8', 0, 1.02, 30, { mat:{ transparent:true, opacity:.8, emissive:'#1b6fb0', emissiveIntensity:.3 } });
       deco(CYL(.35, .5, 2.2, 10), '#d8d1c3', 0, 2.1, 30); const sp = deco(new THREE.SphereGeometry(.9, 12, 8), '#9fdcff', 0, 3.4, 30, { mat:{ transparent:true, opacity:.55 } }); DECO_TICK.push(t=>{ sp.scale.setScalar(1 + Math.sin(t*4)*.12); }); }
@@ -459,23 +556,11 @@
       for (const sx of [-3.6, 3.6]) addBox(X0 + sx, 1.8, Z0 - 2.6, .4, 3.6, .4, 'normal', { color:'#e8e8e8' });
       for (let i=0;i<4;i++) deco(BOX(2, .02, 6.02), i%2 ? '#ffffff' : '#e5433c', X0 - 3 + i*2, 3.82, Z0);
       board(X0, 4.9, Z0 + 2.9, 0, ['HD 어드민 상점', '샤드로 등급을 사세요 · 가까이 가면 열려요'], { w:6, h:1.6, accent:'#ffd23d', title:'#ffd23d' });
-      SHOP_POS.set(X0, 0, Z0 + 4.2); }
+      SHOP_POS.set(MX(X0), 0, MX(Z0 + 4.2)); }
     // 등급표 게시판 (오른쪽)
     { board(20, 3.2, 34, 0, ['등급표', 'VIP 1,000 · MOD 2,500 · ADMIN 5,000', 'HEAD 9,000 · OWNER 15,000 🔷'], { w:6.4, h:2.8, accent:'#5be37d', fs:54 });
       deco(CYL(.1, .1, 2, 8), '#555', 18, 1, 34); deco(CYL(.1, .1, 2, 8), '#555', 22, 1, 34); }
-    // ---------------- 타워 본체 (속이 빈 건물, 구멍: 1층 오너 문 · 동쪽 공사장 문 · 북쪽 기계실 창) ----------------
-    const fac = facadeTex(); fac.repeat.set(3, 18);
-    holedWall('x', HW - .5, -HW, HW, 0, TOP_Y, [{ u0:-2, u1:2, v0:0, v1:4.6 }], fac);                    // 남쪽 벽 (1층 문)
-    holedWall('x', -HW + .5, -HW, HW, 0, TOP_Y, [{ u0:-2.2, u1:2.2, v0:67.5, v1:72 }], fac);             // 북쪽 벽 (기계실 → 하늘 정원 창)
-    holedWall('z', HW - .5, -HW + 1, HW - 1, 0, TOP_Y, [{ u0:-7.4, u1:-3.6, v0:44.5, v1:49.4 }], fac);   // 동쪽 벽 (공사장 → 기계실 문)
-    holedWall('z', -HW + .5, -HW + 1, HW - 1, 0, TOP_Y, [], fac);
-    for (let y=10; y<TOP_Y; y+=12) for (let k=0;k<4;k++){ const a = k*Math.PI/2; deco(BOX(2*HW + .6, .5, .5), '#bfb6a4', Math.sin(a)*(HW + .05), y, Math.cos(a)*(HW + .05), { ry:a, shadow:false }); }
-    board(0, 6.2, HW + .02, 0, ['ADMIN TOWER', '꼭대기 왕좌까지 올라가세요'], { w:9, h:2, accent:'#ff4d6d', fs:64 });
-    // 1층 오너 전용 문 → 안의 텔레포터는 지붕으로 바로 간다
-    { const door = addBox(0, 2.3, HW - .5, 4, 4.6, .6, 'normal', { color:'#ffd23d' }); door.mesh.material.emissive = new THREE.Color('#ffb300'); door.mesh.material.emissiveIntensity = .35; RANKDOORS.push({ c:door, rank:5, mesh:door.mesh });
-      board(0, 5.3, HW + .4, 0, ['OWNER ONLY'], { w:3.4, h:.8, accent:'#ffd23d', title:'#ffd23d', fs:70 });
-      const tp = addBox(0, .1, 0, 3, .2, 3, 'normal', { color:'#ffd23d' }); tp.tele = new THREE.Vector3(0, TOP_Y + .1, 5); tp.mesh.material.emissive = new THREE.Color('#ffd23d'); tp.mesh.material.emissiveIntensity = .7;
-      deco(CYL(1.4, 1.4, 6, 24, 1), '#fff2a8', 0, 3, 0, { shadow:false, mat:{ transparent:true, opacity:.18, emissive:'#ffe066', emissiveIntensity:.8, side:THREE.DoubleSide } }); }
+    XF = false; towerShell(); XF = true;
 
     // ---------------- 1. 정원 테라스 (동쪽) ----------------
     CUR_Z = 1;
@@ -488,7 +573,7 @@
     // 연못 (물 = 빠지면 체크포인트로)
     { const water = addBox(17.5, 3, -6, 14, 1, 18, 'kill'); water.mesh.material = new THREE.MeshStandardMaterial({ color:0x3f9be0, transparent:true, opacity:.82, roughness:.1, metalness:.1, emissive:0x0d4a7a, emissiveIntensity:.25 });
       addBox(10, 2.2, -6, 1, 4.4, 18, 'normal', { color:'#9b8d78' }); addBox(25, 2.2, -6, 1, 4.4, 18, 'normal', { color:'#9b8d78' }); addBox(17.5, 2.2, -15.5, 16, 4.4, 1, 'normal', { color:'#9b8d78' }); }
-    const lily = (x, top, z, r)=>{ const c = P(x, top, z, r*2, r*2, '#4fb04a', 'normal', .5); c.mesh.geometry.dispose(); c.mesh.geometry = CYL(r, r, .5, 20); deco(new THREE.SphereGeometry(.28, 8, 6), '#ffd1e8', x + r*.4, top + .2, z - r*.3); return c; };
+    const lily = (x, top, z, r)=>{ const c = P(x, top, z, r*2, r*2, '#4fb04a', 'normal', .5); const rx = (c.maxX - c.minX)/2, rz = (c.maxZ - c.minZ)/2; c.mesh.geometry.dispose(); c.mesh.geometry = CYL(1, 1, .5, 20); c.mesh.scale.set(rx, 1, rz); c.mesh.material.map = null; deco(new THREE.SphereGeometry(.28, 8, 6), '#ffd1e8', x + r*.4, top + .2, z - r*.3); return c; };
     R(lily(17.5, 5.6, 0, 1.9)); R(lily(14, 6.4, -4.4, 1.9)); R(lily(18.5, 7.3, -7.6, 1.9)); R(lily(14.2, 8.2, -12.2, 1.9));
     { lily(22.6, 6.6, -12.4, 1.2); shard(22.6, 7.8, -12.4, true); }   // 멀리 떨어진 작은 연잎 (숨은 샤드)
     const gc = R(P(17.5, 9, -19, 8, 7, '#d9cfa8'));                   // 회오리가 있는 원형 정원
@@ -507,14 +592,14 @@
     const yb = '#f2b632';
     R(P(-14.5, 21, -11, 2.6, 6, yb), 'w'); const conv = R(addBox(-14.5, 20.5, -5.5, 2.6, 1, 5, 'conveyor', { dir:{ x:0, z:-1, s:4.2 } }), 'w'); R(P(-14.5, 21, -1, 2.6, 4, yb), 'w');
     board(-16.2, 22.6, -5.5, -Math.PI/2, ['⚠ 컨베이어', '거꾸로 돌아요 (일부러)'], { w:2.8, h:1.1, accent:'#f2b632', fs:46 });
-    addBox(-14.5, 27, 1.65, 1.3, 12, 1.3, 'truss'); R(colliders[colliders.length - 1], 's');
-    const dB = R(P(-14.5, 33, 5.5, 6, 5.5, '#9aa1a8'), 's');
+    addBox(-14.5, 27, 1.325, 1.3, 12, 1.3, 'truss'); R(colliders[colliders.length - 1], 's');
+    const dB = R(P(-14.5, 33, 4.95, 6, 6.6, '#9aa1a8'), 's');
     for (const [x, z] of [[-17, 3.2], [-12, 7.8]]) { deco(CYL(.3, .3, .7, 10), '#ff7a1a', x, 33.35, z); deco(CYL(.32, .32, .12, 10), '#ffffff', x, 33.45, z); }   // 콘
     // 크레인: 매달린 팔레트가 남쪽 면을 따라 왔다 갔다
     const pal = P(-6, 33.5, 11, 4, 4, '#b07a3a', 'normal', .6); movers.push({ c:pal, base:{ x:-6, y:pal.mesh.position.y, z:11 }, ax:'x', amp:6.5, spd:.55, ph:0 }); R(pal, 's');
     { deco(BOX(1.4, 48, 1.4), '#f2b632', -24, 24, 14); deco(BOX(34, 1.2, 1.2), '#f2b632', -8, 46.5, 14); deco(BOX(3, 2, 3), '#3c4350', -22, 45, 14);
       const cable = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 1, 6), new THREE.MeshStandardMaterial({ color:0x222222 })); courseRoot.add(cable);
-      DECO_TICK.push(()=>{ const px = pal.mesh.position.x, top = 46, bot = pal.mesh.position.y + .3; cable.position.set(px, (top + bot)/2, 11); cable.scale.y = top - bot; }); }
+      DECO_TICK.push(()=>{ const px = pal.mesh.position.x, top = 46, bot = pal.mesh.position.y + .3; cable.position.set(px, (top + bot)/2, pal.mesh.position.z); cable.scale.y = top - bot; }); }
     const dC = R(P(6.5, 36, 12, 6, 6, '#9aa1a8'), 's');
     board(6.5, 38.6, 15.1, 0, ['현장 2구역', '안전모 미착용시 어드민한테 맞음'], { w:4.6, h:1.3, accent:'#f2b632', fs:44 });
     R(P(11.75, 38, 10.75, 3.5, 4.5, '#d9792b')); R(P(14, 40, 6, 4, 3, '#d9792b')); R(P(13.5, 42.5, 1.5, 3, 4, '#d9792b'));
@@ -529,19 +614,19 @@
     addBox(0, 75.5, 0, 2*HW - 2, 1, 2*HW - 2, 'normal', { color:'#3c4350' });                                         // 천장
     for (const z of [-6, 0, 6]) deco(BOX(16, .12, .5), '#ffe9a8', 0, 74.9, z, { shadow:false, mat:{ emissive:'#ffe9a8', emissiveIntensity:1 } });
     for (let y=46; y<74; y+=4){ deco(BOX(.12, .25, 16), '#e8b400', -7.9, y, 0, { shadow:false }); }
-    { const lin = studTex('#3a4150'); lin.repeat.set(8, 15); const lm = new THREE.MeshStandardMaterial({ map:lin, roughness:.8 });   // 기계실 안쪽 벽: 바깥 창문 무늬가 비치지 않게 철판으로
-      // 구멍(문·창) 자리는 비워 둔다: 벽면을 따라 u(-8~8), 높이 y(44.5~75)
-      const Y0 = 44.5, Y1 = 75, seg = (face, u0, u1, y0, y1)=>{ if (u1 - u0 < .01 || y1 - y0 < .01) return; const m = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, y1 - y0), lm), um = (u0 + u1)/2, ym = (y0 + y1)/2;
-        if (face === 'N'){ m.position.set(um, ym, -7.97); } else if (face === 'S'){ m.position.set(um, ym, 7.97); m.rotation.y = Math.PI; } else if (face === 'W'){ m.position.set(-7.97, ym, um); m.rotation.y = Math.PI/2; } else { m.position.set(7.97, ym, um); m.rotation.y = -Math.PI/2; } courseRoot.add(m); };
-      const lining = (face, holes)=>{ let u = -8; for (const h of holes){ seg(face, u, h.u0, Y0, Y1); seg(face, h.u0, h.u1, Y0, h.v0); seg(face, h.u0, h.u1, h.v1, Y1); u = h.u1; } seg(face, u, 8, Y0, Y1); };
-      lining('N', [{ u0:-2.2, u1:2.2, v0:67.5, v1:72 }]); lining('S', []); lining('W', []); lining('E', [{ u0:-7.4, u1:-3.6, v0:44.5, v1:49.4 }]);
+    { const lin = matTex('diamond'); const lm = new THREE.MeshStandardMaterial({ map:lin, color:'#4a5260', roughness:.5, metalness:.3 });   // 기계실 안쪽 벽: 철판
+      const IN = HW1 - 2.03, Y0 = 44.5, Y1 = 75, seg = (face, u0, u1, y0, y1)=>{ if (u1 - u0 < .01 || y1 - y0 < .01) return; const m = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, y1 - y0), lm), um = (u0 + u1)/2, ym = (y0 + y1)/2;
+        if (face === 'N'){ m.position.set(um, ym, -IN); } else if (face === 'S'){ m.position.set(um, ym, IN); m.rotation.y = Math.PI; } else if (face === 'W'){ m.position.set(-IN, ym, um); m.rotation.y = Math.PI/2; } else { m.position.set(IN, ym, um); m.rotation.y = -Math.PI/2; }
+        const U = m.geometry.attributes.uv; for (let q=0;q<U.count;q++) U.setXY(q, U.getX(q)*(u1 - u0)/4, U.getY(q)*(y1 - y0)/4); courseRoot.add(m); };
+      const lining = (face, holes)=>{ let u = -IN; for (const h of holes){ seg(face, u, h.u0, Y0, Y1); seg(face, h.u0, h.u1, Y0, h.v0); seg(face, h.u0, h.u1, h.v1, Y1); u = h.u1; } seg(face, u, IN, Y0, Y1); };
+      lining('N', [{ u0:-4.4, u1:4.4, v0:67.5, v1:72 }]); lining('S', []); lining('W', []); lining('E', [{ u0:-14.8, u1:-7.2, v0:44.5, v1:49.4 }]);
       for (const [x, z, ry] of [[-7.9, -2, Math.PI/2], [7.9, 2, -Math.PI/2]]) board(x, 50, z, ry, ['⚙ 기계실', '손대지 마시오 (어드민 제외)'], { w:3.4, h:1.2, accent:'#ff8a1f', fs:46 }); }
     const pis = (x, z, base, ph)=>{ const c = P(x, base, z, 3.5, 3.5, '#c8ced6', 'normal', 3); for (let k=0;k<4;k++) deco(BOX(3.52, .16, 3.52), k%2 ? '#1b1b1b' : '#f2b632', x, base - .4 - k*.4, z); movers.push({ c, base:{ x, y:c.mesh.position.y, z }, ax:'y', amp:1.5, spd:1.2, ph }); return c; };
     R(pis(2.5, -5.5, 46, 0), 's'); R(pis(-2.5, -4, 49, Math.PI), 's');
     const L1 = R(P(-5.5, 51.5, 2, 5, 7, '#8a96a8'), 's');
     { const sw = addBox(-5.5, 52.3, 2, 4.6, 1.6, .5, 'damage'); sw.dmg = 25; movers.push({ c:sw, base:{ x:-5.5, y:52.3, z:2 }, ax:'z', amp:2.6, spd:1.6, ph:0 }); }   // 바닥을 쓸고 다니는 막대
     const gear = P(0, 53.5, 4, 3.6, 3.6, '#c0a060', 'normal', .6); circler(gear, 0, 4, 2.6, .9, Math.PI); R(gear, 's');
-    { const gm = deco(new THREE.TorusGeometry(1.9, .25, 6, 18), '#8a6a2a', 0, 53.25, 4, { rx:Math.PI/2 }); DECO_TICK.push(()=>{ gm.position.x = gear.mesh.position.x; gm.position.z = gear.mesh.position.z; gm.rotation.z += .02; }); }
+    { const gm = deco(new THREE.TorusGeometry(1.9, .25, 6, 18), '#8a6a2a', 0, 53.25, 4, { rx:Math.PI/2 }); gm.scale.setScalar(K); DECO_TICK.push(()=>{ gm.position.x = gear.mesh.position.x; gm.position.z = gear.mesh.position.z; gm.rotation.z += .02; }); }
     const L2 = R(P(5.5, 55.5, 4.5, 5, 7, '#8a96a8'), 's');
     { P(7, 59, 7, 2, 2, '#59606b'); shard(7, 60.2, 7, true); }                                      // 파이프 위 숨은 샤드
     deco(CYL(.5, .5, 30, 12), '#6b7380', 7.2, 60, -7.2); deco(CYL(.5, .5, 30, 12), '#6b7380', -7.2, 60, 7.2);
@@ -562,12 +647,15 @@
     R(cloud(-18.5, 78, -5.5, 5, 5), 's');
     const I1 = R(P(-18, 78, 2, 7, 7, '#cfe9c2'));
     tree(-20.5, 78, 4.5, .7);
-    const I2 = R(P(-3, 86, 17, 8, 7, '#cfe9c2'), 's');
-    tornado(-17.6, 78, 2.4, 90, new THREE.Vector3(-3.4, 86, 17));
+    const I2a = R(P(-15, 86, 17, 6, 6, '#cfe9c2'), 's');                 // 회오리가 내려놓는 서쪽 작은 섬 (타워 모서리를 피해서)
+    R(P(-9.5, 86, 17, 5, 2.6, '#a77b4e'), 'w');                          // 나무 다리
+    for (const sz of [15.6, 18.4]) for (let x = -11.6; x <= -7.4; x += 1.4) addBox(x, 86.6, sz, .2, 1.2, .2, 'normal', { color:'#7a5332' });
+    const I2 = R(P(-3, 86, 17, 8, 7, '#cfe9c2'), 'w');
+    tornado(-17.6, 78, 2.4, 90, new THREE.Vector3(-15, 86, 17.3));
     tree(-6, 86, 19.5, .8); lamp(0, 86, 19.6, '#ffd1f0');
     { const c = cloud(-9.5, 82, 25, 3, 3); shard(-9.5, 83.3, 25, true); const bp = P(-9.5, 82.12, 25, 1.6, 1.6, null, 'bounce', .24); }   // 섬 아래 숨은 구름 (튀어서 다시 올라온다)
     const RB = ['#ff3b3b', '#ff9a1f', '#ffe14d', '#4cd964', '#38b6ff', '#b26bff'];
-    RB.forEach((c, i)=>{ const s = P(3 + i*2, 86.5 + i*.3, 17, 2, 3, c); s.mesh.material.emissive = new THREE.Color(c); s.mesh.material.emissiveIntensity = .3; R(s, i ? 'w' : 'j'); });
+    RB.forEach((c, i)=>{ const s = P(3 + i*2, 86.5 + i*.3, 17, 2.4, 3, c); s.mesh.material.emissive = new THREE.Color(c); s.mesh.material.emissiveIntensity = .3; R(s, i ? 'w' : 'j'); });
     R(cloud(17, 89, 12, 3.5, 3.5, 'crumble')); R(cloud(17.5, 90.5, 7.5, 3.5, 3.5, 'crumble')); R(cloud(16.5, 92, 3, 3.5, 3.5, 'crumble'));
     crumbles.forEach(cr=>{ if (!cr.delay) cr.delay = .65; });
     const I3 = R(P(15.5, 93, -3.5, 8, 7, '#cfe9c2'));
@@ -580,9 +668,9 @@
     wind(12, 16, 93.5, 98, -18, -8, 5.5, 0);
     board(17.6, 95.5, -9, Math.PI/2, ['강풍 주의', '바깥으로 밀려요'], { w:2.8, h:1.1, accent:'#9fd8ff', fs:46 });
     [[8.5, 95, -16], [3.5, 96.5, -17.5], [-1.5, 98, -16], [-6.5, 99.5, -17.5]].forEach((p, i)=>{ const c = P(p[0], p[1], p[2], 3.5, 3.5, null, 'timed'); timed.push({ c, ph:i*.5, per:2.2 }); R(c); });
-    const W1 = R(P(-13, 101, -9, 6, 14, '#5a4a8a'));
+    const W1 = R(P(-12.6, 101, -10.5, 6.8, 17, '#5a4a8a'));
     lamp(-15.4, 101, -15, '#c8b8ff'); lamp(-15.4, 101, -3, '#c8b8ff');
-    addBox(-10.65, 106, -6, 1.3, 10, 1.3, 'truss'); R(colliders[colliders.length - 1], 's');
+    addBox(-9.65, 106, -6, 1.3, 10, 1.3, 'truss'); R(colliders[colliders.length - 1], 's');
     // 지붕: 왕좌 + 결승
     addBox(0, TOP_Y - .5, 0, 2*HW, 1, 2*HW, 'normal', { color:'#2b2140' }); const roof = R(colliders[colliders.length - 1], 's');
     for (const [x, z, w, d] of [[0, -HW + .3, 2*HW, .6], [HW - .3, 0, .6, 2*HW], [0, HW - .3, 2*HW, .6]]) addBox(x, TOP_Y + 1.2, z, w, 2.4, d, 'normal', { color:'#4a3a7a' });   // 난간 (서쪽은 트러스로 올라오는 입구라 비움)
@@ -603,6 +691,9 @@
     { const lg = P(23, TOP_Y + 2.5, -2, 6, 6, '#1d3a24'); RANKDOORS.push({ c:lg, rank:1, mesh:lg.mesh, pad:true }); shard(23, TOP_Y + 3.9, -2, true); shard(21.5, TOP_Y + 3.6, -3.5, true);
       const vb = board(23, TOP_Y + 4.8, .95, 0, ['VIP LOUNGE'], { w:3.6, h:.9, accent:'#5be37d', title:'#5be37d', fs:70 }); RANKDOORS.push({ rank:1, mesh:vb, deco:true }); }
 
+    // 넓힌 좌표에 맞게 움직이는 발판 기준점 · 진폭 · 텔레포트 위치를 맞춘다
+    movers.forEach(m=>{ if (m.ax === 'x' || m.ax === 'z'){ if (Math.abs(m.base[m.ax]) <= HW0) m.amp *= K; } m.base.x = m.c.mesh.position.x; m.base.z = m.c.mesh.position.z; });
+    colliders.forEach(c=>{ if (c.tele && !c.toLobby && !c.teleMapped && c.tele.y < 50 && false) {} });
     // 길 위 작은 샤드: 걸어가는 발판 몇 개 건너 하나씩
     ROUTE.forEach((r, i)=>{ if (i < 6 || i%3 || r.how === 's') return; const c = r.c; if (c.cp) return; shard((c.minX + c.maxX)/2, c.maxY + 1.25, (c.minZ + c.maxZ)/2, false); });
     shard(-14.5, 22.3, -11, false); shard(-18.5, 79.3, -5.5, false); shard(8, 88.6, 17, false); shard(-13, 102.3, -12, false); shard(-13, 102.3, -4, false);
@@ -613,7 +704,7 @@
       const ok = how === 'w' ? (rise <= STEP_HEIGHT + .01 && gap < .05) : (rise <= 3.9 && gap <= Math.max(.2, 4.6 - (rise > 0 ? rise*.75 : rise*.3)));
       out.push({ i, how, gap:+gap.toFixed(2), rise:+rise.toFixed(2), ok }); } return out; }
   const SHOP_POS = new THREE.Vector3();
-  buildWorld();
+  buildWorld(); XF = false; BUILDING = false;
   const FLOORS = CPS.length, FLOOR_COLORS = ['#7cc56b', '#f2b632', '#8a96a8', '#9fd8ff', '#7d5bd6'], TOWER_TOP = TOP_Y;
   let Z = 0;
   /*@@COURSE_END*/
@@ -1497,7 +1588,7 @@
     }
   }
   animate();
-  window.__AT = { ROUTE, checkRoute, CPS, SHARDS, TORNADOS, runCommand, FX, ENV, NET, ghosts, pos, step(n, dt=1/60){ for (let i=0;i<n;i++) frame(dt); }, pause(v){ simPaused=v; }, keys, moveVec, onJumpPress, onJumpRelease, setCP, get cpIdx(){ return cpIdx; }, get grounded(){ return grounded; }, get velY(){ return velY; }, set facing(v){ facing = v; }, get facing(){ return facing; }, set rawYaw(v){ rawYaw = v; }, setRank(r){ ownedRank = r; renderPanel(); buildMyTag(); }, openPanel, colliders, die, get hp(){ return hp; }, air, TORN, get groundC(){ return groundC; }, setCam(y){ rawYaw = camYaw = y; }, setPos(x,y,z){ pos.set(x,y,z); velY = 0; curSpeed.set(0,0); air.set(0,0); grounded = true; climbing = null; }, get climbing(){ return climbing; } };
+  window.__AT = { ROUTE, checkRoute, CPS, SHARDS, TORNADOS, runCommand, FX, ENV, NET, ghosts, pos, step(n, dt=1/60){ for (let i=0;i<n;i++) frame(dt); }, pause(v){ simPaused=v; }, keys, moveVec, onJumpPress, onJumpRelease, setCP, get cpIdx(){ return cpIdx; }, get grounded(){ return grounded; }, get velY(){ return velY; }, set facing(v){ facing = v; }, get facing(){ return facing; }, set rawYaw(v){ rawYaw = v; }, setRank(r){ ownedRank = r; renderPanel(); buildMyTag(); }, openPanel, colliders, die, get hp(){ return hp; }, air, TORN, get groundC(){ return groundC; }, setCam(y){ rawYaw = camYaw = y; }, setPos(x,y,z){ pos.set(x,y,z); velY = 0; curSpeed.set(0,0); air.set(0,0); grounded = true; climbing = null; }, get climbing(){ return climbing; }, hardReset(){ deadT = 0; pieces.forEach(pc=>scene.remove(pc.o)); pieces.length = 0; character.visible = true; TORN.active = null; TORN.cool = 0; TORN.flyT = 0; air.set(0, 0); kb.x = kb.z = 0; finished = false; iframe = 0; ffT = 0; hp = HP_MAX; }, get deadT(){ return deadT; } };
 })();
 </script>
 <script>
