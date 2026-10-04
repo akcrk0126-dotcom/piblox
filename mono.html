@@ -555,29 +555,30 @@ MAT.shadow = new T.MeshBasicMaterial({ color:0x020202, fog:false }); MAT.shadow.
 const SH = MAT.shadow;
 function limb(r0, r1, L){ const g = new T.Group(); const m = new T.Mesh(CYL(r1, r0, L, 10), SH); m.position.y = -L/2; g.add(m); const e = new T.Mesh(new T.SphereGeometry(r1, 8, 6), SH); e.position.y = -L; g.add(e); return g; }
 function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.add(body); const R = {};
-  const hip = new T.Group(); hip.position.y = 1.42; body.add(hip); R.hip = hip;
-  const pel = new T.Mesh(new T.SphereGeometry(.17, 14, 10), SH); pel.scale.set(1.1, .7, .75); hip.add(pel);
-  const torso = new T.Group(); hip.add(torso); R.torso = torso; torso.rotation.x = .16;
-  // 가늘고 긴 몸통 (허리가 잘록, 어깨는 좁고 둥글게)
-  const pts = []; for (let k=0;k<=12;k++){ const t = k/12; pts.push(new T.Vector2(.13 + Math.sin(t*Math.PI)*.07 + (t > .75 ? (t - .75)*.25 : 0) - (t > .93 ? (t - .93)*2.2 : 0), t*1.05)); }
-  const tor = new T.Mesh(new T.LatheGeometry(pts, 16), SH); tor.scale.z = .62; torso.add(tor);
-  const neck = new T.Group(); neck.position.y = 1.05; torso.add(neck); R.neck = neck; const nk = new T.Mesh(CYL(.045, .06, .26, 10), SH); nk.position.y = .12; neck.add(nk);
-  const head = new T.Group(); head.position.set(0, .34, .02); neck.add(head); R.head = head;
-  const sk = new T.Mesh(new T.SphereGeometry(.16, 18, 14), SH); sk.scale.set(.82, 1.22, .92); head.add(sk); R.jaw = sk;
-  // 눈: 하얀 타원 + 번지는 빛 (안개 무시 → 어둠 속에서도 보인다)
-  const glowT = new T.CanvasTexture(cv(64, 64, g=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }));
-  R.eyes = []; for (const sx of [-1, 1]){ const e = new T.Mesh(new T.SphereGeometry(.03, 10, 8), MAT.eye); e.position.set(sx*.058, .03, .135); e.scale.set(1.05, .62, .5); head.add(e);
-    const gl = new T.Sprite(new T.SpriteMaterial({ map:glowT, transparent:true, depthWrite:false, blending:T.AdditiveBlending, fog:false, opacity:.75 })); gl.scale.set(.22, .16, 1); gl.position.set(sx*.058, .03, .16); head.add(gl); R.eyes.push(e); }
-  // 팔: 무릎 아래까지 늘어지는 긴 팔, 가는 손가락
-  R.arms = []; for (const sx of [-1, 1]){ const sh = new T.Group(); sh.position.set(sx*.21, .97, 0); torso.add(sh); const sj = new T.Mesh(new T.SphereGeometry(.065, 10, 8), SH); sh.add(sj);
-    const up = limb(.055, .045, .72); sh.add(up); const el = new T.Group(); el.position.y = -.76; sh.add(el); const lo = limb(.045, .032, .78); el.add(lo);
-    const hand = new T.Group(); hand.position.y = -.84; el.add(hand); const palm = new T.Mesh(new T.SphereGeometry(.05, 8, 6), SH); palm.scale.set(.8, 1.3, .45); hand.add(palm);
-    for (let f=0;f<4;f++){ const fi = limb(.012, .007, .2 + (f === 1 || f === 2 ? .04 : 0)); fi.position.set((f - 1.5)*.022, -.05, 0); fi.rotation.z = (f - 1.5)*.06; hand.add(fi); }
-    sh.rotation.z = sx*.06; R.arms.push({ sh, el, hand, sx }); }
-  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.1, -.02, 0); hip.add(th); th.add(limb(.075, .055, .7));
-    const kn = new T.Group(); kn.position.y = -.71; th.add(kn); kn.add(limb(.055, .038, .68)); const ft = new T.Mesh(new T.SphereGeometry(.05, 8, 6), SH); ft.scale.set(.8, .5, 2.2); ft.position.set(0, -.7, .05); kn.add(ft); R.legs.push({ th, kn, sx }); }
+  const hip = new T.Group(); hip.position.y = 1.0; body.add(hip); R.hip = hip;
+  const torso = new T.Group(); hip.add(torso); R.torso = torso; torso.rotation.x = .05;
+  // 몸통: 좁은 목에서 둥근 어깨로 퍼지고, 그대로 길게 내려오는 덩어리 (사진처럼 각진 실루엣)
+  const pr = [[.0, 0], [.2, 0], [.25, .06], [.27, .4], [.29, .8], [.3, 1.0], [.285, 1.06], [.22, 1.12], [.12, 1.15], [.075, 1.2], [.07, 1.42], [0, 1.42]].map(([x, y])=>new T.Vector2(x, y));
+  const tor = new T.Mesh(new T.LatheGeometry(pr, 20), SH); tor.scale.z = .55; torso.add(tor);
+  // 머리: 양옆으로 길게 뻗다가 끝이 뾰족해지는 T자 (가운데는 볼록, 아래는 목으로 깔때기처럼 이어짐)
+  const neck = new T.Group(); neck.position.y = 1.42; torso.add(neck); R.neck = neck; const head = new T.Group(); neck.add(head); R.head = head;
+  const sh = new T.Shape(); sh.moveTo(-1.0, .06); sh.lineTo(-.22, .1); sh.quadraticCurveTo(-.12, .2, 0, .21); sh.quadraticCurveTo(.12, .2, .22, .1); sh.lineTo(1.0, .06);
+  sh.lineTo(.95, .045); sh.quadraticCurveTo(.4, .0, .22, -.06); sh.quadraticCurveTo(.1, -.13, .075, -.25); sh.lineTo(-.075, -.25); sh.quadraticCurveTo(-.1, -.13, -.22, -.06); sh.quadraticCurveTo(-.4, .0, -.95, .045); sh.lineTo(-1.0, .06);
+  const hg = new T.ExtrudeGeometry(sh, { depth:.1, bevelEnabled:true, bevelThickness:.05, bevelSize:.015, bevelSegments:3, curveSegments:10 }); hg.translate(0, .22, -.05);
+  const hm = new T.Mesh(hg, SH); head.add(hm); const dome = new T.Mesh(new T.SphereGeometry(.17, 16, 12), SH); dome.scale.set(1.05, .85, .85); dome.position.y = .3; head.add(dome); R.jaw = dome;
+  // 눈: 작은 하얀 ∩ ∩
+  R.eyes = []; for (const sx of [-1, 1]){ const e = new T.Mesh(new T.TorusGeometry(.022, .0075, 6, 14, Math.PI), MAT.eye); e.position.set(sx*.055, .27, .155); head.add(e); R.eyes.push(e); }
+  // 흐릿한 검은 기운 (사진처럼 가장자리가 번진 그림자)
+  const hz = new T.CanvasTexture(cv(128, 128, g=>{ const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(.55, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }));
+  for (const [y, w2, h2] of [[1.0, 1.3, 2.2], [2.22, 2.2, .8]]){ const sp = new T.Sprite(new T.SpriteMaterial({ map:hz, transparent:true, depthWrite:false, fog:false })); sp.position.set(0, y, 0); sp.scale.set(w2, h2, 1); root.add(sp); }
+  // 팔: 몸 옆에 거의 붙어서 늘어진다
+  R.arms = []; for (const sx of [-1, 1]){ const sa = new T.Group(); sa.position.set(sx*.29, 1.0, 0); torso.add(sa); const sj = new T.Mesh(new T.SphereGeometry(.075, 10, 8), SH); sa.add(sj);
+    sa.add(limb(.075, .06, .52)); const el = new T.Group(); el.position.y = -.54; sa.add(el); el.add(limb(.06, .045, .5)); const hand = new T.Group(); hand.position.y = -.55; el.add(hand); const palm = new T.Mesh(new T.SphereGeometry(.05, 8, 6), SH); palm.scale.set(.7, 1.4, .5); hand.add(palm);
+    sa.rotation.z = sx*.05; R.arms.push({ sh:sa, el, hand, sx }); }
+  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.12, .02, 0); hip.add(th); th.add(limb(.1, .08, .5));
+    const kn = new T.Group(); kn.position.y = -.5; th.add(kn); kn.add(limb(.08, .06, .48)); const ft = new T.Mesh(new T.SphereGeometry(.06, 8, 6), SH); ft.scale.set(.9, .5, 2); ft.position.set(0, -.5, .05); kn.add(ft); R.legs.push({ th, kn, sx }); }
   root.userData.R = R; root.userData.body = body; return root; }
-const MONM = buildMonster(); MONM.visible = false; scene.add(MONM);
+const MONM = buildMonster(); MONM.visible = false; scene.add(MONM); MONM.userData.body.scale.setScalar(.84);
 // 바닥에 드리운 어두운 그림자
 { const c = cv(64, 64, (g)=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }); const t = new T.CanvasTexture(c);
   const sh = new T.Mesh(new T.PlaneGeometry(1.6, 1.6), new T.MeshBasicMaterial({ map:t, transparent:true, depthWrite:false })); sh.rotation.x = -Math.PI/2; sh.position.y = .02; MONM.add(sh); }
@@ -588,15 +589,15 @@ function animMonster(dt, m){ const R = MONM.userData.R; if (!m || m.st === 'off'
   let dr = m.ry - MV.ry; while (dr > Math.PI) dr -= 2*Math.PI; while (dr < -Math.PI) dr += 2*Math.PI; MV.ry += dr*(1 - Math.exp(-dt*8)); MV.y = floorY(MV.x, MV.z);
   const spd = m.sp || 0; MV.walk += dt*spd*1.9; MV.st = m.st; MONM.position.set(MV.x, MV.y, MV.z); MONM.rotation.y = MV.ry;
   const w = MV.walk, sw = Math.min(1, spd/2.2), run = m.st === 'chase' || m.st === 'grab';
-  for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); L.th.rotation.x = Math.sin(ph)*.55*sw; L.kn.rotation.x = Math.max(0, -Math.cos(ph))*.9*sw + .08; }
-  R.hip.position.y = 1.42 + Math.abs(Math.sin(w))*.05*sw; R.torso.rotation.x = run ? .42 : .16 + Math.sin(w*2)*.02;
-  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); A.sh.rotation.x = run ? -.25 + Math.sin(ph)*.6 : Math.sin(ph)*.35*sw + .05; A.el.rotation.x = run ? -.6 : -.15; A.sh.rotation.z = A.sx*(run ? .35 : .1); }
+  for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); L.th.rotation.x = Math.sin(ph)*.45*sw; L.kn.rotation.x = Math.max(0, -Math.cos(ph))*.7*sw + .03; }
+  R.hip.position.y = 1.0 + Math.abs(Math.sin(w))*.04*sw; R.torso.rotation.x = run ? .25 : .05 + Math.sin(w*2)*.015;
+  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); A.sh.rotation.x = run ? Math.sin(ph)*.35 : Math.sin(ph)*.12*sw; A.el.rotation.x = run ? -.25 : -.05; A.sh.rotation.z = A.sx*(run ? .12 : .05); }
   // 경련 · 고개 꺾기 (멈춰 서서 장롱을 노려볼 때 특히)
   MV.glT -= dt; const stare = m.st === 'stare' || m.st === 'listen';
-  if (MV.glT <= 0){ MV.glT = stare ? rand(.08, .4) : rand(.3, 1.6); R.head.rotation.set(rand(-.2, .2) + (stare ? .25 : 0), rand(-.5, .5), stare ? rand(-.9, .9) : rand(-.3, .3)); 
+  if (MV.glT <= 0){ MV.glT = stare ? rand(.08, .4) : rand(.3, 1.6); R.head.rotation.set(rand(-.08, .08) + (stare ? .12 : 0), rand(-.25, .25), stare ? rand(-.35, .35) : rand(-.08, .08)); 
     MONM.userData.body.position.x = Math.random() < .25 ? rand(-.12, .12) : 0; }
   if (m.st === 'grab'){ for (const A of R.arms){ A.sh.rotation.x = -1.6; A.el.rotation.x = -.2; } }
-  const fl = Math.random() < .04 + (m.ag || 0)*.08; MONM.userData.body.scale.set(fl ? rand(.96, 1.05) : 1, 1, 1); for (const e of R.eyes) e.visible = !(Math.random() < .015); }
+  const fl = Math.random() < .04 + (m.ag || 0)*.08; MONM.userData.body.scale.set(.84*(fl ? rand(.96, 1.05) : 1), .84, .84); for (const e of R.eyes) e.visible = !(Math.random() < .015); }
 
 // ---------- AI (호스트만) ----------
 const MON = { st:'off', x:0, z:0, ry:0, sp:0, path:null, pi:0, rp:0, tgt:null, last:null, lostT:0, t:0, stT:0, ward:null, ign:{}, ag:0, farT:0, spawnT:0, stepT:0, boT:60 + Math.random()*50, feedT:0 };
@@ -879,20 +880,18 @@ function escape(){ P.esc = true; SFX.ding(V(XE, HUP + 2, G.elev.cz)); setTimeout
 // ---------- 죽음 ----------
 const SC = $('scareC'), SCg = SC.getContext('2d');
 const SCM = document.createElement('canvas'); SCM.width = SC.width; SCM.height = SC.height; const SCMg = SCM.getContext('2d');
-function scareShape(g, t){ // 매끈한 검은 머리 · 가는 목 · 좁은 어깨 실루엣
-  g.beginPath(); g.ellipse(0, -6, 46, 66, 0, 0, 7); g.fill(); g.fillRect(-11, 50, 22, 40);
-  g.beginPath(); g.moveTo(-150, 200); g.quadraticCurveTo(-90, 92, -14, 86); g.lineTo(14, 86); g.quadraticCurveTo(90, 92, 150, 200); g.fill(); }
-function drawScare(t){ const w = SC.width, h = SC.height, g = SCg; const z = 1 + t*1.7 + Math.sin(t*40)*.03, cx = w/2 + rand(-6, 6)*(1 - t*.5), cy = h*.5 + rand(-5, 5);
-  SCMg.setTransform(1, 0, 0, 1, 0, 0); SCMg.clearRect(0, 0, w, h); SCMg.translate(cx, cy); SCMg.scale(z, z); SCMg.fillStyle = SCMg.strokeStyle = '#fff'; scareShape(SCMg, t);
-  const m = SCMg.getImageData(0, 0, w, h).data, id = g.createImageData(w, h), d = id.data;
-  for (let i=0;i<d.length;i+=4){ const v = m[i + 3] > 80 ? Math.random()*7 : 8 + Math.random()*26; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
-  // 머리 테두리를 밝게 (하얀 윤곽선이 지지직거림)
-  for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++){ const i = (y*w + x)*4; if (m[i + 3] > 80 && (m[i + 3 - 4] < 80 || m[i + 3 + 4] < 80 || m[i + 3 - w*4] < 80 || m[i + 3 + w*4] < 80) && Math.random() < .35){ d[i] = d[i + 1] = d[i + 2] = 40 + Math.random()*60; } }
-  g.putImageData(id, 0, 0);
-  g.save(); g.translate(cx, cy); g.scale(z, z);
-  for (const s of [-1, 1]){ const gr = g.createRadialGradient(s*17, -6, 0, s*17, -6, 18 + t*6); gr.addColorStop(0, '#fff'); gr.addColorStop(.3, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(s*17 - 26, -32, 52, 52); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(s*17, -6, 7, 3.6, s*.15, 0, 7); g.fill(); }
+function scareShape(g){ // T자 머리 (끝이 뾰족) · 목 · 둥근 어깨 몸통
+  g.beginPath(); g.moveTo(-170, -22); g.lineTo(-40, -30); g.quadraticCurveTo(-22, -56, 0, -58); g.quadraticCurveTo(22, -56, 40, -30); g.lineTo(170, -22); g.lineTo(160, -18); g.quadraticCurveTo(70, -8, 40, 6); g.quadraticCurveTo(16, 20, 13, 44);
+  g.lineTo(13, 58); g.quadraticCurveTo(44, 62, 52, 80); g.lineTo(58, 240); g.lineTo(-58, 240); g.lineTo(-52, 80); g.quadraticCurveTo(-44, 62, -13, 58); g.lineTo(-13, 44); g.quadraticCurveTo(-16, 20, -40, 6); g.quadraticCurveTo(-70, -8, -160, -18); g.closePath(); g.fill(); }
+function drawScare(t){ const w = SC.width, h = SC.height, g = SCg; const z = .55 + t*1.9 + Math.sin(t*38)*.02, cx = w/2 + rand(-4, 4)*(1 - t*.5), cy = h*.55 + rand(-3, 3) + t*20;
+  // 뿌연 회색 배경 (사진처럼)
+  const bg = g.createRadialGradient(w/2, h/2, 10, w/2, h/2, w*.7); bg.addColorStop(0, '#9a9a9a'); bg.addColorStop(1, '#1a1a1a'); g.filter = 'none'; g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  g.save(); g.translate(cx, cy); g.scale(z, z); g.filter = 'blur(' + (7/z + 1.5).toFixed(1) + 'px)'; g.fillStyle = 'rgba(0,0,0,.6)'; scareShape(g); g.filter = 'blur(1.2px)'; g.fillStyle = '#050505'; scareShape(g); g.filter = 'none';
+  // 눈: 작은 하얀 ∩ ∩
+  g.strokeStyle = '#fff'; g.lineWidth = 2.4; g.lineCap = 'round'; for (const s2 of [-1, 1]){ g.beginPath(); g.arc(s2*11, -22, 3.6, Math.PI, 0); g.stroke(); }
   g.restore();
-  for (let k=0;k<5;k++){ const y = Math.random()*h|0, hh = 2 + Math.random()*12|0; g.drawImage(SC, 0, y, w, hh, rand(-26, 26), y, w, hh); } }
+  const n = g.getImageData(0, 0, w, h), nd = n.data; for (let i=0;i<nd.length;i+=4){ const v = (Math.random() - .5)*34; nd[i] += v; nd[i + 1] += v; nd[i + 2] += v; } g.putImageData(n, 0, 0);
+  if (t > .55) for (let k=0;k<4;k++){ const y = Math.random()*h|0, hh = 2 + Math.random()*10|0; g.drawImage(SC, 0, y, w, hh, rand(-20, 20), y, w, hh); } }
 function die(){ if (P.dead || P.out) return; P.dead = true; P.lives--; if (P.hid >= 0){ P.hid = -1; $('hideView').style.display = 'none'; } interactRelease(); ovClose();
   scream(); SFX.hit(); $('scare').style.display = 'block'; $('flash').style.opacity = .9; setTimeout(()=>{ $('flash').style.opacity = 0; }, 60);
   const t0 = performance.now(); const run = ()=>{ const t = (performance.now() - t0)/1000; if (t < 1.5){ drawScare(t/1.5); requestAnimationFrame(run); } else { $('scare').style.display = 'none'; after(); } }; run();
