@@ -558,14 +558,16 @@ function smoothLimb(L, r0, r1, bow, flat, tip){ const g = new T.CylinderGeometry
   for (let i=0;i<P.count;i++){ const y = P.getY(i), t = CL(-y/L, 0, 1); const r = lerp(r0, r1, Math.pow(t, 1.15)) + Math.sin(t*Math.PI)*r0*.08 - (tip && t > .85 ? (t - .85)/.15*r1*.7 : 0);
     P.setXYZ(i, P.getX(i)*r + Math.sin(t*Math.PI)*bow, y, P.getZ(i)*r*(flat || 1)); } g.computeVertexNormals();
   const m = new T.Mesh(g, SH); const grp = new T.Group(); grp.add(m); const cap = new T.Mesh(new T.SphereGeometry(Math.max(.012, tip ? r1*.35 : r1), 10, 8), SH); cap.position.y = -L; cap.scale.z = flat || 1; grp.add(cap); return grp; }
+function slab(pts, depth, bev, straight){ const sh = new T.Shape(); sh.moveTo(pts[0][0], pts[0][1]); if (straight) for (const [x, y] of pts.slice(1)) sh.lineTo(x, y); else sh.splineThru(pts.slice(1).map(([x, y])=>new T.Vector2(x, y))); sh.closePath();
+  const g = new T.ExtrudeGeometry(sh, { depth, bevelEnabled:true, bevelThickness:bev, bevelSize:bev*.8, bevelSegments:4, curveSegments:24, steps:1 }); g.translate(0, 0, -depth/2); return new T.Mesh(g, SH); }
 function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.add(body); const R = {};
-  const hip = new T.Group(); hip.position.y = 1.1; body.add(hip); R.hip = hip;
-  const torso = new T.Group(); hip.add(torso); R.torso = torso; torso.rotation.x = .03;
-  // 몸통: 두 번째 원작 사진에서 줄마다 잰 폭 그대로 (엉덩이 쪽이 넓고, 겨드랑이에서 좁아졌다가 어깨가 확 넓어짐 → 굵은 목)
-  const spl = new T.SplineCurve([[.2, -.1], [.29, -.02], [.3, .15], [.28, .4], [.255, .62], [.27, .74], [.36, .83], [.43, .9], [.42, .96], [.37, 1.01], [.28, 1.05], [.19, 1.09], [.15, 1.14], [.135, 1.2]].map(([x, y])=>new T.Vector2(x, y)));
-  const pr = [new T.Vector2(0, -.12)].concat(spl.getPoints(60), [new T.Vector2(0, 1.2)]);
-  const tor = new T.Mesh(new T.LatheGeometry(pr, 28), SH); tor.scale.z = .55; torso.add(tor);
-  const neck = new T.Group(); neck.position.y = 1.09; torso.add(neck); R.neck = neck; const head = new T.Group(); neck.add(head); R.head = head;
+  const hip = new T.Group(); hip.position.y = 1.27; body.add(hip); R.hip = hip;
+  const torso = new T.Group(); hip.add(torso); R.torso = torso; torso.rotation.x = .02;
+  // 몸통: 마른 사람 체형 — 거의 일자, 어깨에서 둥글게 넓어지고 목으로 이어짐 (앞에서 본 윤곽을 두께 있게 뽑음)
+  const half = [[.22, -.02], [.215, .3], [.2, .6], [.205, .8], [.23, .9], [.3, .96], [.335, 1.0], [.32, 1.05], [.24, 1.09], [.14, 1.12], [.1, 1.16]];
+  const tor = slab([[0, -.02]].concat(half, [[0, 1.17]], half.map(([x, y])=>[-x, y]).reverse()), .2, .06); torso.add(tor);
+  // 머리: 양옆으로 길게
+  const neck = new T.Group(); neck.position.y = 1.2; torso.add(neck); R.neck = neck; const head = new T.Group(); neck.add(head); R.head = head;
   const sh = new T.Shape(); sh.moveTo(-1.0, 0.557); sh.lineTo(-0.150, 0.595); sh.lineTo(-0.095, 0.600); sh.bezierCurveTo(-.07, .645, .07, .645, 0.095, 0.600); sh.lineTo(0.150, 0.595); sh.lineTo(1.0, 0.557); sh.lineTo(1.000, 0.540); sh.lineTo(0.830, 0.500); sh.lineTo(0.598, 0.455); sh.lineTo(0.415, 0.410); sh.lineTo(0.230, 0.320); sh.lineTo(0.170, 0.275); sh.lineTo(0.155, 0.230); sh.lineTo(0.133, 0.185); sh.lineTo(0.107, 0.140); sh.lineTo(0.100, 0.085); sh.lineTo(0.098, 0.050); sh.quadraticCurveTo(.1, -.04, .135, -.12); sh.lineTo(-.135, -.12); sh.quadraticCurveTo(-.1, -.04, -.0975, 0.050); sh.lineTo(-0.098, 0.050); sh.lineTo(-0.100, 0.085); sh.lineTo(-0.107, 0.140); sh.lineTo(-0.133, 0.185); sh.lineTo(-0.155, 0.230); sh.lineTo(-0.170, 0.275); sh.lineTo(-0.230, 0.320); sh.lineTo(-0.415, 0.410); sh.lineTo(-0.598, 0.455); sh.lineTo(-0.830, 0.500); sh.lineTo(-1.000, 0.540); sh.lineTo(-1.0, 0.557);
   const hg = new T.ExtrudeGeometry(sh, { depth:.1, bevelEnabled:true, bevelThickness:.05, bevelSize:.006, bevelSegments:3, curveSegments:10 }); hg.translate(0, 0, -.05);
   const hm = new T.Mesh(hg, SH); head.add(hm); R.jaw = hm;
@@ -573,15 +575,19 @@ function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.
   R.eyes = []; for (const sx of [-1, 1]){ const w = .022, t = .0085, lg = .011, es = new T.Shape(); es.moveTo(-w, 0); es.lineTo(-w, lg); es.absarc(0, lg, w, Math.PI, 0, true); es.lineTo(w, 0); es.lineTo(w - t, 0); es.lineTo(w - t, lg); es.absarc(0, lg, w - t, 0, Math.PI, false); es.lineTo(-w + t, 0); es.lineTo(-w, 0); const e = new T.Mesh(new T.ShapeGeometry(es, 16), MAT.eye); e.position.set(sx*.062, .335, .108); head.add(e); R.eyes.push(e); }
   // 흐릿한 검은 기운 (사진처럼 가장자리가 번진 그림자)
   const hz = new T.CanvasTexture(cv(128, 128, g=>{ const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(.55, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }));
-  for (const [y, w2, h2] of [[1.0, 1.3, 2.2], [2.22, 2.2, .8]]){ const sp = new T.Sprite(new T.SpriteMaterial({ map:hz, transparent:true, depthWrite:false, fog:false })); sp.position.set(0, y, 0); sp.scale.set(w2, h2, 1); root.add(sp); }
+  for (const [y, w2, h2] of [[1.2, 1.1, 2.4], [2.4, 2.2, .8]]){ const sp = new T.Sprite(new T.SpriteMaterial({ map:hz, transparent:true, depthWrite:false, fog:false })); sp.position.set(0, y, 0); sp.scale.set(w2, h2, 1); root.add(sp); }
   // 팔: 몸 옆에 거의 붙어서 늘어진다
-  R.arms = []; for (const sx of [-1, 1]){ const sa = new T.Group(); sa.position.set(sx*.33, .9, 0); torso.add(sa);
-    const shJ = new T.Mesh(new T.SphereGeometry(.13, 16, 12), SH); shJ.scale.set(1, .85, .62); sa.add(shJ);
-    const arm = smoothLimb(1.5, .118, .022, sx*.012, .62, true); sa.add(arm);
+  // 팔: 어깨에서 일정한 폭으로 길게 늘어지다 끝만 뾰족 (몸과 살짝 떨어짐)
+  R.arms = []; for (const sx of [-1, 1]){ const sa = new T.Group(); sa.position.set(sx*.29, .97, 0); torso.add(sa);
+    const ah = [[.06, .04], [.075, -.04], [.068, -.5], [.052, -1.0], [.03, -1.35], [.004, -1.55]];
+    const arm = slab([[0, .06]].concat(ah, [[0, -1.56]], ah.map(([x, y])=>[-x, y]).reverse()), .08, .03, true); sa.add(arm);
     const el = new T.Group(); el.position.y = -.74; sa.add(el); const hand = new T.Group(); el.add(hand);
-    sa.rotation.z = sx*.11; R.arms.push({ sh:sa, el, hand, sx }); }
-  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.16, .02, 0); hip.add(th); const hj = new T.Mesh(new T.SphereGeometry(.14, 12, 10), SH); hj.scale.z = .9; th.add(hj); th.add(smoothLimb(.57, .14, .118, 0, .9));
-    const kn = new T.Group(); kn.position.y = -.55; th.add(kn); const kj = new T.Mesh(new T.SphereGeometry(.118, 12, 10), SH); kj.scale.z = .9; kn.add(kj); kn.add(smoothLimb(.55, .118, .095, 0, .9)); const ft = new T.Mesh(new T.SphereGeometry(.1, 8, 6), SH); ft.scale.set(.9, .45, 1.6); ft.position.set(0, -.55, .06); kn.add(ft); R.legs.push({ th, kn, sx }); }
+    sa.rotation.z = sx*.07; R.arms.push({ sh:sa, el, hand, sx }); }
+  // 다리: 길고 곧게
+  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.12, .02, 0); hip.add(th);
+    const tl = [[.1, .06], [.098, -.3], [.09, -.64]]; th.add(slab([[0, .08]].concat(tl, tl.map(([x, y])=>[-x, y]).reverse()), .14, .04));
+    const kn = new T.Group(); kn.position.y = -.62; th.add(kn); const sl = [[.09, .04], [.082, -.3], [.075, -.6], [.07, -.64]]; kn.add(slab([[0, .05]].concat(sl, sl.map(([x, y])=>[-x, y]).reverse()), .13, .04));
+    const ft = new T.Mesh(new T.SphereGeometry(.08, 10, 8), SH); ft.scale.set(.95, .45, 1.7); ft.position.set(0, -.63, .05); kn.add(ft); R.legs.push({ th, kn, sx }); }
   root.userData.R = R; root.userData.body = body; return root; }
 const MONM = buildMonster(); MONM.visible = false; scene.add(MONM); MONM.userData.body.scale.setScalar(.84);
 // 바닥에 드리운 어두운 그림자
@@ -595,7 +601,7 @@ function animMonster(dt, m){ const R = MONM.userData.R; if (!m || m.st === 'off'
   const spd = m.sp || 0; MV.walk += dt*spd*1.9; MV.st = m.st; MONM.position.set(MV.x, MV.y, MV.z); MONM.rotation.y = MV.ry;
   const w = MV.walk, sw = Math.min(1, spd/2.2), run = m.st === 'chase' || m.st === 'grab';
   for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); L.th.rotation.x = Math.sin(ph)*.45*sw; L.kn.rotation.x = Math.max(0, -Math.cos(ph))*.7*sw + .03; }
-  R.hip.position.y = 1.1 + Math.abs(Math.sin(w))*.04*sw; R.torso.rotation.x = run ? .25 : .05 + Math.sin(w*2)*.015;
+  R.hip.position.y = 1.27 + Math.abs(Math.sin(w))*.035*sw; R.torso.rotation.x = run ? .25 : .05 + Math.sin(w*2)*.015;
   for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); A.sh.rotation.x = run ? Math.sin(ph)*.28 : Math.sin(ph)*.1*sw; A.el.rotation.x = run ? -.25 : -.05; A.sh.rotation.z = A.sx*(run ? .16 : .11); }
   // 경련 · 고개 꺾기 (멈춰 서서 장롱을 노려볼 때 특히)
   MV.glT -= dt; const stare = m.st === 'stare' || m.st === 'listen'; if (!MV.hT) MV.hT = V();
