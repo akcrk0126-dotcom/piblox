@@ -554,14 +554,19 @@ function taperTube(pts, r0, r1, seg){ const g = new T.Group(), curve = new T.Cat
 MAT.shadow = new T.MeshBasicMaterial({ color:0x020202, fog:false }); MAT.shadow.userData.keep = true;
 const SH = MAT.shadow;
 function limb(r0, r1, L){ const g = new T.Group(); const m = new T.Mesh(CYL(r1, r0, L, 10), SH); m.position.y = -L/2; g.add(m); const e = new T.Mesh(new T.SphereGeometry(r1, 8, 6), SH); e.position.y = -L; g.add(e); return g; }
+function smoothLimb(L, r0, r1, bow, flat, tip){ const g = new T.CylinderGeometry(1, 1, L, 16, 32, true); g.translate(0, -L/2, 0); const P = g.attributes.position;
+  for (let i=0;i<P.count;i++){ const y = P.getY(i), t = CL(-y/L, 0, 1); const r = lerp(r0, r1, Math.pow(t, 1.15)) + Math.sin(t*Math.PI)*r0*.08 - (tip && t > .85 ? (t - .85)/.15*r1*.7 : 0);
+    P.setXYZ(i, P.getX(i)*r + Math.sin(t*Math.PI)*bow, y, P.getZ(i)*r*(flat || 1)); } g.computeVertexNormals();
+  const m = new T.Mesh(g, SH); const grp = new T.Group(); grp.add(m); const cap = new T.Mesh(new T.SphereGeometry(Math.max(.012, tip ? r1*.35 : r1), 10, 8), SH); cap.position.y = -L; cap.scale.z = flat || 1; grp.add(cap); return grp; }
 function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.add(body); const R = {};
   const hip = new T.Group(); hip.position.y = 1.1; body.add(hip); R.hip = hip;
   const torso = new T.Group(); hip.add(torso); R.torso = torso; torso.rotation.x = .03;
   // 몸통: 두 번째 원작 사진에서 줄마다 잰 폭 그대로 (엉덩이 쪽이 넓고, 겨드랑이에서 좁아졌다가 어깨가 확 넓어짐 → 굵은 목)
-  const pr = [[0, 0], [.305, 0], [.29, .3], [.26, .55], [.235, .75], [.3, .8], [.44, .85], [.42, .88], [.4, .92], [.38, .94], [.37, .97], [.34, 1.0], [.32, 1.03], [.26, 1.06], [.21, 1.09], [.19, 1.12], [.16, 1.18], [.13, 1.2], [0, 1.2]].map(([x, y])=>new T.Vector2(x, y));
-  const tor = new T.Mesh(new T.LatheGeometry(pr, 24), SH); tor.scale.z = .55; torso.add(tor);
+  const spl = new T.SplineCurve([[.2, -.1], [.29, -.02], [.3, .15], [.28, .4], [.255, .62], [.27, .74], [.36, .83], [.43, .9], [.42, .96], [.37, 1.01], [.28, 1.05], [.19, 1.09], [.15, 1.14], [.135, 1.2]].map(([x, y])=>new T.Vector2(x, y)));
+  const pr = [new T.Vector2(0, -.12)].concat(spl.getPoints(60), [new T.Vector2(0, 1.2)]);
+  const tor = new T.Mesh(new T.LatheGeometry(pr, 28), SH); tor.scale.z = .55; torso.add(tor);
   const neck = new T.Group(); neck.position.y = 1.09; torso.add(neck); R.neck = neck; const head = new T.Group(); neck.add(head); R.head = head;
-  const sh = new T.Shape(); sh.moveTo(-1.0, 0.557); sh.lineTo(-0.150, 0.595); sh.lineTo(-0.095, 0.600); sh.bezierCurveTo(-.07, .645, .07, .645, 0.095, 0.600); sh.lineTo(0.150, 0.595); sh.lineTo(1.0, 0.557); sh.lineTo(1.000, 0.540); sh.lineTo(0.830, 0.500); sh.lineTo(0.598, 0.455); sh.lineTo(0.415, 0.410); sh.lineTo(0.230, 0.320); sh.lineTo(0.170, 0.275); sh.lineTo(0.155, 0.230); sh.lineTo(0.133, 0.185); sh.lineTo(0.107, 0.140); sh.lineTo(0.100, 0.085); sh.lineTo(0.098, 0.050); sh.lineTo(.1, -.02); sh.lineTo(-.1, -.02); sh.lineTo(-0.098, 0.050); sh.lineTo(-0.100, 0.085); sh.lineTo(-0.107, 0.140); sh.lineTo(-0.133, 0.185); sh.lineTo(-0.155, 0.230); sh.lineTo(-0.170, 0.275); sh.lineTo(-0.230, 0.320); sh.lineTo(-0.415, 0.410); sh.lineTo(-0.598, 0.455); sh.lineTo(-0.830, 0.500); sh.lineTo(-1.000, 0.540); sh.lineTo(-1.0, 0.557);
+  const sh = new T.Shape(); sh.moveTo(-1.0, 0.557); sh.lineTo(-0.150, 0.595); sh.lineTo(-0.095, 0.600); sh.bezierCurveTo(-.07, .645, .07, .645, 0.095, 0.600); sh.lineTo(0.150, 0.595); sh.lineTo(1.0, 0.557); sh.lineTo(1.000, 0.540); sh.lineTo(0.830, 0.500); sh.lineTo(0.598, 0.455); sh.lineTo(0.415, 0.410); sh.lineTo(0.230, 0.320); sh.lineTo(0.170, 0.275); sh.lineTo(0.155, 0.230); sh.lineTo(0.133, 0.185); sh.lineTo(0.107, 0.140); sh.lineTo(0.100, 0.085); sh.lineTo(0.098, 0.050); sh.quadraticCurveTo(.1, -.04, .135, -.12); sh.lineTo(-.135, -.12); sh.quadraticCurveTo(-.1, -.04, -.0975, 0.050); sh.lineTo(-0.098, 0.050); sh.lineTo(-0.100, 0.085); sh.lineTo(-0.107, 0.140); sh.lineTo(-0.133, 0.185); sh.lineTo(-0.155, 0.230); sh.lineTo(-0.170, 0.275); sh.lineTo(-0.230, 0.320); sh.lineTo(-0.415, 0.410); sh.lineTo(-0.598, 0.455); sh.lineTo(-0.830, 0.500); sh.lineTo(-1.000, 0.540); sh.lineTo(-1.0, 0.557);
   const hg = new T.ExtrudeGeometry(sh, { depth:.1, bevelEnabled:true, bevelThickness:.05, bevelSize:.006, bevelSegments:3, curveSegments:10 }); hg.translate(0, 0, -.05);
   const hm = new T.Mesh(hg, SH); head.add(hm); R.jaw = hm;
   // 눈: 원작처럼 하얀 ∩ 테두리, 안쪽은 머리와 이어진 검정
@@ -571,12 +576,12 @@ function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.
   for (const [y, w2, h2] of [[1.0, 1.3, 2.2], [2.22, 2.2, .8]]){ const sp = new T.Sprite(new T.SpriteMaterial({ map:hz, transparent:true, depthWrite:false, fog:false })); sp.position.set(0, y, 0); sp.scale.set(w2, h2, 1); root.add(sp); }
   // 팔: 몸 옆에 거의 붙어서 늘어진다
   R.arms = []; for (const sx of [-1, 1]){ const sa = new T.Group(); sa.position.set(sx*.33, .9, 0); torso.add(sa);
-    const arm = new T.Mesh(new T.CylinderGeometry(.115, .04, 1.47, 10), SH); arm.scale.z = .62; arm.position.y = -.735; sa.add(arm);
-    const tip = new T.Mesh(new T.ConeGeometry(.04, .08, 10), SH); tip.rotation.x = Math.PI; tip.scale.z = .62; tip.position.y = -1.5; sa.add(tip);
+    const shJ = new T.Mesh(new T.SphereGeometry(.13, 16, 12), SH); shJ.scale.set(1, .85, .62); sa.add(shJ);
+    const arm = smoothLimb(1.5, .118, .022, sx*.012, .62, true); sa.add(arm);
     const el = new T.Group(); el.position.y = -.74; sa.add(el); const hand = new T.Group(); el.add(hand);
     sa.rotation.z = sx*.11; R.arms.push({ sh:sa, el, hand, sx }); }
-  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.16, .02, 0); hip.add(th); th.add(limb(.13, .115, .55));
-    const kn = new T.Group(); kn.position.y = -.55; th.add(kn); kn.add(limb(.115, .1, .53)); const ft = new T.Mesh(new T.SphereGeometry(.1, 8, 6), SH); ft.scale.set(.9, .45, 1.6); ft.position.set(0, -.55, .06); kn.add(ft); R.legs.push({ th, kn, sx }); }
+  R.legs = []; for (const sx of [-1, 1]){ const th = new T.Group(); th.position.set(sx*.16, .02, 0); hip.add(th); const hj = new T.Mesh(new T.SphereGeometry(.14, 12, 10), SH); hj.scale.z = .9; th.add(hj); th.add(smoothLimb(.57, .14, .118, 0, .9));
+    const kn = new T.Group(); kn.position.y = -.55; th.add(kn); const kj = new T.Mesh(new T.SphereGeometry(.118, 12, 10), SH); kj.scale.z = .9; kn.add(kj); kn.add(smoothLimb(.55, .118, .095, 0, .9)); const ft = new T.Mesh(new T.SphereGeometry(.1, 8, 6), SH); ft.scale.set(.9, .45, 1.6); ft.position.set(0, -.55, .06); kn.add(ft); R.legs.push({ th, kn, sx }); }
   root.userData.R = R; root.userData.body = body; return root; }
 const MONM = buildMonster(); MONM.visible = false; scene.add(MONM); MONM.userData.body.scale.setScalar(.84);
 // 바닥에 드리운 어두운 그림자
@@ -591,13 +596,14 @@ function animMonster(dt, m){ const R = MONM.userData.R; if (!m || m.st === 'off'
   const w = MV.walk, sw = Math.min(1, spd/2.2), run = m.st === 'chase' || m.st === 'grab';
   for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); L.th.rotation.x = Math.sin(ph)*.45*sw; L.kn.rotation.x = Math.max(0, -Math.cos(ph))*.7*sw + .03; }
   R.hip.position.y = 1.1 + Math.abs(Math.sin(w))*.04*sw; R.torso.rotation.x = run ? .25 : .05 + Math.sin(w*2)*.015;
-  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); A.sh.rotation.x = run ? Math.sin(ph)*.35 : Math.sin(ph)*.12*sw; A.el.rotation.x = run ? -.25 : -.05; A.sh.rotation.z = A.sx*(run ? .16 : .11); }
+  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); A.sh.rotation.x = run ? Math.sin(ph)*.28 : Math.sin(ph)*.1*sw; A.el.rotation.x = run ? -.25 : -.05; A.sh.rotation.z = A.sx*(run ? .16 : .11); }
   // 경련 · 고개 꺾기 (멈춰 서서 장롱을 노려볼 때 특히)
-  MV.glT -= dt; const stare = m.st === 'stare' || m.st === 'listen';
-  if (MV.glT <= 0){ MV.glT = stare ? rand(.08, .4) : rand(.3, 1.6); R.head.rotation.set(rand(-.08, .08) + (stare ? .12 : 0), rand(-.25, .25), stare ? rand(-.35, .35) : rand(-.08, .08)); 
-    MONM.userData.body.position.x = Math.random() < .25 ? rand(-.12, .12) : 0; }
+  MV.glT -= dt; const stare = m.st === 'stare' || m.st === 'listen'; if (!MV.hT) MV.hT = V();
+  if (MV.glT <= 0){ MV.glT = stare ? rand(1.2, 2.6) : rand(2, 4); MV.hT.set(rand(-.05, .05) + (stare ? .1 : 0), rand(-.18, .18), stare ? rand(-.22, .22) : rand(-.04, .04)); }
+  const hk = 1 - Math.exp(-dt*(stare ? 1.6 : 1.1)); R.head.rotation.x += (MV.hT.x - R.head.rotation.x)*hk; R.head.rotation.y += (MV.hT.y - R.head.rotation.y)*hk; R.head.rotation.z += (MV.hT.z - R.head.rotation.z)*hk;
+  MONM.userData.body.position.x = 0;
   if (m.st === 'grab'){ for (const A of R.arms){ A.sh.rotation.x = -1.6; A.el.rotation.x = -.2; } }
-  const fl = Math.random() < .04 + (m.ag || 0)*.08; MONM.userData.body.scale.set(.84*(fl ? rand(.96, 1.05) : 1), .84, .84); for (const e of R.eyes) e.visible = !(Math.random() < .015); }
+  MV.blink = (MV.blink || 0) - dt; if (MV.blink < -rand(3, 7)) MV.blink = .12; for (const e of R.eyes) e.visible = MV.blink <= 0; }
 
 // ---------- AI (호스트만) ----------
 const MON = { st:'off', x:0, z:0, ry:0, sp:0, path:null, pi:0, rp:0, tgt:null, last:null, lostT:0, t:0, stT:0, ward:null, ign:{}, ag:0, farT:0, spawnT:0, stepT:0, boT:60 + Math.random()*50, feedT:0 };
