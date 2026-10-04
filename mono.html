@@ -266,49 +266,52 @@ function tone(f0, f1, dur, type, vol, o){ if (!AU.c) return; o = o || {}; const 
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + (o.atk || .005)); g.gain.exponentialRampToValueAtTime(.0001, t + dur); os.connect(g); out(g, o); os.start(t); os.stop(t + dur + .05); return os; }
 function noise(dur, f0, f1, type, vol, o){ if (!AU.c) return; o = o || {}; const t = now() + (o.at || 0), s = AU.c.createBufferSource(); s.buffer = AU.noise; const f = AU.c.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur); f.Q.value = o.q || 1;
   const g = AU.c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + (o.atk || .005)); g.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(f); f.connect(g); out(g, o); s.start(t, Math.random()); s.stop(t + dur + .05); }
-// ---------- 괴물 목소리: 8비트처럼 깨진 지지직 + 끊기는 삐— 소리 (버퍼를 만들어 반복, 위치는 HRTF) ----------
-function crushBuf(sec, wild){ const C = AU.c, sr = C.sampleRate, n = Math.floor(sr*sec), b = C.createBuffer(1, n, sr), d = b.getChannelData(0);
-  let hold = 0, holdN = 0, step = 8, chirp = 0, cf = 0, cph = 0, burst = 1, bt = 0;
+// 괴물 그르렁: 레퍼런스 분석값대로 — 78Hz 기본음 + 강한 2·3배음(찌그러짐), 20~100ms 거친 떨림, 0.5~1초 숨 노이즈, 가끔 낮은 쿵
+function biq(type, f, q, gainDb, sr){ const w = 2*Math.PI*f/sr, cs = Math.cos(w), al = Math.sin(w)/(2*q), A = Math.pow(10, (gainDb || 0)/40); let b0, b1, b2, a0, a1, a2;
+  if (type === 'lp'){ b0 = (1 - cs)/2; b1 = 1 - cs; b2 = b0; a0 = 1 + al; a1 = -2*cs; a2 = 1 - al; }
+  else if (type === 'hp'){ b0 = (1 + cs)/2; b1 = -(1 + cs); b2 = b0; a0 = 1 + al; a1 = -2*cs; a2 = 1 - al; }
+  else if (type === 'bp'){ b0 = al; b1 = 0; b2 = -al; a0 = 1 + al; a1 = -2*cs; a2 = 1 - al; }
+  else { b0 = 1 + al*A; b1 = -2*cs; b2 = 1 - al*A; a0 = 1 + al/A; a1 = -2*cs; a2 = 1 - al/A; }
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0; return x=>{ const y = (b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2)/a0; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; }; }
+function growlBuf(sec, ag){ const C = AU.c, sr = C.sampleRate, n = Math.floor(sr*sec), b = C.createBuffer(1, n, sr), d = b.getChannelData(0);
+  const fHP = biq('hp', 62, .8, 0, sr), fHP2 = biq('hp', 50, .7, 0, sr), fPk = biq('pk', 190, 1.1, 9, sr), fPk2 = biq('pk', 240, 2, 4, sr), fLP = biq('lp', 3200, .7, 0, sr), fLP2 = biq('lp', 5000, .7, 0, sr);
+  const nBP = biq('bp', 3000, .7, 0, sr), nBP2 = biq('hp', 1800, .7, 0, sr), tLP = biq('lp', 55, .9, 0, sr);
+  let ph = 0, fj = 0, fjT = 0, rough = .7, roughT = .7, rN = 0, br = 0, brT = 0, brN = 0, th = 0, thN = 0, sum = 0;
   for (let i=0;i<n;i++){
-    if (--holdN <= 0){ hold = Math.random()*2 - 1; holdN = step; }
-    if (i%Math.floor(sr*.05) === 0){ step = 2 + Math.floor(Math.random()*(wild ? 30 : 18)); if (Math.random() < (wild ? .35 : .18)){ chirp = Math.floor(sr*(.02 + Math.random()*.09)); cf = pick([440, 660, 880, 1320, 1760, 2400, 3100])*(wild ? 1.3 : 1); } }
-    if (--bt <= 0){ bt = Math.floor(sr*(.03 + Math.random()*.25)); burst = Math.random() < .25 ? .15 : .55 + Math.random()*.45; }
-    let v = hold*.55*burst;
-    if (chirp > 0){ chirp--; cph += cf/sr; v += (cph%1 < .5 ? .3 : -.3); }
-    v += Math.sin(i/sr*2*Math.PI*55)*.12*(Math.sin(i/sr*7) > 0 ? 1 : .3);   // 낮은 웅
-    d[i] = Math.round(v*7)/7;   // 3비트 양자화 = 픽셀 같은 거친 소리
-  }
-  for (let i=0;i<400;i++){ d[i] *= i/400; d[n - 1 - i] *= i/400; } return b; }
-function monsterVoice(){ const C = AU.c; AU.monBufs = [crushBuf(5.3, false), crushBuf(3.1, true)];
-  const p = C.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'exponential'; p.refDistance = 2.5; p.rolloffFactor = 1.3; p.maxDistance = 80; p.connect(AU.muffle); const rs = C.createGain(); rs.gain.value = .45; p.connect(rs); rs.connect(AU.rev);
-  // 1) 깨진 픽셀 노이즈
-  const s = C.createBufferSource(); s.buffer = AU.monBufs[0]; s.loop = true; const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = .5; const g = C.createGain(); g.gain.value = 0; s.connect(bp); bp.connect(g); g.connect(p); s.start();
-  // 2) 목 깊은 데서 끓는 듯한 그르렁 (톱니 두 개 + 찌그러뜨림 + 떨림)
-  const sh = C.createWaveShaper(); const cu = new Float32Array(1024); for (let i=0;i<1024;i++){ const x = i/512 - 1; cu[i] = Math.tanh(x*6); } sh.curve = cu;
-  const gr = C.createGain(); gr.gain.value = 0; const trem = C.createGain(); trem.gain.value = .6; const lfo = C.createOscillator(); lfo.frequency.value = 7.3; const lg = C.createGain(); lg.gain.value = .45; lfo.connect(lg); lg.connect(trem.gain); lfo.start();
-  const o1 = C.createOscillator(), o2 = C.createOscillator(); o1.type = o2.type = 'sawtooth'; o1.frequency.value = 52; o2.frequency.value = 55.5; const jit = C.createBufferSource(); jit.buffer = AU.noise; jit.loop = true; const jl = C.createBiquadFilter(); jl.type = 'lowpass'; jl.frequency.value = 12; const jg = C.createGain(); jg.gain.value = 18; jit.connect(jl); jl.connect(jg); jg.connect(o1.frequency); jg.connect(o2.frequency); jit.start();
-  const fm = C.createBiquadFilter(); fm.type = 'bandpass'; fm.frequency.value = 420; fm.Q.value = 2.5; const fm2 = C.createBiquadFilter(); fm2.type = 'bandpass'; fm2.frequency.value = 1100; fm2.Q.value = 4; const mix = C.createGain();
-  o1.connect(sh); o2.connect(sh); sh.connect(fm); sh.connect(fm2); fm.connect(mix); fm2.connect(mix); mix.connect(trem); trem.connect(gr); gr.connect(p); o1.start(); o2.start();
-  // 3) 바닥이 울리는 낮은 진동 (가까울수록, 방향 없음)
-  const sub = C.createOscillator(); sub.frequency.value = 36; const sg = C.createGain(); sg.gain.value = 0; const sub2 = C.createOscillator(); sub2.frequency.value = 37.3; sub.connect(sg); sub2.connect(sg); sg.connect(AU.master); sub.start(); sub2.start();
-  // 4) 귀가 먹먹해지는 이명 (아주 가까울 때)
-  const ring = C.createOscillator(); ring.frequency.value = 6800; const rg = C.createGain(); rg.gain.value = 0; ring.connect(rg); rg.connect(AU.master); ring.start();
-  AU.mon = { s, g, p, bp, gr, o1, o2, fm, sg, rg }; }
+    if (--rN <= 0){ rN = Math.floor(sr*(.02 + Math.random()*.08)); roughT = .35 + Math.random()*.65; fjT = (Math.random() - .5)*(8 + ag*8); }
+    rough += (roughT - rough)*.004; fj += (fjT - fj)*.0015;
+    const f0 = 77.5 + ag*5 + fj; ph += f0/sr; if (ph > 2) ph -= 2;
+    const p1 = ph%1, saw = 2*p1 - 1, sub = ph < 1 ? .5 : -.5, pulse = p1 < .32 ? 1 : -.45;
+    // 찌그러진 그르렁 → 120~250Hz 가 가장 크게 (원본과 같은 배음 분포)
+    let v = Math.tanh((saw*.55 + pulse*.35 + sub*.2)*rough*3.6);
+    v = fLP2(fLP(fPk2(fPk(fHP2(fHP(v))))));
+    // 숨 노이즈 (쉭—), 0.3~1.1초 단위로 켜졌다 꺼짐
+    if (--brN <= 0){ brN = Math.floor(sr*(.3 + Math.random()*.8)); brT = Math.random() < .55 ? .2 + Math.random()*.4*(1 + ag) : .015; }
+    br += (brT - br)*.0006; v += nBP2(nBP(Math.random()*2 - 1))*br*2.2 + (Math.random()*2 - 1)*.008;
+    // 가끔 낮은 쿵
+    if (--thN <= 0){ thN = Math.floor(sr*(.25 + Math.random()*1.2)); if (Math.random() < .55) th = 1; }
+    th *= .99992; v += tLP(Math.random()*2 - 1)*th*15;
+    d[i] = v; sum += v*v; }
+  const g = .26/Math.sqrt(sum/n); for (let i=0;i<n;i++) d[i] = Math.tanh(d[i]*g*1.2)*.9;
+  for (let i=0;i<2000;i++){ const k = i/2000; d[i] = d[i]*k + d[n - 2000 + i]*(1 - k); }
+  return b; }
+function monsterVoice(){ const C = AU.c; AU.growl = [growlBuf(6.5, 0), growlBuf(4.5, 1)];
+  const p = C.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'exponential'; p.refDistance = 2.2; p.rolloffFactor = 1.6; p.maxDistance = 70; p.connect(AU.muffle); const rs = C.createGain(); rs.gain.value = .35; p.connect(rs); rs.connect(AU.rev);
+  const mk = (buf)=>{ const s = C.createBufferSource(); s.buffer = buf; s.loop = true; const g = C.createGain(); g.gain.value = 0; s.connect(g); g.connect(p); s.start(0, Math.random()*buf.duration); return { s, g }; };
+  const A = mk(AU.growl[0]), B = mk(AU.growl[1]);
+  const sub = C.createOscillator(); sub.frequency.value = 39; const sg = C.createGain(); sg.gain.value = 0; sub.connect(sg); sg.connect(AU.master); sub.start();
+  AU.mon = { p, A, B, sg }; }
 function monsterSound(pos, vol, agit, near){ if (!AU.mon) return; const M2 = AU.mon, t = now(); near = near || 0; M2.p.positionX.setTargetAtTime(pos.x, t, .05); M2.p.positionY.setTargetAtTime(pos.y, t, .05); M2.p.positionZ.setTargetAtTime(pos.z, t, .05);
-  M2.g.gain.setTargetAtTime(vol*.8, t, .15); M2.bp.frequency.setTargetAtTime(900 + agit*2200 + Math.random()*400, t, .1); M2.s.playbackRate.setTargetAtTime(.85 + agit*.5 + (Math.random() - .5)*.12, t, .2);
-  M2.gr.gain.setTargetAtTime(vol*(.18 + agit*.42), t, .2); const f = 46 + agit*18 + (Math.random() < .03 ? -14 : 0); M2.o1.frequency.setTargetAtTime(f, t, .15); M2.o2.frequency.setTargetAtTime(f*1.068, t, .15); M2.fm.frequency.setTargetAtTime(360 + agit*260, t, .3);
-  M2.sg.gain.setTargetAtTime(near*near*.55*(vol > 0 ? 1 : 0), t, .25); M2.rg.gain.setTargetAtTime(near > .75 ? (near - .75)*.05 : 0, t, .3); }
-// 쫓기 시작 · 붙잡을 때: 찢어지는 디지털 비명 (FM + 찌그러뜨림)
-function screech(pos, v){ if (!AU.c) return; const C = AU.c, t = now(), dur = .9 + Math.random()*.5;
-  const car = C.createOscillator(), mod = C.createOscillator(), mg = C.createGain(); car.type = 'sawtooth'; car.frequency.setValueAtTime(2600 + Math.random()*800, t); car.frequency.exponentialRampToValueAtTime(700, t + dur);
-  mod.frequency.setValueAtTime(170 + Math.random()*90, t); mg.gain.setValueAtTime(1800, t); mg.gain.linearRampToValueAtTime(400, t + dur); mod.connect(mg); mg.connect(car.frequency);
-  const sh = C.createWaveShaper(); const cu = new Float32Array(512); for (let i=0;i<512;i++){ const x = i/256 - 1; cu[i] = Math.sign(x)*Math.pow(Math.abs(x), .4); } sh.curve = cu;
-  const hp = C.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500; const g = C.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.32*v, t + .03); g.gain.setValueAtTime(.32*v, t + dur*.6); g.gain.exponentialRampToValueAtTime(.001, t + dur);
-  car.connect(sh); sh.connect(hp); hp.connect(g); out(g, { pos, rev:.55, ref:4 }); car.start(t); mod.start(t); car.stop(t + dur + .05); mod.stop(t + dur + .05);
-  monGlitch(pos, .8*v); tone(70, 30, .7, 'sine', .7*v, { raw:true, rev:0 }); }
+  // 가까울수록 크게 (멀면 거의 안 들림), 흥분하면 거친 쪽(B)이 섞임
+  const nv = vol > 0 ? vol*(.15 + near*1.1) : 0; M2.A.g.gain.setTargetAtTime(nv*(1 - agit*.6), t, .2); M2.B.g.gain.setTargetAtTime(nv*agit*.9, t, .2);
+  M2.A.s.playbackRate.setTargetAtTime(1 + (Math.random() - .5)*.03, t, .3); M2.sg.gain.setTargetAtTime(vol > 0 ? near*near*.35 : 0, t, .25); }
+function monGlitch(pos, v){ roar(pos, v*.6); }
+// 쫓기 시작 · 붙잡을 때: 크게 내지르는 포효 (같은 그르렁을 빠르게 · 크게)
+function roar(pos, v){ if (!AU.c || !AU.growl) return; const C = AU.c, t = now(), dur = 1 + Math.random()*.6; const s = C.createBufferSource(); s.buffer = AU.growl[1]; s.playbackRate.setValueAtTime(1.25, t); s.playbackRate.linearRampToValueAtTime(.9, t + dur);
+  const g = C.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.1*v, t + .06); g.gain.setValueAtTime(1.1*v, t + dur*.6); g.gain.exponentialRampToValueAtTime(.001, t + dur); s.connect(g); out(g, { pos, rev:.5, ref:4 }); s.start(t, Math.random()*2); s.stop(t + dur + .05); }
+function screech(pos, v){ roar(pos, v); tone(60, 30, .6, 'sine', .6*v, { raw:true, rev:0 }); }
 // 장롱 앞에서: 낮게 끌리는 숨 + 그르렁
 function growlBurst(pos){ if (!AU.c) return; for (let i=0;i<3;i++){ noise(1.1, 300, 120, 'bandpass', .35, { pos, at:i*1.3, atk:.5, q:2, rev:.5 }); tone(62, 44, 1.1, 'sawtooth', .07, { pos, at:i*1.3 + .1, atk:.4 }); } }
-function monGlitch(pos, v){ if (!AU.c) return; const s = AU.c.createBufferSource(); s.buffer = AU.monBufs[1]; s.playbackRate.value = rand(.9, 1.6); const g = AU.c.createGain(); g.gain.value = v; s.connect(g); out(g, { pos, rev:.4, ref:3 }); s.start(0, Math.random()*2); s.stop(now() + rand(.25, .9)); }
 function monStep(pos, v){ tone(62, 30, .32, 'sine', .8*v, { pos, rev:.55, ref:3 }); noise(.12, 500, 90, 'lowpass', .55*v, { pos, rev:.45 }); noise(.04, 2400, 0, 'highpass', .12*v, { pos, at:.02, rev:.3 }); }
 // ---------- 효과음 ----------
 const SFX = {
@@ -332,27 +335,24 @@ const SFX = {
   powerUp:()=>{ for (let i=0;i<5;i++) noise(.04, 5000, 0, 'highpass', .25, { at:i*.11 + Math.random()*.05 }); tone(40, 120, 1.4, 'sawtooth', .07, { atk:.6 }); },
   heart:(v)=>{ tone(58, 40, .14, 'sine', .9*v, { rev:0, raw:true }); tone(54, 38, .12, 'sine', .7*v, { at:.2, rev:0, raw:true }); },
   breath:(v)=>{ noise(.7, 900, 500, 'bandpass', .14*v, { q:.7, atk:.25, rev:.05 }); },
-  hit:()=>{ tone(90, 30, .5, 'sine', 1, { raw:true, rev:0 }); noise(.4, 3000, 200, 'lowpass', .9, { raw:true, rev:0 }); },
+  hit:()=>{ tone(90, 30, .6, 'sine', 1.1, { raw:true, rev:0 }); tone(45, 25, .9, 'sine', .9, { raw:true, rev:0 }); },
   win:()=>{ for (const [f, a] of [[523, 0], [659, .25], [784, .5], [1046, .8]]) tone(f, f, 1.6, 'sine', .22, { at:a, rev:.6 }); },
   stinger:()=>{ for (const f of [233, 247, 262]) tone(f, f*.97, 1.6, 'sawtooth', .07, { atk:.02, rev:.6 }); noise(1.2, 4000, 800, 'bandpass', .25, { q:.5, rev:.6 }); }
 };
-// ---------- 잡혔을 때: 남자가 내지르는 듯한 비명 (포먼트 합성) + 지지직 폭발 + 저음 쾅 ----------
-function scream(){ if (!AU.c) return; const C = AU.c, t = now(), dur = 1.9;
-  const shaper = C.createWaveShaper(); const cu = new Float32Array(1024); for (let i=0;i<1024;i++){ const x = i/512 - 1; cu[i] = Math.tanh(x*4.5); } shaper.curve = cu;
-  const pre = C.createGain(); pre.gain.value = 1; const post = C.createGain(); post.gain.setValueAtTime(0, t); post.gain.linearRampToValueAtTime(1.15, t + .05); post.gain.setValueAtTime(1.1, t + dur*.6); post.gain.exponentialRampToValueAtTime(.001, t + dur);
-  // 성대: 톱니 두 개 (살짝 어긋나게) — 음높이가 확 올라갔다가 떨리며 내려온다
-  const vib = C.createOscillator(); vib.frequency.value = 7.5; const vg = C.createGain(); vg.gain.value = 14; vib.connect(vg);
-  const jit = C.createBufferSource(); jit.buffer = AU.noise; jit.loop = true; const jl = C.createBiquadFilter(); jl.type = 'lowpass'; jl.frequency.value = 30; const jg = C.createGain(); jg.gain.value = 40; jit.connect(jl); jl.connect(jg);
-  for (const det of [0, 9]){ const o = C.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(150 + det, t); o.frequency.exponentialRampToValueAtTime(285 + det, t + .14); o.frequency.linearRampToValueAtTime(262 + det, t + dur*.7); o.frequency.exponentialRampToValueAtTime(170, t + dur);
-    vg.connect(o.frequency); jg.connect(o.frequency); o.connect(pre); o.start(t); o.stop(t + dur + .1); }
-  const br = C.createBufferSource(); br.buffer = AU.noise; const brg = C.createGain(); brg.gain.value = .35; br.connect(brg); brg.connect(pre); br.start(t, Math.random()); br.stop(t + dur);
+// ---------- 잡혔을 때: 남자가 내지르는 비명을 낮고 크게 찌그러뜨려 괴물 포효처럼 (지지직 없음) ----------
+function scream(){ if (!AU.c) return; const C = AU.c, t = now(), dur = 2.3;
+  const shaper = C.createWaveShaper(); const cu = new Float32Array(1024); for (let i=0;i<1024;i++){ const x = i/512 - 1; cu[i] = Math.tanh(x*9); } shaper.curve = cu;
+  const pre = C.createGain(); pre.gain.value = 1.4; const post = C.createGain(); post.gain.setValueAtTime(0, t); post.gain.linearRampToValueAtTime(2.2, t + .04); post.gain.setValueAtTime(2.1, t + dur*.65); post.gain.exponentialRampToValueAtTime(.001, t + dur);
+  const vib = C.createOscillator(); vib.frequency.value = 6.5; const vg = C.createGain(); vg.gain.value = 10; vib.connect(vg);
+  const jit = C.createBufferSource(); jit.buffer = AU.noise; jit.loop = true; const jl = C.createBiquadFilter(); jl.type = 'lowpass'; jl.frequency.value = 35; const jg = C.createGain(); jg.gain.value = 45; jit.connect(jl); jl.connect(jg);
+  for (const [f0, f1, f2, det, gv] of [[120, 215, 150, 0, 1], [123, 220, 152, 6, .9], [60, 108, 75, 0, .7]]){ const o = C.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 + det, t); o.frequency.exponentialRampToValueAtTime(f1 + det, t + .16); o.frequency.linearRampToValueAtTime(f1*.92 + det, t + dur*.7); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    vg.connect(o.frequency); jg.connect(o.frequency); const og = C.createGain(); og.gain.value = gv; o.connect(og); og.connect(pre); o.start(t); o.stop(t + dur + .1); }
+  const br = C.createBufferSource(); br.buffer = AU.noise; const brf = C.createBiquadFilter(); brf.type = 'bandpass'; brf.frequency.value = 1400; brf.Q.value = .8; const brg = C.createGain(); brg.gain.value = .5; br.connect(brf); brf.connect(brg); brg.connect(pre); br.start(t, Math.random()); br.stop(t + dur);
   vib.start(t); vib.stop(t + dur + .1); jit.start(t); jit.stop(t + dur + .1);
-  pre.connect(shaper); // "아아—" 모음 포먼트
-  for (const [f, q, gn] of [[760, 7, 1], [1150, 8, .55], [2500, 9, .32], [3400, 10, .15]]){ const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = C.createGain(); g.gain.value = gn*1.6; shaper.connect(bp); bp.connect(g); g.connect(post); }
-  post.connect(AU.master); const rs = C.createGain(); rs.gain.value = .45; post.connect(rs); rs.connect(AU.rev);
-  // 지지직 폭발 + 쾅
-  const st = C.createBufferSource(); st.buffer = AU.monBufs[1]; st.playbackRate.value = 1.4; const sg = C.createGain(); sg.gain.setValueAtTime(1.2, t); sg.gain.exponentialRampToValueAtTime(.001, t + 1.4); st.connect(sg); sg.connect(AU.master); st.start(t); st.stop(t + 1.5);
-  tone(80, 26, 1.2, 'sine', 1.2, { raw:true, rev:0 }); noise(.5, 8000, 300, 'lowpass', 1, { raw:true, rev:.5 }); }
+  pre.connect(shaper);
+  for (const [f, q, gn] of [[650, 5, 1], [1050, 6, .6], [2300, 7, .3], [300, 3, .8]]){ const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = C.createGain(); g.gain.value = gn*1.7; shaper.connect(bp); bp.connect(g); g.connect(post); }
+  post.connect(AU.master); const rs = C.createGain(); rs.gain.value = .5; post.connect(rs); rs.connect(AU.rev);
+  roar(null, 1.3); tone(70, 24, 1.4, 'sine', 1.4, { raw:true, rev:0 }); }
 // =====================================================================
 //  세계: 시드로 만든 회색 미로 + 계단 + 위층 시작 방(엘리베이터) + 로비 방
 // =====================================================================
