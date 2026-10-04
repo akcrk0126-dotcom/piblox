@@ -59,7 +59,7 @@ body.play #hud{display:block}
 #kpG button{font:600 20px 'IBM Plex Mono',monospace;background:#1e1e1e;color:#ddd;border:1px solid #3a3a3a;height:52px;cursor:pointer}
 #kpG button:active{background:#444}
 #scare{position:fixed;inset:0;z-index:40;display:none;background:#000}
-#scare canvas{width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+#scare canvas{width:100%;height:100%;object-fit:cover}
 #death{position:fixed;inset:0;z-index:35;display:none;flex-direction:column;align-items:center;justify-content:center;background:#000;gap:16px;text-align:center}
 #death h1{font:900 clamp(40px,9vw,90px) 'Noto Sans KR',sans-serif;letter-spacing:.2em;color:#ddd}
 #death p{font-size:13px;letter-spacing:.2em;color:#888;line-height:1.9}
@@ -116,7 +116,7 @@ body.touch.play #touch{display:block}
  <div id="stamBar"><div></div></div>
 </div>
 <div id="ov"></div>
-<div id="scare"><canvas id="scareC" width="320" height="200"></canvas></div>
+<div id="scare"><canvas id="scareC" width="640" height="400"></canvas></div>
 <div id="death"><h1 id="dTitle">잡혔다</h1><p id="dSub"></p><button class="btn" id="dBtn" style="display:none">로비로</button></div>
 <div id="pause"><h2>일시정지</h2><button class="btn" id="pRes">계속하기</button><button class="btn" id="pQuit">로비로 나가기</button><div id="help" style="text-align:center;margin-top:12px">WASD 이동 · SHIFT 달리기 · E 상호작용 / 숨기 · 마우스 시점 · ESC 일시정지</div></div>
 <div id="lobby">
@@ -162,7 +162,7 @@ function RNG(seed){ let a = seed >>> 0; const f = ()=>{ a |= 0; a = a + 0x6D2B79
 const ren = new T.WebGLRenderer({ canvas:$('c'), antialias:!isTouch, powerPreference:'high-performance' });
 ren.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.2 : 1.6)); ren.setSize(innerWidth, innerHeight);
 ren.outputEncoding = T.sRGBEncoding; ren.toneMapping = T.ACESFilmicToneMapping; ren.toneMappingExposure = 1.1;
-const scene = new T.Scene(); scene.background = new T.Color(0x050505); scene.fog = new T.FogExp2(0x070707, .085);
+const scene = new T.Scene(); scene.background = new T.Color(0x050505); scene.fog = new T.FogExp2(0x070707, .055);
 const cam = new T.PerspectiveCamera(74, innerWidth/innerHeight, .05, 120); cam.rotation.order = 'YXZ'; scene.add(cam);
 addEventListener('resize', ()=>{ cam.aspect = innerWidth/innerHeight; cam.updateProjectionMatrix(); ren.setSize(innerWidth, innerHeight); });
 const hemi = new T.HemisphereLight(0x9a9a9a, 0x141414, .16); scene.add(hemi);
@@ -345,13 +345,16 @@ function scream(){ if (!AU.c) return; const C = AU.c, t = now(), dur = 2.3;
   const pre = C.createGain(); pre.gain.value = 1.4; const post = C.createGain(); post.gain.setValueAtTime(0, t); post.gain.linearRampToValueAtTime(2.2, t + .04); post.gain.setValueAtTime(2.1, t + dur*.65); post.gain.exponentialRampToValueAtTime(.001, t + dur);
   const vib = C.createOscillator(); vib.frequency.value = 6.5; const vg = C.createGain(); vg.gain.value = 10; vib.connect(vg);
   const jit = C.createBufferSource(); jit.buffer = AU.noise; jit.loop = true; const jl = C.createBiquadFilter(); jl.type = 'lowpass'; jl.frequency.value = 35; const jg = C.createGain(); jg.gain.value = 45; jit.connect(jl); jl.connect(jg);
-  for (const [f0, f1, f2, det, gv] of [[120, 215, 150, 0, 1], [123, 220, 152, 6, .9], [60, 108, 75, 0, .7]]){ const o = C.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 + det, t); o.frequency.exponentialRampToValueAtTime(f1 + det, t + .16); o.frequency.linearRampToValueAtTime(f1*.92 + det, t + dur*.7); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  for (const [f0, f1, f2, det, gv] of [[150, 255, 170, 0, 1.3], [153, 262, 172, 7, 1.1], [75, 128, 86, 0, .55]]){ const o = C.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 + det, t); o.frequency.exponentialRampToValueAtTime(f1 + det, t + .16); o.frequency.linearRampToValueAtTime(f1*.92 + det, t + dur*.7); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
     vg.connect(o.frequency); jg.connect(o.frequency); const og = C.createGain(); og.gain.value = gv; o.connect(og); og.connect(pre); o.start(t); o.stop(t + dur + .1); }
   const br = C.createBufferSource(); br.buffer = AU.noise; const brf = C.createBiquadFilter(); brf.type = 'bandpass'; brf.frequency.value = 1400; brf.Q.value = .8; const brg = C.createGain(); brg.gain.value = .5; br.connect(brf); brf.connect(brg); brg.connect(pre); br.start(t, Math.random()); br.stop(t + dur);
   vib.start(t); vib.stop(t + dur + .1); jit.start(t); jit.stop(t + dur + .1);
   pre.connect(shaper);
-  for (const [f, q, gn] of [[650, 5, 1], [1050, 6, .6], [2300, 7, .3], [300, 3, .8]]){ const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = C.createGain(); g.gain.value = gn*1.7; shaper.connect(bp); bp.connect(g); g.connect(post); }
-  post.connect(AU.master); const rs = C.createGain(); rs.gain.value = .5; post.connect(rs); rs.connect(AU.rev);
+  for (const [f, q, gn] of [[720, 5, 1.2], [1150, 6, .85], [2450, 7, .5], [3300, 8, .25], [320, 3, .6]]){ const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; const g = C.createGain(); g.gain.value = gn*1.7; shaper.connect(bp); bp.connect(g); g.connect(post); }
+  // 깨지는 소리: 크게 키운 뒤 딱 잘라버리는 하드 클리핑 → 압축기 안 거치고 바로 스피커로
+  const boost = C.createGain(); boost.gain.value = 3.2; const clip = C.createWaveShaper(); const cc = new Float32Array(2048); for (let i=0;i<2048;i++){ const x = (i/1024 - 1)*3; cc[i] = Math.max(-.98, Math.min(.98, x)); } clip.curve = cc;
+  const loud = C.createGain(); loud.gain.value = 1; post.connect(boost); boost.connect(clip); clip.connect(loud); loud.connect(C.destination);
+  AU.master.gain.cancelScheduledValues(t); AU.master.gain.setValueAtTime(.9, t); AU.master.gain.linearRampToValueAtTime(.35, t + .05); AU.master.gain.setValueAtTime(.35, t + dur); AU.master.gain.linearRampToValueAtTime(.9, t + dur + 1.2);
   roar(null, 1.3); tone(70, 24, 1.4, 'sine', 1.4, { raw:true, rev:0 }); }
 // =====================================================================
 //  세계: 시드로 만든 회색 미로 + 계단 + 위층 시작 방(엘리베이터) + 로비 방
@@ -614,7 +617,8 @@ function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.
     const fg = new T.ExtrudeGeometry(fs, { depth:.12, bevelEnabled:true, bevelThickness:.015, bevelSize:.012, bevelSegments:3, curveSegments:10 }); fg.rotateY(-Math.PI/2); fg.translate(.06, 0, 0); an.add(new T.Mesh(fg, SH));
     R.legs.push({ th, kn, an, sx }); }
   root.userData.R = R; root.userData.body = body; return root; }
-const MONM = buildMonster(); MONM.visible = false; scene.add(MONM); MONM.userData.body.scale.setScalar(.84);
+const MONM = buildMonster(); MONM.visible = false; scene.add(MONM);
+{ const RIM = new T.MeshBasicMaterial({ color:0x262626, side:T.BackSide, fog:false }); const ms = []; MONM.traverse(o=>{ if (o.isMesh && o.material === SH && o.geometry.type === 'ExtrudeGeometry') ms.push(o); }); for (const o of ms){ const r = new T.Mesh(o.geometry, RIM); r.scale.copy(o.scale).multiplyScalar(1.035); r.position.copy(o.position); r.rotation.copy(o.rotation); r.renderOrder = -1; o.parent.add(r); } } MONM.userData.body.scale.setScalar(.84);
 // 바닥에 드리운 어두운 그림자
 { const c = cv(64, 64, (g)=>{ const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }); const t = new T.CanvasTexture(c);
   const sh = new T.Mesh(new T.PlaneGeometry(1.6, 1.6), new T.MeshBasicMaterial({ map:t, transparent:true, depthWrite:false })); sh.rotation.x = -Math.PI/2; sh.position.y = .02; MONM.add(sh); }
@@ -644,6 +648,8 @@ function animMonster(dt, m){ const R = MONM.userData.R; if (!m || m.st === 'off'
   if (MV.glT <= 0){ MV.glT = stare ? rand(1.2, 2.6) : rand(2, 4); MV.hT.set(rand(-.05, .05) + (stare ? .1 : 0), rand(-.18, .18), stare ? rand(-.22, .22) : rand(-.04, .04)); }
   const hk = 1 - Math.exp(-dt*(stare ? 1.6 : 1.1)); R.head.rotation.x += (MV.hT.x - R.head.rotation.x)*hk; R.head.rotation.y += (MV.hT.y - R.head.rotation.y)*hk; R.head.rotation.z += (MV.hT.z - R.head.rotation.z)*hk;
   MONM.userData.body.position.x = 0;
+  if (MV.lunge != null){ MV.lunge += dt; const k = Math.min(1, MV.lunge/.38), dist = lerp(2.6, .32, k*k), f = V(); cam.getWorldDirection(f); f.y = 0; f.normalize();
+    MONM.visible = true; MONM.position.set(cam.position.x + f.x*dist, cam.position.y - 2.43 + .06 + Math.sin(MV.lunge*40)*.03, cam.position.z + f.z*dist); MONM.rotation.y = Math.atan2(-f.x, -f.z); R.head.rotation.set(-.1, 0, Math.sin(MV.lunge*30)*.08); for (const A of R.arms){ A.sh.rotation.x = -1.4; } }
   MV.blink = (MV.blink || 0) - dt; if (MV.blink < -rand(3, 7)) MV.blink = .12; for (const e of R.eyes) e.visible = MV.blink <= 0; }
 
 // ---------- AI (호스트만) ----------
@@ -929,18 +935,24 @@ const SC = $('scareC'), SCg = SC.getContext('2d');
 const SCM = document.createElement('canvas'); SCM.width = SC.width; SCM.height = SC.height; const SCMg = SCM.getContext('2d');
 function scareShape(g){ // 원작 사진에서 뽑은 윤곽 그대로
   g.beginPath(); g.moveTo(-171, -44.8); g.lineTo(-25.6, -51.2); g.lineTo(-16.2, -52.0); g.bezierCurveTo(-12, -57.5, 12, -57.5, 16.2, -52.0); g.lineTo(25.6, -51.2); g.lineTo(171, -44.8); g.lineTo(171.0, -41.8); g.lineTo(141.9, -34.9); g.lineTo(102.2, -27.2); g.lineTo(71.0, -19.6); g.lineTo(39.3, -4.2); g.lineTo(29.1, 3.5); g.lineTo(26.5, 11.2); g.lineTo(22.7, 18.9); g.lineTo(18.4, 26.6); g.lineTo(17.1, 36.0); g.lineTo(16.7, 42.0); g.lineTo(22.2, 49.7); g.lineTo(33.3, 57.4); g.lineTo(50.0, 65.1); g.lineTo(59.0, 72.8); g.lineTo(64.1, 80.5); g.lineTo(69.3, 88.2); g.lineTo(74.0, 95.9); g.lineTo(75.7, 111.3); g.lineTo(75.7, 295.1); g.lineTo(-75.7, 295.1); g.lineTo(-75.7, 111.3); g.lineTo(-74.0, 95.9); g.lineTo(-69.3, 88.2); g.lineTo(-64.1, 80.5); g.lineTo(-59.0, 72.8); g.lineTo(-50.0, 65.1); g.lineTo(-33.3, 57.4); g.lineTo(-22.2, 49.7); g.lineTo(-16.7, 42.0); g.lineTo(-17.1, 36.0); g.lineTo(-18.4, 26.6); g.lineTo(-22.7, 18.9); g.lineTo(-26.5, 11.2); g.lineTo(-29.1, 3.5); g.lineTo(-39.3, -4.2); g.lineTo(-71.0, -19.6); g.lineTo(-102.2, -27.2); g.lineTo(-141.9, -34.9); g.lineTo(-171.0, -41.8); g.closePath(); g.fill(); }
-function drawScare(t){ const w = SC.width, h = SC.height, g = SCg; const z = .55 + t*1.9 + Math.sin(t*38)*.02, cx = w/2 + rand(-4, 4)*(1 - t*.5), cy = h*.55 + rand(-3, 3) + t*20;
-  // 뿌연 회색 배경 (사진처럼)
-  const bg = g.createRadialGradient(w/2, h/2, 10, w/2, h/2, w*.7); bg.addColorStop(0, '#9a9a9a'); bg.addColorStop(1, '#1a1a1a'); g.filter = 'none'; g.fillStyle = bg; g.fillRect(0, 0, w, h);
-  g.save(); g.translate(cx, cy); g.scale(z, z); g.filter = 'blur(' + (7/z + 1.5).toFixed(1) + 'px)'; g.fillStyle = 'rgba(0,0,0,.6)'; scareShape(g); g.filter = 'blur(1.2px)'; g.fillStyle = '#050505'; scareShape(g); g.filter = 'none';
-  // 눈: 가로로 긴 하얀 타원
-  g.strokeStyle = '#fff'; g.lineWidth = 2.3; g.lineCap = 'butt'; for (const s2 of [-1, 1]){ const ex = s2*10.6; g.beginPath(); g.moveTo(ex - 3.8, -9); g.lineTo(ex - 3.8, -12.6); g.arc(ex, -12.6, 3.8, Math.PI, 0); g.lineTo(ex + 3.8, -9); g.stroke(); }
-  g.restore();
-  const n = g.getImageData(0, 0, w, h), nd = n.data; for (let i=0;i<nd.length;i+=4){ const v = (Math.random() - .5)*34; nd[i] += v; nd[i + 1] += v; nd[i + 2] += v; } g.putImageData(n, 0, 0);
-  if (t > .55) for (let k=0;k<4;k++){ const y = Math.random()*h|0, hh = 2 + Math.random()*10|0; g.drawImage(SC, 0, y, w, hh, rand(-20, 20), y, w, hh); } }
+function drawScare(t){ const w = SC.width, h = SC.height, g = SCg; const strobe = t < .55 && Math.floor(t*30)%3 === 0;
+  const z = 3.4 + t*3.2 + (Math.floor(t*24)%2 ? .25 : 0) + Math.sin(t*50)*.08, cx = w/2 + rand(-10, 10), cy = h*.52 + 12*z + rand(-8, 8);
+  g.filter = 'none'; g.fillStyle = strobe ? '#e8e8e8' : '#1c1c1c'; g.fillRect(0, 0, w, h);
+  if (!strobe){ const bg = g.createRadialGradient(w/2, h/2, 10, w/2, h/2, w*.7); bg.addColorStop(0, '#8a8a8a'); bg.addColorStop(1, '#0a0a0a'); g.fillStyle = bg; g.fillRect(0, 0, w, h); }
+  g.save(); g.translate(cx, cy); g.scale(z, z); g.filter = 'blur(' + (4/z + 1).toFixed(1) + 'px)'; g.fillStyle = 'rgba(0,0,0,.75)'; scareShape(g); g.filter = 'none'; g.fillStyle = '#000'; scareShape(g);
+  // 눈: 하얀 ∩ — 점점 커지며 번진다
+  const ew = 1 + t*.6; g.strokeStyle = '#fff'; g.lineCap = 'butt'; g.shadowColor = '#fff'; g.shadowBlur = 8/z*2; g.lineWidth = 2.6*ew;
+  for (const s2 of [-1, 1]){ const ex = s2*10.6, r = 3.8*ew; g.beginPath(); g.moveTo(ex - r, -9); g.lineTo(ex - r, -12.6); g.arc(ex, -12.6, r, Math.PI, 0); g.lineTo(ex + r, -9); g.stroke(); }
+  g.shadowBlur = 0; g.restore();
+  if (t > .7) { g.fillStyle = 'rgba(0,0,0,' + ((t - .7)/.3).toFixed(2) + ')'; g.fillRect(0, 0, w, h); } }
 function die(){ if (P.dead || P.out) return; P.dead = true; P.lives--; if (P.hid >= 0){ P.hid = -1; $('hideView').style.display = 'none'; } interactRelease(); ovClose();
-  scream(); SFX.hit(); $('scare').style.display = 'block'; $('flash').style.opacity = .9; setTimeout(()=>{ $('flash').style.opacity = 0; }, 60);
-  const t0 = performance.now(); const run = ()=>{ const t = (performance.now() - t0)/1000; if (t < 1.5){ drawScare(t/1.5); requestAnimationFrame(run); } else { $('scare').style.display = 'none'; after(); } }; run();
+  MV.lunge = 0; P.shake = 1.2; roar(V(MV.x, MV.y + 2, MV.z), 1.2);
+  const t0 = performance.now(); let shown = false; const sc = $('scare');
+  const run = ()=>{ const t = (performance.now() - t0)/1000;
+    if (t >= .38 && !shown){ shown = true; scream(); SFX.hit(); sc.style.display = 'block'; $('flash').style.opacity = 1; setTimeout(()=>{ $('flash').style.opacity = 0; }, 50); }
+    if (shown){ const u = (t - .38)/1.7; if (u < 1){ drawScare(u); sc.style.transform = 'translate(' + rand(-26, 26)*(1 - u*.5) + 'px,' + rand(-20, 20)*(1 - u*.5) + 'px) scale(' + (1.04 + Math.random()*.08) + ') rotate(' + rand(-2, 2) + 'deg)'; }
+      else { sc.style.display = 'none'; sc.style.transform = ''; MV.lunge = null; after(); return; } }
+    requestAnimationFrame(run); }; run();
   const after = ()=>{ const dd = $('death'); dd.style.display = 'flex'; $('dBtn').style.display = 'none';
     if (P.lives > 0){ $('dTitle').textContent = '잡혔다'; $('dSub').innerHTML = '남은 목숨 ' + P.lives + '<br>갖고 있던 열쇠는 사라졌다…'; setTimeout(respawn, 3200); }
     else { P.out = true; $('dTitle').textContent = '끝'; $('dSub').innerHTML = GAME.net ? '목숨을 모두 잃었다<br>남은 파티원을 지켜보는 중…' : '목숨을 모두 잃었다'; if (GAME.net) setTimeout(()=>{ if (!GAME.ended) dd.style.display = 'none'; }, 3500); $('dBtn').style.display = ''; try { document.exitPointerLock(); } catch(e){} } }; }
@@ -966,8 +978,8 @@ function lightsTick(dt){ const bo = W.bo > 0, mx = MV.x, mz = MV.z, mon = MONM.v
   for (const f of G.fix){ f.t -= dt; let b;
     if (f.dead) b = 0; else if (bo) b = 0;
     else { const md = mon ? Math.hypot(f.x - mx, f.z - mz) : 99;
-      if (md < 4.5) b = Math.random() < .75 ? 0 : Math.random()*.6;                    // 괴물 바로 옆: 거의 꺼짐
-      else if (md < 10){ if (f.t <= 0){ f.t = rand(.03, .25); f.st = Math.random() < .45 ? 0 : 1; } b = f.st == null ? 1 : f.st; }
+      if (md < 4.5){ if (f.t <= 0){ f.t = rand(.04, .16); f.st = Math.random() < .35 ? .25 : 1; } b = f.st == null ? 1 : f.st; }   // 괴물 바로 옆: 세게 깜빡임 (실루엣은 보이게)
+      else if (md < 10){ if (f.t <= 0){ f.t = rand(.05, .3); f.st = Math.random() < .25 ? .3 : 1; } b = f.st == null ? 1 : f.st; }
       else if (f.kind === 'flicker'){ if (f.t <= 0){ const burst = Math.random() < .3; f.t = burst ? rand(.02, .09) : rand(.4, 3.5); f.st = burst ? (Math.random() < .5 ? 0 : .3) : 1; } b = f.st == null ? 1 : f.st; }
       else { if (f.t <= 0){ f.t = rand(2, 14); f.st = Math.random() < .12 ? .25 : 1; if (f.st < 1) f.t = .06; } b = f.st == null ? 1 : f.st; } }
     if ((b > .5) !== (f.cur > .5) && Math.hypot(f.x - ex, f.z - ez) < 9 && Math.random() < .5) SFX.flick(V(f.x, f.y, f.z), .7);
@@ -975,7 +987,7 @@ function lightsTick(dt){ const bo = W.bo > 0, mx = MV.x, mz = MV.z, mon = MONM.v
   // 가까운 불 8개에만 진짜 조명
   lightT -= dt; if (lightT <= 0){ lightT = .15; const cand = G.fix.filter(f=>!f.dead).map(f=>({ f, d:Math.hypot(f.x - ex, f.z - ez) + Math.abs(f.y - cam.position.y)*2 })).sort((a, b)=>a.d - b.d).slice(0, LPOOL.length); LPOOL.forEach((l, i)=>{ l.userData.f = cand[i] ? cand[i].f : null; }); }
   let near = 99; for (const l of LPOOL){ const f = l.userData.f; if (!f){ l.intensity = 0; continue; } l.position.set(f.x, f.y - .15, f.z); l.intensity = f.cur*1.25; if (f.cur > .5) near = Math.min(near, Math.hypot(f.x - ex, f.z - ez)); }
-  hemi.intensity = bo ? .03 : .14; G.elev.cabL.intensity = G.elev.open > .1 ? 1.2 : 0;
+  hemi.intensity = bo ? .04 : .2; G.elev.cabL.intensity = G.elev.open > .1 ? 1.2 : 0;
   if (AU.hum){ humV += ((near < 99 ? CL(1.3 - near/6, 0, 1)*.55 : 0) - humV)*Math.min(1, dt*8); AU.hum.gain.setTargetAtTime(humV, now(), .03); } }
 
 // ---------- 세계 상태 → 모습 ----------
