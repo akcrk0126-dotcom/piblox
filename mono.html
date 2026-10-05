@@ -889,9 +889,21 @@ const wp = (obj, x, y, z)=>obj.localToWorld(V(x, y, z));
 function buildInter(){ INTER = [];
   for (const pk of G.planks) addInter({ pos:pk.m.position.clone(), r:2.2, hold:1.15, label:'판자 뜯기', cond:()=>!W.pl[pk.id], onHold:()=>{ if (Math.random() < .08) SFX.creakHold(pk.m.position); pk.m.rotation.z += (Math.random() - .5)*.01; },
     use:()=>{ SFX.plank(pk.m.position, W.pl.filter(v=>!v).length === 1); W.pl[pk.id] = 1; act({ a:'pl', i:pk.id }); } });
-  for (const dr of G.drw){ const ds = G.dres[dr.dres]; addInter({ posFn:()=>wp(dr.g, 0, 0, .35), r:1.9, label:'', labelFn:()=>W.dr[dr.id] ? '서랍 닫기' : '서랍 열기', use:()=>{ const v = W.dr[dr.id] ? 0 : 1; W.dr[dr.id] = v; SFX.drawer(wp(dr.g, 0, 0, .3), v); act({ a:'dr', i:dr.id, v }); } });
-    if (dr.note) addInter({ posFn:()=>wp(dr.note, 0, 0, 0), r:1.9, label:'쪽지 읽기', cond:()=>W.dr[dr.id], prio:1, use:()=>showCode('서랍 속 쪽지') }); }
-  for (const k of G.keys) addInter({ posFn:()=>wp(k.m, 0, 0, 0), r:1.9, label:'열쇠 줍기', prio:2, cond:()=>{ const s = W.it[k.id]; return s && s[0] === 'd' && W.dr[+s.slice(1)] && k.m.parent; }, use:()=>{ SFX.key(); W.it[k.id] = 'p' + NET.uid; act({ a:'tk', k:k.id }); toast('열쇠를 주웠다 (' + myKeys() + ')'); } });
+  // 서랍장: 서랍장 하나가 상호작용 하나. 시선이 닿는 높이로 위/가운데/아래 서랍을 고르고,
+  //  열린 서랍에 열쇠 · 쪽지가 있으면 E 한 번에 바로 줍는다 (위 서랍이 열려 있어도 아래 서랍 문제없음)
+  const NAMES = ['아래', '가운데', '위'];
+  for (const ds of G.dres){ const hit = ()=>{ const f = V(); cam.getWorldDirection(f); const n = V(ds.dx, 0, ds.dz), p0 = V(ds.x + ds.dx*.28, 0, ds.z + ds.dz*.28);
+      const den = f.dot(n); let k = -1; if (den < -.05){ const t = p0.clone().sub(cam.position).dot(n)/den; if (t > 0 && t < 3){ const y = cam.position.y + f.y*t - floorY(ds.x, ds.z); k = Math.floor((y - .1)/((1.05 - .14)/3)); } }
+      if (k < 0 || k > 2){ // 시선이 서랍장 밖이면: 내용물 있는 열린 서랍 → 닫힌 서랍 중 가장 가까운 높이
+        const yy = cam.position.y + f.y*.8 - floorY(ds.x, ds.z); k = CL(Math.floor((yy - .1)/.3), 0, 2); }
+      return ds.drs[k]; };
+    const keyIn = dr=>G.keys.find(kk=>W.it[kk.id] === 'd' + dr.id);
+    addInter({ posFn:()=>V(ds.x + ds.dx*.35, floorY(ds.x, ds.z) + .55, ds.z + ds.dz*.35), r:2.3, minDot:.55,
+      labelFn:()=>{ const dr = hit(); if (!dr) return '서랍'; const open = W.dr[dr.id]; if (open && keyIn(dr)) return '열쇠 줍기'; if (open && dr.note && !dr.read) return '쪽지 읽기'; return (open ? '서랍 닫기' : '서랍 열기') + ' (' + NAMES[dr.k] + ')'; },
+      use:()=>{ const dr = hit(); if (!dr) return; const open = W.dr[dr.id], kk = keyIn(dr);
+        if (open && kk){ SFX.key(); W.it[kk.id] = 'p' + NET.uid; act({ a:'tk', k:kk.id }); toast('열쇠를 주웠다 (' + myKeys() + ')'); return; }
+        if (open && dr.note && !dr.read){ dr.read = true; showCode('서랍 속 쪽지'); return; }
+        const v = open ? 0 : 1; W.dr[dr.id] = v; if (!v) dr.read = false; SFX.drawer(wp(dr.g, 0, 0, .3), v); act({ a:'dr', i:dr.id, v }); } }); }
   if (G.codeAt.t === 'b') addInter({ pos:G.codeAt.pos.clone(), r:2, label:'쪽지 읽기', use:()=>showCode('하얀 상자 위 쪽지') });
   if (G.codeAt.t === 'm') addInter({ pos:G.codeAt.pos.clone(), r:2.6, label:'거울을 들여다보기', use:()=>showCode('거울에 쓰여 있다') });
   for (const m of G.mirr) if (!(G.codeAt.t === 'm' && G.codeAt.id === m.id)) addInter({ pos:m.pos.clone(), r:1.6, label:'거울을 들여다보기', use:()=>{ toast('뿌옇다. 아무것도 비치지 않는다…'); SFX.stinger && Math.random() < .25 && SFX.stinger(); } });
@@ -905,7 +917,7 @@ function interactRelease(){ holdOn = false; holdT = 0; $('hold').style.opacity =
 function useInter(it){ interCur = null; $('prompt').classList.remove('on'); it.use(it); }
 function interTick(dt){ if (P.dead || P.out || P.esc || P.hid >= 0){ $('prompt').classList.remove('on'); interCur = null; return; }
   const fw = V(-Math.sin(P.yaw)*Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw)*Math.cos(P.pitch)), eye = cam.position; let best = null, bs = -1;
-  for (const it of INTER){ if (it.cond && !it.cond()) continue; const p = it.posFn ? it.posFn() : it.pos, d = p.clone().sub(eye), L = d.length(); if (L > it.r) continue; const dot = d.normalize().dot(fw); if (dot < .8 && L > .8) continue;
+  for (const it of INTER){ if (it.cond && !it.cond()) continue; const p = it.posFn ? it.posFn() : it.pos, d = p.clone().sub(eye), L = d.length(); if (L > it.r) continue; const dot = d.normalize().dot(fw); if (dot < (it.minDot || .8) && L > .8) continue;
     if (segBlocked(eye.x, eye.z, p.x - (p.x - eye.x)*.15, p.z - (p.z - eye.z)*.15) && L > .9) continue; const sc = dot*2 - L*.12 + (it.prio || 0)*.08; if (sc > bs){ bs = sc; best = it; } }
   if (best !== interCur){ interCur = best; holdOn = false; holdT = 0; $('hold').style.opacity = 0; }
   if (best){ $('prompt').innerHTML = (isTouch ? '' : '<kbd>E</kbd>') + (best.hold ? '꾹 눌러 ' : '') + (best.labelFn ? best.labelFn() : best.label); $('prompt').classList.add('on'); } else $('prompt').classList.remove('on');
