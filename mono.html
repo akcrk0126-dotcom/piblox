@@ -626,19 +626,20 @@ function animMonster(dt, m){ const R = MONM.userData.R; if (!m || m.st === 'off'
   const spd = m.sp || 0; MV.walk += dt*spd*1.9; MV.st = m.st; MONM.position.set(MV.x, MV.y, MV.z); MONM.rotation.y = MV.ry;
   const w = MV.walk, sw = Math.min(1, spd/2.2), run = m.st === 'chase' || m.st === 'grab';
   MV.t = (MV.t || 0) + dt; const st = m.st, stareS = st === 'stare', grab = st === 'grab', feed = st === 'feed', idle = sw < .08;
-  const amp = run ? 1 : .62;
+  const amp = run ? 1.45 : .62;
   // 다리: 허벅지 앞뒤 · 무릎은 다리가 앞으로 나갈 때 굽힘 · 발목은 바닥과 나란히
-  for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); const thg = -Math.sin(ph)*.5*amp*sw, kn = Math.max(0, Math.sin(ph + 1.9))*1.05*amp*sw + .04;
+  for (const L of R.legs){ const ph = w + (L.sx > 0 ? Math.PI : 0); const thg = -Math.sin(ph)*.5*amp*sw - (run ? .12 : 0), kn = Math.max(0, Math.sin(ph + 1.9))*(run ? 1.25 : 1.05)*amp*sw + .04;
     L.th.rotation.x = thg; L.kn.rotation.x = kn; L.an.rotation.x = -(thg + kn)*.85; L.th.rotation.z = L.sx*.02; }
   // 몸: 걸음마다 위아래 · 골반/어깨 엇갈려 비틀림 · 뛸 때 앞으로 숙임 · 서 있으면 숨쉬기
-  R.hip.position.y = 1.31 - (1 - Math.cos(w*2))*.025*sw - (run ? .04 : 0);
-  R.hip.rotation.y = Math.sin(w)*.09*sw; R.torso.rotation.y = -Math.sin(w)*.13*sw; R.torso.rotation.z = Math.sin(w)*.025*sw;
-  const lean = grab ? .32 : feed ? .45 : run ? .2 : stareS ? .12 : .04; R.torso.rotation.x += (lean - R.torso.rotation.x)*Math.min(1, dt*4);
+  R.hip.position.y = 1.31 - (1 - Math.cos(w*2))*(run ? .075 : .025)*sw - (run ? .07 : 0);
+  R.hip.rotation.y = Math.sin(w)*(run ? .2 : .09)*sw; R.torso.rotation.y = -Math.sin(w)*(run ? .3 : .13)*sw; R.torso.rotation.z = Math.sin(w)*(run ? .09 : .025)*sw + (run ? Math.sin(MV.t*23)*.025 : 0);
+  if (run){ R.head.rotation.z += Math.sin(w*2 + 1)*.06; R.head.rotation.x += (Math.random() - .5)*.06; }
+  const lean = grab ? .32 : feed ? .45 : run ? .34 + Math.sin(w*2)*.05 : stareS ? .12 : .04; R.torso.rotation.x += (lean - R.torso.rotation.x)*Math.min(1, dt*4);
   const br = idle ? Math.sin(MV.t*1.3)*.012 : 0; R.torso.scale.set(1 + br*.5, 1 + br, 1 + br);
   // 팔: 반대쪽 다리와 함께 앞뒤로, 서 있으면 아주 살짝 흔들림
-  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); let ax = -Math.sin(ph)*(run ? .5 : .26)*sw + (idle ? Math.sin(MV.t*.9 + A.sx)*.02 : 0), az = A.sx*(run ? .06 : .015);
+  for (const A of R.arms){ const ph = w + (A.sx > 0 ? 0 : Math.PI); let ax = -Math.sin(ph)*(run ? 1.05 : .26)*sw + (idle ? Math.sin(MV.t*.9 + A.sx)*.02 : 0) - (run ? .15 : 0), az = A.sx*(run ? .22 + Math.max(0, -Math.sin(ph))*.45 : .015);
     if (grab){ ax = -1.45 + Math.sin(MV.t*20)*.04; az = A.sx*.18; } else if (stareS){ ax = -.12 + Math.sin(MV.t*2 + A.sx)*.03; } else if (feed){ ax = -.9; }
-    A.sh.rotation.x += (ax - A.sh.rotation.x)*Math.min(1, dt*(grab ? 14 : 9)); A.sh.rotation.z += (az - A.sh.rotation.z)*Math.min(1, dt*6); }
+    A.sh.rotation.x += (ax - A.sh.rotation.x)*Math.min(1, dt*(grab ? 14 : run ? 18 : 9)); A.sh.rotation.z += (az - A.sh.rotation.z)*Math.min(1, dt*(run ? 14 : 6)); }
   // 경련 · 고개 꺾기 (멈춰 서서 장롱을 노려볼 때 특히)
   MV.glT -= dt; const stare = m.st === 'stare' || m.st === 'listen'; if (!MV.hT) MV.hT = V();
   if (MV.glT <= 0){ MV.glT = stare ? rand(1.2, 2.6) : rand(2, 4); MV.hT.set(rand(-.05, .05) + (stare ? .1 : 0), rand(-.18, .18), stare ? rand(-.22, .22) : rand(-.04, .04)); }
@@ -690,10 +691,10 @@ function monTick(dt, PL){ if (!W.go){ MON.st = 'off'; return; }
     case 'chase': { const p = PL.find(q=>q.uid === MON.tgt); if (!p || !p.alive || p.esc || !inMazeZone(p)){ MON.st = 'search'; const t = MON.last ? tileOf(MON.last.x, MON.last.z) : randTile(); monGo(t[0], t[1]); break; }
       const vis = monSees(p, range + 4); if (vis){ MON.last = { x:p.x, z:p.z }; MON.lostT = 0; } else MON.lostT += dt;
       if (MON.lostT > 3.5){ MON.st = 'search'; const t = tileOf(MON.last.x, MON.last.z); monGo(t[0], t[1]); break; }
-      const sp = 4.75 + (dark ? .35 : 0); const d = Math.hypot(p.x - MON.x, p.z - MON.z);
+      const sp = 5.25 + (dark ? .35 : 0); const d = Math.hypot(p.x - MON.x, p.z - MON.z);
       if (vis && d < 3.2){ const dx = p.x - MON.x, dz = p.z - MON.z; const st = Math.min(d, sp*dt); const q = { x:MON.x + dx/d*st, z:MON.z + dz/d*st }; collideCircle(q, .3); MON.x = q.x; MON.z = q.z; MON.ry = Math.atan2(dx, dz); MON.sp = sp; }
       else { MON.rp -= dt; if (MON.rp <= 0 || !MON.path){ MON.rp = .35; const t = tileOf(MON.last.x, MON.last.z); monGo(t[0], t[1]); } monFollow(dt, sp); } break; }
-    case 'toWard': { const w = MON.ward; if (monFollow(dt, 4.9)){ const fx = w.front.x, fz = w.front.z, dx = fx - MON.x, dz = fz - MON.z, d = Math.hypot(dx, dz);
+    case 'toWard': { const w = MON.ward; if (monFollow(dt, 5.5)){ const fx = w.front.x, fz = w.front.z, dx = fx - MON.x, dz = fz - MON.z, d = Math.hypot(dx, dz);
         if (d > .15){ MON.x += dx/d*Math.min(d, 3*dt); MON.z += dz/d*Math.min(d, 3*dt); MON.sp = 2; } else { MON.st = 'stare'; MON.stT = rand(3.2, 5.6); MON.ry = Math.atan2(w.x - MON.x, w.z - MON.z); netFx('stare'); } } break; }
     case 'stare': { MON.stT -= dt; const w = MON.ward; MON.ry = Math.atan2(w.x - MON.x, w.z - MON.z); const p = PL.find(q=>q.uid === MON.wuid);
       if (!p || p.hid !== w.id){ // 그새 나왔다 → 바로 쫓는다
