@@ -355,8 +355,10 @@ function scream(){ if (!AU.c) return; const C = AU.c, t = now(), dur = 2.3;
 // =====================================================================
 //  세계: 시드로 만든 회색 미로 + 계단 + 위층 시작 방(엘리베이터) + 로비 방
 // =====================================================================
-const S = 2.4, WH = 3.0, HUP = 3.6, CW = 10, CH = 9, TW = CW*2 + 1, TH = CH*2 + 1, IE = 11;   // IE: 미로 입구(계단) 열
-const ZST0 = -.5*S, ZST1 = -3.5*S, ZDOOR = -4.5*S, ZROOM1 = -8.5*S, XR0 = 8.5*S, XR1 = 13.5*S, XE = IE*S;
+const S = 2.4, WH = 3.0, HUP = 3.6;
+let CW = 10, CH = 9, TW = CW*2 + 1, TH = CH*2 + 1, IE = 11;   // 판마다 바뀜 (미로 크기 · 입구 위치). IE: 미로 입구(계단) 열
+const ZST0 = -.5*S, ZST1 = -3.5*S, ZDOOR = -4.5*S, ZROOM1 = -8.5*S; let XR0 = 8.5*S, XR1 = 13.5*S, XE = IE*S;
+let VAR = { loop:.16, rooms:4, ward:13, dres:11, mirr:6, box:7, wreck:9, light:.62, dead:.14, flick:.36 };
 const MERGE = new Map();
 function addMerged(geo, mat, x, y, z, ry, rx){ const g = geo.index ? geo.toNonIndexed() : geo; if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); g.translate(x, y, z); if (!MERGE.has(mat)) MERGE.set(mat, []); MERGE.get(mat).push(g); }
 function flushMerged(parent){ for (const [mat, list] of MERGE){ let n = 0; list.forEach(g=>n += g.attributes.position.count); const pos = new Float32Array(n*3), nor = new Float32Array(n*3), uv = new Float32Array(n*2); let o = 0;
@@ -370,13 +372,13 @@ let G = null;   // 현재 레벨 데이터
 
 // ---------- 미로 만들기 (뒤로가기 탐색 + 고리 + 방) ----------
 function genMaze(rng){ const g = []; for (let j=0;j<TH;j++){ g.push(new Array(TW).fill(1)); }
-  const seen = new Set(), st = [[Math.floor(CW/2), 0]]; seen.add(st[0] + ''); g[1][st[0][0]*2 + 1] = 0;
+  const seen = new Set(), st = [[(IE - 1)/2, 0]]; seen.add(st[0] + ''); g[1][st[0][0]*2 + 1] = 0;
   while (st.length){ const [cx, cy] = st[st.length - 1]; const nb = rng.shuf([[1, 0], [-1, 0], [0, 1], [0, -1]]).map(([dx, dy])=>[cx + dx, cy + dy, dx, dy]).filter(([x, y])=>x >= 0 && y >= 0 && x < CW && y < CH && !seen.has(x + ',' + y));
     if (!nb.length){ st.pop(); continue; } const [nx, ny, dx, dy] = nb[0]; g[cy*2 + 1 + dy][cx*2 + 1 + dx] = 0; g[ny*2 + 1][nx*2 + 1] = 0; seen.add(nx + ',' + ny); st.push([nx, ny]); }
   // 고리: 벽 일부를 뚫어 막다른 길만 있지 않게 (도망칠 길)
-  for (let j=1;j<TH-1;j++) for (let i=1;i<TW-1;i++){ if (g[j][i] !== 1) continue; const h = g[j][i-1] === 0 && g[j][i+1] === 0 && g[j-1][i] === 1 && g[j+1][i] === 1, v = g[j-1][i] === 0 && g[j+1][i] === 0 && g[j][i-1] === 1 && g[j][i+1] === 1; if ((h || v) && rng() < .16) g[j][i] = 0; }
+  for (let j=1;j<TH-1;j++) for (let i=1;i<TW-1;i++){ if (g[j][i] !== 1) continue; const h = g[j][i-1] === 0 && g[j][i+1] === 0 && g[j-1][i] === 1 && g[j+1][i] === 1, v = g[j-1][i] === 0 && g[j+1][i] === 0 && g[j][i-1] === 1 && g[j][i+1] === 1; if ((h || v) && rng() < VAR.loop) g[j][i] = 0; }
   // 방 세 개 (2×2 칸 → 3×3 타일 트임)
-  const rooms = []; for (let k=0;k<4;k++){ const rx = 1 + rng.i(CW - 2), ry = 1 + rng.i(CH - 2); if (rooms.some(r=>Math.abs(r[0] - rx) < 3 && Math.abs(r[1] - ry) < 3)) continue; rooms.push([rx, ry]); for (let j=ry*2+1;j<=ry*2+3;j++) for (let i=rx*2+1;i<=rx*2+3;i++) g[j][i] = 0; }
+  const rooms = []; for (let k=0;k<VAR.rooms;k++){ const rx = 1 + rng.i(CW - 2), ry = 1 + rng.i(CH - 2); if (rooms.some(r=>Math.abs(r[0] - rx) < 3 && Math.abs(r[1] - ry) < 3)) continue; rooms.push([rx, ry]); for (let j=ry*2+1;j<=ry*2+3;j++) for (let i=rx*2+1;i<=rx*2+3;i++) g[j][i] = 0; }
   g[0][IE] = 0; return { g, rooms }; }
 function walkable(i, j){ if (j >= 0 && j < TH && i >= 0 && i < TW) return G.grid[j][i] === 0; return i === IE && j <= -1 && j >= -4; }
 // A* (타일 위)
@@ -460,6 +462,9 @@ function makeNote(code){ const t = new T.CanvasTexture(codeCanvas(code, false));
 
 // ---------- 레벨 전체 ----------
 function buildLevel(seed){ clearLevel(); const rng = RNG(seed);
+  // 시작할 때마다 다른 맵: 미로 크기 · 입구 위치 · 고리/방 개수 · 소품 수 · 조명 상태가 시드마다 달라짐
+  CW = 8 + rng.i(5); CH = 7 + rng.i(5); TW = CW*2 + 1; TH = CH*2 + 1; IE = 2*(1 + rng.i(CW - 2)) + 1; XE = IE*S; XR0 = XE - 2.5*S; XR1 = XE + 2.5*S;
+  VAR = { loop:rng.r(.08, .26), rooms:2 + rng.i(4), ward:10 + rng.i(6), dres:9 + rng.i(5), mirr:4 + rng.i(4), box:5 + rng.i(5), wreck:6 + rng.i(6), light:rng.r(.5, .72), dead:rng.r(.08, .2), flick:rng.r(.25, .45) };
   G = { seed, grid:null, rooms:[], fix:[], ward:[], dres:[], drw:[], mirr:[], boxes:[], planks:[], keys:[], locks:[], code:'', codeAt:null, notes:[], elev:null, kp:null };
   const mz = genMaze(rng); G.grid = mz.g; G.rooms = mz.rooms; const grid = G.grid;
   // 바닥 · 천장 (미로 전체 한 판)
@@ -479,20 +484,20 @@ function buildLevel(seed){ clearLevel(); const rng = RNG(seed);
   // 위층 시작 방
   buildStartRoom(rng);
   // 형광등: 칸 중앙 위주로
-  for (let j=1;j<TH;j+=2) for (let i=1;i<TW;i+=2){ if (grid[j][i] !== 0) continue; if (rng() > .62) continue; const r = rng(); const horiz = grid[j][i-1] === 0 || grid[j][i+1] === 0;
-      addFixture(i*S, WH - .04, j*S, horiz ? 0 : Math.PI/2, r < .14 ? 'dead' : r < .36 ? 'flicker' : 'ok'); }
+  for (let j=1;j<TH;j+=2) for (let i=1;i<TW;i+=2){ if (grid[j][i] !== 0) continue; if (rng() > VAR.light) continue; const r = rng(); const horiz = grid[j][i-1] === 0 || grid[j][i+1] === 0;
+      addFixture(i*S, WH - .04, j*S, horiz ? 0 : Math.PI/2, r < VAR.dead ? 'dead' : r < VAR.dead + VAR.flick ? 'flicker' : 'ok'); }
   addFixture(XE, HUP + WH - .04, (ZST0 + ZST1)/2, Math.PI/2, 'flicker');
   // 소품 자리: 벽 하나에 붙은 바닥 타일
   const spots = []; for (let j=1;j<TH-1;j++) for (let i=1;i<TW-1;i++){ if (grid[j][i] !== 0) continue; if (i === IE && j <= 2) continue; const walls = [0, 1, 2, 3].filter(d=>grid[j - DIRV[d][1]][i - DIRV[d][0]] === 1); if (walls.length && walls.length < 4) spots.push({ i, j, walls }); }
   rng.shuf(spots); const used = new Set(), take = (cond)=>{ for (const s of spots){ const k = s.i + ',' + s.j; if (used.has(k) || (cond && !cond(s))) continue; used.add(k); return s; } return null; };
   const dead = s=>s.walls.length === 3;
-  for (let k=0;k<13;k++){ const s = take(k < 5 ? dead : null) || take(); if (!s) break; wardrobe(s.i, s.j, rng.pick(s.walls), G.ward.length); }
-  for (let k=0;k<11;k++){ const s = take(); if (!s) break; dresser(s.i, s.j, rng.pick(s.walls), G.dres.length); }
-  for (let k=0;k<6;k++){ const s = take(); if (!s) break; mirror(s.i, s.j, rng.pick(s.walls), G.mirr.length); }
+  for (let k=0;k<VAR.ward;k++){ const s = take(k < 5 ? dead : null) || take(); if (!s) break; wardrobe(s.i, s.j, rng.pick(s.walls), G.ward.length); }
+  for (let k=0;k<VAR.dres;k++){ const s = take(); if (!s) break; dresser(s.i, s.j, rng.pick(s.walls), G.dres.length); }
+  for (let k=0;k<VAR.mirr;k++){ const s = take(); if (!s) break; mirror(s.i, s.j, rng.pick(s.walls), G.mirr.length); }
   // 하얀 상자 · 무너진 가구: 벽 하나만 있는 칸에서 벽 쪽으로 붙여 (통로는 막지 않게)
   const side = s=>{ const d = s.walls[0]; return [s.i*S - DIRV[d][0]*.78, s.j*S - DIRV[d][1]*.78]; };
-  for (let k=0;k<7;k++){ const s = take(x=>x.walls.length === 1); if (!s) break; const [x, z] = side(s); whiteBoxes(x, z, rng, G.boxes.length); }
-  for (let k=0;k<9;k++){ const s = take(x=>x.walls.length === 1); if (!s) break; const [x, z] = side(s); wreck(x, z, rng); }
+  for (let k=0;k<VAR.box;k++){ const s = take(x=>x.walls.length === 1); if (!s) break; const [x, z] = side(s); whiteBoxes(x, z, rng, G.boxes.length); }
+  for (let k=0;k<VAR.wreck;k++){ const s = take(x=>x.walls.length === 1); if (!s) break; const [x, z] = side(s); wreck(x, z, rng); }
   for (const [rx, ry] of G.rooms){ const cx = (rx*2 + 2)*S + (rng() < .5 ? -.5 : .5)*S, cz = (ry*2 + 2)*S + (rng() < .5 ? -.5 : .5)*S; if (rng() < .5) whiteBoxes(cx, cz, rng, G.boxes.length); else wreck(cx, cz, rng); }
   flushMerged();
   // 열쇠 4개: 서로 떨어진 서랍장에서 하나씩
@@ -1063,7 +1068,7 @@ setInterval(()=>{ try { partyTick(); if (!GAME.on && NET.dirty) renderLobby(); }
 renderLobby();
 // 테스트용
 window.__MO = { GAME, W, P, MON, MV, G:()=>G, NET, startGame, toLobby, act, applyAct, INTER:()=>INTER, interactPress, interactRelease, useInter, hide, unhide, KEYS, cam, scene, monTick, playersList, renderLobby, partyTick, kpPress, die,
-  step:(n, dt)=>{ for (let i=0;i<n;i++) logic(dt || 1/30); ren.render(scene, cam); }, stepq:(n, dt)=>{ for (let i=0;i<n;i++){ logic(dt || 1/30); scene.updateMatrixWorld(); } }, sim:v=>{ GAME.sim = v; }, setPos:(x, z)=>{ P.pos.set(x, floorY(x, z), z); }, SOL, segBlocked, floorY, gridPath, tileOf, consts:{ S, XE, HUP, ZDOOR, ZROOM1, ZST0, ZST1 } };
+  step:(n, dt)=>{ for (let i=0;i<n;i++) logic(dt || 1/30); ren.render(scene, cam); }, stepq:(n, dt)=>{ for (let i=0;i<n;i++){ logic(dt || 1/30); scene.updateMatrixWorld(); } }, sim:v=>{ GAME.sim = v; }, setPos:(x, z)=>{ P.pos.set(x, floorY(x, z), z); }, SOL, segBlocked, floorY, gridPath, tileOf, get consts(){ return { S, XE, HUP, ZDOOR, ZROOM1, ZST0, ZST1 }; } };
 
 })();
 </script>
