@@ -1880,6 +1880,7 @@ const MP = (function () {
       });
       emoScanPlayers(val);
       mpChatPresence(val);
+      try { gmPlayers(val); } catch (e) {}
       // 게임 쪽 콜백에서 오류가 나도 파이어베이스 이벤트 처리가 끊기지 않게 ("Exception was thrown by user callback")
       if (onPlayersCb) { try { onPlayersCb(val); } catch (e) { console.warn('[MP] onPlayersUpdate 콜백 오류', e); } }
     }
@@ -2618,6 +2619,127 @@ const MP = (function () {
       if (onFriendsCb) onFriendsCb([], err);
     });
   }
+
+  // =====================================================================
+  //  게임 메뉴 (모든 게임 공통) — 왼쪽 위 메뉴 버튼
+  //  · 사람: 같은 방에 있는 사람만 (같은 게임이라도 다른 방 사람은 안 보임) · 각자 아바타 카드
+  //          카드를 누르면 이름 · 끼고 있는 장식 · 색 · 친구 추가
+  //  · 설정: 음량 · 음소거 · 채팅 보이기 · FPS 표시 · 그래픽 낮춤 · 전체화면
+  //  · 게임 나가기 → 허브
+  // =====================================================================
+  const GM = { el:null, btn:null, players:{}, view:'people', sel:null, leaving:false, fpsEl:null, set:{ vol:1, mute:0, chat:1, fps:0, low:0 }, gains:new Set(), renderers:new Set() };
+  try { Object.assign(GM.set, JSON.parse(localStorage.getItem('mp_gm_set') || '{}')); } catch(e){}
+  const gmSave = ()=>{ try { localStorage.setItem('mp_gm_set', JSON.stringify(GM.set)); } catch(e){} };
+  const gmVol = ()=>GM.set.mute ? 0 : Math.max(0, Math.min(1, +GM.set.vol));
+  const GMI = { menu:'<path d="M4 6.5h16M4 12h16M4 17.5h16"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>', people:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.8 3.5-6 6.5-6s5.7 2.2 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M17 14c2.5 0 4 1.8 4.5 4.5"/>',
+    gear:'<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/>', exit:'<path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
+    back:'<path d="M15 5l-7 7 7 7"/>', userplus:'<circle cx="10" cy="8" r="4"/><path d="M3 21c1-4.5 4-7 7-7s5 1.5 6.3 4M19 8v6M16 11h6"/>', vol:'<path d="M4 9.5v5h4l5 4v-13l-5 4z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>', crown:'<path d="M4 18h16l1-10-5 4-4-6-4 6-5-4z"/>' };
+  const gmIc = (n, s)=>`<svg viewBox="0 0 24 24" width="${s || 18}" height="${s || 18}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">${GMI[n] || ''}</svg>`;
+  const gmEsc = t=>String(t == null ? '' : t).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  // 소리: 게임이 만드는 모든 AudioContext 의 출력 앞에 음량 노드를 끼운다
+  (function gmPatchAudio(){ if (typeof window === 'undefined') return; const Orig = window.AudioContext || window.webkitAudioContext; if (!Orig || Orig.__gm) return;
+    class GMAudioContext extends Orig { constructor(...a){ super(...a); try { const real = super.destination; const g = this.createGain(); g.gain.value = gmVol(); g.connect(real); Object.defineProperty(this, 'destination', { get:()=>g, configurable:true }); GM.gains.add(g); } catch(e){} } }
+    GMAudioContext.__gm = true; window.AudioContext = GMAudioContext; if (window.webkitAudioContext) window.webkitAudioContext = GMAudioContext; })();
+  function gmApplyAudio(){ for (const g of GM.gains){ try { g.gain.setTargetAtTime(gmVol(), g.context.currentTime, .05); } catch(e){} } document.querySelectorAll('audio,video').forEach(a=>{ a.muted = !!GM.set.mute; }); }
+  // 그래픽 낮춤: three.js 렌더러 해상도 배율을 1 로
+  function gmPatchThree(){ const T = window.THREE; if (!T || !T.WebGLRenderer || T.WebGLRenderer.prototype.__gm) return; const P = T.WebGLRenderer.prototype, o = P.setPixelRatio;
+    P.setPixelRatio = function(v){ GM.renderers.add(this); this.__gmWant = v; return o.call(this, GM.set.low ? Math.min(1, v) : v); }; P.__gm = o; }
+  function gmApplyGfx(){ gmPatchThree(); const T = window.THREE; if (!T || !T.WebGLRenderer || !T.WebGLRenderer.prototype.__gm) return; for (const r of GM.renderers){ try { T.WebGLRenderer.prototype.__gm.call(r, GM.set.low ? Math.min(1, r.__gmWant || 1) : (r.__gmWant || 1)); } catch(e){} } }
+  if (typeof window !== 'undefined') gmPatchThree();
+  function gmFps(){ if (!GM.set.fps){ if (GM.fpsEl){ GM.fpsEl.remove(); GM.fpsEl = null; } return; } if (GM.fpsEl) return;
+    const el = GM.fpsEl = document.createElement('div'); el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:48;font:800 11px monospace;color:#9f9;background:rgba(0,0,0,.55);padding:3px 7px;border-radius:6px;pointer-events:none'; document.body.appendChild(el);
+    let n = 0, t0 = performance.now(); const tick = ()=>{ if (GM.fpsEl !== el) return; n++; const t = performance.now(); if (t - t0 >= 500){ el.textContent = Math.round(n*1000/(t - t0)) + ' FPS'; n = 0; t0 = t; } requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+  function gmApplyChat(){ if (CHAT.el) CHAT.el.style.display = GM.set.chat ? '' : 'none'; }
+  function gmPlayers(val){ GM.players = val || {}; if (GM.btn){ const n = Object.keys(GM.players).length + 1; GM.btn.querySelector('.n').textContent = n > 1 ? n : ''; } if (GM.el && GM.el.classList.contains('on') && GM.view === 'people') gmRender(); }
+  // 아바타 그림: 3D 전신 (three.js 가 있으면) → 없으면 2D 얼굴
+  function gmShot(lo){ try { return mpAvatarShot(lo || {}, 'full') || mpHeadshot(lo || {}); } catch(e){ try { return mpHeadshot(lo || {}); } catch(e2){ return ''; } } }
+  function gmItems(lo){ lo = Object.assign(mpDefaultLoadout(), lo || {}); const rows = [];
+    const face = AVATAR_FACES.find(f=>f.id === lo.face); if (face) rows.push(['얼굴', face.name]);
+    for (const [k, n] of [['skin', '피부'], ['shirt', '상의 색'], ['pants', '바지 색']]){ const c = (AVATAR_PALETTE[k] || []).find(x=>x.id === lo[k]); if (c) rows.push([n, c.name, '#' + (c.color >>> 0).toString(16).padStart(6, '0')]); }
+    const SN = { hair:'머리', head:'모자', acc:'액세서리', top:'상의', bottom:'하의', back:'등', body:'몸' };
+    for (const s of AVATAR_SLOTS){ if (s === 'face' || !lo[s]) continue; const it = AVATAR_CATALOG.find(i=>i.id === lo[s]); if (it) rows.push([SN[s] || s, it.name, it.color != null ? '#' + (it.color >>> 0).toString(16).padStart(6, '0') : null]); }
+    return rows; }
+  function gmList(){ const me = { uid:uid || 'me', name:getDisplayName(), lo:getLocalAvatarLoadout(), me:true }; const out = [me];
+    for (const k in GM.players){ const p = GM.players[k]; if (!p) continue; out.push({ uid:k, name:p.name || '플레이어', lo:p.avatarLoadout || p.lo || null }); } return out; }
+  function gmRender(){ const el = GM.el; if (!el) return; const list = gmList(), body = el.querySelector('.gmBody');
+    el.querySelectorAll('.gmTab').forEach(t=>t.classList.toggle('on', t.dataset.v === (GM.view === 'detail' ? 'people' : GM.view)));
+    el.querySelector('.gmTab[data-v="people"] b').textContent = list.length;
+    el.querySelector('.gmRoom').textContent = ready && currentRoom ? '방 ' + currentRoom : '혼자 하는 중';
+    if (GM.view === 'people'){
+      body.innerHTML = `<div class="gmGrid">${list.map((p, i)=>`<button class="gmCard" data-i="${i}"><div class="gmAv" style="--c:${'#' + ((colorForUid(p.uid) >>> 0) & 0xffffff).toString(16).padStart(6, '0')}"><img src="${gmShot(p.lo)}" alt=""></div><div class="gmNm">${gmEsc(p.name)}${p.me ? '<i>나</i>' : ''}</div></button>`).join('')}</div>
+        <div class="gmNote">이 방에 있는 사람만 보여요. 같은 게임이라도 다른 방에 있는 사람은 나오지 않아요.</div>`;
+      GM.list = list; }
+    else if (GM.view === 'detail'){ const p = GM.sel; if (!p){ GM.view = 'people'; return gmRender(); } const rows = gmItems(p.lo), fs = !p.me && typeof friendState === 'function' ? friendState(p.uid) : null;
+      body.innerHTML = `<button class="gmBack">${gmIc('back', 16)}사람 목록</button><div class="gmDet"><div class="gmBig" style="--c:${'#' + ((colorForUid(p.uid) >>> 0) & 0xffffff).toString(16).padStart(6, '0')}"><img src="${gmShot(p.lo)}" alt=""></div>
+        <div class="gmInfo"><div class="gmName">${gmEsc(p.name)}${p.me ? ' <i>나</i>' : ''}</div><div class="gmSub">끼고 있는 것</div>${rows.map(([k, v, c])=>`<div class="gmRow"><span>${k}</span><b>${c ? `<em style="background:${c}"></em>` : ''}${gmEsc(v)}</b></div>`).join('')}
+        ${!p.me && p.uid && p.uid !== 'me' ? (fs === 'friend' ? '<div class="gmOk">친구예요</div>' : fs === 'pending' ? '<div class="gmOk">친구 요청 보냄</div>' : `<button class="gmFriend">${gmIc('userplus', 16)}친구 추가</button>`) : ''}</div></div>`; }
+    else { const s = GM.set, tg = (k, n, d)=>`<div class="gmSet"><div><b>${n}</b><small>${d}</small></div><button class="gmTg ${s[k] ? 'on' : ''}" data-k="${k}"><i></i></button></div>`;
+      body.innerHTML = `<div class="gmSet"><div><b>음량</b><small>이 게임의 모든 소리</small></div><input class="gmVol" type="range" min="0" max="100" value="${Math.round(s.vol*100)}"></div>
+        ${tg('mute', '음소거', '소리를 모두 끄기')}${tg('chat', '채팅 보이기', '왼쪽 위 채팅창')}${tg('fps', 'FPS 표시', '오른쪽 아래에 초당 화면 수')}${tg('low', '그래픽 낮춤', '해상도를 낮춰서 렉 줄이기')}
+        <div class="gmSet"><div><b>전체화면</b><small>화면 꽉 채우기</small></div><button class="gmFs">${document.fullscreenElement ? '끄기' : '켜기'}</button></div>`; }
+    const lv = el.querySelector('.gmLeave'); lv.innerHTML = GM.leaving ? '<span>정말 나갈까요?</span><button class="gmYes">나가기</button><button class="gmNo">취소</button>' : gmIc('exit', 18) + '게임 나가기'; lv.classList.toggle('ask', GM.leaving); }
+  function gmOpen(on){ if (!GM.el) return; GM.el.classList.toggle('on', on); window.MPMenuOpen = !!on; if (on){ GM.leaving = false; if (GM.view === 'detail') GM.view = 'people'; try { if (document.pointerLockElement) document.exitPointerLock(); } catch(e){} gmRender(); } }
+  function gmLeaveNow(){ try { leave(); } catch(e){} try { if (window.top !== window) { window.top.location.href = 'hub.html'; return; } } catch(e){} location.href = 'hub.html'; }
+  function gmMount(){ if (GM.el || typeof document === 'undefined' || !document.body) return; const pg = (location.pathname.split('/').pop() || '').toLowerCase();
+    if (!pg || /^(hub|hub-preview|account|index)\.html$/.test(pg) || document.getElementById('tabbar')) return;
+    const st = document.createElement('style'); st.textContent = `
+      #gmBtn{position:fixed;left:10px;top:12px;z-index:46;height:34px;min-width:38px;padding:0 9px;border:none;border-radius:10px;background:rgba(18,18,26,.72);color:#fff;display:flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);font:800 12px sans-serif;backdrop-filter:blur(6px)}
+      #gmBtn:hover{background:rgba(40,40,60,.85)} #gmBtn .n:empty{display:none} #gmBtn .n{background:#3a7cff;border-radius:99px;padding:1px 6px;font-size:10.5px}
+      #mpChat .bar #gmBtn{position:static;height:30px;box-shadow:none;background:rgba(20,20,24,.62)}
+      #gmPanel{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;background:rgba(4,6,14,.6);font-family:'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif;color:#eef1ff}
+      #gmPanel.on{display:flex} #gmPanel *{box-sizing:border-box}
+      #gmPanel .gmBox{width:min(620px,94vw);max-height:88vh;display:flex;flex-direction:column;background:linear-gradient(170deg,#1b2140,#0e1226);border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden;animation:gmPop .18s ease}
+      @keyframes gmPop{from{transform:scale(.95);opacity:0}}
+      #gmPanel .gmHead{display:flex;align-items:center;gap:10px;padding:14px 16px 10px} #gmPanel .gmTitle{font:900 17px sans-serif;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} #gmPanel .gmRoom{font:700 11px sans-serif;color:#9aa3c7;background:rgba(255,255,255,.06);padding:4px 9px;border-radius:99px;white-space:nowrap}
+      #gmPanel .gmX{width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+      #gmPanel .gmTabs{display:flex;gap:6px;padding:0 16px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+      #gmPanel .gmTab{display:flex;align-items:center;gap:7px;border:0;cursor:pointer;padding:8px 14px;border-radius:12px;background:rgba(255,255,255,.05);color:#9aa3c7;font:800 13px sans-serif} #gmPanel .gmTab b{background:rgba(255,255,255,.12);border-radius:99px;padding:0 7px;font-size:11px;color:#fff}
+      #gmPanel .gmTab.on{background:linear-gradient(135deg,#7a5cff,#38a8ff);color:#fff}
+      #gmPanel .gmBody{flex:1;overflow-y:auto;padding:14px 16px}
+      #gmPanel .gmGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media (max-width:560px){#gmPanel .gmGrid{grid-template-columns:repeat(3,1fr)}}
+      #gmPanel .gmCard{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:14px;padding:8px 6px 9px;cursor:pointer;color:#fff;transition:transform .12s,background .12s;min-width:0}
+      #gmPanel .gmCard:hover{transform:translateY(-3px);background:rgba(255,255,255,.08)}
+      #gmPanel .gmAv,#gmPanel .gmBig{border-radius:11px;background:radial-gradient(circle at 50% 30%,color-mix(in srgb,var(--c) 55%,#fff 0%),#121630 75%);aspect-ratio:3/4;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+      #gmPanel .gmAv img,#gmPanel .gmBig img{width:100%;height:100%;object-fit:contain}
+      #gmPanel .gmNm{margin-top:6px;font:800 12px sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} #gmPanel i{font-style:normal;font-size:9.5px;background:#ffc44d;color:#1a1200;border-radius:5px;padding:1px 5px;margin-left:5px;vertical-align:1px}
+      #gmPanel .gmNote{margin-top:12px;font-size:11.5px;color:#7d86ad;text-align:center}
+      #gmPanel .gmBack{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:#9aa3c7;font:800 12.5px sans-serif;cursor:pointer;margin-bottom:10px;padding:0}
+      #gmPanel .gmDet{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:16px} @media (max-width:480px){#gmPanel .gmDet{grid-template-columns:1fr}#gmPanel .gmBig{max-width:200px;margin:0 auto}}
+      #gmPanel .gmName{font:900 20px sans-serif} #gmPanel .gmSub{font:800 11px sans-serif;color:#7d86ad;margin:12px 0 4px;letter-spacing:.06em}
+      #gmPanel .gmRow{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px} #gmPanel .gmRow span{color:#9aa3c7} #gmPanel .gmRow b{display:flex;align-items:center;gap:6px} #gmPanel .gmRow em{width:13px;height:13px;border-radius:4px;border:1px solid rgba(255,255,255,.3)}
+      #gmPanel .gmFriend,#gmPanel .gmFs{margin-top:12px;display:inline-flex;align-items:center;gap:6px;border:0;border-radius:11px;padding:9px 14px;background:#3a7cff;color:#fff;font:800 13px sans-serif;cursor:pointer} #gmPanel .gmFs{margin:0;background:rgba(255,255,255,.1)} #gmPanel .gmOk{margin-top:12px;color:#5aff9a;font:800 13px sans-serif}
+      #gmPanel .gmSet{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)} #gmPanel .gmSet b{display:block;font-size:14px} #gmPanel .gmSet small{color:#7d86ad;font-size:11.5px}
+      #gmPanel .gmVol{width:min(220px,44vw);accent-color:#7a5cff}
+      #gmPanel .gmTg{width:46px;height:26px;border-radius:99px;border:0;background:rgba(255,255,255,.15);position:relative;cursor:pointer;flex:none} #gmPanel .gmTg i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;margin:0;padding:0;transition:left .15s}
+      #gmPanel .gmTg.on{background:#2cbf7a} #gmPanel .gmTg.on i{left:23px}
+      #gmPanel .gmLeave{margin:0 16px 14px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:13px;background:#d6304a;color:#fff;font:900 14px sans-serif;cursor:pointer}
+      #gmPanel .gmLeave.ask{background:rgba(214,48,74,.18);cursor:default} #gmPanel .gmLeave.ask button{border:0;border-radius:10px;padding:8px 14px;font:900 13px sans-serif;cursor:pointer} #gmPanel .gmYes{background:#d6304a;color:#fff} #gmPanel .gmNo{background:rgba(255,255,255,.12);color:#fff}`;
+    document.head.appendChild(st);
+    const b = GM.btn = document.createElement('button'); b.id = 'gmBtn'; b.type = 'button'; b.title = '메뉴 (사람 · 설정 · 나가기)'; b.innerHTML = gmIc('menu', 17) + '<span class="n"></span>'; document.body.appendChild(b);
+    const p = GM.el = document.createElement('div'); p.id = 'gmPanel';
+    p.innerHTML = `<div class="gmBox"><div class="gmHead"><div class="gmTitle">${gmEsc((document.title || '게임').replace(/\s*[-|·].*$/, ''))}</div><div class="gmRoom"></div><button class="gmX" type="button">${gmIc('x', 16)}</button></div>
+      <div class="gmTabs"><button class="gmTab on" data-v="people" type="button">${gmIc('people', 16)}사람 <b>1</b></button><button class="gmTab" data-v="settings" type="button">${gmIc('gear', 16)}설정</button></div><div class="gmBody"></div><div class="gmLeave" role="button"></div></div>`;
+    document.body.appendChild(p);
+    ['pointerdown', 'mousedown', 'touchstart', 'keydown', 'keyup', 'wheel'].forEach(t=>{ b.addEventListener(t, e=>e.stopPropagation()); p.addEventListener(t, e=>e.stopPropagation()); });
+    b.addEventListener('click', e=>{ e.stopPropagation(); gmOpen(!p.classList.contains('on')); });
+    p.addEventListener('click', e=>{ e.stopPropagation(); const t = e.target;
+      if (t === p || t.closest('.gmX')) return gmOpen(false);
+      const tab = t.closest('.gmTab'); if (tab){ GM.view = tab.dataset.v; return gmRender(); }
+      const c = t.closest('.gmCard'); if (c){ GM.sel = GM.list[+c.dataset.i]; GM.view = 'detail'; return gmRender(); }
+      if (t.closest('.gmBack')){ GM.view = 'people'; return gmRender(); }
+      if (t.closest('.gmFriend') && GM.sel){ try { sendFriendRequest(GM.sel.uid, GM.sel.name, ()=>gmRender()); } catch(err){} t.closest('.gmFriend').outerHTML = '<div class="gmOk">친구 요청 보냄</div>'; return; }
+      const tg = t.closest('.gmTg'); if (tg){ const k = tg.dataset.k; GM.set[k] = GM.set[k] ? 0 : 1; gmSave(); gmApplyAudio(); gmPlace(); gmFps(); gmApplyGfx(); return gmRender(); }
+      if (t.closest('.gmFs')){ try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch(err){} return setTimeout(gmRender, 300); }
+      if (t.closest('.gmYes')) return gmLeaveNow(); if (t.closest('.gmNo')){ GM.leaving = false; return gmRender(); }
+      if (t.closest('.gmLeave') && !GM.leaving){ GM.leaving = true; return gmRender(); } });
+    p.addEventListener('input', e=>{ if (e.target.classList.contains('gmVol')){ GM.set.vol = (+e.target.value)/100; if (GM.set.vol > 0 && GM.set.mute) GM.set.mute = 0; gmSave(); gmApplyAudio(); } });
+    window.addEventListener('keydown', e=>{ if (e.key === 'Escape' && p.classList.contains('on')){ e.stopPropagation(); gmOpen(false); } }, true);
+    gmApplyAudio(); gmApplyChat(); gmFps(); gmApplyGfx(); gmPlace(); }
+  // 채팅창이 있으면 그 줄 맨 앞에, 없으면 왼쪽 위에
+  function gmPlace(){ if (!GM.btn) return; const bar = GM.set.chat && CHAT.el && CHAT.el.querySelector('.bar'); if (bar && GM.btn.parentNode !== bar) bar.insertBefore(GM.btn, bar.firstChild); else if (!bar && GM.btn.parentNode !== document.body) document.body.appendChild(GM.btn); if (!bar) GM.btn.style.top = '54px'; gmApplyChat(); }
+  if (typeof window !== 'undefined') window.__gmPlayers = v=>gmPlayers(v);   // 테스트용
+  if (typeof window !== 'undefined'){ const go = ()=>{ try { gmMount(); } catch(e){ console.warn('[MP] game menu', e); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else setTimeout(go, 0); setInterval(()=>{ try { gmMount(); gmPlace(); } catch(e){} }, 1000); }
+
 
   return {
     init,
