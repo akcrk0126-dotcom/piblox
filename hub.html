@@ -3608,6 +3608,8 @@
   @media (hover:hover){ .card:hover{ transform:translateY(-5px); box-shadow:0 16px 36px rgba(0,0,0,.5),0 0 0 1px var(--spine,#7a5cff); } .card:hover .thumb::before{ opacity:1; } }
   .card .cardTitle{ font-weight:900!important; font-size:14.5px!important; }
   .card.hide{ display:none!important; }
+  @media (max-width:600px){ #topbar.searching .lvChip, #topbar.searching #bellBtn, #topbar.searching #settingsOpenBtn{ display:none!important; } }
+  body.hxSearching #hero, body.hxSearching #hxRows, body.hxSearching #friendsRow, body.hxSearching #genreChips, body.hxSearching #liveSection{ display:none!important; }
   .genreTag{ border-radius:8px!important; backdrop-filter:blur(6px); }
   /* 친구 줄 */
   #friendsRow{ padding:0 2px!important; min-height:0!important; }
@@ -3757,19 +3759,21 @@
     const openDr = ()=>{ const nm = (window.MP && MP.getDisplayName && MP.getDisplayName()) || '플레이어'; dr.querySelector('#hxName').textContent = nm; dr.querySelector('#hxSub').textContent = 'Lv ' + ((($('#lvNum') || {}).textContent) || 1) + ' · 샤드 ' + ((($('#shardAmountTop') || {}).textContent) || 0);
       try { const u = window.MP && MP.headshot2D && MP.headshot2D(MP.getLocalAvatarLoadout()); if (u) dr.querySelector('.me .av').innerHTML = '<img src="' + u + '" alt="">'; } catch(e){} dr.classList.add('on'); };
     mb.addEventListener('click', openDr); dr.addEventListener('click', e=>{ const it = e.target.closest('.it'); if (it){ dr.classList.remove('on'); setTimeout(()=>acts[+it.dataset.a](), 120); return; } if (e.target.classList.contains('dim')) dr.classList.remove('on'); });
-    // ---------- 빠른 버튼 (색 다른 아이콘 타일) ----------
-    const QB = [['dice', '랜덤', W.random, '#ff6a9a,#ff3a5a'], ['star', '즐겨찾기', W.fav, '#ffd23a,#ff9a1a'], ['clock', '최근', W.recent, '#5bd0ff,#3a7cff'], ['trophy', '랭킹', ()=>clickEl(tabs[3]), '#ffc44d,#d68a10'],
-      ['user', '아바타', ()=>clickEl(tabs[2]), '#7a5cff,#4a2fd6'], ['gem', '상점', ()=>clickEl('#shardBadge'), '#38d8ff,#1a8ad6'], ['megaphone', '공지', W.notice, '#ff8a4a,#e0501a'], ['chart', '내 기록', W.stats, '#2cd88a,#169a5a']];
-    const q = document.createElement('div'); q.id = 'hxQuick'; q.innerHTML = QB.map(([icn, n, , col], i)=>`<button data-q="${i}"><span style="background:linear-gradient(150deg,${col});border-color:transparent">${ic(icn)}</span>${n}</button>`).join(''); q.addEventListener('click', e=>{ const b = e.target.closest('[data-q]'); if (b) QB[+b.dataset.q][2](); });
-    const hero = document.getElementById('hero'); main.insertBefore(q, hero ? hero.nextSibling : main.firstChild);
+    const hero = document.getElementById('hero');
     // ---------- 가로 줄 ----------
-    const rowsBox = document.createElement('div'); rowsBox.id = 'hxRows'; const fr = document.getElementById('friendsRow'); main.insertBefore(rowsBox, fr ? fr.nextSibling : q.nextSibling);
+    const rowsBox = document.createElement('div'); rowsBox.id = 'hxRows'; const fr = document.getElementById('friendsRow'); main.insertBefore(rowsBox, fr ? fr.nextSibling : (hero ? hero.nextSibling : main.firstChild));
     const multi = cards.filter(c=>/멀티|파티|같이|2v2|1v1|명/.test((c.dataset.search || '') + c.textContent)).map(c=>c.dataset.game);
     const horror = cards.filter(c=>((c.querySelector('.genreTag') || {}).textContent || '').includes('공포')).map(c=>c.dataset.game);
     const row = (icn, t, keys, more, rank)=>keys.filter(byKey).length ? `<div class="hxRow"><div class="hd"><b>${ic(icn)}${t}</b>${more ? `<a data-more="${more}">모두 보기 ›</a>` : ''}</div><div class="sc">${keys.filter(byKey).slice(0, 12).map((k, i)=>`<div class="mini" data-k="${k}"><img src="thumbs/${k}.webp" alt="" loading="lazy">${rank ? '<span class="rk">' + (i + 1) + '</span>' : ''}<div>${title(byKey(k))}</div></div>`).join('')}</div></div>` : '';
     function renderRows(){ rowsBox.innerHTML = row('clock', '최근 플레이', ls('hub_recent', []), 'recent') + row('star', '즐겨찾기', favs(), 'fav') + row('fire', '인기 TOP 10', cards.slice(0, 10).map(c=>c.dataset.game), '', true) + row('people', '친구랑 같이', multi) + row('ghost', '무서운 게임', horror); }
     rowsBox.addEventListener('click', e=>{ const m = e.target.closest('.mini'); if (m) return clickEl(byKey(m.dataset.k)); const a = e.target.closest('[data-more]'); if (a) W[a.dataset.more](); });
     renderRows();
+    // 검색: 결과가 맨 위에 바로 보이도록 배너 · 줄 · 장르 버튼을 잠깐 숨긴다
+    const si = document.getElementById('searchInput'), chipsEl = document.getElementById('genreChips');
+    const syncSearch = ()=>{ const on = !!(si && si.value.trim()); if (on !== document.body.classList.contains('hxSearching')){ document.body.classList.toggle('hxSearching', on);
+        if (on){ grid.querySelectorAll('.card.hide').forEach(c=>c.classList.remove('hide')); if (chipsEl) chipsEl.querySelectorAll('button').forEach((b, i)=>b.classList.toggle('on', i === 0)); } } if (on) scrollTo(0, 0); };
+    if (si){ si.addEventListener('input', syncSearch); si.addEventListener('keydown', ()=>setTimeout(syncSearch, 0)); }
+    ['searchBackBtn', 'searchClearBtn'].forEach(id=>{ const b = document.getElementById(id); if (b) b.addEventListener('click', ()=>setTimeout(syncSearch, 0)); });
     addEventListener('keydown', e=>{ if (e.key === 'Escape'){ win.classList.remove('on'); dr.classList.remove('on'); } });
   } catch(e){ console.warn('hubV2c', e); }
 })();
