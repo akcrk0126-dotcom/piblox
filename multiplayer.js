@@ -1857,11 +1857,13 @@ const MP = (function () {
   // 1번 방은 원래 이름 그대로라 예전 버전과도 같은 방에서 만난다.
   let roomBase = null, roomShardDone = false, roomShard = 1;
   const ROOM_STALE_MS = 20000;
-  function roomCap(){ const c = +(typeof window !== 'undefined' && window.MP_ROOM_CAP); return c >= 2 ? c : 16; }
+  // 기본은 나누지 않는다 (모두 한 방). 나누고 싶은 게임만 multiplayer.js 를 불러오기 전에 window.MP_ROOM_CAP = 정원 을 정한다
+  function roomCap(){ const c = +(typeof window !== 'undefined' && window.MP_ROOM_CAP); return c >= 2 ? c : Infinity; }
   function urlHasRoom(){ try { return !!new URLSearchParams(window.location.search).get('room'); } catch (e) { return false; } }
   function pickShard(cb){
-    if (roomShardDone || urlHasRoom() || !roomBase){ roomShardDone = true; cb(); return; }
-    const cap = roomCap(), now = serverNow(); let k = 1;
+    const cap = roomCap();
+    if (roomShardDone || urlHasRoom() || !roomBase || !isFinite(cap)){ roomShardDone = true; cb(); return; }
+    const now = serverNow(); let k = 1;
     const tryK = () => {
       const name = k === 1 ? roomBase : roomBase + '~' + k;
       db.ref(`${MP_ROOT}/rooms/${name}/players`).once('value').then(snap => {
@@ -2702,7 +2704,7 @@ const MP = (function () {
   function gmRender(){ const el = GM.el; if (!el) return; const list = gmList(), body = el.querySelector('.gmBody');
     el.querySelectorAll('.gmTab').forEach(t=>t.classList.toggle('on', t.dataset.v === (GM.view === 'detail' ? 'people' : GM.view)));
     el.querySelector('.gmTab[data-v="people"] b').textContent = list.length;
-    el.querySelector('.gmRoom').textContent = ready && currentRoom ? (urlHasRoom() ? '방 ' + currentRoom : '서버 ' + roomShard) : '혼자 하는 중';
+    el.querySelector('.gmRoom').textContent = ready && currentRoom ? (urlHasRoom() || !isFinite(roomCap()) ? '같은 방 ' + (Object.keys(GM.players).length + 1) + '명' : '서버 ' + roomShard) : '혼자 하는 중';
     if (GM.view === 'people'){
       body.innerHTML = `<div class="gmGrid">${list.map((p, i)=>`<button class="gmCard" data-i="${i}"><div class="gmAv" style="--c:${'#' + ((colorForUid(p.uid) >>> 0) & 0xffffff).toString(16).padStart(6, '0')}"><img src="${gmShot(p.lo)}" alt=""></div><div class="gmNm">${gmEsc(p.name)}${p.me ? '<i>나</i>' : ''}</div></button>`).join('')}</div>
         <div class="gmNote">이 방에 있는 사람만 보여요. 같은 게임이라도 다른 방에 있는 사람은 나오지 않아요.</div>`;
