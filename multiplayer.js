@@ -1660,6 +1660,8 @@ const MP = (function () {
     app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.database();
+    // 테스트용: 로컬 파이어베이스 에뮬레이터 (실제 사이트에서는 window.__MP_EMU 가 없어서 아무 일 없음)
+    if (typeof window !== 'undefined' && window.__MP_EMU){ try { auth.useEmulator('http://127.0.0.1:9099'); db.useEmulator('127.0.0.1', 9000); } catch (e) { console.warn('[MP] emu', e); } }
     // 기기 시계가 틀려도(몇 분씩 어긋난 PC/폰 흔함) 모두 같은 시간을 보게 서버 시계 기준으로 맞춘다
     try { db.ref('.info/serverTimeOffset').on('value', snap => { serverOffset = snap.val() || 0; }); } catch (e) {}
     // 연결이 잠깐 끊겼다 붙으면(폰에서 흔함) 서버가 onDisconnect를 이미 써버려서, 그 뒤로는
@@ -1668,7 +1670,7 @@ const MP = (function () {
     try {
       db.ref('.info/connected').on('value', snap => {
         if (snap.val() !== true) return;
-        if (myRef) { try { myRef.onDisconnect().remove(); } catch (e) {} }
+        if (myRef) { try { myRef.onDisconnect().remove(); if (ready && Object.keys(sentAll).length) writeAll(false); } catch (e) {} }
         if (presenceRef) {
           try {
             presenceRef.onDisconnect().update({ online:false, game:null, room:null, ts: firebase.database.ServerValue.TIMESTAMP });
@@ -1850,20 +1852,39 @@ const MP = (function () {
     return auth ? auth.currentUser : null;
   }
 
+  // ---------- 서버 나누기 (로블록스 서버처럼) ----------
+  // 초대 링크(?room=…)로 들어온 게 아니면, 정원이 찬 방은 건너뛰고 다음 방(이름~2, ~3 …)에 들어간다.
+  // 1번 방은 원래 이름 그대로라 예전 버전과도 같은 방에서 만난다.
+  let roomBase = null, roomShardDone = false, roomShard = 1;
+  const ROOM_STALE_MS = 20000;
+  function roomCap(){ const c = +(typeof window !== 'undefined' && window.MP_ROOM_CAP); return c >= 2 ? c : 16; }
+  function urlHasRoom(){ try { return !!new URLSearchParams(window.location.search).get('room'); } catch (e) { return false; } }
+  function pickShard(cb){
+    if (roomShardDone || urlHasRoom() || !roomBase){ roomShardDone = true; cb(); return; }
+    const cap = roomCap(), now = serverNow(); let k = 1;
+    const tryK = () => {
+      const name = k === 1 ? roomBase : roomBase + '~' + k;
+      db.ref(`${MP_ROOT}/rooms/${name}/players`).once('value').then(snap => {
+        const v = snap.val() || {}; let n = 0;
+        for (const id in v){ const p = v[id]; if (id !== uid && p && p.ts && now - p.ts < ROOM_STALE_MS) n++; }
+        if (n < cap || k >= 60){ roomShard = k; currentRoom = name; roomShardDone = true; cb(); } else { k++; tryK(); }
+      }).catch(() => { roomShardDone = true; cb(); });
+    };
+    tryK();
+  }
+
   function joinRoom(newUid) {
+    if (!roomShardDone){ uid = newUid; pickShard(() => joinRoom(newUid)); return; }
     uid = newUid;
+    lastSentKeys = {}; sentAll = {};
     if (myRef) { try { myRef.onDisconnect().cancel(); } catch (e) {} }
     myRef = db.ref(`${MP_ROOT}/rooms/${currentRoom}/players/${uid}`);
     myRef.onDisconnect().remove();
     // 방에 들어갈 때 계정에 저장된 아바타 꾸밈을 불러와서 같이 뿌려줌
     fetchAccountAvatarLoadout((loadout) => {
-      myRef.set({
-        name: getDisplayName(),
-        color: colorForUid(uid),
-        avatarLoadout: loadout || getLocalAvatarLoadout(),
-        x: 0, y: 0, z: 0, ry: 0,
-        ts: firebase.database.ServerValue.TIMESTAMP
-      });
+      // 기본 정보 + 그 사이에 게임이 이미 보낸 값(있으면 그게 이김)을 한 번에 통째로 쓴다
+      sentAll = Object.assign({ name: getDisplayName(), color: colorForUid(uid), avatarLoadout: loadout || getLocalAvatarLoadout(), x: 0, y: 0, z: 0, ry: 0 }, sentAll);
+      writeAll(true);
     });
 
     if (playersRef) playersRef.off();
@@ -1888,15 +1909,16 @@ const MP = (function () {
     // snap.val()로 풀고 게임 콜백까지 돌리면 렉이 걸리므로, 마지막 스냅샷만 기억했다가 최대 초당 20번만 처리한다.
     let pendingSnap = null, emitTimer = null, lastEmitAt = 0;
     const flushPlayers = () => {
-      emitTimer = null; if (!pendingSnap) return; const sn = pendingSnap; pendingSnap = null; lastEmitAt = Date.now();
-      lastPlayersSnapshot = sn.val() || {};
+      emitTimer = null; if (!dirty) return; dirty = false; lastEmitAt = Date.now();
       try { mpChatScan(lastPlayersSnapshot); } catch (e) { console.warn('[MP] chat', e); }
       emitFilteredPlayers();
     };
-    playersRef.on('value', snap => {
-      pendingSnap = snap;
-      if (!emitTimer) emitTimer = setTimeout(flushPlayers, Math.max(0, 50 - (Date.now() - lastEmitAt)));
-    });
+    // 바뀐 사람 한 명만 받아서 내 목록에 고쳐 넣는다 (방 전체를 매번 다시 풀지 않음)
+    const live = {}; lastPlayersSnapshot = live; let dirty = false;
+    const kick = () => { dirty = true; if (!emitTimer) emitTimer = setTimeout(flushPlayers, Math.max(0, 50 - (Date.now() - lastEmitAt))); };
+    playersRef.on('child_added', snap => { live[snap.key] = snap.val(); kick(); });
+    playersRef.on('child_changed', snap => { live[snap.key] = snap.val(); kick(); });
+    playersRef.on('child_removed', snap => { delete live[snap.key]; kick(); });
     // 다른 사람이 아무도 움직이지 않으면(=파이어베이스에 새 쓰기가 없으면) 위 'value' 리스너가
     // 다시 안 불려서 낡은 유령이 그대로 남아있을 수 있음 - 5초마다 타이머로 강제 재검사해서 걸러냄
     if (presenceStaleTimer) clearInterval(presenceStaleTimer);
@@ -2046,6 +2068,7 @@ const MP = (function () {
     }
     roomMode = true;
     currentRoom = roomCode || getRoomFromURL();
+    roomBase = currentRoom; roomShardDone = false;
     firstCallback = callback;
     firstCallbackFired = false;
     try {
@@ -2079,11 +2102,26 @@ const MP = (function () {
 
   function onAuthStateChange(cb) { onAuthCb = cb; }
 
+  // 보내기 줄이기: 지난번과 같은 항목은 빼고 바뀐 것만, 1초에 최대 15번까지 (넘치면 모아서 한 번에)
+  let lastSentKeys = {}, pendingState = null, sendTimer = null, lastSendAt = 0, sentAll = {};
+  // 지금까지 보낸 내 기록 전체를 다시 통째로 쓴다 (처음 들어갈 때 · 연결이 끊겼다 다시 붙었을 때 — 서버가 끊김 때 기록을 지우므로)
+  function writeAll(useSet){ if (!myRef) return; const full = Object.assign({}, sentAll, pendingState || {}); pendingState = null; sentAll = full; lastSentKeys = {};
+    for (const k in full){ try { lastSentKeys[k] = JSON.stringify(full[k]); } catch (e) {} }
+    const out = Object.assign({}, full, { ts: firebase.database.ServerValue.TIMESTAMP }); (useSet ? myRef.set(out) : myRef.update(out)).catch(() => { lastSentKeys = {}; }); }
+  const SEND_GAP_MS = 66;
+  function flushSend(){ sendTimer = null; if (!pendingState || !ready || !myRef) return; const st = pendingState; pendingState = null; lastSendAt = Date.now();
+    const out = {}; let n = 0; for (const k in st){ const v = st[k]; if (v === undefined) continue; let j; try { j = JSON.stringify(v); } catch (e) { j = String(Math.random()); } if (lastSentKeys[k] !== j){ out[k] = v; lastSentKeys[k] = j; n++; } }
+    Object.assign(sentAll, out);
+    out.ts = firebase.database.ServerValue.TIMESTAMP;   // ts 는 매번 (게임들이 ts 가 바뀌었는지로 새 소식을 알아챔)
+    myRef.update(out).catch(() => { lastSentKeys = {}; }); }
   function update(state) {
     if (state && isFinite(+state.x) && isFinite(+state.z)){ EMO.selfPos = [+state.x, +state.z];
       if (EMO.self){ if (EMO.self.x == null){ EMO.self.x = +state.x; EMO.self.z = +state.z; } else if (Math.hypot(+state.x - EMO.self.x, +state.z - EMO.self.z) > .9) stopEmote(); } }
+    if (!state) return;
+    pendingState = Object.assign(pendingState || {}, state);   // 방에 아직 안 들어갔으면 모아 뒀다가 들어갈 때 같이 쓴다
     if (!ready || !myRef) return;
-    myRef.update(Object.assign({ ts: firebase.database.ServerValue.TIMESTAMP }, state));
+    const wait = SEND_GAP_MS - (Date.now() - lastSendAt);
+    if (wait <= 0 && !sendTimer) flushSend(); else if (!sendTimer) sendTimer = setTimeout(flushSend, Math.max(0, wait));
   }
 
   function onPlayersUpdate(cb) { onPlayersCb = cb; }
@@ -2664,7 +2702,7 @@ const MP = (function () {
   function gmRender(){ const el = GM.el; if (!el) return; const list = gmList(), body = el.querySelector('.gmBody');
     el.querySelectorAll('.gmTab').forEach(t=>t.classList.toggle('on', t.dataset.v === (GM.view === 'detail' ? 'people' : GM.view)));
     el.querySelector('.gmTab[data-v="people"] b').textContent = list.length;
-    el.querySelector('.gmRoom').textContent = ready && currentRoom ? '방 ' + currentRoom : '혼자 하는 중';
+    el.querySelector('.gmRoom').textContent = ready && currentRoom ? (urlHasRoom() ? '방 ' + currentRoom : '서버 ' + roomShard) : '혼자 하는 중';
     if (GM.view === 'people'){
       body.innerHTML = `<div class="gmGrid">${list.map((p, i)=>`<button class="gmCard" data-i="${i}"><div class="gmAv" style="--c:${'#' + ((colorForUid(p.uid) >>> 0) & 0xffffff).toString(16).padStart(6, '0')}"><img src="${gmShot(p.lo)}" alt=""></div><div class="gmNm">${gmEsc(p.name)}${p.me ? '<i>나</i>' : ''}</div></button>`).join('')}</div>
         <div class="gmNote">이 방에 있는 사람만 보여요. 같은 게임이라도 다른 방에 있는 사람은 나오지 않아요.</div>`;
@@ -2742,6 +2780,7 @@ const MP = (function () {
 
 
   return {
+    getRoom: () => currentRoom, getServerNo: () => roomShard,
     init,
     initAuthOnly,
     onAuthStateChange,
