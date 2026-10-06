@@ -222,7 +222,7 @@ const MAT = {
   metal: M({ map:TX.metal, roughness:.4, metalness:.7 }), dark: M({ color:0x0d0d0d, roughness:.6 }), elev: M({ map:TX.elev, roughness:.35, metalness:.6 }), carpet: M({ map:TX.carpet }),
   tubeOn: new T.MeshBasicMaterial({ color:0xf4f4f0 }), tubeOff: new T.MeshBasicMaterial({ color:0x3a3a3a }), fixture: M({ color:0x5a5a58, roughness:.5, metalness:.3 }),
   paper: M({ color:0xdedad2, roughness:1 }), key: M({ color:0xc8c8c8, roughness:.3, metalness:.9, emissive:0x222222 }), gray: M({ color:0x777775 }), cloth: M({ color:0x2e2e2e, roughness:1 }),
-  monster: new T.MeshBasicMaterial({ map:statTex, color:0xffffff, fog:true }), eye: new T.MeshBasicMaterial({ color:0xffffff, fog:false }), eyeIn: new T.MeshBasicMaterial({ color:0x8a8a8a, fog:false }), pupil: new T.MeshBasicMaterial({ color:0x000000, fog:false })
+  monster: new T.MeshBasicMaterial({ map:statTex, color:0xffffff, fog:true }), eye: new T.MeshBasicMaterial({ color:0xffffff, fog:false })
 };
 for (const k in MAT) MAT[k].userData.keep = true;
 const BOX = (w, h, d)=>new T.BoxGeometry(w, h, d), CYL = (a, b, h, s)=>new T.CylinderGeometry(a, b, h, s || 10);
@@ -293,14 +293,14 @@ function growlBuf(sec, ag){ const C = AU.c, sr = C.sampleRate, n = Math.floor(sr
   for (let i=0;i<2000;i++){ const k = i/2000; d[i] = d[i]*k + d[n - 2000 + i]*(1 - k); }
   return b; }
 function monsterVoice(){ const C = AU.c; AU.growl = [growlBuf(6.5, 0), growlBuf(4.5, 1)];
-  const p = C.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'exponential'; p.refDistance = 2.2; p.rolloffFactor = 1.6; p.maxDistance = 70; p.connect(AU.muffle); const rs = C.createGain(); rs.gain.value = .35; p.connect(rs); rs.connect(AU.rev);
+  const p = C.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'linear'; p.refDistance = 1; p.rolloffFactor = 0; p.maxDistance = 1000;   // 방향만 잡고, 거리에 따른 크기는 아래에서 직접 p.connect(AU.muffle); const rs = C.createGain(); rs.gain.value = .35; p.connect(rs); rs.connect(AU.rev);
   const mk = (buf)=>{ const s = C.createBufferSource(); s.buffer = buf; s.loop = true; const g = C.createGain(); g.gain.value = 0; s.connect(g); g.connect(p); s.start(0, Math.random()*buf.duration); return { s, g }; };
   const A = mk(AU.growl[0]), B = mk(AU.growl[1]);
   const sub = C.createOscillator(); sub.frequency.value = 39; const sg = C.createGain(); sg.gain.value = 0; sub.connect(sg); sg.connect(AU.master); sub.start();
   AU.mon = { p, A, B, sg }; }
-function monsterSound(pos, vol, agit, near){ if (!AU.mon) return; const M2 = AU.mon, t = now(); near = near || 0; M2.p.positionX.setTargetAtTime(pos.x, t, .05); M2.p.positionY.setTargetAtTime(pos.y, t, .05); M2.p.positionZ.setTargetAtTime(pos.z, t, .05);
-  // 가까울수록 크게 (멀면 거의 안 들림), 흥분하면 거친 쪽(B)이 섞임
-  const nv = vol > 0 ? vol*(.15 + near*1.1) : 0; M2.A.g.gain.setTargetAtTime(nv*(1 - agit*.6), t, .2); M2.B.g.gain.setTargetAtTime(nv*agit*.9, t, .2);
+function monsterSound(pos, vol, agit, near, dist){ if (!AU.mon) return; const M2 = AU.mon, t = now(); near = near || 0; const d = dist == null ? 8 : dist; M2.p.positionX.setTargetAtTime(pos.x, t, .05); M2.p.positionY.setTargetAtTime(pos.y, t, .05); M2.p.positionZ.setTargetAtTime(pos.z, t, .05);
+  // 멀리서도 희미하게 들리고 (40m 쯤까지), 다가올수록 점점 커진다. 흥분하면 거친 쪽(B)이 섞임
+  const far = 1.05/(1 + Math.pow(d/6, 1.35)), nv = vol > 0 ? vol*(far + near*.45) : 0; M2.A.g.gain.setTargetAtTime(nv*(1 - agit*.6), t, .2); M2.B.g.gain.setTargetAtTime(nv*agit*.9, t, .2);
   M2.A.s.playbackRate.setTargetAtTime(1 + (Math.random() - .5)*.03, t, .3); M2.sg.gain.setTargetAtTime(vol > 0 ? near*near*.35 : 0, t, .25); }
 function monGlitch(pos, v){ roar(pos, v*.6); }
 // 쫓기 시작 · 붙잡을 때: 크게 내지르는 포효 (같은 그르렁을 빠르게 · 크게)
@@ -601,11 +601,7 @@ function buildMonster(){ const root = new T.Group(), body = new T.Group(); root.
   const hg = new T.ExtrudeGeometry(sh, { depth:.1, bevelEnabled:true, bevelThickness:.05, bevelSize:.006, bevelSegments:3, curveSegments:10 }); hg.translate(0, 0, -.05);
   const hm = new T.Mesh(hg, SH); head.add(hm); R.jaw = hm;
   // 눈: 원작처럼 하얀 ∩ 테두리, 안쪽은 머리와 이어진 검정
-  R.eyes = []; for (const sx of [-1, 1]){ const w = .022, t = .0085, lg = .011, es = new T.Shape(); es.moveTo(-w, 0); es.lineTo(-w, lg); es.absarc(0, lg, w, Math.PI, 0, true); es.lineTo(w, 0); es.lineTo(w - t, 0); es.lineTo(w - t, lg); es.absarc(0, lg, w - t, 0, Math.PI, false); es.lineTo(-w + t, 0); es.lineTo(-w, 0); const e = new T.Mesh(new T.ShapeGeometry(es, 16), MAT.eye); e.position.set(sx*.062, .335, .108); head.add(e); R.eyes.push(e);
-    // 안쪽: 위는 검게 (눈꺼풀), 맨 아래에만 눈이 살짝 보인다 — 흐릿한 흰자 띠 + 반쯤 가려진 눈동자
-    const iw = w - t*.6, bh = lg*.95, band = new T.Shape(); band.moveTo(-iw, 0); band.lineTo(iw, 0); band.lineTo(iw, bh*.7); band.quadraticCurveTo(0, bh*1.25, -iw, bh*.7); band.lineTo(-iw, 0);
-    const wh = new T.Mesh(new T.ShapeGeometry(band, 12), MAT.eyeIn); wh.position.z = -.0004; e.add(wh);
-    const pu = new T.Mesh(new T.CircleGeometry(bh*.62, 16, 0, Math.PI), MAT.pupil); pu.position.set(sx*-.0012, .0006, .0003); e.add(pu); }
+  R.eyes = []; for (const sx of [-1, 1]){ const w = .022, t = .0085, lg = .011, es = new T.Shape(); es.moveTo(-w, 0); es.lineTo(-w, lg); es.absarc(0, lg, w, Math.PI, 0, true); es.lineTo(w, 0); es.lineTo(w - t, 0); es.lineTo(w - t, lg); es.absarc(0, lg, w - t, 0, Math.PI, false); es.lineTo(-w + t, 0); es.lineTo(-w, 0); const e = new T.Mesh(new T.ShapeGeometry(es, 16), MAT.eye); e.position.set(sx*.062, .335, .108); head.add(e); R.eyes.push(e); }
   // 흐릿한 검은 기운 (사진처럼 가장자리가 번진 그림자)
   const hz = new T.CanvasTexture(cv(128, 128, g=>{ const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(.55, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }));
   for (const [y, w2, h2] of [[1.2, 1.1, 2.4], [2.4, 2.2, .8]]){ const sp = new T.Sprite(new T.SpriteMaterial({ map:hz, transparent:true, depthWrite:false, fog:false })); sp.position.set(0, y, 0); sp.scale.set(w2, h2, 1); root.add(sp); }
@@ -1043,7 +1039,7 @@ function onFx(k){ const mp = V(MV.x, 2, MV.z);
 const STC = $('stat'), STg = STC.getContext('2d'); let heartT = 0, statV = 0;
 function dreadTick(dt){ const on = MONM.visible, d = on ? Math.hypot(MV.x - cam.position.x, MV.z - cam.position.z) + Math.abs(MV.y - P.pos.y)*1.5 : 99;
   const los = on && d < 30 && !segBlocked(cam.position.x, cam.position.z, MV.x, MV.z);
-  const ag = MON.ag || 0; monsterSound(V(MV.x, MV.y + 2, MV.z), on ? (.35 + ag*.65)*(los ? 1 : .55) : 0, ag, on ? CL(1 - d/16, 0, 1) : 0);
+  const ag = MON.ag || 0; monsterSound(V(MV.x, MV.y + 2, MV.z), on ? (.35 + ag*.65)*(los ? 1 : .6) : 0, ag, on ? CL(1 - d/16, 0, 1) : 0, d);
   if (on && MON.st === 'chase' && Math.random() < dt*.18) screech(V(MV.x, MV.y + 2, MV.z), .55);
   if (on && Math.random() < dt*(.15 + ag*.8)) monGlitch(V(MV.x, MV.y + 2, MV.z), .3 + ag*.5);
   if (on && MON.sp > .5){ MV.stepAcc += dt*MON.sp; if (MV.stepAcc > 1.6){ MV.stepAcc = 0; monStep(V(MV.x, MV.y, MV.z), d < 14 ? 1 : .5); } }
