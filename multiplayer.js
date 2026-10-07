@@ -2721,7 +2721,7 @@ const MP = (function () {
   function gmOpen(on){ if (!GM.el) return; GM.el.classList.toggle('on', on); window.MPMenuOpen = !!on; if (on){ GM.leaving = false; if (GM.view === 'detail') GM.view = 'people'; try { if (document.pointerLockElement) document.exitPointerLock(); } catch(e){} gmRender(); } }
   function gmLeaveNow(){ try { leave(); } catch(e){} try { if (window.top !== window) { window.top.location.href = 'hub.html'; return; } } catch(e){} location.href = 'hub.html'; }
   function gmMount(){ if (GM.el || typeof document === 'undefined' || !document.body) return; const pg = (location.pathname.split('/').pop() || '').toLowerCase();
-    if (!pg || /^(hub|hub-preview|account|index)\.html$/.test(pg) || document.getElementById('tabbar')) return;
+    if (!pg || /^(hub|hub-preview|account|index|chat)\.html$/.test(pg) || document.getElementById('tabbar')) return;
     const st = document.createElement('style'); st.textContent = `
       #gmBtn{position:fixed;left:10px;top:12px;z-index:46;height:34px;min-width:38px;padding:0 9px;border:none;border-radius:10px;background:rgba(18,18,26,.72);color:#fff;display:flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);font:800 12px sans-serif;backdrop-filter:blur(6px)}
       #gmBtn:hover{background:rgba(40,40,60,.85)} #gmBtn .n:empty{display:none} #gmBtn .n{background:#3a7cff;border-radius:99px;padding:1px 6px;font-size:10.5px}
