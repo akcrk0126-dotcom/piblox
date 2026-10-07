@@ -323,16 +323,18 @@ $('bLock').onclick = ()=>{ setLock(!LOCK); toast(LOCK ? '잠금: 밀어도 안 �
 function release(pid){ const m = PTR[pid]; delete PTR[pid]; if (m != null && !stillHeld(m, pid)) noteOff(m); }
 kbEl.addEventListener('pointerdown', e=>{ e.preventDefault(); try { kbEl.setPointerCapture(e.pointerId); } catch(x){}
   PT[e.pointerId] = { x0:e.clientX, y0:e.clientY, x:e.clientX, pos0:POS, mode:'play', t:performance.now(), vx:0 };
-  const ids = Object.keys(PT);
-  // 잠금이 풀려 있을 때 두 손가락 = 집어서 크기 조절
-  if (!LOCK && ids.length === 2){ ids.forEach(id=>{ release(+id); PT[id].mode = 'pinch'; }); const [a, b] = ids.map(id=>PT[id]); pinch = { d0:Math.abs(a.x - b.x) || 1, ww0:WW }; return; }
   if (pinch) return;
+  // 여러 손가락 = 화음. (두 손가락을 실제로 벌리거나 오므릴 때만 크기 조절로 바뀐다)
   const m = keyAt(e.clientX, e.clientY); if (m == null) return; PTR[e.pointerId] = m; noteOn(m, velAt(e.clientY, m)); });
 kbEl.addEventListener('pointermove', e=>{ const pt = PT[e.pointerId]; if (!pt) return; const now = performance.now(), dx = e.clientX - pt.x; pt.vx = pt.vx*.6 + (dx/Math.max(1, now - pt.t))*.4; pt.x = e.clientX; pt.t = now;
   if (pt.mode === 'pinch'){ if (!pinch) return; const ps = Object.values(PT).filter(q=>q.mode === 'pinch'); if (ps.length < 2) return; const d = Math.abs(ps[0].x - ps[1].x) || 1; zoomTo(pinch.ww0*d/pinch.d0, (ps[0].x + ps[1].x)/2); return; }
   if (pt.mode === 'pan'){ setPos(pt.pos0 - (e.clientX - pt.x0)/WW, true); applyPos(); return; }
-  // 슬라이드 모드: 옆으로 충분히 밀면 연주를 멈추고 건반을 움직인다
-  if (!LOCK && Math.abs(e.clientX - pt.x0) > 14 && Math.abs(e.clientX - pt.x0) > Math.abs(e.clientY - pt.y0)){ pt.mode = 'pan'; release(e.pointerId); kbEl.classList.add('panning'); setPos(pt.pos0 - (e.clientX - pt.x0)/WW, true); applyPos(); return; }
+  const fingers = Object.keys(PT);
+  if (!LOCK && fingers.length === 2 && !pinch){ const [a, b] = fingers.map(id=>PT[id]), d0 = Math.abs(a.x0 - b.x0), d = Math.abs(a.x - b.x);
+    // 두 손가락이 둘 다 움직이면서 사이가 크게 바뀌면 집기
+    if (Math.abs(d - d0) > 45 && Math.abs(a.x - a.x0) > 18 && Math.abs(b.x - b.x0) > 18){ fingers.forEach(id=>{ release(+id); PT[id].mode = 'pinch'; }); pinch = { d0:d || 1, ww0:WW }; return; } }
+  // 슬라이드 모드: 손가락 하나로 옆으로 충분히 밀면 연주를 멈추고 건반을 움직인다 (화음 치는 중엔 안 움직임)
+  if (!LOCK && fingers.length === 1 && Math.abs(e.clientX - pt.x0) > 18 && Math.abs(e.clientX - pt.x0) > Math.abs(e.clientY - pt.y0)){ pt.mode = 'pan'; release(e.pointerId); kbEl.classList.add('panning'); setPos(pt.pos0 - (e.clientX - pt.x0)/WW, true); applyPos(); return; }
   if (!LOCK) return;   // 슬라이드 모드에서는 글리산도 대신 밀기
   if (!(e.pointerId in PTR)) return; const m = keyAt(e.clientX, e.clientY); if (m === PTR[e.pointerId]) return; if (PTR[e.pointerId] != null && !stillHeld(PTR[e.pointerId], e.pointerId)) noteOff(PTR[e.pointerId]); PTR[e.pointerId] = m; if (m != null) noteOn(m, velAt(e.clientY, m)); });
 const ptrUp = e=>{ const pt = PT[e.pointerId]; delete PT[e.pointerId]; if (pt && pt.mode === 'pan'){ kbEl.classList.remove('panning'); setPos(POS - pt.vx*220/WW); } if (pinch && !Object.values(PT).some(q=>q.mode === 'pinch')) pinch = null; if (e.pointerId in PTR) release(e.pointerId); };
