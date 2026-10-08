@@ -2076,6 +2076,8 @@ const MP = (function () {
     try {
       ensureApp();
       auth.onAuthStateChanged(handleAuthChange);
+      // 가끔 로그인은 끝났는데 상태 변경 알림이 안 와서 '접속 중…'에서 멈춘다 → 잠시 뒤 직접 확인해서 방에 들어간다
+      [4000, 9000].forEach(ms => setTimeout(() => { try { if (!firstCallbackFired && auth && auth.currentUser) handleAuthChange(auth.currentUser); } catch (e) {} }, ms));
     } catch (err) {
       console.error('[MP] Firebase 초기화 실패:', err);
       if (callback) callback(null, err);
