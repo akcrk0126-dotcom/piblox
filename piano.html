@@ -153,7 +153,7 @@ body.tablet .top{ padding-left:64px; }
 <div class="slist" id="slist"><div class="slbox">
   <div class="slhd"><b>곡 목록</b><span class="sp"></span><div class="sltab" id="slTab"><button class="on" data-l="0">전체</button><button data-l="1">쉬움</button><button data-l="2">보통</button><button data-l="3">어려움</button></div><button class="b" id="bSlX" title="닫기"><svg class="i" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
   <div class="slrows" id="slRows"></div>
-  <p class="slfoot">악보는 모두 <b>Mutopia Project</b>(mutopiaproject.org)의 무료 악보를 그대로 MIDI로 바꾼 것이라 처음부터 끝까지, 도돌이표까지 연주돼요. 곡마다 아래에 악보를 입력한 사람과 라이선스를 적었어요 (자세한 내용: songs/CREDITS.txt).</p>
+  <p class="slfoot">클래식은 모두 <b>Mutopia Project</b>(mutopiaproject.org)의 무료 악보를 그대로 MIDI로 바꾼 것이라 처음부터 끝까지, 도돌이표까지 연주돼요. 애니 이름이 붙은 곡은 그 애니 장면에서 실제로 연주된 클래식 원곡이에요 (애니 주제가는 저작권이 있어서 넣을 수 없어요). 퐁크 곡은 이 사이트를 위해 새로 지은 오리지널이고, 카우벨 · 808 · 드럼으로 연주돼요. 곡마다 아래에 악보를 입력한 사람과 라이선스를 적었어요 (자세한 내용: songs/CREDITS.txt).</p>
 </div></div>
 <div class="toast" id="toast"></div>
 <div class="start" id="start"><button id="bGo"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="#fff"/></svg>눌러서 시작</button></div>
@@ -254,7 +254,18 @@ const INST = [
   { id:'bell', name:'종', col:'#fff1a8', sus:false, play(m, v, t){ const f = mtof(m), g = voiceOut(1, 1.1); const car = osc('sine', f, t, g); const mod = AC.createOscillator(); mod.frequency.value = f*3.5; const mg = AC.createGain(); mod.connect(mg); mg.connect(car.frequency); mod.start(t);
       mg.gain.setValueAtTime(f*4*v, t); mg.gain.exponentialRampToValueAtTime(f*.2, t + 3); const peak = .2*v; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + .003); g.gain.exponentialRampToValueAtTime(.0001, t + 4);
       stopAll([car, mod], t + 4.1); return { off(){}, end:t + 4, nodes:[car, mod] }; } },
-  { id:'drum', name:'드럼', col:'#7ab8ff', sus:false, drum:true, play(m, v, t){ return drumHit(((m % 12) + 12) % 12, v, t); } } ];
+  { id:'drum', name:'드럼', col:'#7ab8ff', sus:false, drum:true, play(m, v, t){ return drumHit(((m % 12) + 12) % 12, v, t); } },
+  // 퐁크: TR-808 카우벨 (네모파 두 개를 1 : 1.48 로 겹쳐 띠 필터) · 808 베이스 (사인파가 위에서 툭 떨어지고 살짝 찌그러짐)
+  { id:'cowbell', name:'카우벨', col:'#ff5ad1', sus:false, play(m, v, t){ const f = mtof(m), g = voiceOut(1, .3), bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(9000, f*1.25); bp.Q.value = 2.4; bp.connect(g);
+      const o1 = osc('square', f, t, bp), o2 = osc('square', f*1.4836, t, bp); const pk = .42*v;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + .002); g.gain.exponentialRampToValueAtTime(pk*.32, t + .06); g.gain.exponentialRampToValueAtTime(.0001, t + .6);
+      stopAll([o1, o2], t + .65); return { off(){}, end:t + .6, nodes:[o1, o2] }; } },
+  { id:'b808', name:'808 베이스', col:'#ff3d5a', play(m, v, t){ const f = mtof(m - 12), g = voiceOut(1, .04), sh = AC.createWaveShaper(); sh.curve = driveCurve(); sh.connect(g);
+      const o = osc('sine', f*2.4, t, sh); o.frequency.exponentialRampToValueAtTime(f, t + .05); const pk = .3*v;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + .004); g.gain.setTargetAtTime(pk*.7, t + .08, .6);
+      return { off(t2){ rel(g, t2, .1); stopAll([o], t2 + .25); }, end:Infinity, nodes:[o] }; } } ];
+const INST_ID = {}; INST.forEach(it=>INST_ID[it.id] = it);
+function driveCurve(){ if (waveCache.drive) return waveCache.drive; const N = 1024, c = new Float32Array(N); for (let i=0;i<N;i++){ const x = i/(N - 1)*2 - 1; c[i] = Math.tanh(x*3.2)/Math.tanh(3.2); } return waveCache.drive = c; }
 function rel(g, t, r){ if (g.gain.cancelAndHoldAtTime) g.gain.cancelAndHoldAtTime(t); else { g.gain.cancelScheduledValues(t); try { g.gain.setValueAtTime(g.gain.value, t); } catch(e){} } g.gain.setTargetAtTime(0, t, r/3); }
 function stopAll(list, t){ list.forEach(o=>{ try { o.stop(t); } catch(e){} }); }
 // 드럼: 건반 하나하나가 다른 북
@@ -447,6 +458,8 @@ $('bSheetX').onclick = $('shade').onclick = ()=>setSheet(false);
 //  악기 고르기 (그림은 직접 그린 것)
 // =====================================================================
 const ICONS = {
+  cowbell:'<svg viewBox="0 0 40 40"><path d="M15 6h10l6 26H9z" fill="#ff5ad1" stroke="#7a1a5e" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 6h10l1.6 7H13.4z" fill="#ffb3ea"/><rect x="17" y="2" width="6" height="5" rx="1.5" fill="#7a1a5e"/><path d="M5 18l-3-2M5 24H1M35 18l3-2M35 24h4" stroke="#ff5ad1" stroke-width="2" stroke-linecap="round"/></svg>',
+  b808:'<svg viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="6" fill="#2a0c14" stroke="#ff3d5a" stroke-width="1.8"/><circle cx="20" cy="20" r="11" fill="#14060a" stroke="#ff3d5a" stroke-width="2"/><circle cx="20" cy="20" r="5" fill="#ff3d5a"/><circle cx="20" cy="20" r="2" fill="#ffb3c0"/></svg>',
   grand:'<svg viewBox="0 0 40 40"><path d="M6 30V14c0-6 5-9 11-9 7 0 9 4 12 9 2 3 5 4 5 8v8z" fill="#2a2638" stroke="#f3f1ff" stroke-width="1.6"/><rect x="6" y="26" width="28" height="6" fill="#fff"/><g fill="#14121c"><rect x="9" y="26" width="2" height="3.6"/><rect x="13" y="26" width="2" height="3.6"/><rect x="19" y="26" width="2" height="3.6"/><rect x="23" y="26" width="2" height="3.6"/><rect x="27" y="26" width="2" height="3.6"/></g><path d="M8 32v4M32 32v4" stroke="#f3f1ff" stroke-width="2" stroke-linecap="round"/></svg>',
   epiano:'<svg viewBox="0 0 40 40"><rect x="3" y="14" width="34" height="14" rx="3" fill="#ff9ad5"/><rect x="5" y="20" width="30" height="6" fill="#fff"/><g fill="#2a2638"><rect x="8" y="20" width="2" height="3.4"/><rect x="12" y="20" width="2" height="3.4"/><rect x="18" y="20" width="2" height="3.4"/><rect x="22" y="20" width="2" height="3.4"/><rect x="26" y="20" width="2" height="3.4"/></g><circle cx="9" cy="17" r="1.4" fill="#fff"/><circle cx="14" cy="17" r="1.4" fill="#fff"/><path d="M8 28v6M32 28v6" stroke="#ff9ad5" stroke-width="2.4" stroke-linecap="round"/></svg>',
   organ:'<svg viewBox="0 0 40 40"><g fill="#ffb35a"><rect x="6" y="10" width="4" height="18" rx="2"/><rect x="12" y="5" width="4" height="23" rx="2"/><rect x="18" y="2" width="4" height="26" rx="2"/><rect x="24" y="5" width="4" height="23" rx="2"/><rect x="30" y="10" width="4" height="18" rx="2"/></g><rect x="4" y="27" width="32" height="9" rx="2" fill="#7a4a22"/><rect x="6" y="29" width="28" height="3" fill="#fff"/></svg>',
@@ -519,7 +532,17 @@ const SONGS = [
   ['mountain', '산속 마왕의 궁전', '그리그', 3, 1, 'Coyau · Public Domain'],
   ['maple', '단풍잎 래그', '조플린', 3, 1, 'Chris Sawer · Public Domain'],
   ['rach', '전주곡 올림다단조 (종)', '라흐마니노프', 3, 1, 'Petro Kostandy · CC BY-SA 4.0'],
-  ['cap24', '카프리스 24번', '파가니니', 3, 1, 'Samuel Rummel · CC BY-SA 4.0'] ].map(([k, name, by, lv, rate, credit])=>({ k, name, by, lv, rate, credit }));
+  ['cap24', '카프리스 24번', '파가니니', 3, 1, 'Samuel Rummel · CC BY-SA 4.0'],
+  // 애니에 나온 클래식 (애니 주제가는 저작권 때문에 못 넣고, 장면에서 실제로 연주된 원곡을 넣었다)
+  ['air', 'G선상의 아리아 · 에반게리온 극장판', '바흐', 1, 1, 'Jeff Covey · CC BY-SA 3.0'],
+  ['cello1', '첼로 모음곡 1번 전주곡 · 에반게리온 신지의 첼로', '바흐', 2, 1, 'Andreas Scherer · Public Domain'],
+  ['path1', '비창 소나타 1악장 · 노다메 칸타빌레', '베토벤', 3, 1, 'Chris Sawer · Public Domain'],
+  ['path3', '비창 소나타 3악장 · 노다메 칸타빌레', '베토벤', 3, 1, 'Chris Sawer · Public Domain'],
+  ['ballade1', '발라드 1번 · 4월은 너의 거짓말', '쇼팽', 3, 1.2, 'Javier Ruiz-Alma · CC BY-SA 4.0'],
+  // 퐁크: 이 사이트를 위해 새로 지은 곡 (다른 노래를 베낀 게 아님). 곡마다 악기가 정해져 있다
+  ['phdrift', '드리프트 나이트 (퐁크)', 'PlayHub 오리지널', 2, 1, 'PlayHub 창작곡', { 0:'cowbell', 1:'b808', 2:'bell', 9:'drum' }],
+  ['phrush', '카우벨 러시 (브라질 퐁크)', 'PlayHub 오리지널', 2, 1, 'PlayHub 창작곡', { 0:'cowbell', 1:'b808', 2:'synth', 9:'drum' }],
+  ['phfog', '멤피스 포그 (멤피스 퐁크)', 'PlayHub 오리지널', 2, 1, 'PlayHub 창작곡', { 0:'cowbell', 1:'b808', 2:'bell', 9:'drum' }] ].map(([k, name, by, lv, rate, credit, mix])=>({ k, name, by, lv, rate, credit, mix }));
 function nameToMidi(s){ const r = /^([A-G])(#?)(\d)$/.exec(s); if (!r) return null; return 12*(+r[3] + 1) + { C:0, D:2, E:4, F:5, G:7, A:9, B:11 }[r[1]] + (r[2] ? 1 : 0); }
 function parseVoice(str, bpm){ let t = 0, beat = 60000/bpm; const ev = [];
   for (const tok of str.trim().split(/\s+/)){ if (tok[0] === '@'){ beat = 60000/(+tok.slice(1)); continue; } const [n, d] = tok.split(':'), dur = +d*beat; if (n !== '-') ev.push([t, dur, n.split('+').map(nameToMidi).filter(m=>m != null)]); t += dur; }
@@ -541,7 +564,7 @@ function parseMidi(buf){ const d = new DataView(buf); let p = 0;
   const segs = []; let acc = 0; for (let i=0;i<tempos.length;i++){ const [tk, us] = tempos[i]; if (i) acc += (tk - tempos[i - 1][0])*tempos[i - 1][1]/div/1e6; segs.push([tk, acc, us]); }
   const sec = tk=>{ let lo = 0, hi = segs.length - 1; while (lo < hi){ const m = (lo + hi + 1) >> 1; if (segs[m][0] <= tk) lo = m; else hi = m - 1; } const [t0, s0, us] = segs[lo]; return s0 + (tk - t0)*us/div/1e6; };
   ons.sort((a, b)=>a[0] - b[0] || a[1] - b[1]); const open = {}, notes = [];
-  for (const [tk, on, ch, n, v, tr] of ons){ const key = tr*2048 + ch*128 + n; if (on){ (open[key] = open[key] || []).push([tk, v]); } else { const q = open[key]; if (q && q.length){ const [t0, v0] = q.shift(); notes.push({ t:sec(t0), d:Math.max(.03, sec(tk) - sec(t0)), n, v:v0/127 }); } } }
+  for (const [tk, on, ch, n, v, tr] of ons){ const key = tr*2048 + ch*128 + n; if (on){ (open[key] = open[key] || []).push([tk, v]); } else { const q = open[key]; if (q && q.length){ const [t0, v0] = q.shift(); notes.push({ t:sec(t0), d:Math.max(.03, sec(tk) - sec(t0)), n, v:v0/127, ch }); } } }
   notes.sort((a, b)=>a.t - b.t); return notes; }
 const MIDI_CACHE = {};
 function loadSong(S){ if (MIDI_CACHE[S.k]) return Promise.resolve(MIDI_CACHE[S.k]);
@@ -556,8 +579,9 @@ function songUI(){ const pos = songPos(), tot = SP.end/spRate(); $('songProg').q
   $('bSongPlay').innerHTML = SP.on ? '<svg class="i" viewBox="0 0 20 20"><rect x="5" y="4" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="11.5" y="4" width="3.5" height="12" rx="1" fill="currentColor"/></svg>' : '<svg class="i" viewBox="0 0 20 20"><path d="M6 4l10 6-10 6z" fill="currentColor"/></svg>';
   $('bSongPlay').disabled = !SP.notes; $('bStopSong').disabled = !SP.notes; $('bSongList').classList.toggle('on', SP.on); }
 function songSilence(){ const now = AC ? AC.currentTime : 0; SP.voices.forEach(v=>{ try { v.off(now); } catch(e){} }); SP.voices = []; SP.vis.forEach(clearTimeout); SP.vis = []; for (const m in KEYS) if (!LIVE[m]) keyEl(+m, false); }
-function songTick(){ if (!SP.on) return; const now = AC.currentTime, ahead = now + .3, r = spRate(), inst = INST[CUR];
+function songTick(){ if (!SP.on) return; const now = AC.currentTime, ahead = now + .3, r = spRate(), inst0 = INST[CUR];
   while (SP.idx < SP.notes.length){ const nt = SP.notes[SP.idx], at = SP.t0 + nt.t/r; if (at > ahead) break; SP.idx++; if (at < now - .05) continue;
+    const mix = SP.S.mix, inst = mix && mix[nt.ch] ? INST_ID[mix[nt.ch]] : inst0;
     const vel = .35 + nt.v*.65, dur = Math.max(.04, nt.d/r), v = inst.play(nt.n, vel, at); v.inst = inst; v.m = nt.n; v.songEnd = at + dur;
     if (inst.sus !== false) v.off(at + dur); SP.voices.push(v); ACTIVE.push(v);
     const m = nt.n, w = Math.max(0, (at - now)*1000); SP.vis.push(setTimeout(()=>{ keyEl(m, true); spark(m, inst); }, w)); SP.vis.push(setTimeout(()=>{ if (!LIVE[m]) keyEl(m, false); endBar(m); }, w + dur*1000)); }
@@ -583,7 +607,7 @@ $('songSpeed').onchange = ()=>{ if (SP.on){ const pos = songPos(); SP.pos = pos;
 $('songProg').onclick = e=>{ if (!SP.notes) return; const r = $('songProg').getBoundingClientRect(), f = Math.max(0, Math.min(1, (e.clientX - r.left)/r.width)); const was = SP.on; songPause(); SP.pos = f*SP.end; if (was) songResume(); songUI(); };
 // ---------- 곡 목록 창 ----------
 let SL_LV = 0; const songLen = S=>MIDI_CACHE[S.k] ? fmt(MIDI_CACHE[S.k].reduce((a, n)=>Math.max(a, n.t + n.d), 0)/S.rate) : '';
-const LENS = { star:26, ode:16, bachc:140, gym1:234, prel4:108, elise:156, moon1:276, path2:243, k545:265, noct92:202, raindrop:267, clair:324, arab1:177, enter:253, canon:249, consol:244, turk:216, moon3:407, fantimp:254, revol:126, aeolian:114, minute:90, mountain:146, maple:144, rach:164, cap24:132 };
+const LENS = { star:26, ode:16, bachc:140, gym1:234, prel4:108, elise:156, moon1:276, path2:243, k545:265, noct92:202, raindrop:267, clair:324, arab1:177, enter:253, canon:249, consol:244, turk:216, moon3:407, fantimp:254, revol:126, aeolian:114, minute:90, mountain:146, maple:144, rach:164, cap24:132, air:288, cello1:126, path1:477, path3:234, ballade1:579, phdrift:96, phrush:96, phfog:114 };
 function buildSongList(){ $('slRows').innerHTML = SONGS.filter(S=>!SL_LV || S.lv === SL_LV).map(S=>`<button class="slr ${S.lv >= 3 ? 'hard' : ''} ${SP.S && SP.S.k === S.k ? 'on' : ''}" data-k="${S.k}"><span class="nm"><b>${S.name}</b><small>${S.by} · 악보 ${S.credit}</small></span><span class="dots">${[1, 2, 3].map(i=>`<i class="${i <= S.lv ? 'on' : ''}"></i>`).join('')}</span><span class="len">${fmt(LENS[S.k] || 0)}</span></button>`).join(''); }
 $('bSongList').onclick = ()=>{ buildSongList(); $('slist').classList.add('on'); };
 $('bSlX').onclick = ()=>$('slist').classList.remove('on'); $('slist').onclick = e=>{ if (e.target === $('slist')) $('slist').classList.remove('on'); };
@@ -625,7 +649,7 @@ addEventListener('pointerdown', ()=>{ initAudio(); const s = $('start'); if (s) 
 addEventListener('keydown', ()=>{ initAudio(); const s = $('start'); if (s) s.remove(); }, { once:true, capture:true });
 // 허브 접속 표시
 try { const MP = window.MP; if (MP && MP.isConfigured && MP.isConfigured() && !window.__mpFail && MP.initAuthOnly) MP.initAuthOnly(u=>{ if (u) try { MP.setPresence('piano', null); } catch(e){} }); } catch(e){}
-window.__PN = { SONGS, SP, parseMidi, loadSong, songLoad, keyAt, get OUT(){ return OUT; }, INST, noteOn, noteOff, setInst, setSus, get CUR(){ return CUR; }, get AC(){ return AC; }, LIVE, KEYS, baseMidi, BARS };
+window.__PN = { SONGS, SP, songStop, initAudio: ()=>initAudio(), parseMidi, loadSong, songLoad, keyAt, get OUT(){ return OUT; }, INST, noteOn, noteOff, setInst, setSus, get CUR(){ return CUR; }, get AC(){ return AC; }, LIVE, KEYS, baseMidi, BARS };
 })();
 </script>
 </body>
