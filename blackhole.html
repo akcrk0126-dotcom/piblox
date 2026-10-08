@@ -156,7 +156,15 @@ body.sl #xh{display:block}
 <div id="touch"><div id="joy"><div id="joyB"><div id="joyS"></div></div></div><div class="tb" id="tE">E</div></div>
 <div id="title"><h1>블랙홀 머지</h1><p>2짜리 작은 블랙홀에 다가가 집어 들고 같은 숫자끼리 합쳐 4 · 8 · 16 … 점점 거대하고 화려하게 키워라.<br>10분마다 깨어나는 태양에 블랙홀을 던져 <b>마지막 일격</b>을 날린 사람이 상금을 가져간다.<br>다른 섬에 블랙홀을 날려 공격하고, 쉴드를 업그레이드해서 막아라.</p><button class="btn gold" id="bPlay" style="font-size:18px;padding:14px 34px">시작</button><a href="hub.html">허브로</a></div>
 <div id="err"></div>
-<script>window.addEventListener('error', e=>{ if (e.target && e.target !== window) return; document.getElementById('err').textContent = '⚠ ' + (e.message || '') + (e.lineno ? ' (line ' + e.lineno + ')' : ''); });</script>
+<script>
+// 게임이 다 불러와지기 전에 시작을 눌러도 무시하지 않고, 준비되는 대로 바로 시작한다
+(function(){ const b = document.getElementById('bPlay'); b.onclick = function(){ window.__bhWant = true; b.textContent = '불러오는 중…'; b.disabled = true; }; })();
+window.addEventListener('error', e=>{ if (e.target && e.target !== window) return; const msg = (e.message || '') + (e.lineno ? ' (line ' + e.lineno + ')' : ''); document.getElementById('err').textContent = '⚠ ' + msg;
+  // 시작 전에 멈추면 시작 버튼이 먹통이 되니, 화면 가운데에 이유를 크게 보여 준다
+  if (!window.__bhReady){ const b = document.getElementById('bPlay'); b.disabled = false; b.textContent = '새로고침'; b.onclick = ()=>location.reload();
+    let m = document.getElementById('bootErr'); if (!m){ m = document.createElement('p'); m.id = 'bootErr'; m.style.cssText = 'color:#ff8a9a;font-size:13px;max-width:520px;line-height:1.6'; b.parentNode.insertBefore(m, b); }
+    m.textContent = /webgl/i.test(msg) ? '이 기기(브라우저)에서 3D 그래픽(WebGL)을 켤 수 없어서 게임을 시작할 수 없어요. 크롬 최신 버전에서 열거나, 설정에서 하드웨어 가속을 켜 주세요.' : '게임을 불러오다가 문제가 생겼어요: ' + msg; } });
+</script>
 <script src="lib/three.r128.min.js"></script>
 <script>window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"><\/script>')</script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
@@ -551,7 +559,12 @@ requestAnimationFrame(frame);
 // 탭이 뒤로 가서 화면 갱신이 멈춰도 게임(돈 · 날아오는 공격 · 온라인 기록)은 계속 돌아간다
 let lastFrame = performance.now();
 setInterval(()=>{ const t = performance.now(), gap = (t - lastFrame)/1000; if (gap > .6 && !window.__SIM){ lastFrame = t; last = t; let g = Math.min(gap, 30); while (g > 0){ const d = Math.min(.25, g); step(d); g -= d; } netSend(1); } if (NET.ready) netIn(); }, 500);
-$('bPlay').onclick = ()=>{ audioInit(); $('title').style.display = 'none'; started = true; hint('블랙홀에 다가가면 <b>저절로 들고</b><br>같은 숫자에 닿으면 <b>합체!</b>', 3200); metaStart(); };
+function startGame(){ if (started) return; $('title').style.display = 'none'; started = true;   // 화면부터 연다 (소리 · 이벤트가 실패해도 게임은 시작)
+  try { audioInit(); } catch(e){ console.warn('[BH] audio', e); }
+  hint('블랙홀에 다가가면 <b>저절로 들고</b><br>같은 숫자에 닿으면 <b>합체!</b>', 3200);
+  try { metaStart(); } catch(e){ console.warn('[BH] meta', e); } }
+$('bPlay').disabled = false; $('bPlay').textContent = '시작'; $('bPlay').onclick = startGame; window.__bhReady = true;
+if (window.__bhWant) startGame();
 addEventListener('pagehide', save); document.addEventListener('visibilitychange', ()=>{ if (document.hidden) save(); });
 window.__BH = { ME, AIS, SEATS, PL, CAM, AIM, NET, SUNS, SUNH, PROJ, step:(n, dt)=>{ for (let i=0;i<n;i++){ step(dt || 1/30); netSend(dt || 1/30); } hud(); placeCam(1); ren.render(scene, cam); }, act, buyMe, throwSun, attackSeat, aim, hitMe, applyHit, activateShield, shieldOn, syncSeat, seatsUpdate, netIn, sunCalc, sunHit, myId, mySeat:()=>mySeat, inc, dmg, SH, SL, shiftLock, META:()=>META, spin:()=>spinWheel(), rebirth:()=>doRebirth(), buyPass:(k)=>buyPass(k), claimDaily:()=>claimDaily(), autoHands, noPick:()=>noPick, get ext(){ return { MET, meteorShower, PET, hatch, giftSeat, giveBH, isTeam, qEv, REV }; },
   start:()=>{ started = true; $('title').style.display = 'none'; }, setPos:(x, z, ry)=>{ PL.x = x; PL.z = z; if (ry != null) PL.ry = ry; } };
