@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#121633">
+<title>SAT 워들</title>
+<style>
+  :root{ --bg:#0f1330; --bg2:#181d45; --card:#1f2557; --line:rgba(255,255,255,.12); --tx:#f1f3ff; --sub:#a7aedb;
+    --g:#2fbf71; --y:#e9b730; --x:#3a3f6b; --key:#5a6199; --acc:#7a5cff; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:radial-gradient(1200px 600px at 50% -200px, #2a2f78, var(--bg)); color:var(--tx); font-family:'Pretendard','Noto Sans KR','Malgun Gothic',system-ui,sans-serif; }
+  body{ display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+  button{ font:inherit; color:inherit; border:none; cursor:pointer; background:none; }
+  svg.i{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  header{ flex:none; height:56px; display:flex; align-items:center; gap:8px; padding:0 12px 0 64px; }
+  header h1{ margin:0; font-size:19px; font-weight:900; letter-spacing:.02em; flex:1; display:flex; align-items:center; gap:8px; }
+  header h1 small{ font-size:12px; font-weight:700; color:var(--sub); }
+  header h1{ white-space:nowrap; min-width:0; } @media (max-width:480px){ header h1 small{ display:none; } }
+  .hb{ height:36px; min-width:36px; padding:0 10px; border-radius:10px; background:rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center; gap:6px; font-weight:800; font-size:13px; }
+  .hb:hover{ background:rgba(255,255,255,.15); }
+  .tabs{ flex:none; display:flex; gap:6px; justify-content:center; padding:0 12px 6px; }
+  .tabs button{ height:34px; padding:0 14px; border-radius:99px; background:rgba(255,255,255,.07); font-weight:800; font-size:13.5px; color:var(--sub); }
+  .tabs button.on{ background:var(--acc); color:#fff; }
+  .status{ flex:none; height:28px; display:flex; align-items:center; justify-content:center; gap:14px; font-size:13px; color:var(--sub); font-weight:700; }
+  .status b{ color:var(--tx); }
+
+  main{ flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4px 8px; }
+  #board{ display:grid; grid-template-rows:repeat(6, 1fr); gap:6px; height:min(100%, 410px); aspect-ratio:5/6; max-width:100%; }
+  .row{ display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; }
+  .row.shake{ animation:shake .4s; }
+  @keyframes shake{ 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+  .t{ display:flex; align-items:center; justify-content:center; border:2px solid var(--line); border-radius:8px; font-size:clamp(20px, 5.4vh, 34px); font-weight:900; text-transform:uppercase; user-select:none; }
+  .t.f{ border-color:rgba(255,255,255,.4); animation:pop .1s; }
+  @keyframes pop{ 50%{ transform:scale(1.08); } }
+  .t.g, .t.y, .t.x{ border-color:transparent; animation:flip .5s both; }
+  .t.g{ background:var(--g); } .t.y{ background:var(--y); color:#1d1500; } .t.x{ background:var(--x); }
+  @keyframes flip{ 0%{ transform:rotateX(0); } 50%{ transform:rotateX(90deg); } 100%{ transform:rotateX(0); } }
+  .row.win .t{ animation:jump .5s both; }
+  @keyframes jump{ 40%{ transform:translateY(-14px); } }
+
+  .hintBar{ flex:none; min-height:40px; display:flex; align-items:center; justify-content:center; gap:8px; padding:4px 12px; }
+  .hintBar button{ height:32px; padding:0 12px; border-radius:99px; background:rgba(255,255,255,.08); font-size:12.5px; font-weight:800; color:var(--sub); display:flex; align-items:center; gap:6px; }
+  .hintBar button:disabled{ opacity:.4; cursor:default; }
+  .hintBar .hx{ font-size:13px; color:#ffe7a6; text-align:center; line-height:1.4; max-width:560px; }
+
+  #kb{ flex:none; width:100%; max-width:520px; margin:0 auto; padding:0 6px calc(10px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:7px; }
+  #kb .kr{ display:flex; gap:5px; justify-content:center; }
+  #kb button{ flex:1; max-width:46px; height:54px; border-radius:7px; background:var(--key); font-weight:900; font-size:15px; text-transform:uppercase; user-select:none; }
+  #kb button.wide{ max-width:72px; flex:1.5; font-size:12px; }
+  #kb button.g{ background:var(--g); } #kb button.y{ background:var(--y); color:#1d1500; } #kb button.x{ background:#262a4d; color:#7e84b5; }
+  #kb button:active{ filter:brightness(1.25); }
+
+  #toast{ position:fixed; left:50%; top:110px; transform:translateX(-50%); background:#fff; color:#111; font-weight:800; font-size:14px; padding:10px 16px; border-radius:10px; opacity:0; pointer-events:none; transition:opacity .2s; z-index:60; }
+  #toast.on{ opacity:1; }
+
+  .modal{ position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(5,7,20,.66); padding:16px; }
+  .modal.on{ display:flex; }
+  .box{ width:min(440px, 100%); max-height:92dvh; overflow-y:auto; background:linear-gradient(170deg, #252c6a, #161a40); border:1px solid var(--line); border-radius:20px; padding:22px 20px 18px; box-shadow:0 30px 80px rgba(0,0,0,.55); position:relative; animation:mIn .2s; }
+  @keyframes mIn{ from{ transform:translateY(10px) scale(.97); opacity:0; } }
+  .box .x{ position:absolute; right:12px; top:12px; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--sub); }
+  .box .x:hover{ background:rgba(255,255,255,.1); color:#fff; }
+  .box h2{ margin:0 0 6px; font-size:22px; }
+  .box p{ margin:6px 0; color:var(--sub); font-size:14px; line-height:1.6; }
+  .word{ margin:12px 0 4px; display:flex; align-items:center; gap:10px; }
+  .word b{ font-size:30px; letter-spacing:.08em; text-transform:uppercase; }
+  .say{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; }
+  .def{ background:rgba(0,0,0,.25); border-radius:12px; padding:12px 14px; margin:8px 0 12px; }
+  .def .en{ font-size:15px; line-height:1.5; } .def .ko{ margin-top:6px; color:#ffe7a6; font-weight:800; font-size:15px; }
+  .stats{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:12px 0; text-align:center; }
+  .stats div b{ display:block; font-size:24px; } .stats div small{ font-size:11px; color:var(--sub); }
+  .dist{ display:flex; flex-direction:column; gap:4px; margin:6px 0 12px; }
+  .dist .d{ display:flex; align-items:center; gap:6px; font-size:12px; font-weight:800; }
+  .dist .d i{ display:block; height:20px; min-width:24px; background:var(--x); border-radius:4px; text-align:right; padding-right:6px; font-style:normal; line-height:20px; }
+  .dist .d.me i{ background:var(--g); }
+  .big{ width:100%; height:48px; border-radius:12px; background:var(--acc); color:#fff; font-weight:900; font-size:16px; margin-top:6px; }
+  .big.sub{ background:rgba(255,255,255,.1); }
+  .lb{ margin:8px 0; display:flex; flex-direction:column; gap:4px; }
+  .lb .r{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:9px; background:rgba(255,255,255,.05); font-size:13.5px; }
+  .lb .r.me{ background:rgba(122,92,255,.3); }
+  .lb .n{ width:22px; text-align:center; font-weight:900; color:var(--sub); } .lb .n.g1{ color:#ffd23a; } .lb .n.g2{ color:#d6dcf5; } .lb .n.g3{ color:#e59a5b; }
+  .lb .nm{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; }
+  .lb small{ color:var(--sub); font-size:11.5px; } .lb .sc{ font-weight:900; }
+  .empty{ color:var(--sub); font-size:13px; padding:8px 0; text-align:center; }
+  .help .ex{ display:flex; gap:5px; margin:8px 0 2px; } .help .ex .t{ width:40px; height:40px; font-size:20px; animation:none; }
+  .notes{ display:flex; flex-direction:column; gap:6px; margin:10px 0; }
+  .notes .w{ display:flex; gap:10px; align-items:baseline; padding:8px 10px; background:rgba(255,255,255,.05); border-radius:10px; }
+  .notes .w b{ text-transform:uppercase; letter-spacing:.06em; min-width:64px; } .notes .w span{ font-size:13px; color:var(--sub); } .notes .w em{ font-style:normal; color:#ffe7a6; font-size:13px; font-weight:800; }
+  @media (max-height:640px){ #kb button{ height:44px; } header{ height:48px; } .tabs button{ height:30px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="i" viewBox="0 0 24 24" style="width:24px;height:24px;color:#2fbf71"><rect x="3" y="3" width="8" height="8" rx="2" fill="#2fbf71" stroke="none"/><rect x="13" y="3" width="8" height="8" rx="2" fill="#e9b730" stroke="none"/><rect x="3" y="13" width="8" height="8" rx="2" fill="#3a3f6b" stroke="none"/><rect x="13" y="13" width="8" height="8" rx="2" fill="#2fbf71" stroke="none"/></svg>SAT 워들 <small id="wcount"></small></h1>
+  <button class="hb" id="bNotes" title="내 단어장"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg></button>
+  <button class="hb" id="bRank" title="랭킹"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V12h4v8M10 20V6h4v14M16 20v-6h4v6"/></svg></button>
+  <button class="hb" id="bHelp" title="방법"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6v.6M12 17.5v.01"/></svg></button>
+</header>
+<div class="tabs"><button data-m="daily" class="on">오늘의 단어</button><button data-m="inf">무한 모드</button></div>
+<div class="status" id="status"></div>
+<main><div id="board"></div></main>
+<div class="hintBar"><button id="bHint"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>힌트: 뜻 보기</button><div class="hx" id="hintTx"></div></div>
+<div id="kb"></div>
+<div id="toast"></div>
+
+<div class="modal" id="mEnd"><div class="box">
+  <button class="x" data-close><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h2 id="endTitle"></h2><p id="endSub"></p>
+  <div class="word"><b id="endWord"></b><button class="say" id="bSay" title="발음 듣기"><svg class="i" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button></div>
+  <div class="def"><div class="en" id="endEn"></div><div class="ko" id="endKo"></div></div>
+  <div id="endBody"></div>
+  <button class="big" id="bNext"></button>
+</div></div>
+
+<div class="modal" id="mRank"><div class="box">
+  <button class="x" data-close><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h2>무한 모드 랭킹</h2><p>한 번도 안 틀리고 이어서 맞힌 점수예요. 적은 횟수로 맞힐수록, 힌트를 안 쓸수록 점수가 커요.</p>
+  <div class="lb" id="rankList"><div class="empty">불러오는 중…</div></div>
+</div></div>
+
+<div class="modal" id="mNotes"><div class="box">
+  <button class="x" data-close><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h2>내 단어장</h2><p id="notesSub"></p>
+  <div class="notes" id="notesList"></div>
+</div></div>
+
+<div class="modal" id="mHelp"><div class="box help">
+  <button class="x" data-close><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h2>하는 방법</h2>
+  <p>다섯 글자 <b>SAT 영단어</b>를 6번 안에 맞혀요. 아무 영어 단어나 넣어 보면 글자마다 색이 바뀌어요.</p>
+  <div class="ex"><div class="t g">L</div><div class="t">U</div><div class="t">C</div><div class="t">I</div><div class="t">D</div></div>
+  <p><b style="color:var(--g)">초록</b>: 그 글자가 그 자리에 맞아요.</p>
+  <div class="ex"><div class="t">T</div><div class="t y">E</div><div class="t">R</div><div class="t">S</div><div class="t">E</div></div>
+  <p><b style="color:var(--y)">노랑</b>: 단어에 있지만 다른 자리예요.</p>
+  <div class="ex"><div class="t">V</div><div class="t">A</div><div class="t">P</div><div class="t x">I</div><div class="t">D</div></div>
+  <p><b>회색</b>: 단어에 없는 글자예요.</p>
+  <p>맞히거나 끝나면 <b>영어 뜻 · 한국어 뜻 · 발음</b>이 나오고, 만난 단어는 <b>내 단어장</b>에 모여요. 막히면 <b>힌트</b>로 영어 뜻을 볼 수 있어요.</p>
+  <p><b>오늘의 단어</b>는 하루에 한 번, 모두 같은 단어예요. <b>무한 모드</b>는 틀릴 때까지 계속 이어서 점수를 쌓고 랭킹에 올라가요.</p>
+  <button class="big" data-close>시작하기</button>
+</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js" crossorigin="anonymous" onerror="window.__mpFail=true"></script>
+<script src="multiplayer.js" onerror="window.__mpFail=true"></script>
+<script>
+(function(){
+'use strict';
+const $ = id=>document.getElementById(id);
+// [단어, 영어 뜻, 한국어 뜻] — 정답이 되는 SAT 단어
+const ANS = [["abate", "to become less intense", "약해지다, 누그러지다"], ["abhor", "to hate very strongly", "몹시 싫어하다"], ["aloof", "distant and not friendly", "냉담한, 무관심한"], ["amend", "to change in order to improve", "수정하다, 개정하다"], ["ample", "more than enough", "충분한, 넉넉한"], ["ardor", "great enthusiasm or passion", "열정, 열의"], ["avert", "to prevent or turn away", "막다, (눈을) 돌리다"], ["banal", "boring because it is so common", "진부한, 평범한"], ["bland", "lacking strong flavor or interest", "밋밋한, 단조로운"], ["bleak", "cold, empty and without hope", "암울한, 황량한"], ["brash", "bold in a rude or careless way", "무례하게 대담한"], ["covet", "to strongly want what belongs to another", "탐내다"], ["cower", "to crouch down in fear", "(겁에 질려) 움츠리다"], ["crass", "crude and insensitive", "천박한, 무신경한"], ["cynic", "a person who distrusts others' motives", "냉소적인 사람"], ["decry", "to criticize publicly", "공공연히 비난하다"], ["defer", "to put off until later; to yield to another", "미루다; (의견에) 따르다"], ["deign", "to do something thought to be beneath one", "(체면 불구하고) ~해 주다"], ["deter", "to discourage from acting", "단념시키다, 막다"], ["dogma", "a belief accepted without question", "교리, 독단적 신념"], ["droll", "amusing in an odd way", "익살스러운"], ["elate", "to make very happy", "기쁘게 하다"], ["elude", "to escape or avoid cleverly", "교묘히 피하다"], ["emend", "to correct a text", "(글을) 교정하다"], ["endow", "to give a quality or money to", "부여하다, 기부하다"], ["ensue", "to happen as a result", "뒤이어 일어나다"], ["epoch", "a distinct period of time", "시대, 시기"], ["evoke", "to bring a feeling or memory to mind", "(감정·기억을) 불러일으키다"], ["exalt", "to praise highly", "칭찬하다, 높이다"], ["expel", "to force out", "쫓아내다, 배출하다"], ["extol", "to praise enthusiastically", "극찬하다"], ["facet", "one side or aspect of something", "측면, 단면"], ["feign", "to pretend", "~인 척하다"], ["fetid", "smelling very bad", "악취가 나는"], ["flair", "a natural talent", "타고난 재능, 감각"], ["flout", "to openly ignore a rule", "(규칙을) 대놓고 어기다"], ["folly", "a foolish act or idea", "어리석음"], ["frail", "weak and delicate", "허약한, 연약한"], ["gaudy", "too bright and showy", "야한, 번지르르한"], ["glean", "to gather bit by bit", "(정보를) 조금씩 모으다"], ["gloat", "to show pleasure at another's failure", "고소해하다"], ["guile", "clever but sneaky behavior", "교활함, 간계"], ["haven", "a safe place", "피난처, 안식처"], ["hoard", "to collect and hide away", "비축하다, 사재기하다"], ["impel", "to drive or force into action", "(행동하도록) 몰아대다"], ["inane", "silly and without meaning", "어리석은, 공허한"], ["inept", "lacking skill", "서투른, 무능한"], ["inert", "unable or unwilling to move", "움직이지 않는, 비활성의"], ["irate", "very angry", "몹시 화난"], ["irony", "the opposite of what is expected", "아이러니, 반어"], ["jaded", "tired or bored from too much of something", "싫증 난, 지친"], ["knack", "a special skill or talent", "요령, 재주"], ["lapse", "a brief failure; a passing of time", "실수, (시간의) 경과"], ["livid", "furiously angry", "격노한"], ["lofty", "very high; noble or proud", "아주 높은, 고상한"], ["lucid", "clear and easy to understand", "명쾌한, 명료한"], ["lurid", "shocking and sensational", "선정적인, 끔찍한"], ["mirth", "amusement and laughter", "즐거움, 웃음"], ["motif", "a repeated idea or pattern", "모티프, 주제"], ["naive", "lacking experience; too trusting", "순진한, 세상 물정 모르는"], ["niche", "a role or place that suits someone well", "틈새, 적소"], ["opine", "to state an opinion", "의견을 말하다"], ["outdo", "to do better than", "능가하다"], ["overt", "done openly", "공공연한, 명백한"], ["parch", "to make very dry", "바싹 말리다"], ["peril", "serious danger", "위험"], ["petty", "small and unimportant; mean", "사소한, 옹졸한"], ["pious", "deeply religious", "경건한, 신앙심 깊은"], ["plead", "to beg seriously", "간청하다, 변론하다"], ["poise", "calm confidence", "침착함, 평정"], ["prone", "likely to do or suffer something", "~하기 쉬운"], ["prude", "a person easily shocked by improper things", "얌전한 체하는 사람"], ["quell", "to put an end to", "진압하다, 가라앉히다"], ["query", "a question", "질문, 의문"], ["quirk", "an odd habit", "별난 버릇"], ["rabid", "extremely fanatical", "과격한, 광적인"], ["rebut", "to prove an argument false", "반박하다"], ["recur", "to happen again", "되풀이되다"], ["relic", "an object surviving from the past", "유물"], ["remit", "to send money as payment", "송금하다"], ["repel", "to drive back or push away", "물리치다, 쫓아내다"], ["revel", "to enjoy greatly", "한껏 즐기다"], ["rigid", "stiff and unbending", "엄격한, 뻣뻣한"], ["rouse", "to wake up or stir up", "깨우다, 자극하다"], ["sated", "fully satisfied", "충분히 만족한"], ["savor", "to enjoy slowly", "음미하다"], ["scant", "barely enough", "부족한, 빈약한"], ["scorn", "open contempt", "경멸"], ["shirk", "to avoid a duty", "(책임을) 회피하다"], ["snide", "mean in a sneaky way", "비꼬는, 헐뜯는"], ["sober", "serious and calm; not drunk", "진지한, 술 취하지 않은"], ["spurn", "to reject with contempt", "퇴짜 놓다, 일축하다"], ["staid", "serious and dull", "고루한, 차분한"], ["stark", "harsh and plain", "삭막한, 극명한"], ["stoic", "showing no emotion in pain", "금욕적인, 묵묵히 견디는"], ["stout", "strong and thick; brave", "튼튼한, 단호한"], ["sully", "to stain or damage a reputation", "더럽히다, 손상시키다"], ["surly", "rude and bad tempered", "무뚝뚝한, 퉁명스러운"], ["tacit", "understood without being said", "암묵적인"], ["taint", "to spoil or contaminate", "더럽히다, 오염시키다"], ["taunt", "to mock to provoke", "조롱하다"], ["tenet", "a principle or belief", "교리, 신조"], ["tepid", "lukewarm; not enthusiastic", "미지근한, 열의 없는"], ["terse", "using few words", "간결한, 퉁명스러운"], ["timid", "shy and easily scared", "소심한"], ["trite", "overused and unoriginal", "진부한"], ["truce", "an agreement to stop fighting", "휴전"], ["usurp", "to take power illegally", "(권력을) 빼앗다"], ["utter", "complete; to say aloud", "완전한; 말하다"], ["vague", "not clear", "모호한"], ["valid", "logically sound", "타당한, 유효한"], ["vapid", "dull and lacking interest", "따분한, 김빠진"], ["vaunt", "to boast about", "자랑하다"], ["venal", "open to bribery", "돈으로 매수되는"], ["verge", "the edge or border", "가장자리, 직전"], ["vexed", "annoyed and frustrated", "짜증 난, 골치 아픈"], ["vigil", "a period of staying awake to watch", "철야, 불침번"], ["vigor", "strength and energy", "활력, 정력"], ["vivid", "bright and clear", "생생한, 선명한"], ["vogue", "popular fashion", "유행"], ["waver", "to be unsure; to sway", "흔들리다, 망설이다"], ["weary", "very tired", "지친"], ["wield", "to hold and use; to have power", "휘두르다, (권력을) 행사하다"], ["wrath", "extreme anger", "분노, 격노"], ["wrest", "to pull away by force", "비틀어 빼앗다"], ["yearn", "to long for", "갈망하다"], ["zesty", "full of energy and flavor", "활기찬, 풍미 있는"], ["adept", "very skilled", "능숙한"], ["agile", "able to move quickly and easily", "민첩한"], ["allot", "to give out a share", "할당하다"], ["amass", "to gather a large amount", "모으다, 축적하다"], ["audit", "an official examination of records", "감사, 회계 감사"], ["augur", "to be a sign of a future event", "(일의) 징조가 되다"], ["belie", "to give a false idea of", "(실제와) 다르게 보이게 하다, 모순되다"], ["blunt", "frank and direct", "무뚝뚝한, 직설적인"], ["boast", "to talk with too much pride", "자랑하다"], ["brisk", "quick and energetic", "활발한, 빠른"], ["caper", "a playful leap; a daring prank", "깡충거림; 장난"], ["chide", "to scold mildly", "꾸짖다"], ["civil", "polite; relating to citizens", "예의 바른; 시민의"], ["clout", "influence or power", "영향력"], ["debut", "a first public appearance", "데뷔, 첫 등장"], ["dirge", "a sad song for the dead", "만가, 장송곡"], ["equip", "to supply with what is needed", "갖추게 하다"], ["erode", "to wear away slowly", "침식시키다, 약화시키다"], ["ethic", "a set of moral principles", "윤리"], ["exult", "to show great joy", "크게 기뻐하다"], ["forge", "to make by heating metal; to fake", "단조하다; 위조하다"], ["furor", "an outbreak of public anger", "격노, 소동"], ["grave", "serious; a burial place", "심각한; 무덤"], ["hardy", "strong and able to survive", "강인한"], ["ideal", "perfect; a standard to aim for", "이상적인; 이상"], ["infer", "to conclude from evidence", "추론하다"], ["laden", "heavily loaded", "짐을 실은, 가득한"], ["mimic", "to copy someone", "흉내 내다"], ["moral", "a lesson from a story", "교훈"]];
+const LB_CAT = 'wordle_sat_inf';
+const esc = s=>String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const store = { get(k, d){ try { const v = localStorage.getItem('wd_' + k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }, set(k, v){ try { localStorage.setItem('wd_' + k, JSON.stringify(v)); } catch(e){} } };
+let toastT = 0; function toast(s, ms){ const t = $('toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('on'), ms || 1500); }
+
+// ---------- 사전 (12,653개 다섯 글자 영단어, an-array-of-english-words · MIT) ----------
+let DICT = null;
+const ANSSET = new Set(ANS.map(a=>a[0]));
+fetch('words5.txt').then(r=>r.ok ? r.text() : Promise.reject()).then(t=>{ DICT = new Set(); for (let i=0;i + 5 <= t.length;i+=5) DICT.add(t.slice(i, i + 5)); }).catch(()=>{ DICT = null; });
+const isWord = w=>ANSSET.has(w) || !DICT || DICT.has(w);
+
+// ---------- 오늘의 단어: 날짜로 정해져서 모두 같은 단어 ----------
+const DAY0 = Date.UTC(2026, 0, 1);
+function dayNo(){ const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAY0)/864e5); }
+function rng(seed){ let a = seed >>> 0; return ()=>{ a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0)/4294967296; }; }
+const ORDER = (()=>{ const o = ANS.map((_, i)=>i), r = rng(20260126); for (let i=o.length - 1;i>0;i--){ const j = Math.floor(r()*(i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; })();
+const dailyIdx = ()=>ORDER[((dayNo() % ORDER.length) + ORDER.length) % ORDER.length];
+
+// ---------- 상태 ----------
+let mode = 'daily';
+const G = { ans:null, rows:[], cur:'', done:false, hint:false, busy:false };
+const INF = store.get('inf', { score:0, words:0, used:[] });
+const DS = store.get('daily', { day:-1, rows:[], done:false, hint:false, won:false });
+const STATS = store.get('stats', { played:0, won:0, streak:0, best:0, dist:[0, 0, 0, 0, 0, 0], lastDay:-99 });
+const NOTES = store.get('notes', []);   // 만난 단어 (최근 것이 앞)
+let bestInf = store.get('bestInf', 0);
+
+function newInfWord(){ let pool = ANS.map((_, i)=>i).filter(i=>!INF.used.includes(i)); if (!pool.length){ INF.used = []; pool = ANS.map((_, i)=>i); } const i = pool[Math.floor(Math.random()*pool.length)]; INF.used.push(i); INF.cur = i; INF.rows = []; INF.hint = false; store.set('inf', INF); return i; }
+function load(){
+  if (mode === 'daily'){
+    const d = dayNo(); if (DS.day !== d){ DS.day = d; DS.rows = []; DS.done = false; DS.hint = false; DS.won = false; store.set('daily', DS); }
+    G.ans = ANS[dailyIdx()]; G.rows = DS.rows.slice(); G.done = DS.done; G.hint = DS.hint;
+  } else {
+    if (INF.cur == null || INF.done) { INF.done = false; newInfWord(); }
+    G.ans = ANS[INF.cur]; G.rows = (INF.rows || []).slice(); G.done = false; G.hint = !!INF.hint;
+  }
+  G.cur = ''; render(true); renderStatus(); renderHint();
+  if (mode === 'daily' && G.done) setTimeout(()=>showEnd(DS.won, false), 300);
+}
+function save(){ if (mode === 'daily'){ DS.rows = G.rows; DS.done = G.done; DS.hint = G.hint; store.set('daily', DS); } else { INF.rows = G.rows; INF.hint = G.hint; store.set('inf', INF); } }
+
+// ---------- 색 매기기 (같은 글자가 여러 번이어도 정확하게) ----------
+function score(guess, ans){ const res = Array(5).fill('x'), left = {};
+  for (let i=0;i<5;i++){ if (guess[i] === ans[i]) res[i] = 'g'; else left[ans[i]] = (left[ans[i]] || 0) + 1; }
+  for (let i=0;i<5;i++){ if (res[i] === 'g') continue; if (left[guess[i]] > 0){ res[i] = 'y'; left[guess[i]]--; } }
+  return res; }
+
+// ---------- 그리기 ----------
+function render(full){
+  const b = $('board');
+  if (full || !b.children.length){ b.innerHTML = Array.from({ length:6 }, ()=>'<div class="row">' + '<div class="t"></div>'.repeat(5) + '</div>').join(''); }
+  for (let r=0;r<6;r++){ const row = b.children[r], g = G.rows[r];
+    for (let c=0;c<5;c++){ const t = row.children[c];
+      if (g){ const sc = score(g, G.ans[0]); t.textContent = g[c]; if (full) { t.className = 't ' + sc[c]; t.style.animationDelay = '0s'; t.style.animationDuration = '0s'; } }
+      else if (r === G.rows.length && !G.done){ const ch = G.cur[c] || ''; if (t.textContent !== ch){ t.textContent = ch; t.className = 't' + (ch ? ' f' : ''); } }
+      else { t.textContent = ''; t.className = 't'; } } }
+  renderKb(); }
+const KB = ['qwertyuiop', 'asdfghjkl', '>zxcvbnm<'];
+function keyState(){ const st = {}; const rank = { x:1, y:2, g:3 };
+  G.rows.forEach(g=>{ const sc = score(g, G.ans[0]); for (let i=0;i<5;i++){ const k = g[i]; if (!st[k] || rank[sc[i]] > rank[st[k]]) st[k] = sc[i]; } }); return st; }
+function renderKb(){ const st = keyState();
+  $('kb').innerHTML = KB.map(r=>'<div class="kr">' + [...r].map(k=>k === '>' ? '<button class="wide" data-k="Enter">입력</button>' : k === '<' ? '<button class="wide" data-k="Backspace" aria-label="지우기"><svg class="i" viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12z"/><path d="M12 9l6 6M18 9l-6 6"/></svg></button>' : '<button data-k="' + k + '" class="' + (st[k] || '') + '">' + k + '</button>').join('') + '</div>').join(''); }
+function renderStatus(){
+  $('wcount').textContent = 'SAT 단어 ' + ANS.length + '개';
+  if (mode === 'daily') $('status').innerHTML = '#' + (dayNo() + 1) + ' · 연속 <b>' + STATS.streak + '</b>일 · 최고 <b>' + STATS.best + '</b>일';
+  else $('status').innerHTML = '점수 <b>' + INF.score.toLocaleString() + '</b> · 맞힌 단어 <b>' + INF.words + '</b> · 최고 <b>' + bestInf.toLocaleString() + '</b>';
+}
+function renderHint(){ $('bHint').disabled = G.done || G.hint; $('hintTx').textContent = G.hint ? G.ans[1] : ''; $('bHint').style.display = G.hint ? 'none' : ''; }
+
+// ---------- 입력 ----------
+function press(k){
+  if (G.done || G.busy || document.querySelector('.modal.on')) return;
+  if (k === 'Enter') return submit();
+  if (k === 'Backspace'){ G.cur = G.cur.slice(0, -1); render(); return; }
+  if (/^[a-z]$/.test(k) && G.cur.length < 5){ G.cur += k; render(); }
+}
+function shake(msg){ const row = $('board').children[G.rows.length]; row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake'); toast(msg); }
+function submit(){
+  const w = G.cur; if (w.length < 5) return shake('다섯 글자를 채워 주세요');
+  if (!isWord(w)) return shake('사전에 없는 단어예요');
+  G.rows.push(w); G.cur = ''; save();
+  const r = G.rows.length - 1, row = $('board').children[r], sc = score(w, G.ans[0]); G.busy = true;
+  for (let c=0;c<5;c++){ const t = row.children[c]; t.textContent = w[c]; t.style.animationDuration = ''; t.style.animationDelay = (c*.25) + 's'; t.className = 't ' + sc[c]; }
+  setTimeout(()=>{ G.busy = false; renderKb();
+    const won = w === G.ans[0];
+    if (won){ row.classList.add('win'); [...row.children].forEach((t, i)=>{ t.style.animationDelay = (i*.08) + 's'; t.style.animationDuration = ''; }); }
+    if (won || G.rows.length >= 6) finish(won);
+    else render(); }, 5*250 + 300);
+}
+function addNote(){ const w = G.ans[0], i = NOTES.indexOf(w); if (i >= 0) NOTES.splice(i, 1); NOTES.unshift(w); if (NOTES.length > 300) NOTES.length = 300; store.set('notes', NOTES); }
+function finish(won){
+  G.done = true; addNote(); renderHint();
+  const tries = G.rows.length;
+  if (mode === 'daily'){
+    DS.won = won; save();
+    STATS.played++; if (won){ STATS.won++; STATS.dist[tries - 1]++; STATS.streak = STATS.lastDay === DS.day - 1 ? STATS.streak + 1 : 1; STATS.best = Math.max(STATS.best, STATS.streak); } else STATS.streak = 0;
+    STATS.lastDay = won ? DS.day : STATS.lastDay; store.set('stats', STATS);
+    setTimeout(()=>showEnd(won, true), won ? 900 : 300);
+  } else {
+    let pts = 0;
+    if (won){ pts = (7 - tries)*20 + 20; if (G.hint) pts = Math.round(pts/2); INF.score += pts; INF.words++; INF.done = true; }
+    const runScore = INF.score, runWords = INF.words;
+    if (!won){ INF.done = true; INF.score = 0; INF.words = 0; INF.used = []; }
+    if (runScore > bestInf){ bestInf = runScore; store.set('bestInf', bestInf); }
+    store.set('inf', INF); renderStatus();
+    if (runScore > 0) submitInf(runScore, runWords);   // 맞힐 때마다 올려 둔다 (더 높을 때만 바뀜)
+    setTimeout(()=>showEnd(won, true, { pts, runScore, runWords }), won ? 900 : 300);
+  }
+}
+
+// ---------- 끝 화면 ----------
+function showEnd(won, fresh, inf){
+  const a = G.ans, tries = G.rows.length;
+  $('endWord').textContent = a[0]; $('endEn').textContent = a[1]; $('endKo').textContent = a[2];
+  let body = '';
+  if (mode === 'daily'){
+    $('endTitle').textContent = won ? ['천재!', '대단해요!', '멋져요!', '좋아요!', '잘했어요!', '휴, 아슬아슬!'][tries - 1] : '아쉬워요';
+    $('endSub').textContent = won ? tries + '번 만에 맞혔어요' + (G.hint ? ' (힌트 사용)' : '') + '. 내일 새 단어가 나와요.' : '오늘의 단어는 이거였어요. 내일 다시 도전해요!';
+    const mx = Math.max(1, ...STATS.dist);
+    body = '<div class="stats"><div><b>' + STATS.played + '</b><small>플레이</small></div><div><b>' + (STATS.played ? Math.round(STATS.won/STATS.played*100) : 0) + '%</b><small>성공률</small></div><div><b>' + STATS.streak + '</b><small>연속</small></div><div><b>' + STATS.best + '</b><small>최고 연속</small></div></div>'
+      + '<div class="dist">' + STATS.dist.map((n, i)=>'<div class="d' + (won && i === tries - 1 ? ' me' : '') + '"><span>' + (i + 1) + '</span><i style="width:' + Math.max(8, n/mx*100) + '%">' + n + '</i></div>').join('') + '</div>';
+    $('bNext').textContent = '무한 모드로 더 풀기';
+    $('bNext').onclick = ()=>{ close(); setMode('inf'); };
+  } else {
+    if (won){ $('endTitle').textContent = '+' + inf.pts + '점!'; $('endSub').textContent = tries + '번 만에 맞혔어요' + (G.hint ? ' (힌트 사용으로 점수 절반)' : '') + '. 지금 점수 ' + inf.runScore.toLocaleString() + '점'; $('bNext').textContent = '다음 단어'; }
+    else { $('endTitle').textContent = '게임 끝'; $('endSub').textContent = '이번 판: ' + inf.runWords + '단어 · ' + inf.runScore.toLocaleString() + '점 (최고 ' + bestInf.toLocaleString() + '점)'; $('bNext').textContent = '새 판 시작'; body = '<div class="lb" id="endRank"><div class="empty">랭킹 불러오는 중…</div></div>'; }
+    $('bNext').onclick = ()=>{ close(); load(); };
+  }
+  $('endBody').innerHTML = body; $('mEnd').classList.add('on');
+  if (mode === 'inf' && !won) loadRank($('endRank'), 5);
+  if (fresh) say(a[0]);
+}
+function say(w){ try { const u = new SpeechSynthesisUtterance(w); u.lang = 'en-US'; u.rate = .9; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch(e){} }
+$('bSay').onclick = ()=>say(G.ans[0]);
+function close(){ document.querySelectorAll('.modal.on').forEach(m=>m.classList.remove('on')); }
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick = close);
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click', e=>{ if (e.target === m) close(); }));
+
+// ---------- 랭킹 (무한 모드) ----------
+const mpOn = !window.__mpFail && typeof firebase !== 'undefined' && window.MP && MP.isConfigured && MP.isConfigured();
+let authQ = null;
+function withAuth(cb){ if (!mpOn){ cb(false); return; } if (MP.uid){ cb(true); return; }
+  if (authQ){ authQ.push(cb); return; }
+  const q = authQ = [cb]; let fin = false;
+  const done = ok=>{ if (fin) return; fin = true; authQ = null; clearTimeout(to); q.forEach(f=>f(ok)); };
+  const to = setTimeout(()=>done(!!MP.uid), 8000);
+  try { MP.initAuthOnly(u=>{ if (u) done(true); }); } catch(e){ done(false); } }
+function rows(arr){ if (!arr.length) return '<div class="empty">아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!</div>';
+  return arr.map((r, i)=>'<div class="r' + (r.uid === MP.uid ? ' me' : '') + '"><span class="n' + (i < 3 ? ' g' + (i + 1) : '') + '">' + (i + 1) + '</span><span class="nm">' + esc(r.name || '플레이어') + (r.uid === MP.uid ? ' (나)' : '') + '</span><small>' + (+r.n || 0) + '단어</small><span class="sc">' + (+r.score || 0).toLocaleString() + '점</span></div>').join(''); }
+function loadRank(el, limit){ if (!el) return; if (!mpOn){ el.innerHTML = '<div class="empty">오프라인이라 랭킹을 볼 수 없어요</div>'; return; }
+  withAuth(ok=>{ if (!ok){ el.innerHTML = '<div class="empty">서버에 연결하지 못했어요</div>'; return; } MP.fetchLeaderboard(LB_CAT, { limit, direction:'desc' }, arr=>{ el.innerHTML = rows(arr); }); }); }
+function submitInf(sc, n){ if (!mpOn) return; withAuth(ok=>{ if (ok) MP.submitScore(LB_CAT, sc, 'desc', { n }, ()=>{ const el = $('endRank'); if (el) loadRank(el, 5); }); }); }
+$('bRank').onclick = ()=>{ $('mRank').classList.add('on'); loadRank($('rankList'), 20); };
+
+// ---------- 단어장 ----------
+$('bNotes').onclick = ()=>{ const map = {}; ANS.forEach(a=>map[a[0]] = a);
+  $('notesSub').textContent = NOTES.length ? '지금까지 만난 SAT 단어 ' + NOTES.length + '개 / ' + ANS.length + '개. 단어를 누르면 발음을 들려줘요.' : '아직 만난 단어가 없어요. 한 판 풀면 여기에 모여요.';
+  $('notesList').innerHTML = NOTES.filter(w=>map[w]).map(w=>'<button class="w" data-w="' + w + '" style="text-align:left;width:100%"><b>' + w + '</b><span>' + esc(map[w][1]) + '<br><em>' + esc(map[w][2]) + '</em></span></button>').join('');
+  $('mNotes').classList.add('on'); };
+$('notesList').onclick = e=>{ const b = e.target.closest('[data-w]'); if (b) say(b.dataset.w); };
+
+// ---------- 모드 · 힌트 · 키 ----------
+function setMode(m){ mode = m; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.m === m)); store.set('mode', m); load(); }
+document.querySelector('.tabs').onclick = e=>{ const b = e.target.closest('button'); if (b && b.dataset.m !== mode) setMode(b.dataset.m); };
+$('bHint').onclick = ()=>{ if (G.done || G.hint) return; G.hint = true; save(); renderHint(); if (mode === 'inf') toast('힌트를 쓰면 이 단어 점수가 절반이에요', 2200); };
+$('bHelp').onclick = ()=>$('mHelp').classList.add('on');
+$('kb').addEventListener('click', e=>{ const b = e.target.closest('[data-k]'); if (b) press(b.dataset.k); });
+addEventListener('keydown', e=>{ if (e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Escape'){ close(); return; }
+  if (document.querySelector('.modal.on')){ if (e.key === 'Enter' && $('mEnd').classList.contains('on')){ e.preventDefault(); $('bNext').click(); } return; }
+  const k = e.key === 'Enter' || e.key === 'Backspace' ? e.key : e.key.length === 1 ? e.key.toLowerCase() : ''; if (k){ e.preventDefault(); press(k); } });
+
+mode = store.get('mode', 'daily') === 'inf' ? 'inf' : 'daily';
+document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.m === mode));
+load();
+if (!store.get('seenHelp', false)){ store.set('seenHelp', true); $('mHelp').classList.add('on'); }
+if (mpOn) withAuth(ok=>{ if (ok) try { MP.setPresence('wordle', null); } catch(e){} });
+window.__WD = { G, ANS, score, press, isWord, get DICT(){ return DICT; }, INF, STATS };
+})();
+</script>
+</body>
+</html>
