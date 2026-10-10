@@ -54,6 +54,8 @@
   .row .big { margin-top:0; width:auto; flex:none; padding:0 18px; }
   .rules { margin-top:16px; text-align:left; font-size:12.5px; line-height:1.65; color:#cfd3d8; background:rgba(255,255,255,.05); border-radius:12px; padding:12px 14px; }
   .rules b { color:#fff; }
+  .lvl { display:flex; align-items:center; gap:6px; margin-top:14px; } .lvl span { font-size:13px; font-weight:800; color:var(--dim); margin-right:4px; }
+  .lvl button { flex:1; height:36px; border:none; border-radius:10px; background:rgba(255,255,255,.08); color:#cfd3d8; font-weight:900; font-size:14px; cursor:pointer; } .lvl button.on { background:#ff6a5a; color:#fff; }
   #dict { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); padding:14px; }
   #dict.show { display:flex; }
   #dict .dbox { width:min(520px, 100%); max-height:90vh; display:flex; flex-direction:column; background:#23262c; border:1px solid var(--line); border-radius:16px; padding:16px; color:#fff; }
@@ -93,7 +95,8 @@
 <div id="lobby" class="scr show"><div class="card">
   <h1>🪑 의자 끝말잇기</h1>
   <div class="sub">의자에 둘러앉아 끝말을 이어요. 시간 안에 못 대면 의자가 튕겨 나가요!</div>
-  <button class="big" id="soloBtn" type="button">혼자 연습 (봇 3명)</button>
+  <div class="lvl" id="lvl"><span>AI 실력</span><button type="button" data-l="1">쉬움</button><button type="button" data-l="2">보통</button><button type="button" data-l="3" class="on">어려움</button></div>
+  <div class="row" style="margin-top:8px"><button class="big" id="duelBtn" type="button" style="flex:1;width:auto;margin-top:0">AI와 1:1</button><button class="big" id="soloBtn" type="button" style="flex:1;width:auto;margin-top:0">AI 3명과</button></div>
   <div class="row"><input id="roomIn" maxlength="12" placeholder="방 코드 (비우면 공개방)"><button class="big alt" id="onBtn" type="button">온라인</button></div>
   <div id="status"></div>
   <button class="big alt" id="dictBtn" type="button"><svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:-3px;margin-right:6px" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>단어 사전 · 한방단어 찾기</button>
@@ -106,7 +109,8 @@
     · 첫 단어(그리고 시간 초과 뒤 새로 나오는 단어)는 <b>한방단어 · 유도 단어가 절대 안 나와요</b>. 이을 단어가 많은 단어만 나와요.<br>
     · 한방단어(뒤에 이을 단어가 없는 단어)는 써도 돼요. 받는 사람은 못 이으면 ❤ 가 깨져요.<br>
     · 시간 안에 못 대면 ❤ 하나가 깨져요. ❤ 두 개 다 깨지면 <b>의자가 튕겨 나가요</b>.<br>
-    · 끝까지 남은 한 명이 우승! 갈수록 시간이 짧아져요.
+    · 끝까지 남은 한 명이 우승! 갈수록 시간이 짧아져요.<br>
+    · <b>AI</b>: 표준국어대사전 전체를 알아요. 평소엔 흔한 단어로 넘기다가, 받은 글자가 쉬우면 받기 어려운 단어로 공격하고 가끔 한방단어도 써요. 어려움일수록 덜 막히고 더 독해요.
   </div>
   <a class="small" href="hub.html">⌂ 허브로</a>
 </div></div>
@@ -311,14 +315,31 @@ let hostDirtyF = false; function hostDirty(){ hostDirtyF = true; }
 // =====================================================================
 const BOT_NAMES = ['하늘봇', '별이봇', '도윤봇', '서아봇', '지호봇'];
 const botPlan = {};
+// AI 실력: 1 쉬움 · 2 보통 · 3 어려움
+let AILV = 3; try { AILV = +localStorage.getItem('wc_ailv') || 3; } catch(e){}
+const AI = { 1:{ miss:.22, kill:.04, atk:.1, think:[1800, 4200], key:[170, 150] }, 2:{ miss:.07, kill:.15, atk:.35, think:[1200, 3200], key:[120, 110] }, 3:{ miss:.015, kill:.28, atk:.7, think:[700, 2400], key:[85, 70] } };
+const pickR = a=>a[Math.floor(Math.random()*a.length)];
+// 사람처럼 고르기: 평소엔 아는(쉬운) 단어로 넘기고, 가끔 한방단어, 받은 글자가 쉬우면 상대가 받기 어려운 단어로 공격
+function botChoose(lv){ const A = AI[lv] || AI[3];
+  const all = candidates(G.word, G.used, byFirst()); if (!all.length) return null;
+  if (Math.random() < A.miss) return null;                                    // 가끔은 진짜 막힘 (사람처럼)
+  const kills = all.filter(w=>nextCount(w[w.length - 1]) === 0);
+  const killP = A.kill*(G.round < 3 ? .4 : 1);                                // 시작하자마자 한방은 잘 안 씀
+  if (kills.length && Math.random() < killP) return pickR(kills.slice(0, 40));
+  const easyLetter = all.length > 150;                                         // 받은 글자가 쉬움 → 공격
+  if (easyLetter && Math.random() < A.atk){
+    const hard = all.map(w=>[w, nextCount(w[w.length - 1])]).filter(x=>x[1] > 0 && x[1] <= 25).sort((a, b)=>a[1] - b[1]);
+    if (hard.length) return pickR(hard.slice(0, Math.min(12, hard.length)))[0]; }
+  const known = candidates(G.word, G.used, BOTIDX);                            // 평소엔 흔한 단어
+  if (known.length && Math.random() < .8){ const safe = known.filter(w=>nextCount(w[w.length - 1]) >= 20); return pickR(safe.length ? safe : known); }
+  const short = all.filter(w=>w.length <= 4 && nextCount(w[w.length - 1]) >= 20); return pickR(short.length ? short : all); }
 function botTick(){ if (G.st !== 'play') return; const id = G.turn, p = PL[id]; if (!p || !p.bot) return; let pl = botPlan[id];
-  if (!pl || pl.seq !== G.seq){ const c1 = candidates(G.word, G.used, BOTIDX); let w = null;
-    if (c1.length && Math.random() < p.skill){ const short = c1.filter(x=>x.length <= 3); const src = short.length && Math.random() < .7 ? short : c1; w = src[Math.floor(Math.random()*src.length)]; }
-    else if (Math.random() < p.skill*.6){ const c2 = candidates(G.word, G.used, byFirst()).filter(x=>x.length <= 4); if (c2.length) w = c2[Math.floor(Math.random()*c2.length)]; }
-    pl = botPlan[id] = { seq:G.seq, w, at:now() + 900 + Math.random()*2600*(1.4 - p.skill), typed:0, nextT:0 }; }
+  if (!pl || pl.seq !== G.seq){ const A = AI[AILV] || AI[3]; const w = botChoose(AILV);
+    const think = A.think[0] + Math.random()*(A.think[1] - A.think[0]) + (w && nextCount(w[w.length - 1]) <= 25 ? 600 : 0);
+    pl = botPlan[id] = { seq:G.seq, w, at:now() + Math.min(think, limitFor(G.round) - 2500), typed:0, nextT:0, key:A.key }; }
   const t = now(); if (t < pl.at) return;
   if (!pl.w){ if (!pl.fake){ pl.fake = G.word.slice(-1); } p.typ = pl.fake; return; }   // 못 찾음 → 첫 글자만 쓰고 고민
-  if (pl.typed < pl.w.length){ if (t >= pl.nextT){ pl.typed++; pl.nextT = t + 130 + Math.random()*120; p.typ = pl.w.slice(0, pl.typed); sfx.type(); } return; }
+  if (pl.typed < pl.w.length){ if (t >= pl.nextT){ pl.typed++; pl.nextT = t + pl.key[0] + Math.random()*pl.key[1]; p.typ = pl.w.slice(0, pl.typed); sfx.type(); } return; }
   if (t >= pl.nextT + 250){ hostSubmit(id, pl.w); p.typ = ''; } }
 
 // =====================================================================
@@ -392,11 +413,11 @@ function nameOf(id){ if (MODE === 'solo') return PL[id] ? PL[id].name : '?'; if 
 // =====================================================================
 //  혼자 모드
 // =====================================================================
-function startSolo(){ MODE = 'solo'; ME.id = 'me'; ME.name = myName(); for (const k in PL) delete PL[k];
+function startSolo(n){ MODE = 'solo'; ME.id = 'me'; ME.name = myName(); for (const k in PL) delete PL[k];
   PL.me = { id:'me', name:ME.name, seat:0, lo:myLoadout() };
   const names = BOT_NAMES.slice().sort(()=>Math.random() - .5);
-  [2, 4, 6].forEach((seat, k)=>{ const id = 'bot' + k; PL[id] = { id, name:names[k], seat, bot:true, skill:.8 + Math.random()*.17, lo:botLoadout(k) }; });
-  $('lobby').classList.remove('show'); $('roomTag').textContent = '혼자 연습';
+  (n === 1 ? [4] : [2, 4, 6]).forEach((seat, k)=>{ const id = 'bot' + k; PL[id] = { id, name:names[k], seat, bot:true, skill:.8 + Math.random()*.17, lo:botLoadout(k) }; });
+  $('lobby').classList.remove('show'); $('roomTag').textContent = (n === 1 ? 'AI와 1:1' : 'AI 3명과') + ' · ' + ['', '쉬움', '보통', '어려움'][AILV];
   G = freshG(); G.st = 'count'; G.startAt = now() + 3500; G.seq = 1; }
 function botLoadout(k){ const sk = ['skin_light', 'skin_tan', 'skin_brown', 'skin_classic'], sh = ['shirt_red', 'shirt_blue', 'shirt_green', 'shirt_black', 'shirt_white'], pa = ['pants_black', 'pants_navy', 'pants_grey', 'pants_khaki'];
   return { skin:sk[(k*3 + 1) % sk.length], shirt:sh[(k*2 + 1) % sh.length], pants:pa[k % pa.length] }; }
@@ -442,7 +463,9 @@ $('dict').addEventListener('click', e=>{ if (e.target.id === 'dict') dictClose()
 $('dictIn').addEventListener('input', ()=>{ clearTimeout(dictT); dictT = setTimeout(dictRun, 180); });
 let dictT = 0;
 document.querySelector('#dict .tabs').addEventListener('click', e=>{ const b = e.target.closest('button'); if (!b) return; DT = b.dataset.t; document.querySelectorAll('#dict .tabs button').forEach(x=>x.classList.toggle('on', x === b)); $('dictIn').placeholder = DT === 'find' ? '찾을 단어 (예: 사과, 기차)' : '시작 글자 (예: 가, 리)'; dictRun(); });
-$('soloBtn').addEventListener('click', ()=>{ if (!DICT) return; startSolo(); });
+$('soloBtn').addEventListener('click', ()=>{ if (!DICT) return; startSolo(3); });
+$('duelBtn').addEventListener('click', ()=>{ if (!DICT) return; startSolo(1); });
+document.querySelectorAll('#lvl button').forEach(b=>{ b.classList.toggle('on', +b.dataset.l === AILV); b.addEventListener('click', ()=>{ AILV = +b.dataset.l; try { localStorage.setItem('wc_ailv', AILV); } catch(e){} document.querySelectorAll('#lvl button').forEach(x=>x.classList.toggle('on', x === b)); }); });
 $('onBtn').addEventListener('click', ()=>{ if (!DICT) return; startOnline($('roomIn').value); });
 $('roomIn').addEventListener('keydown', e=>{ if (e.key === 'Enter') $('onBtn').click(); });
 $('leaveBtn').addEventListener('click', ()=>{ if (MODE === 'online'){ location.href = 'wordchain.html'; return; } MODE = null; G = freshG(); for (const k in PL) delete PL[k]; for (let i=0;i<SEATS;i++) seatAvatar(i, null); resetSeats(); $('lobby').classList.add('show'); });
@@ -536,7 +559,7 @@ loadDict(ok=>{ $('loading').remove(); if (!ok) $('status').textContent = '사전
 requestAnimationFrame(loop);
 // 탭이 뒤로 가도(애니메이션 멈춤) 진행은 계속되게
 setInterval(()=>{ if (document.hidden && MODE){ if (MODE === 'solo') soloTick(); else netTick(1); } }, 1000);
-window.__W = { get G(){ return G; }, PL, frame, checkWord, starts, candidates, hostSubmit, startSolo, get DICT(){ return DICT; }, BOTIDX, ME, NET, startOnline, now, seatObj };
+window.__W = { get G(){ return G; }, set G(v){ G = v; }, botChoose, nextCount, setLv:l=>{ AILV = l; }, PL, frame, checkWord, starts, candidates, hostSubmit, startSolo, get DICT(){ return DICT; }, BOTIDX, ME, NET, startOnline, now, seatObj };
 })();
 </script>
 <script>
