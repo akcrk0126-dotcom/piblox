@@ -50,7 +50,7 @@ PL.tryEnter = ()=>{
 };
 PL.enterCar = v=>{ PL.inCar = true; PL.car = v; v.driver = 'player'; if (v.ai) v.ai = null; v.parked = false; PL.lastCar = v; v.keep = false;
   // 앉은 모습 보이기
-  v.g.add(PL.g); const t = v.t; PL.g.position.set(t.bus ? 0 : -.38, t.gc + (t.bus ? .85 : .22), (t.cr + t.cf)/2*t.len + (t.bus ? t.len*.4 : .05)); PL.g.rotation.set(0, 0, 0); PL.ch.play('sit', { fade:.15 });
+  v.g.add(PL.g); const t = v.t; PL.g.position.set(t.bus ? 0 : -.38, t.bus ? t.gc + .85 : Math.min(t.gc + .22, t.roof - 1.12), (t.cr + t.cf)/2*t.len + (t.bus ? t.len*.4 : .05)); PL.g.rotation.set(0, 0, 0); PL.ch.play('sit', { fade:.15 });
   CAM.yaw = v.h + Math.PI; G.emit('enterCar', v); G.save.stats.cars++; };
 PL.exitCar = (fast)=>{ const v = PL.car; if (!v) return; v.g.remove(PL.g); G.scene.add(PL.g); const d = v.door(-1);
   // 문 쪽이 막혔으면 반대쪽

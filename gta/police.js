@@ -14,7 +14,7 @@ WT.atLeast = (n, why)=>{ if (WT.level < n) WT.set(n, why); else { WT.seen = true
 function copNear(x, z, r){ for (const p of G.peds.list) if (p.kind === 'cop' && p.alive && Math.hypot(p.x - x, p.z - z) < r) return true; for (const v of V.list) if (v.t.police && !v.dead && v.driver && Math.hypot(v.x - x, v.z - z) < r) return true; return false; }
 WT.copNear = copNear;
 // ----- 범죄 -----
-G.on('pedDead', (p, by, kind)=>{ if (by !== PL()) return; G.save.stats.kills++; if (p.kind === 'cop'){ WT.atLeast(2, '경찰 살해'); WT.add(1); return; } if (copNear(p.x, p.z, 60)) WT.add(1, '살인'); else if (Math.random() < .55) setTimeout(()=>{ if (PL().alive) WT.atLeast(1, '목격자 신고'); }, 2500 + Math.random()*4000); });
+G.on('pedDead', (p, by, kind)=>{ if (by !== PL()) return; G.save.stats.kills++; if (p.kind === 'cop'){ WT.atLeast(2, '경찰 살해'); WT.add(1); return; } if (p.mission || p.kind === 'gang'){ if (copNear(p.x, p.z, 35)) WT.atLeast(1, '총격전'); return; } if (copNear(p.x, p.z, 60)) WT.add(1, '살인'); else if (Math.random() < .55) setTimeout(()=>{ if (PL().alive) WT.atLeast(1, '목격자 신고'); }, 2500 + Math.random()*4000); });
 G.on('pedHurt', (p, by, kind)=>{ if (by !== PL()) return; if (p.kind === 'cop') WT.atLeast(1, '경찰 폭행'); else if (copNear(p.x, p.z, 30)) WT.atLeast(1, '폭행'); });
 G.on('carjack', (v, drv)=>{ if (drv.kind === 'cop' || v.t.police){ WT.atLeast(2, '경찰차 탈취'); return; } if (copNear(v.x, v.z, 40)) WT.atLeast(1, '차량 강탈'); else if (Math.random() < .2) WT.atLeast(1, '차량 강탈 신고'); });
 G.on('gunshot', (x, z, by)=>{ if (by !== PL()) return; if (copNear(x, z, 55)) WT.atLeast(1, '총기 발사'); });

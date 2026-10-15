@@ -35,7 +35,7 @@ const MATS = {};
 function paint(col){ const k = 'p' + col; if (MATS[k]) return MATS[k]; const m = new THREE.MeshPhysicalMaterial({ color:LC(col), metalness:.55, roughness:.32, clearcoat:1, clearcoatRoughness:.06, envMapIntensity:1.2 }); MATS[k] = m; return m; }
 const M = {};
 function mats(){ if (M.glass) return M;
-  M.glass = new THREE.MeshPhysicalMaterial({ color:0x0c1218, metalness:.2, roughness:.04, transparent:true, opacity:.82, clearcoat:1, envMapIntensity:1.6 });
+  M.glass = new THREE.MeshPhysicalMaterial({ color:LC(0x1a2630), metalness:.85, roughness:.06, transparent:true, opacity:.9, clearcoat:1, envMapIntensity:1.1 });
   M.black = new THREE.MeshStandardMaterial({ color:0x0c0c0d, roughness:.65, metalness:.1 });
   M.trim = new THREE.MeshStandardMaterial({ color:0x18191b, roughness:.45, metalness:.4 });
   M.chrome = new THREE.MeshStandardMaterial({ color:0xd8dce0, roughness:.12, metalness:1 });

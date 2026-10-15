@@ -9,7 +9,7 @@ const E = G.env = { hour:9.5, timeScale:1/60*1, weather:'clear', w:{ cloud:.2, r
 
 E.init = ()=>{
   const q = G.cfg.quality;
-  const R = G.renderer = new THREE.WebGLRenderer({ antialias:q > 0, powerPreference:'high-performance', stencil:false });
+  const R = G.renderer = new THREE.WebGLRenderer({ antialias:q > 0, powerPreference:'high-performance', stencil:false, preserveDrawingBuffer:!!window.__PDB });
   R.setPixelRatio(Math.min(devicePixelRatio, q > 0 ? 1.5 : 1)); R.setSize(innerWidth, innerHeight);
   R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1;
   R.shadowMap.enabled = true; R.shadowMap.type = q > 0 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;

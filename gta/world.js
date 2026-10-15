@@ -165,6 +165,7 @@ function plainTex(kind){
   else if (kind === 'sand'){ [c, x] = cv(256, 256); noiseFill(x, 256, 256, '#d8c49a', .12, 30000); }
   else if (kind === 'roof'){ [c, x] = cv(256, 256); noiseFill(x, 256, 256, '#77736c', .18, 25000); grime(x, 256, 256, 1.5); }
   else if (kind === 'shingle'){ [c, x] = cv(256, 256); for (let r = 0; r < 16; r++) for (let k = 0; k < 9; k++){ const v = 60 + Math.random()*30; x.fillStyle = 'rgb(' + (v + 20 | 0) + ',' + (v*.75 | 0) + ',' + (v*.7 | 0) + ')'; x.fillRect(k*32 - (r%2)*16, r*16, 31, 15); } x.fillStyle = 'rgba(0,0,0,.25)'; for (let r = 0; r < 16; r++) x.fillRect(0, r*16 + 13, 256, 3); }
+  else if (kind === 'awning'){ [c, x] = cv(128, 64); for (let k = 0; k < 8; k++){ x.fillStyle = k%2 ? '#ffffff' : '#c8c8c8'; x.fillRect(k*16, 0, 16, 64); } x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(0, 54, 128, 10); }
   else if (kind === 'concrete'){ [c, x] = cv(256, 256); noiseFill(x, 256, 256, '#9c9890', .1, 15000); grime(x, 256, 256, 1); x.strokeStyle = 'rgba(0,0,0,.2)'; x.strokeRect(0, 0, 256, 256); }
   else if (kind === 'xwalk'){ [c, x] = cv(256, 64); x.clearRect(0, 0, 256, 64); x.fillStyle = 'rgba(240,240,240,.9)'; for (let k = 8; k < 256; k += 32) x.fillRect(k, 0, 18, 64); x.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 1500; i++){ x.fillStyle = 'rgba(0,0,0,' + Math.random()*.6 + ')'; x.fillRect(Math.random()*256, Math.random()*64, 2, 2); } }
   else if (kind === 'store'){ // 1층 상가: 4칸 × 1층(4.5m)
@@ -203,16 +204,16 @@ function facadeMat(kind){
     sh.fragmentShader = 'uniform float uNight, uWet; varying float vSeed; varying vec3 vWP;\nfloat wh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }\n' + sh.fragmentShader
       .replace('#include <map_fragment>', `vec4 texel = texture2D(map, vUv); texel = mapTexelToLinear(texel); float win = smoothstep(.86, .97, texel.a);
         diffuseColor.rgb = mix(texel.rgb*vColor, texel.rgb, win);
-        vec2 cell = floor(vUv*4.); float wr1 = wh(cell + vSeed*31.7), wr2 = wh(cell*1.7 + vSeed*13.1);`)
+        vec2 cell = mod(floor(vUv*4.), 64.); float sd = mod(floor(vSeed + .5)*7., 53.); float wr1 = wh(cell + sd), wr2 = wh(cell*1.7 + sd*1.3);`)
       .replace('#include <color_fragment>', '')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, ${glass ? '.12' : '.18'}, win); roughnessFactor = mix(roughnessFactor, roughnessFactor*.35, uWet*(1. - win));`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         metalnessFactor = mix(metalnessFactor, ${glass ? '.75' : '.45'}, win);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        { float lit = step(wr1, ${glass ? '.28' : '.34'}*uNight) * win;
+        { float lit = (wr1 < ${glass ? '.28' : '.34'}*uNight) ? win : 0.;
           vec3 lc = mix(vec3(1., .78, .5), vec3(.78, .86, 1.), step(.6, wr2)) * (.7 + .5*wr2);
-          float blind = step(.8, wh(cell + 3.3 + vSeed));
+          float blind = step(.8, wh(cell + 3.3 + sd));
           totalEmissiveRadiance += lc * lit * mix(.85, .35, blind); }`);
   };
   m.customProgramCacheKey = ()=>'fac-' + glass;
@@ -224,7 +225,7 @@ function simpleMat(key, opts){ if (MAT[key]) return MAT[key]; opts = Object.assi
 function storeMat(){ if (MAT.store) return MAT.store; const m = new THREE.MeshStandardMaterial({ map:plainTex('store'), vertexColors:true, roughness:.6 });
   m.onBeforeCompile = sh=>{ sh.uniforms.uNight = W.U.uNight; sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <map_fragment>', 'vec4 texel = mapTexelToLinear(texture2D(map, vUv)); float win = smoothstep(.86, .97, texel.a); diffuseColor.rgb = mix(texel.rgb*vColor, texel.rgb, win);').replace('#include <color_fragment>', '')
     .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, .08, win);').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = mix(0., .5, win);')
-    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(1., .86, .66) * win * (.25 + 1.3*uNight) * (.6 + .4*vColor.r);'); };
+    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(1., .86, .66) * win * (.06 + 1.3*uNight) * (.6 + .4*vColor.r);'); };
   m.customProgramCacheKey = ()=>'store'; MAT.store = m; return m; }
 function signMat(){ if (MAT.sign) return MAT.sign; const t = signAtlas(); const m = new THREE.MeshStandardMaterial({ map:t, emissiveMap:t, emissive:0xffffff, emissiveIntensity:1, roughness:.5 });
   m.onBeforeCompile = sh=>{ sh.uniforms.uNight = W.U.uNight; sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= .15 + 2.2*uNight;'); }; m.customProgramCacheKey = ()=>'sign'; MAT.sign = m; return m; }
@@ -271,7 +272,7 @@ function inst(name, x, y, z, ry, s, extra){ (INST[name] = INST[name] || []).push
 
 const PALETTE = { stucco:[0xf2e6d0, 0xe8d0b0, 0xd8e0e8, 0xf0d8d0, 0xe0e8d4, 0xfff4e0, 0xd8c8b8, 0xc8d8e0], house:[0xe8e8e4, 0xc8d4dc, 0xe4d8b8, 0xd8c4c4, 0xc4d4c0, 0xb8b8c8, 0xe0d0b0], office:[0xffffff, 0xe8e4dc, 0xd0ccc4, 0xf0ece0], brick:[0xffffff, 0xe0d0c8, 0xd0b8b0, 0xc8b8a8] };
 function building(rng, x0, z0, x1, z1, h, kind, o){
-  o = o || {}; const cx = (x0 + x1)/2, cz = (z0 + z1)/2; const seed = rng()*100;
+  o = o || {}; const cx = (x0 + x1)/2, cz = (z0 + z1)/2; const seed = Math.floor(rng()*1000);
   const tint = LC(U.pick.call(null, PALETTE[kind] || [0xffffff])); if (PALETTE[kind]) tint.copy(LC(PALETTE[kind][Math.floor(rng()*PALETTE[kind].length)]));
   let base = 0;
   if (o.store){ const sh = 4.5; gb(cx, cz, 'store').box(x0, 0, z0, x1, sh, z1, { tw:14.4, th:4.5, col:LC(U.pick([0xffffff, 0xd8c8b0, 0xa8b8c8, 0xc8a8a0])), seed });
@@ -287,6 +288,18 @@ function building(rng, x0, z0, x1, z1, h, kind, o){
   gb(cx, cz, fk).box(x0, base, z0, x1, h, z1, { tw:kind === 'house' ? 12 : 14.4, th, col:tint, seed, uo:Math.floor(rng()*4)/4 });
   // 지붕 + 난간
   const rg = gb(cx, cz, 'roof'); rg.box(x0, h, z0, x1, h + .01, z1, { walls:false, top:true, ts:8 });
+  // 처마 장식(코니스) · 1층 위 띠
+  if (kind === 'brick' || kind === 'stucco' || kind === 'office' || kind === 'hotel'){ const o = .35, cc = LC(kind === 'brick' ? 0xb8b0a0 : 0xd8d4cc); rg.box(x0 - o, h - .7, z0 - o, x1 + o, h, z1 + o, { tw:8, th:8, col:cc, top:true });
+    if (base > 0) rg.box(x0 - .2, base, z0 - .2, x1 + .2, base + .45, z1 + .2, { tw:8, th:8, col:cc, top:true });
+    if (h > 30 && kind !== 'office') for (let fy = base + 14.4; fy < h - 4; fy += 14.4) rg.box(x0 - .12, fy - .2, z0 - .12, x1 + .12, fy, z1 + .12, { tw:8, th:8, col:cc }); }
+  if (base > 0 && rng() < .6){ // 차양
+    const aw = gb(cx, cz, 'awning'); const ac = LC(U.pick([0xb83a2a, 0x2a5a3a, 0x1d3a6a, 0x3a3a3a, 0xd8a020, 0x6a2a5a])); const side = o.front || 's'; const d = 1.6, y0 = 3.2, y1 = 3.9;
+    const L = (side === 's' || side === 'n') ? x1 - x0 : z1 - z0; const st = 2, n = Math.max(1, Math.floor((L - 2)/7)); 
+    for (let k = 0; k < n; k++){ const a0 = -L/2 + 1 + k*(L - 2)/n + .4, a1 = a0 + (L - 2)/n - .8;
+      if (side === 's') aw.quad([cx + a0, y0, z1 + d], [cx + a1, y0, z1 + d], [cx + a1, y1, z1], [cx + a0, y1, z1], [0, .9, .4], [0, 0, (a1 - a0)/2, 1], ac);
+      if (side === 'n') aw.quad([cx + a1, y0, z0 - d], [cx + a0, y0, z0 - d], [cx + a0, y1, z0], [cx + a1, y1, z0], [0, .9, -.4], [0, 0, (a1 - a0)/2, 1], ac);
+      if (side === 'e') aw.quad([x1 + d, y0, cz - a0], [x1 + d, y0, cz - a1], [x1, y1, cz - a1], [x1, y1, cz - a0], [.4, .9, 0], [0, 0, (a1 - a0)/2, 1], ac);
+      if (side === 'w') aw.quad([x0 - d, y0, cz + a0], [x0 - d, y0, cz + a1], [x0, y1, cz + a1], [x0, y1, cz + a0], [-.4, .9, 0], [0, 0, (a1 - a0)/2, 1], ac); } void st; }
   if (kind !== 'house' && kind !== 'ware'){ const p = .35, ph = 1; const pc = LC(0x8a8680);
     rg.box(x0, h, z0, x1, h + ph, z0 + p, { tw:8, th:8, col:pc, top:true }); rg.box(x0, h, z1 - p, x1, h + ph, z1, { tw:8, th:8, col:pc, top:true }); rg.box(x0, h, z0, x0 + p, h + ph, z1, { tw:8, th:8, col:pc, top:true }); rg.box(x1 - p, h, z0, x1, h + ph, z1, { tw:8, th:8, col:pc, top:true });
     // 옥상 설비
@@ -298,7 +311,7 @@ function building(rng, x0, z0, x1, z1, h, kind, o){
 }
 // 집: 박공 지붕
 function house(rng, x0, z0, x1, z1, floors, ry){
-  const h = floors*3; const cx = (x0 + x1)/2, cz = (z0 + z1)/2; const tint = LC(PALETTE.house[Math.floor(rng()*PALETTE.house.length)]); const seed = rng()*100;
+  const h = floors*3; const cx = (x0 + x1)/2, cz = (z0 + z1)/2; const tint = LC(PALETTE.house[Math.floor(rng()*PALETTE.house.length)]); const seed = Math.floor(rng()*1000);
   gb(cx, cz, 'house').box(x0, CURB, z0, x1, h + CURB, z1, { tw:12, th:12, col:tint, seed, vo:0 });
   const rg = gb(cx, cz, 'shingle'); const rc = LC(U.pick([0x8a4a3a, 0x4a4a52, 0x6a5040, 0x3a4a5a, 0x7a6a5a])); const o = .5, top = h + CURB + (ry ? (x1 - x0) : (z1 - z0))*.35;
   const y = h + CURB;
@@ -346,7 +359,7 @@ function buildCity(){
   }
   outskirts();
   // 청크 → 메시
-  const matOf = k=>k === 'store' ? storeMat() : k === 'sign' ? signMat() : k === 'roof' ? simpleMat('roof', { map:plainTex('roof'), vertexColors:true, roughness:.95, wet:true }) : k === 'shingle' ? simpleMat('shingle', { map:plainTex('shingle'), vertexColors:true, roughness:.85, wet:true })
+  const matOf = k=>k === 'awning' ? simpleMat('awning', { map:plainTex('awning'), vertexColors:true, roughness:.8, side:THREE.DoubleSide }) : k === 'store' ? storeMat() : k === 'sign' ? signMat() : k === 'roof' ? simpleMat('roof', { map:plainTex('roof'), vertexColors:true, roughness:.95, wet:true }) : k === 'shingle' ? simpleMat('shingle', { map:plainTex('shingle'), vertexColors:true, roughness:.85, wet:true })
     : k === 'walk' ? simpleMat('walk', { map:plainTex('walk'), vertexColors:true, roughness:.85, wet:true }) : k === 'plaza' ? simpleMat('plaza', { map:plainTex('plaza'), vertexColors:true, roughness:.8, wet:true }) : k === 'grass' ? simpleMat('grass', { map:plainTex('grass'), vertexColors:true, roughness:1 })
     : k === 'sand' ? simpleMat('sand', { map:plainTex('sand'), vertexColors:true, roughness:1 }) : k === 'concrete' ? simpleMat('concrete', { map:plainTex('concrete'), vertexColors:true, roughness:.9, wet:true }) : facadeMat(k);
   W.chunkMeshes = [];

@@ -42,7 +42,7 @@ class Ped {
   hitByCar(v, sp){ if (!this.alive || this.state === 'ragdoll') return; const dmg = sp < 6 ? sp*4 : sp*sp*.9; const dx = this.x - v.x, dz = this.z - v.z, d = Math.hypot(dx, dz) || 1;
     this.vx = v.vx*.9 + dx/d*2; this.vz = v.vz*.9 + dz/d*2; this.vy = Math.min(9, 2 + sp*.35); this.state = 'ragdoll'; this.t = 0; this.ch.play('knock', { restart:true, fade:.05 });
     this.damage(dmg, v.driver === 'player' ? G.player : v.driver, 'car'); G.emit('pedHitByCar', this, v, sp); if (this.alive) this.scare(v.x, v.z, 1); }
-  enterCar(v, seat){ this.car = v; this.state = 'drive'; v.g.add(this.g); const t = v.t; this.g.position.set(seat === 'pass' ? .38 : -.38, t.gc + (t.bus ? .85 : .22), (t.cr + t.cf)/2*t.len + (t.bus ? t.len*.4 : .05)); this.g.rotation.set(0, 0, 0); this.ch.play('sit', { fade:0 }); }
+  enterCar(v, seat){ this.car = v; this.state = 'drive'; v.g.add(this.g); const t = v.t; this.g.position.set(seat === 'pass' ? .38 : -.38, t.bus ? t.gc + .85 : Math.min(t.gc + .22, t.roof - 1.12), (t.cr + t.cf)/2*t.len + (t.bus ? t.len*.4 : .05)); this.g.rotation.set(0, 0, 0); this.ch.play('sit', { fade:0 }); }
   exitCar(fast){ const v = this.car; if (!v) return; v.g.remove(this.g); G.scene.add(this.g); const d = v.door(-1); this.x = d.x; this.z = d.z; this.y = W.groundY(d.x, d.z); this.h = v.h - Math.PI/2; this.car = null; this.state = 'walk'; this.ch.play('idle', { fade:.1 }); }
   // 인도 목표
   pickTarget(){
