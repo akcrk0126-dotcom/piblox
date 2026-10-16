@@ -152,6 +152,15 @@ nav button.on i{filter:none;opacity:1}
 .sh-head .tt b{display:block;font-size:19px;word-break:keep-all}
 .sh-head .tt small{color:var(--mute);font-size:13px}
 #sheet .result{background:transparent;border:0;padding:0;margin:0}
+.quick{display:flex;gap:6px;margin-top:8px}
+.quick input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:15px;outline:none;color:inherit;font-family:inherit}
+.quick input:focus,.rko:focus{border-color:var(--accent)}
+.quick .btn{flex:none;padding-left:16px;padding-right:16px}
+.quick-sub{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);margin-top:6px;gap:8px}
+.linkbtn{background:none;border:0;color:var(--accent);font-weight:700;font-size:12px;padding:4px 0;cursor:pointer;font-family:inherit}
+.rko{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;outline:none;color:inherit;font-family:inherit;margin-top:4px}
+.bulk-prev{font-size:12px;color:var(--mute);margin:-4px 0 12px}
+.bulk-prev b{color:var(--accent)}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:13px;color:var(--mute);margin-bottom:6px;font-weight:600}
 .field label em{color:var(--accent);font-style:normal}
@@ -227,6 +236,7 @@ nav button.on i{filter:none;opacity:1}
 
 #toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#fff;color:#1a1a2e;padding:11px 18px;border-radius:999px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:60;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 #toast.on{opacity:1;transform:translateX(-50%)}
+#gmBtn{display:none!important}
 #sync{display:inline-flex;align-items:center;gap:5px;margin-top:4px;font-size:11px;font-weight:600;opacity:.65;cursor:pointer;background:none;border:0;color:inherit;padding:0;font-family:inherit}
 #sync svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #sync.ok{color:#5dd39e;opacity:.9}#sync.err{color:#ff8a8a;opacity:.9}#sync.busy svg{animation:spin 1s linear infinite}
@@ -486,7 +496,7 @@ function setSheet(id){
   return `<div class="sh-head"><span class="em">${esc(s.emoji)}</span><div class="tt"><b>${esc(s.name)}</b><small>${s.ids.length}단어 · ${masteryPct(s.ids)}% 외움</small></div><button class="icon-btn" data-act="rename-set" data-arg="${s.id}">✏️</button></div>
   <div class="row-btns"><button class="btn pri" data-act="study" data-arg="${s.id}|flash">🃏 플래시카드</button><button class="btn" data-act="study" data-arg="${s.id}|quiz">🎯 퀴즈</button></div>
   ${weak&&weak<s.ids.length?`<button class="btn block ghost sm" style="margin-top:8px" data-act="study" data-arg="${s.id}|flash|weak">🔁 못 외운 ${weak}개만 학습</button>`:''}
-  <button class="btn block" style="margin-top:8px" data-act="add-words" data-arg="${s.id}">🔍 사전에서 단어 추가</button>
+  <div class="row-btns" style="margin-top:8px"><button class="btn" data-act="add-words" data-arg="${s.id}">🔍 사전에서 추가</button><button class="btn" data-act="bulk-open" data-arg="${s.id}">✍️ 직접 입력</button></div>
   <h2>단어 목록</h2>
   ${s.ids.length?`<div class="wlist">${s.ids.map(k=>wordRow(k,`<span class="x" data-act="rm-from-set" data-arg="${s.id}|${esc(k)}">✕</span>`)).join('')}</div>
   <div class="legend"><span><i class="dot"></i>새 단어</span><span><i class="dot l"></i>학습 중</span><span><i class="dot m"></i>외움</span></div>`
@@ -515,13 +525,16 @@ function renderDict(){
     <input id="q" type="search" placeholder="영어 단어 또는 한글로 검색" value="${esc(dictQ)}" enterkeyhint="search" autocapitalize="off" spellcheck="false">
     <button class="icon-btn" style="width:48px;height:48px;background:var(--accent);border-color:var(--accent)" type="submit">🔍</button>
     <div class="sugs" id="sugs" hidden></div></form>
+    <form class="quick" id="qform" autocomplete="off"><input id="qw" placeholder="단어" autocapitalize="off" spellcheck="false" enterkeyhint="next"><input id="qk" placeholder="뜻" enterkeyhint="done"><button class="btn pri" type="submit">추가</button></form>
+    <div class="quick-sub"><span>검색이 안 되면 여기에 바로 써서 추가해요</span><button class="linkbtn" data-act="bulk-open" data-arg="${ts?ts.id:''}">여러 개 한꺼번에</button></div>
     ${ts?`<div class="target"><span>📥 <b>${esc(ts.emoji+' '+ts.name)}</b>에 바로 추가 중</span><button class="btn sm ghost" data-act="clear-target">해제</button></div>`:''}</div>`;
   if(dictLoading)h+=`<div class="loading"><div class="spin"></div>찾는 중…</div>`;
-  else if(lastResult&&lastResult.notFound)h+=`<div class="empty"><span class="big">🤔</span>‘${esc(lastResult.q)}’를 사전에서 못 찾았어요<br>인터넷이 안 되거나, 철자가 다를 수 있어요<br><br><button class="btn sm pri" data-act="custom-from-search">✍️ 내 사전에 직접 입력하기</button></div>`;
+  else if(lastResult&&lastResult.notFound)h+=`<div class="empty"><span class="big">🤔</span>‘${esc(lastResult.q)}’를 사전에서 못 찾았어요<br>인터넷이 안 되거나, 철자가 다를 수 있어요<br><br><button class="btn sm pri" data-act="custom-from-search">✍️ 내 사전에 직접 입력하기</button><br><small>또는 위 칸에 단어와 뜻만 쓰고 추가를 눌러도 돼요</small></div>`;
   else if(lastResult){
     const k=key(lastResult.w),saved=S.words[k];
     const view=saved?Object.assign({},saved,{note:lastResult.note,phon:saved.phon||lastResult.phon}):lastResult;
     h+=`<div class="result">${wordBody(view)}
+      ${saved?'':`<div class="field" style="margin:12px 0 0"><label>한국어 뜻 ${view.ko?'(고칠 수 있어요)':'<em>— 자동 번역이 안 됐어요, 직접 써 주세요</em>'}</label><input class="rko" id="rko" value="${esc(view.ko||'')}" placeholder="예: 뜻밖의 행운"></div>`}
       <div class="actions">${saved?`<button class="btn" data-act="open-word" data-arg="${esc(k)}">✓ 저장됨 · 보기</button>`:''}
       <button class="btn pri" data-act="add-result">${ts?`＋ ${esc(ts.name)}에 추가`:saved?'＋ 세트에 추가':'＋ 단어 추가'}</button></div>
       ${saved&&saved.custom?'<div class="note" style="margin-top:10px">✍️ 내가 직접 입력한 뜻으로 보여주고 있어요</div>':''}</div>`;
@@ -599,6 +612,32 @@ function formSheet(k,pre){
   <button class="btn block pri" data-act="save-form" data-arg="${esc(k||'')}">저장</button>`;
 }
 
+/* ───────── 직접 입력 (한 줄에 하나씩, 여러 개) ───────── */
+function parseBulk(txt){const out=[],bad=[];
+  txt.split(/\r?\n/).forEach(line=>{const l=line.trim();if(!l)return;
+    let m=l.match(/^(.+?)\s*(?:\t|\s[-–—=:]\s|[-–—=:]|,|\s{2,})\s*(.+)$/);
+    if(m&&/[가-힣]/.test(m[1])&&!/[가-힣]/.test(m[2]))m=[0,m[2],m[1]];
+    if(!m){const n=l.match(/^([A-Za-z][A-Za-z'’ .-]*?)\s+([^A-Za-z].*)$/);if(n)m=n}
+    if(m&&m[1].trim()&&m[2].trim())out.push({w:m[1].trim(),ko:m[2].trim()});else bad.push(l)});
+  return {out,bad}}
+let bulkSet='';
+function bulkSheet(){
+  return `<div class="sh-head"><div class="tt"><b>단어 직접 입력</b><small>한 줄에 하나씩 · 단어와 뜻 사이에 - 나 : 를 넣어요</small></div></div>
+  <div class="field"><label>단어 목록</label><textarea id="bulkTxt" style="min-height:180px" placeholder="apple - 사과\nabandon - 버리다, 포기하다\nrely on : ~에 의지하다\nserendipity = 뜻밖의 행운" autocapitalize="off" spellcheck="false"></textarea></div>
+  <div class="bulk-prev" id="bulkPrev">엑셀이나 메모장에서 복사해서 붙여넣어도 돼요</div>
+  <div class="field"><label>넣을 세트</label><select id="bulkSet"><option value="">세트에 넣지 않음 (내 단어에만)</option>${S.sets.map(x=>`<option value="${x.id}" ${x.id===bulkSet?'selected':''}>${esc(x.emoji+' '+x.name)}</option>`).join('')}<option value="__new">＋ 새 세트 만들기</option></select></div>
+  <div class="field" id="bulkNewF" hidden><label>새 세트 이름</label><input id="bulkNew" placeholder="예: 3과 단어"></div>
+  <button class="btn block pri" data-act="bulk-save">추가하기</button>`;
+}
+function bulkBind(){const t=$('#bulkTxt'),sel=$('#bulkSet');if(!t)return;
+  t.oninput=()=>{const {out,bad}=parseBulk(t.value);$('#bulkPrev').innerHTML=t.value.trim()?`<b>${out.length}개</b> 인식됨${bad.length?` · 뜻이 없어서 빠지는 줄 ${bad.length}개`:''}`:'엑셀이나 메모장에서 복사해서 붙여넣어도 돼요'};
+  sel.onchange=()=>{$('#bulkNewF').hidden=sel.value!=='__new';if(sel.value==='__new')$('#bulkNew').focus()};
+  setTimeout(()=>t.focus(),250)}
+function quickAdd(w,ko,sid){w=w.trim();ko=ko.trim();if(!w)return 'w';if(!ko)return 'k';
+  const k=key(w),ex=S.words[k];
+  if(ex)ex.ko=ko;else{const lib=LIBINDEX[k];putWord(lib?Object.assign({},lib,{w,ko}):{w,ko,phon:'',audio:'',defs:[{pos:'',def:'',ex:''}],syn:[],ant:[],custom:true})}
+  if(sid)addToSet(sid,k);return k}
+
 /* ───────── 단어 상세 / 세트 선택 ───────── */
 function wordSheet(k){
   const o=S.words[k];if(!o)return '<div class="empty">삭제된 단어예요</div>';
@@ -622,7 +661,9 @@ function openSheet(fn){sheetStack.push(fn);drawSheet()}
 function drawSheet(){
   const top=sheetStack[sheetStack.length-1];
   if(!top){$('#sheet').classList.remove('on');$('#back').classList.remove('on');document.body.classList.remove('lock');return}
+  const keep=top===bulkSheet&&$('#bulkTxt')?[$('#bulkTxt').value,$('#bulkSet').value,$('#bulkNew').value]:null;
   $('#sheetIn').innerHTML='<div class="grab"></div>'+top();
+  if(top===bulkSheet){if(keep){$('#bulkTxt').value=keep[0];$('#bulkSet').value=keep[1];$('#bulkNew').value=keep[2];$('#bulkNewF').hidden=keep[1]!=='__new'}bulkBind();$('#bulkTxt').oninput()}
   $('#sheet').classList.add('on');$('#back').classList.add('on');document.body.classList.add('lock');
 }
 function closeSheet(){sheetStack.pop();drawSheet()}
@@ -636,6 +677,10 @@ function render(){
   v.innerHTML=tab==='sets'?renderSets():tab==='dict'?renderDict():tab==='mine'?renderMine():renderCustom();
   if(tab==='dict'){
     $('#sform').onsubmit=e=>{e.preventDefault();$('#sugs').hidden=true;$('#q').blur();doSearch($('#q').value)};
+    $('#qw').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#qk').focus()}};
+    $('#qform').onsubmit=e=>{e.preventDefault();const w=$('#qw').value,ko=$('#qk').value,r=quickAdd(w,ko,targetSet);
+      if(r==='w'){$('#qw').focus();return toast('단어를 적어주세요')}if(r==='k'){$('#qk').focus();return toast('뜻을 적어주세요')}
+      save();const ts=targetSet&&getSet(targetSet);toast(ts?`${ts.name}에 추가했어요`:'내 단어에 추가했어요');render();setTimeout(()=>{const q=$('#qw');q&&q.focus()},30)};
     $('#q').oninput=onQInput;
   }
   if(tab==='mine'){renderMineList();const mq=$('#mq');if(mq)mq.oninput=e=>{mineQ=e.target.value;renderMineList()}}
@@ -751,6 +796,10 @@ function studyArg(arg){
   startStudy(ids,mode||'flash',title);
 }
 const ACT={
+  'bulk-open'(sid){bulkSet=sid||targetSet||'';openSheet(bulkSheet)},
+  'bulk-save'(){const {out}=parseBulk($('#bulkTxt').value);if(!out.length)return toast('‘단어 - 뜻’ 형식으로 한 줄씩 써 주세요');
+    let sid=$('#bulkSet').value;if(sid==='__new'){const n=$('#bulkNew').value.trim();if(!n)return toast('새 세트 이름을 적어주세요');sid=newSet(n).id}
+    out.forEach(o=>quickAdd(o.w,o.ko,sid));save();sheetStack=[];if(sid)openSheet(()=>setSheet(sid));else drawSheet();render();toast(`${out.length}단어를 추가했어요`)},
   sync(){if(cloudUid)cloudPull();else toast('서버에 연결되지 않았어요')},
   tab(g){tab=g;closeAll();window.scrollTo(0,0);render();if(g==='dict')setTimeout(()=>{const q=$('#q');if(q&&!lastResult)q.focus()},50)},
   'sheet-close'(){closeSheet()},
@@ -791,6 +840,7 @@ const ACT={
   'clear-recent'(){S.recent=[];save();render()},
   'add-result'(){
     const r=lastResult;if(!r||r.notFound)return;const k=key(r.w);
+    const rk=$('#rko');if(rk&&!S.words[k])r.ko=rk.value.trim();
     if(targetSet){
       if(!S.words[k])putWord({w:r.w,ko:r.ko,phon:r.phon,audio:r.audio,defs:r.defs,syn:r.syn,ant:r.ant,custom:false});
       const s=getSet(targetSet);const added=addToSet(targetSet,k);save();render();
