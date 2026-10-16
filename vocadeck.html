@@ -237,6 +237,7 @@ nav button.on i{filter:none;opacity:1}
 #toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#fff;color:#1a1a2e;padding:11px 18px;border-radius:999px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:60;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 #toast.on{opacity:1;transform:translateX(-50%)}
 #gmBtn{display:none!important}
+.f-ko.en{font-family:inherit;font-size:19px;line-height:1.45;font-weight:600}
 #sync{display:inline-flex;align-items:center;gap:5px;margin-top:4px;font-size:11px;font-weight:600;opacity:.65;cursor:pointer;background:none;border:0;color:inherit;padding:0;font-family:inherit}
 #sync svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #sync.ok{color:#5dd39e;opacity:.9}#sync.err{color:#ff8a8a;opacity:.9}#sync.busy svg{animation:spin 1s linear infinite}
@@ -377,7 +378,9 @@ function newSet(name,emoji){const s={id:'s'+Date.now().toString(36)+Math.random(
 const getSet=id=>S.sets.find(s=>s.id===id);
 function addToSet(sid,k){const s=getSet(sid);if(s&&!s.ids.includes(k)){s.ids.push(k);return true}return false}
 const level=o=>!o||!o.box?'n':o.box>=3?'m':'l';
-const meaningOf=o=>o.ko||(o.defs&&o.defs[0]&&o.defs[0].def)||'(뜻 없음)';
+const enDef=o=>((o.defs||[]).find(x=>x&&x.def)||{}).def||'';
+const meaningOf=o=>(S.mlang==='en'?enDef(o)||o.ko:o.ko||enDef(o))||'(뜻 없음)';
+const subDef=(o,d)=>S.mlang!=='en'&&o.ko&&d.def;
 const setsOf=k=>S.sets.filter(s=>s.ids.includes(k));
 
 /* ───────── 상태 ───────── */
@@ -525,8 +528,8 @@ function renderDict(){
     <input id="q" type="search" placeholder="영어 단어 또는 한글로 검색" value="${esc(dictQ)}" enterkeyhint="search" autocapitalize="off" spellcheck="false">
     <button class="icon-btn" style="width:48px;height:48px;background:var(--accent);border-color:var(--accent)" type="submit">🔍</button>
     <div class="sugs" id="sugs" hidden></div></form>
-    <form class="quick" id="qform" autocomplete="off"><input id="qw" placeholder="단어" autocapitalize="off" spellcheck="false" enterkeyhint="next"><input id="qk" placeholder="뜻" enterkeyhint="done"><button class="btn pri" type="submit">추가</button></form>
-    <div class="quick-sub"><span>검색이 안 되면 여기에 바로 써서 추가해요</span><button class="linkbtn" data-act="bulk-open" data-arg="${ts?ts.id:''}">여러 개 한꺼번에</button></div>
+    <form class="quick" id="qform" autocomplete="off"><input id="qw" placeholder="단어" autocapitalize="off" spellcheck="false" enterkeyhint="next"><input id="qk" placeholder="뜻 (한글 또는 영어)" enterkeyhint="done"><button class="btn pri" type="submit">추가</button></form>
+    <div class="quick-sub"><span>뜻은 한글, 영어 정의, 또는 <b>사과 / a round fruit</b> 처럼 둘 다</span><button class="linkbtn" data-act="bulk-open" data-arg="${ts?ts.id:''}">여러 개 한꺼번에</button></div>
     ${ts?`<div class="target"><span>📥 <b>${esc(ts.emoji+' '+ts.name)}</b>에 바로 추가 중</span><button class="btn sm ghost" data-act="clear-target">해제</button></div>`:''}</div>`;
   if(dictLoading)h+=`<div class="loading"><div class="spin"></div>찾는 중…</div>`;
   else if(lastResult&&lastResult.notFound)h+=`<div class="empty"><span class="big">🤔</span>‘${esc(lastResult.q)}’를 사전에서 못 찾았어요<br>인터넷이 안 되거나, 철자가 다를 수 있어요<br><br><button class="btn sm pri" data-act="custom-from-search">✍️ 내 사전에 직접 입력하기</button><br><small>또는 위 칸에 단어와 뜻만 쓰고 추가를 눌러도 돼요</small></div>`;
@@ -602,7 +605,7 @@ function formSheet(k,pre){
   const posOpts=['','noun','verb','adjective','adverb','phrasal verb','phrase','idiom','other'];
   return `<div class="sh-head"><div class="tt"><b>${k?'단어 수정':'새 단어 직접 입력'}</b><small>${k?'뜻이나 동의어를 내 방식대로 고쳐요':'* 표시만 채우면 돼요'}</small></div></div>
   <div class="field"><label>단어 <em>*</em></label><input id="fw" value="${esc(o.w)}" placeholder="예: serendipity" autocapitalize="off" spellcheck="false"></div>
-  <div class="field"><label>한국어 뜻 <em>*</em></label><input id="fko" value="${esc(o.ko)}" placeholder="예: 뜻밖의 행운"></div>
+  <div class="field"><label>한국어 뜻 <em>*</em> <small style="font-weight:500">(영어 정의만 써도 돼요)</small></label><input id="fko" value="${esc(o.ko)}" placeholder="예: 뜻밖의 행운"></div>
   <div class="field"><label>품사</label><select id="fpos">${posOpts.map(p=>`<option value="${p}" ${p===(d.pos||'')?'selected':''}>${p?posKo(p):'선택 안 함'}</option>`).join('')}</select></div>
   <div class="field"><label>정의 (영어나 한국어 설명)</label><textarea id="fdef" placeholder="the occurrence of events by chance in a happy way">${esc(d.def||'')}</textarea></div>
   <div class="field"><label>예문</label><input id="fex" value="${esc(d.ex||'')}" placeholder="Meeting her was pure serendipity."></div>
@@ -613,17 +616,20 @@ function formSheet(k,pre){
 }
 
 /* ───────── 직접 입력 (한 줄에 하나씩, 여러 개) ───────── */
+/* 뜻 칸 하나에 한국어 · 영어 정의를 섞어 써도 나눠 준다: "사과 / a round fruit" */
+function parseMeaning(t){const ko=[],en=[];String(t||'').split(/\s+[-–—\/|]\s+|\s*[\/|]\s*/).forEach(x=>{x=x.trim();if(x)(/[가-힣]/.test(x)?ko:en).push(x)});return {ko:ko.join(', '),def:en.join('; ')}}
 function parseBulk(txt){const out=[],bad=[];
   txt.split(/\r?\n/).forEach(line=>{const l=line.trim();if(!l)return;
-    let m=l.match(/^(.+?)\s*(?:\t|\s[-–—=:]\s|[-–—=:]|,|\s{2,})\s*(.+)$/);
+    let m=l.match(/^(.+?)\s*(?:\t|\s{2,}|\s[-–—=:|]\s|:|=)\s*(.+)$/)||l.match(/^(.+?)\s*[-–—]\s*([가-힣].*)$/)||l.match(/^([^,]+),\s*(.+)$/);
     if(m&&/[가-힣]/.test(m[1])&&!/[가-힣]/.test(m[2]))m=[0,m[2],m[1]];
     if(!m){const n=l.match(/^([A-Za-z][A-Za-z'’ .-]*?)\s+([^A-Za-z].*)$/);if(n)m=n}
-    if(m&&m[1].trim()&&m[2].trim())out.push({w:m[1].trim(),ko:m[2].trim()});else bad.push(l)});
+    const pm=m&&parseMeaning(m[2]);
+    if(m&&m[1].trim()&&(pm.ko||pm.def))out.push({w:m[1].trim(),ko:pm.ko,def:pm.def});else bad.push(l)});
   return {out,bad}}
 let bulkSet='';
 function bulkSheet(){
-  return `<div class="sh-head"><div class="tt"><b>단어 직접 입력</b><small>한 줄에 하나씩 · 단어와 뜻 사이에 - 나 : 를 넣어요</small></div></div>
-  <div class="field"><label>단어 목록</label><textarea id="bulkTxt" style="min-height:180px" placeholder="apple - 사과\nabandon - 버리다, 포기하다\nrely on : ~에 의지하다\nserendipity = 뜻밖의 행운" autocapitalize="off" spellcheck="false"></textarea></div>
+  return `<div class="sh-head"><div class="tt"><b>단어 직접 입력</b><small>한 줄에 하나씩 · 단어와 뜻 사이에 - 나 : · 한글 뜻과 영어 정의는 / 로 나눠요</small></div></div>
+  <div class="field"><label>단어 목록</label><textarea id="bulkTxt" style="min-height:180px" placeholder="apple - 사과\nabandon : 버리다 / to leave behind\ncandid - frank and honest\nrely on = ~에 의지하다" autocapitalize="off" spellcheck="false"></textarea></div>
   <div class="bulk-prev" id="bulkPrev">엑셀이나 메모장에서 복사해서 붙여넣어도 돼요</div>
   <div class="field"><label>넣을 세트</label><select id="bulkSet"><option value="">세트에 넣지 않음 (내 단어에만)</option>${S.sets.map(x=>`<option value="${x.id}" ${x.id===bulkSet?'selected':''}>${esc(x.emoji+' '+x.name)}</option>`).join('')}<option value="__new">＋ 새 세트 만들기</option></select></div>
   <div class="field" id="bulkNewF" hidden><label>새 세트 이름</label><input id="bulkNew" placeholder="예: 3과 단어"></div>
@@ -633,9 +639,10 @@ function bulkBind(){const t=$('#bulkTxt'),sel=$('#bulkSet');if(!t)return;
   t.oninput=()=>{const {out,bad}=parseBulk(t.value);$('#bulkPrev').innerHTML=t.value.trim()?`<b>${out.length}개</b> 인식됨${bad.length?` · 뜻이 없어서 빠지는 줄 ${bad.length}개`:''}`:'엑셀이나 메모장에서 복사해서 붙여넣어도 돼요'};
   sel.onchange=()=>{$('#bulkNewF').hidden=sel.value!=='__new';if(sel.value==='__new')$('#bulkNew').focus()};
   setTimeout(()=>t.focus(),250)}
-function quickAdd(w,ko,sid){w=w.trim();ko=ko.trim();if(!w)return 'w';if(!ko)return 'k';
+function quickAdd(w,ko,sid,def){w=w.trim();ko=(ko||'').trim();def=(def||'').trim();if(!w)return 'w';if(!ko&&!def)return 'k';
   const k=key(w),ex=S.words[k];
-  if(ex)ex.ko=ko;else{const lib=LIBINDEX[k];putWord(lib?Object.assign({},lib,{w,ko}):{w,ko,phon:'',audio:'',defs:[{pos:'',def:'',ex:''}],syn:[],ant:[],custom:true})}
+  if(ex){if(ko)ex.ko=ko;if(def){ex.defs=ex.defs||[];if(ex.defs[0]&&!ex.defs[0].def)ex.defs[0].def=def;else if(!ex.defs.some(x=>x.def===def))ex.defs.unshift({pos:'',def,ex:''})}}
+  else{const lib=LIBINDEX[k];putWord(lib?Object.assign({},lib,{w},ko?{ko}:{},def?{defs:[{pos:'',def,ex:''}].concat(lib.defs)}:{}):{w,ko,phon:'',audio:'',defs:[{pos:'',def,ex:''}],syn:[],ant:[],custom:true})}
   if(sid)addToSet(sid,k);return k}
 
 /* ───────── 단어 상세 / 세트 선택 ───────── */
@@ -678,7 +685,7 @@ function render(){
   if(tab==='dict'){
     $('#sform').onsubmit=e=>{e.preventDefault();$('#sugs').hidden=true;$('#q').blur();doSearch($('#q').value)};
     $('#qw').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#qk').focus()}};
-    $('#qform').onsubmit=e=>{e.preventDefault();const w=$('#qw').value,ko=$('#qk').value,r=quickAdd(w,ko,targetSet);
+    $('#qform').onsubmit=e=>{e.preventDefault();const w=$('#qw').value,pm=parseMeaning($('#qk').value),r=quickAdd(w,pm.ko,targetSet,pm.def);
       if(r==='w'){$('#qw').focus();return toast('단어를 적어주세요')}if(r==='k'){$('#qk').focus();return toast('뜻을 적어주세요')}
       save();const ts=targetSet&&getSet(targetSet);toast(ts?`${ts.name}에 추가했어요`:'내 단어에 추가했어요');render();setTimeout(()=>{const q=$('#qw');q&&q.focus()},30)};
     $('#q').oninput=onQInput;
@@ -706,7 +713,7 @@ function grade(k,ok){
 }
 function stTop(){
   const n=ST.ids.length,i=Math.min(ST.i,n);
-  return `<div class="st-top"><button class="icon-btn" data-act="close-study">✕</button><div class="st-title">${esc(ST.title)}<small>${ST.mode==='quiz'?'퀴즈':'플래시카드'} · ${Math.min(i+1,n)} / ${n}</small></div><button class="icon-btn" style="width:auto;padding:0 10px;font-size:13px;font-weight:700" data-act="dir-toggle">${S.dir==='w2m'?'A→가':'가→A'}</button></div>
+  return `<div class="st-top"><button class="icon-btn" data-act="close-study">✕</button><div class="st-title">${esc(ST.title)}<small>${ST.mode==='quiz'?'퀴즈':'플래시카드'} · ${Math.min(i+1,n)} / ${n}</small></div><button class="icon-btn" style="width:auto;padding:0 10px;font-size:13px;font-weight:700" data-act="dir-toggle">${S.dir==='w2m'?'단어→뜻':'뜻→단어'}</button><button class="icon-btn" style="width:auto;padding:0 10px;font-size:13px;font-weight:700;margin-left:6px" data-act="lang-toggle" title="뜻을 한국어로 볼지, 영어 정의(영영)로 볼지">${S.mlang==='en'?'영영':'영한'}</button></div>
   <div class="bar"><i style="width:${i/n*100}%"></i></div>`;
 }
 function relLine(o){
@@ -725,9 +732,9 @@ function renderStudy(){
     const wordFace=`<button class="f-spk" data-act="speak" data-arg="${esc(o.w)}">🔊</button><div class="f-word">${esc(o.w)}</div>${o.phon?`<div class="f-phon">${esc(o.phon)}</div>`:''}`;
     const front=S.dir==='w2m'
       ?`${wordFace}<div class="f-hint">탭해서 뜻 보기</div>`
-      :`<div class="f-ko">${esc(meaningOf(o))}</div>${o.ko&&d.def?`<div class="f-def">${esc(d.def)}</div>`:''}<div class="f-hint">탭해서 단어 보기</div>`;
+      :`<div class="f-ko${S.mlang==='en'?' en':''}">${esc(meaningOf(o))}</div>${subDef(o,d)?`<div class="f-def">${esc(d.def)}</div>`:''}<div class="f-hint">탭해서 단어 보기</div>`;
     const back=S.dir==='w2m'
-      ?`<div class="cen"><div class="f-ko">${esc(meaningOf(o))}</div>${(o.defs||[]).slice(0,2).map(x=>x.def&&(x.def!==o.ko||!o.ko)?`<div class="f-def">${x.pos?`<span class="p">${esc(posKo(x.pos))}</span>`:''}${o.ko?esc(x.def):''}</div>`:'').join('')}${d.ex?`<div class="f-ex">“${esc(d.ex)}”</div>`:''}${relLine(o)}</div>`
+      ?`<div class="cen"><div class="f-ko${S.mlang==='en'?' en':''}">${esc(meaningOf(o))}</div>${S.mlang==='en'?(o.defs||[]).filter(x=>x.def&&x.def!==meaningOf(o)).slice(0,1).map(x=>`<div class="f-def">${x.pos?`<span class="p">${esc(posKo(x.pos))}</span>`:''}${esc(x.def)}</div>`).join(''):(o.defs||[]).slice(0,2).map(x=>x.def&&(x.def!==o.ko||!o.ko)?`<div class="f-def">${x.pos?`<span class="p">${esc(posKo(x.pos))}</span>`:''}${o.ko?esc(x.def):''}</div>`:'').join('')}${d.ex?`<div class="f-ex">“${esc(d.ex)}”</div>`:''}${relLine(o)}</div>`
       :`<div class="cen">${wordFace}${d.ex?`<div class="f-ex">“${esc(d.ex)}”</div>`:''}${relLine(o)}</div>`;
     el.innerHTML=stTop()+`<div class="stage">
       <div class="card ${ST.flipped?'flip':''}" id="fcard"><div class="card-in">
@@ -740,13 +747,13 @@ function renderStudy(){
     if(!ST.choices){
       const label=x=>S.dir==='w2m'?meaningOf(x):x.w;
       const right=label(o),used=new Set([right]);
-      const pool=shuffle(Object.keys(S.words).filter(x=>x!==k));const opts=[right];
+      let pool=shuffle(Object.keys(S.words).filter(x=>x!==k));if(S.dir==='w2m'){const same=x=>!!enDef(S.words[x])===(S.mlang==='en'?!!enDef(o):!!S.words[k].ko)&&(S.mlang==='en'||!!S.words[x].ko);pool=pool.filter(same).concat(pool.filter(x=>!same(x)))}const opts=[right];
       for(const x of pool){const l=label(S.words[x]);if(!used.has(l)){used.add(l);opts.push(l)}if(opts.length===4)break}
       ST.choices=shuffle(opts);ST.right=right;ST.ans=null;
     }
     const q=S.dir==='w2m'
       ?`<button class="f-spk" data-act="speak" data-arg="${esc(o.w)}">🔊</button><div class="f-word">${esc(o.w)}</div>${o.phon?`<div class="f-phon">${esc(o.phon)}</div>`:''}`
-      :`<div class="f-ko">${esc(meaningOf(o))}</div>${o.ko&&d.def?`<div class="f-def">${esc(d.def)}</div>`:''}`;
+      :`<div class="f-ko${S.mlang==='en'?' en':''}">${esc(meaningOf(o))}</div>${subDef(o,d)?`<div class="f-def">${esc(d.def)}</div>`:''}`;
     el.innerHTML=stTop()+`<div class="stage" style="justify-content:flex-start">
       <div class="q-word">${q}</div>
       <div class="muted" style="text-align:center;font-size:13px;margin-top:14px">${S.dir==='w2m'?'알맞은 뜻을 고르세요':'알맞은 단어를 고르세요'}</div>
@@ -799,7 +806,7 @@ const ACT={
   'bulk-open'(sid){bulkSet=sid||targetSet||'';openSheet(bulkSheet)},
   'bulk-save'(){const {out}=parseBulk($('#bulkTxt').value);if(!out.length)return toast('‘단어 - 뜻’ 형식으로 한 줄씩 써 주세요');
     let sid=$('#bulkSet').value;if(sid==='__new'){const n=$('#bulkNew').value.trim();if(!n)return toast('새 세트 이름을 적어주세요');sid=newSet(n).id}
-    out.forEach(o=>quickAdd(o.w,o.ko,sid));save();sheetStack=[];if(sid)openSheet(()=>setSheet(sid));else drawSheet();render();toast(`${out.length}단어를 추가했어요`)},
+    out.forEach(o=>quickAdd(o.w,o.ko,sid,o.def));save();sheetStack=[];if(sid)openSheet(()=>setSheet(sid));else drawSheet();render();toast(`${out.length}단어를 추가했어요`)},
   sync(){if(cloudUid)cloudPull();else toast('서버에 연결되지 않았어요')},
   tab(g){tab=g;closeAll();window.scrollTo(0,0);render();if(g==='dict')setTimeout(()=>{const q=$('#q');if(q&&!lastResult)q.focus()},50)},
   'sheet-close'(){closeSheet()},
@@ -826,6 +833,7 @@ const ACT={
   'study-list'(){const ks=JSON.parse($('#mineList').dataset.keys||'[]');startStudy(ks,'flash','📖 내 단어')},
   'close-study'(){closeStudy()},
   answer(g){answer(g==='1')},
+  'lang-toggle'(){S.mlang=S.mlang==='en'?'ko':'en';save();ST.flipped=false;ST.choices=null;renderStudy();toast(S.mlang==='en'?'영영 모드: 영어 정의로 공부해요':'영한 모드: 한국어 뜻으로 공부해요')},
   'dir-toggle'(){S.dir=S.dir==='w2m'?'m2w':'w2m';save();ST.flipped=false;ST.choices=null;renderStudy()},
   'quiz-pick'(i){if(ST.ans!==null)return;ST.ans=+i;grade(ST.ids[ST.i],ST.choices[ST.ans]===ST.right);renderStudy()},
   'quiz-next'(){ST.i++;ST.choices=null;ST.ans=null;renderStudy()},
@@ -861,7 +869,7 @@ const ACT={
   'custom-from-search'(){const pre=lastResult&&lastResult.q&&!/[가-힣]/.test(lastResult.q)?{w:lastResult.q}:{};openSheet(()=>formSheet(null,pre))},
   'save-form'(oldK){
     const w=$('#fw').value.trim(),ko=$('#fko').value.trim();
-    if(!w)return toast('단어를 적어주세요');if(!ko)return toast('한국어 뜻을 적어주세요');
+    if(!w)return toast('단어를 적어주세요');if(!ko&&!$('#fdef').value.trim())return toast('한국어 뜻이나 영어 정의 중 하나는 적어주세요');
     const k=key(w);
     if(!oldK&&S.words[k]&&!confirm(`‘${w}’는 이미 내 단어에 있어요.\n내가 쓴 뜻으로 덮어쓸까요?`))return;
     if(oldK&&oldK!==k&&S.words[k])return toast('같은 단어가 이미 있어요');
