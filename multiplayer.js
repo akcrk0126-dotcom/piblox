@@ -1636,6 +1636,46 @@ function emoPose(g, e, t, undo){ const P = g.userData.parts, u = g.userData; if 
   const sc = g.scale.y || 1; let dy = q.dy || 0; if (q.sit) dy -= (u.legH || 1.24)*.92;
   if (dy || q.ry || q.rx){ save(g, true); g.position.y += dy*sc; if (q.rx){ g.rotation.order = 'YXZ'; g.rotation.x += q.rx; } if (q.ry) g.rotation.y += q.ry; } }
 
+
+// ================================================================
+// 기기 차단: 영구 기기 ID + 기기 지문. 관리자가 차단한 기기는 모든 PlayHub 페이지가 막혀요.
+// ================================================================
+const PH_DEV = (function () {
+  const fnv = str => { let h1 = 0x811c9dc5, h2 = 0x01000193; for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = Math.imul(h2 ^ c, 2246822519) >>> 0; } return h1.toString(36) + h2.toString(36); };
+  const getCookie = k => { try { const m = document.cookie.match(new RegExp('(?:^|; )' + k + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } };
+  const setCookie = (k, v) => { try { document.cookie = k + '=' + encodeURIComponent(v) + '; max-age=' + (60 * 60 * 24 * 730) + '; path=/; SameSite=Lax'; } catch (e) {} };
+  let pid = null; try { pid = localStorage.getItem('ph_pid'); } catch (e) {}
+  if (!pid) pid = getCookie('ph_pid');
+  if (!pid) pid = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  try { localStorage.setItem('ph_pid', pid); } catch (e) {} setCookie('ph_pid', pid);
+  let gl = '';
+  try { const c = document.createElement('canvas'), g = c.getContext('webgl') || c.getContext('experimental-webgl'); if (g) { const d = g.getExtension('WEBGL_debug_renderer_info'); gl = d ? g.getParameter(d.UNMASKED_VENDOR_WEBGL) + '|' + g.getParameter(d.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER); } } catch (e) {}
+  let cv = '';
+  try { const c = document.createElement('canvas'); c.width = 220; c.height = 40; const x = c.getContext('2d'); x.textBaseline = 'top'; x.font = '16px Arial'; x.fillStyle = '#f60'; x.fillRect(100, 1, 62, 20); x.fillStyle = '#069'; x.fillText('PlayHub 기기 🎮 0123', 2, 15); x.fillStyle = 'rgba(102,204,0,0.7)'; x.fillText('PlayHub 기기 🎮 0123', 4, 17); cv = fnv(c.toDataURL()); } catch (e) {}
+  const n = navigator, sc = window.screen || {};
+  let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
+  const hwParts = [n.platform, tz, sc.width + 'x' + sc.height + 'x' + sc.colorDepth, window.devicePixelRatio, n.hardwareConcurrency, n.deviceMemory, gl, cv];
+  const hw = 'h' + fnv(hwParts.join('#'));
+  const fp = 'f' + fnv(hwParts.concat([n.userAgent, (n.languages || []).join(',')]).join('#'));
+  return { pid, fp, hw, gl: String(gl).slice(0, 80) };
+})();
+function phBlockDevice() {
+  try { localStorage.setItem('ph_dban', '1'); } catch (e) {}
+  if (window.__phBlocked) return; window.__phBlocked = true;
+  const show = () => {
+    if (document.getElementById('phBan')) return;
+    const d = document.createElement('div'); d.id = 'phBan';
+    d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0b0d12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:16px -apple-system,"Malgun Gothic",sans-serif;text-align:center;padding:24px';
+    d.innerHTML = '<div style="font-size:24px;font-weight:800">이 기기는 차단되었어요</div><div style="color:#9aa0b0;max-width:420px;line-height:1.6">핵 사용으로 이 기기에서는 PlayHub를 이용할 수 없어요.<br>잘못 차단되었다면 운영자에게 알려 주세요.</div><div style="color:#555;font-size:12px">' + PH_DEV.pid + '</div>';
+    document.documentElement.appendChild(d);
+    try { document.body && (document.body.style.overflow = 'hidden'); } catch (e) {}
+  };
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+  setInterval(show, 2000);
+  try { if (window.firebase && firebase.apps && firebase.apps.length) firebase.database().goOffline(); } catch (e) {}
+}
+try { if (localStorage.getItem('ph_dban') === '1') phBlockDevice(); } catch (e) {}
+
 const MP = (function () {
   let app = null, auth = null, db = null;
   let uid = null;
@@ -2041,10 +2081,27 @@ const MP = (function () {
     if (!open) return; try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
     box.innerHTML = EMOTES.filter(e=>!e.forest || ownsEmote(e.id)).map(e=>{ const own = ownsEmote(e.id); return '<button type="button" data-e="' + e.id + '" class="' + (own ? '' : 'lk') + '" title="/e ' + e.alias[0] + '"><span>' + e.icon + '</span><small>' + (own ? e.name : '🔒 🔷' + e.price) + '</small></button>'; }).join('') + '<div class="hint">/e 이름 으로도 쓸 수 있어요 · 움직이면 멈춰요 · 더 많은 이모트는 허브 마켓플레이스</div>'; }
 
+  // 기기 차단 확인 + 내 기기 정보 기록 (관리 페이지에서 같은 기기 계정을 찾을 때 써요)
+  let devChecked = false;
+  function checkDevice() {
+    if (!db || !uid) return;
+    if (!devChecked) {
+      devChecked = true;
+      const keys = [PH_DEV.pid, PH_DEV.fp, PH_DEV.hw];
+      Promise.all(keys.map(k => db.ref(`${MP_ROOT}/banned_devices/${k}`).once('value').then(s => s.val()).catch(() => null)))
+        .then(r => {
+          const hit = r[0] || r[1] || (r[2] && r[2].hw);   // 하드웨어 지문은 '강하게 차단'했을 때만 써요
+          if (hit) phBlockDevice();
+          else { try { if (localStorage.getItem('ph_dban') === '1') { localStorage.removeItem('ph_dban'); location.reload(); } } catch (e) {} }
+        });
+    }
+    db.ref(`${MP_ROOT}/users/${uid}/device`).set({ pid: PH_DEV.pid, fp: PH_DEV.fp, hw: PH_DEV.hw, gl: PH_DEV.gl, ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+  }
   function handleAuthChange(user) {
     authReady = true;
     if (user) {
       uid = user.uid;
+      checkDevice();
       ensureUserRecord();
       if (roomMode && currentRoom) joinRoom(user.uid);
       if (!firstCallbackFired && firstCallback) { firstCallback(user.uid, null); firstCallbackFired = true; }
@@ -2266,7 +2323,7 @@ const MP = (function () {
     return true;
   }
   function submitScore(category, score, direction, extra, cb) {
-    if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
+    if (!isConfigured() || !db || !uid || window.__phBlocked) { cb && cb(false); return; }
     score = Number(score);
     if (!isFinite(score) || score < 0 || score > 1e16) { cb && cb(false); return; }
     const ref = db.ref(`${MP_ROOT}/leaderboard/${category}/${uid}`);
