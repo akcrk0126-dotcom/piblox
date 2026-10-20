@@ -2243,15 +2243,39 @@ const MP = (function () {
    * submitScore(category, score, direction, extra, cb)
    * direction: 'asc'(작을수록 좋음, 예: 기록 시간) | 'desc'(클수록 좋음, 예: 등급/점수)
    */
+  // ---------- 순위 보호 ----------
+  // 브라우저 게임은 점수를 브라우저가 계산하니, 확장 프로그램으로 가짜 점수를 넣을 수 있어요.
+  // 1) 서버 규칙(anticheat-rules.json)이 말이 안 되는 점수 · 너무 잦은 제출 · 차단된 사람을 막고
+  // 2) 여기서는 순위를 보여 줄 때 차단된 사람과 기준을 벗어난 기록을 걸러요.
+  let lbGuard = { t: 0, banned: {}, cfg: {} };
+  function loadGuard(cb) {
+    if (!db) return cb(lbGuard);
+    if (Date.now() - lbGuard.t < 60000) return cb(lbGuard);
+    Promise.all([
+      db.ref(`${MP_ROOT}/banned`).once('value').then(s => s.val() || {}).catch(() => ({})),
+      db.ref(`${MP_ROOT}/lbcfg`).once('value').then(s => s.val() || {}).catch(() => ({}))
+    ]).then(([banned, cfg]) => { lbGuard = { t: Date.now(), banned, cfg }; cb(lbGuard); });
+  }
+  function scoreOk(category, row) {
+    if (!row || typeof row.score !== 'number' || !isFinite(row.score) || row.score < 0 || row.score > 1e16) return false;
+    if (lbGuard.banned[row.uid]) return false;
+    const c = lbGuard.cfg[category];
+    if (c && typeof c.max === 'number' && row.score > c.max) return false;
+    if (c && typeof c.min === 'number' && row.score < c.min) return false;
+    if (c && c.hide && c.hide[row.uid]) return false;
+    return true;
+  }
   function submitScore(category, score, direction, extra, cb) {
     if (!isConfigured() || !db || !uid) { cb && cb(false); return; }
+    score = Number(score);
+    if (!isFinite(score) || score < 0 || score > 1e16) { cb && cb(false); return; }
     const ref = db.ref(`${MP_ROOT}/leaderboard/${category}/${uid}`);
     ref.once('value').then(snap => {
       const cur = snap.val();
       const better = !cur || (direction === 'asc' ? score < cur.score : score > cur.score);
       if (better) {
         const payload = Object.assign({
-          name: getDisplayName(), score: score,
+          name: String(getDisplayName() || '플레이어').slice(0, 24), score: score,
           ts: firebase.database.ServerValue.TIMESTAMP
         }, extra || {});
         ref.set(payload).then(() => cb && cb(true)).catch(() => cb && cb(false));
@@ -2267,13 +2291,15 @@ const MP = (function () {
     const limit = opts.limit || 10;
     const direction = opts.direction || 'desc';
     const base = db.ref(`${MP_ROOT}/leaderboard/${category}`).orderByChild('score');
-    const q = direction === 'asc' ? base.limitToFirst(limit) : base.limitToLast(limit);
-    q.once('value').then(snap => {
-      const arr = [];
+    const want = limit * 2 + 10;   // 걸러질 기록이 있어도 순위가 모자라지 않게 넉넉히 받아요
+    const q = direction === 'asc' ? base.limitToFirst(want) : base.limitToLast(want);
+    loadGuard(() => q.once('value').then(snap => {
+      let arr = [];
       snap.forEach(child => { arr.push(Object.assign({ uid: child.key }, child.val())); });
       if (direction === 'desc') arr.reverse();
+      arr = arr.filter(r => scoreOk(category, r)).slice(0, limit);
       cb && cb(arr);
-    }).catch(err => { console.error('[MP] 리더보드 조회 실패', err); cb && cb([]); });
+    }).catch(err => { console.error('[MP] 리더보드 조회 실패', err); cb && cb([]); }));
   }
 
   // 내 기록 하나만 (순위표 밖일 때 표시용)
@@ -2344,11 +2370,11 @@ const MP = (function () {
   // 경험치를 더한다. 레벨이 올랐으면 결과에 leveledTo가 담긴다.
   function addXP(amount, cb){
     const before = levelFromXP(getLocalXP()).level;
-    myXP = getLocalXP() + Math.max(0, Math.round(amount || 0));
+    myXP = getLocalXP() + Math.min(3000, Math.max(0, Math.round(amount || 0)));   // 한 번에 너무 많이 못 올려요 (게임이 주는 최대치 3000)
     try { localStorage.setItem('mp_xp', String(myXP)); } catch (e) {}
     const after = levelFromXP(myXP);
     if (isConfigured() && db && uid){
-      db.ref(`${MP_ROOT}/users/${uid}`).update({ xp: myXP, level: after.level }).catch(()=>{});
+      db.ref(`${MP_ROOT}/users/${uid}`).update({ xp: myXP, level: after.level, xpTs: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
       if (after.level > before) submitScore('level', myXP, 'desc', { level: after.level });
     }
     const res = Object.assign({}, after, { leveledTo: after.level > before ? after.level : null });
