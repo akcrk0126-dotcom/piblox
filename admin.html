@@ -52,9 +52,8 @@ th{color:var(--mute);font-weight:600}
     <ol>
       <li>허브에서 내 계정으로 로그인한 상태로 이 페이지를 열어요. 위에 나온 <b>내 UID</b>를 복사해요.</li>
       <li><a href="https://console.firebase.google.com/project/eraser-gacha/database/eraser-gacha-default-rtdb/data" target="_blank" rel="noopener" style="color:var(--acc)">Firebase 콘솔 › Realtime Database › 데이터</a>에서 <code>playhub_mp</code> 아래에 <code>admins</code> 를 만들고, 값에 <b>내 UID</b>를 그대로 붙여넣어요.</li>
-      <li>같은 화면의 <b>규칙</b> 탭에서 <code>playhub_mp</code> 안의 <code>leaderboard</code> 부분을 아래 내용의 <code>leaderboard</code> 로 바꾸고, <code>banned</code> · <code>banned_devices</code> · <code>admins</code> · <code>lbcfg</code> 를 <code>playhub_mp</code> 안에 추가해요.</li>
-      <li><code>users</code> › <code>$uid</code> 안에는 <code>xp</code> · <code>xpTs</code> 두 줄을 추가해요 (경험치를 한꺼번에 못 올리게).</li>
-      <li><b>게시</b>를 눌러요. 이 페이지를 새로고침하면 "관리자"로 보여요.</li>
+      <li>같은 화면의 <b>규칙</b> 탭에 있는 내용을 <b>전부 지우고</b>, 아래 <b>규칙 복사</b> 버튼으로 복사한 내용을 통째로 붙여넣은 뒤 <b>게시</b>를 누르세요. (기존 방 · 계정 · 친구 규칙도 다 들어 있어요)</li>
+      <li>이 페이지를 새로고침하면 "관리자"로 보여요.</li>
     </ol>
     <div class="row" style="margin:8px 0"><button id="copyRules">규칙 복사</button><span class="mute">anticheat-rules.json 과 같은 내용이에요</span></div>
     <pre id="rules">불러오는 중...</pre>
@@ -78,6 +77,11 @@ th{color:var(--mute);font-weight:600}
     <div class="tblwrap"><table><thead><tr><th>#</th><th>이름</th><th>점수</th><th>시각</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
   </div>
 
+  <div class="card">
+    <h2>자동으로 잠긴 계정</h2>
+    <div class="mute" style="margin-bottom:8px">개발자 도구 · 코드 조작 · 확장 스크립트가 감지되면 계정이 자동으로 잠겨요. 잠긴 계정은 순위 · 샤드 · 경험치 · 멀티플레이가 서버에서 막혀요. 같은 브라우저에서 새로 만든 계정도 '연결됨'으로 같이 잠겨요.</div>
+    <div id="locks" class="mute">없음</div>
+  </div>
   <div class="card">
     <h2>샤드 많은 사람</h2>
     <div class="mute" style="margin-bottom:8px">계정에 저장된 샤드예요. 너무 많으면 '샤드 0으로'를 누르면 다음 접속 때 그 사람 화면에서도 0이 돼요.</div>
@@ -110,7 +114,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let tt=0;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2200)}
 const ASC=new Set(['admintower','backrooms','exit8_best','isle_best','jumpmap','protower']);
-let db=null,uid=null,isAdmin=false,ALL={},CFG={},BANNED={},USERS={},DBANS={},BYDEV={};
+let db=null,uid=null,isAdmin=false,ALL={},CFG={},BANNED={},USERS={},DBANS={},BYDEV={},LOCKED={};
 const R='playhub_mp/';
 function fail(e){const c=(e&&(e.code||e.message))||'';toast(/permission/i.test(c)?'권한이 없어요. 위의 "서버 보호 켜기"를 먼저 해 주세요':'실패했어요: '+c)}
 fetch('anticheat-rules.json').then(r=>r.text()).then(t=>$('rules').textContent=t).catch(()=>$('rules').textContent='anticheat-rules.json 파일을 열지 못했어요');
@@ -124,10 +128,10 @@ function renderMe(u){const name=(MP.getDisplayName&&MP.getDisplayName())||'플�
   $('me').innerHTML=`<div class="row"><b>${esc(name)}</b>${isAdmin?'<span class="tag ok">관리자</span>':'<span class="tag warn">관리자 아님</span>'}${u.isAnonymous?'<span class="tag bad">로그인 안 됨 (익명)</span>':''}</div>
     <div class="row" style="margin-top:6px"><span class="mute">내 UID</span><code id="myUid">${esc(uid)}</code><button class="sm" id="cpUid">복사</button></div>`;
   $('cpUid').onclick=()=>navigator.clipboard.writeText(uid).then(()=>toast('UID를 복사했어요'));if(isAdmin)$('setup').style.opacity=.6}
-function loadAll(){Promise.all([db.ref(R+'leaderboard').once('value'),db.ref(R+'lbcfg').once('value').catch(()=>null),db.ref(R+'banned').once('value').catch(()=>null),db.ref(R+'users').once('value').catch(()=>null),db.ref(R+'banned_devices').once('value').catch(()=>null)]).then(([lb,cfg,ban,us,db2])=>{
+function loadAll(){Promise.all([db.ref(R+'leaderboard').once('value'),db.ref(R+'lbcfg').once('value').catch(()=>null),db.ref(R+'banned').once('value').catch(()=>null),db.ref(R+'users').once('value').catch(()=>null),db.ref(R+'banned_devices').once('value').catch(()=>null),db.ref(R+'locked').once('value').catch(()=>null)]).then(([lb,cfg,ban,us,db2,lk])=>{LOCKED=(lk&&lk.val())||{};
   ALL=lb.val()||{};CFG=(cfg&&cfg.val())||{};BANNED=(ban&&ban.val())||{};USERS=(us&&us.val())||{};DBANS=(db2&&db2.val())||{};BYDEV={};for(const u in USERS){const d=USERS[u]&&USERS[u].device;if(d&&d.fp)(BYDEV[d.fp]||(BYDEV[d.fp]=[])).push(u)}
   const sel=$('cat'),cur=sel.value;sel.innerHTML=Object.keys(ALL).sort().map(k=>`<option value="${esc(k)}">${esc(k)} (${Object.keys(ALL[k]||{}).length})</option>`).join('');if(cur&&ALL[cur])sel.value=cur;
-  renderCat();renderBans();renderDBans();renderShards()}).catch(fail)}
+  renderCat();renderBans();renderDBans();renderShards();renderLocks()}).catch(fail)}
 function rowsOf(cat){const asc=ASC.has(cat);return Object.entries(ALL[cat]||{}).map(([u,v])=>Object.assign({uid:u},v||{})).sort((a,b)=>asc?(a.score-b.score):(b.score-a.score))}
 function devOf(u){return USERS[u]&&USERS[u].device||null}
 function flags(cat,r,rows){const f=[];const c=CFG[cat]||{};if(BANNED[r.uid])f.push(['bad','차단됨']);const dv=devOf(r.uid);if(dv&&(DBANS[dv.fp]||DBANS[dv.pid]))f.push(['bad','차단된 기기']);const FL=USERS[r.uid]&&USERS[r.uid].flags;if(FL){const NM={devtools:'개발자 도구',tamper:'코드 조작',extension:'확장 스크립트'};for(const k in FL)f.push(['bad',(NM[k]||k)+' 감지 '+((FL[k]&&FL[k].n)||1)+'회'])}if(dv&&BYDEV[dv.fp]&&BYDEV[dv.fp].length>1)f.push(['warn','같은 기기 계정 '+BYDEV[dv.fp].length+'개']);if(typeof r.score!=='number'||!isFinite(r.score)||r.score<0)f.push(['bad','숫자 아님']);
@@ -154,6 +158,9 @@ function ban(u,name){const dv=devOf(u),same=dv&&BYDEV[dv.fp]?BYDEV[dv.fp].filter
 function renderDBans(){const by={};for(const k in DBANS){const v=DBANS[k]||{};const key=v.uid||k;(by[key]||(by[key]={v,keys:[]})).keys.push(k)}const L=Object.entries(by);
   $('dbans').innerHTML=L.length?L.map(([u,o])=>`<div class="row" style="padding:4px 0"><b>${esc(o.v.name||'?')}</b><span class="uid">${esc(o.v.gl||'')}</span>${o.keys.some(k=>DBANS[k]&&DBANS[k].hw)?'<span class="tag bad">강하게</span>':''}<span class="mute">${o.v.ts?new Date(o.v.ts).toLocaleString('ko-KR'):''}</span><button class="sm" data-undev="${esc(o.keys.join('|'))}">기기 차단 해제</button></div>`).join(''):'<span class="mute">없음</span>';
   $('dbans').querySelectorAll('[data-undev]').forEach(b=>b.onclick=()=>{const up={};b.dataset.undev.split('|').forEach(k=>up['banned_devices/'+k]=null);db.ref(R.slice(0,-1)).update(up).then(()=>{toast('기기 차단을 풀었어요');loadAll()}).catch(fail)})}
+function renderLocks(){const NM={devtools:'개발자 도구',tamper:'코드 조작',extension:'확장 스크립트',linked:'연결됨'};const L=Object.entries(LOCKED).sort((a,b)=>((b[1]&&b[1].ts)||0)-((a[1]&&a[1].ts)||0));
+  $('locks').innerHTML=L.length?L.map(([u,v])=>{const us=USERS[u]||{};const nm=us.displayName||us.nickname||'?';return`<div class="row" style="padding:4px 0"><b>${esc(nm)}</b><span class="tag bad">${esc(NM[v&&v.why]||(v&&v.why)||'?')}</span><span class="uid">${esc(u)}</span><span class="mute">${v&&v.ts?new Date(v.ts).toLocaleString('ko-KR'):''}</span><button class="sm" data-unlock="${esc(u)}">잠금 해제</button>${BANNED[u]?'':`<button class="sm bad" data-ban="${esc(u)}" data-name="${esc(nm)}">차단</button>`}</div>`}).join(''):'<span class="mute">없음</span>';
+  $('locks').querySelectorAll('[data-unlock]').forEach(b=>b.onclick=()=>{const u=b.dataset.unlock;const up={};up['locked/'+u]=null;up['users/'+u+'/flags']=null;db.ref(R.slice(0,-1)).update(up).then(()=>{toast('잠금을 풀었어요');loadAll()}).catch(fail)});bindRowBtns($('locks'))}
 function renderShards(){const L=Object.entries(USERS).filter(([u,v])=>v&&typeof v.shards==='number').sort((a,b)=>b[1].shards-a[1].shards).slice(0,30);
   $('shards').innerHTML=L.length?`<div class="tblwrap"><table><thead><tr><th>#</th><th>이름</th><th>샤드</th><th>마지막 변경</th><th></th></tr></thead><tbody>${L.map(([u,v],i)=>`<tr><td>${i+1}</td><td>${esc(v.displayName||v.nickname||'?')}${BANNED[u]?'<span class="tag bad">차단됨</span>':''}<div class="uid">${esc(u)}</div></td><td>${v.shards.toLocaleString('ko-KR')}</td><td class="mute">${v.shardsTs?new Date(v.shardsTs).toLocaleString('ko-KR'):''}</td><td class="row"><button class="sm" data-zero="${esc(u)}">샤드 0으로</button>${BANNED[u]?'':`<button class="sm bad" data-ban="${esc(u)}" data-name="${esc(v.displayName||v.nickname||'')}">차단</button>`}</td></tr>`).join('')}</tbody></table></div>`:'<span class="mute">없음</span>';
   $('shards').querySelectorAll('[data-zero]').forEach(b=>b.onclick=()=>{if(!confirm('이 사람의 샤드를 0으로 만들까요?'))return;db.ref(R+'users/'+b.dataset.zero).update({shards:0,shardsTs:firebase.database.ServerValue.TIMESTAMP,shardsReset:firebase.database.ServerValue.TIMESTAMP}).then(()=>{toast('샤드를 0으로 만들었어요');loadAll()}).catch(fail)});bindRowBtns($('shards'))}
