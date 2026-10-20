@@ -1659,22 +1659,31 @@ const PH_DEV = (function () {
   const fp = 'f' + fnv(hwParts.concat([n.userAgent, (n.languages || []).join(',')]).join('#'));
   return { pid, fp, hw, gl: String(gl).slice(0, 80) };
 })();
-function phBlockDevice() {
-  try { localStorage.setItem('ph_dban', '1'); } catch (e) {}
+function phBlockDevice(lock) {
+  if (!lock) try { localStorage.setItem('ph_dban', '1'); } catch (e) {}
   if (window.__phBlocked) return; window.__phBlocked = true;
+  const title = lock ? '이 계정은 잠겼어요' : '이 기기는 차단되었어요';
+  const body = lock ? '핵 · 개발자 도구 · 게임을 바꾸는 확장 프로그램이 감지되어 PlayHub를 이용할 수 없어요.<br>잘못 잠겼다면 운영자에게 알려 주세요.' : '핵 사용으로 이 기기에서는 PlayHub를 이용할 수 없어요.<br>잘못 차단되었다면 운영자에게 알려 주세요.';
   const show = () => {
     if (document.getElementById('phBan')) return;
     const d = document.createElement('div'); d.id = 'phBan';
     d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0b0d12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:16px -apple-system,"Malgun Gothic",sans-serif;text-align:center;padding:24px';
-    d.innerHTML = '<div style="font-size:24px;font-weight:800">이 기기는 차단되었어요</div><div style="color:#9aa0b0;max-width:420px;line-height:1.6">핵 사용으로 이 기기에서는 PlayHub를 이용할 수 없어요.<br>잘못 차단되었다면 운영자에게 알려 주세요.</div><div style="color:#555;font-size:12px">' + PH_DEV.pid + '</div>';
+    d.innerHTML = '<div style="font-size:24px;font-weight:800">' + title + '</div><div style="color:#9aa0b0;max-width:420px;line-height:1.6">' + body + '</div><div style="color:#555;font-size:12px">' + PH_DEV.pid + '</div>';
     document.documentElement.appendChild(d);
     try { document.body && (document.body.style.overflow = 'hidden'); } catch (e) {}
   };
   if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
   setInterval(show, 2000);
-  try { if (window.firebase && firebase.apps && firebase.apps.length) firebase.database().goOffline(); } catch (e) {}
+  if (!lock) try { if (window.firebase && firebase.apps && firebase.apps.length) firebase.database().goOffline(); } catch (e) {}   // 잠금은 풀렸는지 확인해야 해서 연결을 유지해요
 }
 try { if (localStorage.getItem('ph_dban') === '1') phBlockDevice(); } catch (e) {}
+// 핵이 감지된 계정의 UID (브라우저에 남겨서 새 계정을 만들어도 같이 잠가요)
+const phLockMark = {
+  get() { try { const v = localStorage.getItem('ph_lock'); if (v) return v; } catch (e) {} const m = document.cookie.match(/(?:^|; )ph_lock=([^;]+)/); return m ? decodeURIComponent(m[1]) : null; },
+  set(u) { try { localStorage.setItem('ph_lock', u); } catch (e) {} try { document.cookie = 'ph_lock=' + encodeURIComponent(u) + ';path=/;max-age=31536000;SameSite=Lax'; } catch (e) {} },
+  clear() { try { localStorage.removeItem('ph_lock'); } catch (e) {} try { document.cookie = 'ph_lock=;path=/;max-age=0'; } catch (e) {} }
+};
+if (phLockMark.get()) phBlockDevice(true);
 
 const MP = (function () {
   let app = null, auth = null, db = null;
@@ -2131,7 +2140,22 @@ const MP = (function () {
           else { try { if (localStorage.getItem('ph_dban') === '1') { localStorage.removeItem('ph_dban'); location.reload(); } } catch (e) {} }
         });
     }
+    checkLock();
     db.ref(`${MP_ROOT}/users/${uid}/device`).set({ pid: PH_DEV.pid, fp: PH_DEV.fp, hw: PH_DEV.hw, gl: PH_DEV.gl, ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+  }
+  // 잠긴 계정이면 막고, 이 브라우저에서 잠긴 계정이 있었으면 새 계정도 같이 잠가요
+  function checkLock() {
+    const mark = phLockMark.get(), me = uid;
+    const isLocked = u => db.ref(`${MP_ROOT}/locked/${u}`).once('value').then(s => s.exists()).catch(() => null);
+    isLocked(me).then(mine => {
+      if (mine) { phLockMark.set(me); phBlockDevice(true); return; }
+      if (!mark) return;
+      (mark === me ? Promise.resolve(false) : isLocked(mark)).then(prev => {
+        if (prev === null) return;
+        if (prev) { db.ref(`${MP_ROOT}/locked/${me}`).set({ why: 'linked', from: mark, ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {}); phBlockDevice(true); }
+        else { phLockMark.clear(); if (window.__phBlocked) location.reload(); }   // 관리자가 잠금을 풀었어요
+      });
+    });
   }
   function handleAuthChange(user) {
     authReady = true;
@@ -3025,8 +3049,16 @@ try { Object.freeze(MP); Object.defineProperty(window, 'MP', { value: MP, writab
       try {
         const u = MP.uid;
         if (u && window.firebase && firebase.apps && firebase.apps.length) {
-          const r = firebase.database().ref('playhub_mp/users/' + u + '/flags/' + why);
-          r.transaction(v => ({ n: ((v && v.n) || 0) + 1, ts: Date.now(), page: location.pathname.slice(-40) })).catch(() => {});
+          const d = firebase.database();
+          d.ref('playhub_mp/users/' + u + '/flags/' + why).transaction(v => ({ n: ((v && v.n) || 0) + 1, ts: Date.now(), page: location.pathname.slice(-40) })).catch(() => {});
+          // 관리자가 아니면 계정을 잠가요 (서버가 잠긴 계정의 점수 · 샤드 · 멀티플레이를 거절해요)
+          d.ref('playhub_mp/admins').once('value').then(s => {
+            const a = s.val();
+            if (a === u || (a && typeof a === 'object' && a[u])) return;
+            phLockMark.set(u);
+            d.ref('playhub_mp/locked/' + u).set({ why, ts: firebase.database.ServerValue.TIMESTAMP, page: location.pathname.slice(-40) }).catch(() => {})
+              .then(() => phBlockDevice(true));
+          }).catch(() => { phLockMark.set(u); phBlockDevice(true); });
           return;
         }
       } catch (e) {}

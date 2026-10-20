@@ -1,39 +1,109 @@
 {
-  "_설명": "Firebase 콘솔 > Realtime Database > 규칙 에서 playhub_mp 안의 leaderboard 부분을 아래 leaderboard 로 바꾸고, banned / banned_devices / admins / lbcfg 를 playhub_mp 안에 새로 넣으세요. users 안에는 $uid 아래에 xp / xpTs / shards / shardsTs / shardsReset 를 추가하세요. 자세한 순서는 admin.html 에 있어요.",
-  "leaderboard": {
-    "$category": {
-      ".read": true,
-      ".indexOn": ["score"],
-      "$uid": {
-        ".write": "auth != null && ((auth.uid === $uid && !root.child('playhub_mp/banned/' + auth.uid).exists()) || (root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid))",
-        ".validate": "!newData.exists() || (root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) || (newData.hasChildren(['score', 'ts', 'name']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 10000000000000000 && newData.child('ts').val() === now && newData.child('name').isString() && newData.child('name').val().length <= 24 && (!data.exists() || now - data.child('ts').val() >= 5000) && (!root.child('playhub_mp/lbcfg/' + $category + '/max').exists() || newData.child('score').val() <= root.child('playhub_mp/lbcfg/' + $category + '/max').val()) && (!root.child('playhub_mp/lbcfg/' + $category + '/min').exists() || newData.child('score').val() >= root.child('playhub_mp/lbcfg/' + $category + '/min').val()))"
+  "rules": {
+    "playhub_mp": {
+      "rooms": {
+        "$room": {
+          "players": {
+            ".read": "auth != null",
+            "$uid": {
+              ".write": "auth != null && !root.child('playhub_mp/banned/' + auth.uid).exists() && !root.child('playhub_mp/locked/' + auth.uid).exists() && (auth.uid === $uid || $uid.matches(/^_[metc]$/))",
+              "$sub": {
+                ".write": "auth != null && !root.child('playhub_mp/banned/' + auth.uid).exists() && !root.child('playhub_mp/locked/' + auth.uid).exists() && $uid === '_p' && auth.uid === $sub"
+              }
+            }
+          }
+        }
+      },
+      "users": {
+        ".read": "auth != null",
+        ".indexOn": [
+          "nicknameLower",
+          "displayNameLower"
+        ],
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          "xp": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && ((data.exists() && newData.val() <= data.val()) || (!root.child('playhub_mp/locked/' + auth.uid).exists() && (!data.exists() || newData.val() <= data.val() + 3000 || (data.parent().child('xpTs').exists() && newData.val() <= data.val() + 3000 + (now - data.parent().child('xpTs').val()) / 20))))"
+          },
+          "xpTs": {
+            ".validate": "newData.val() === now"
+          },
+          "shards": {
+            ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) || (data.exists() && newData.val() <= data.val()) || (!root.child('playhub_mp/locked/' + auth.uid).exists() && ((!data.exists() && newData.val() <= 60000) || (data.exists() && newData.val() <= data.val() + 25000 && (!data.parent().child('shardsTs').exists() || now - data.parent().child('shardsTs').val() >= 5000)))))"
+          },
+          "shardsTs": {
+            ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)",
+            ".validate": "newData.val() === now"
+          },
+          "shardsReset": {
+            ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)",
+            ".validate": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) && newData.val() === now"
+          },
+          "flags": {
+            ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)"
+          }
+        }
+      },
+      "presence": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "friends": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      },
+      "leaderboard": {
+        "$category": {
+          ".read": true,
+          ".indexOn": [
+            "score"
+          ],
+          "$uid": {
+            ".write": "auth != null && ((auth.uid === $uid && !root.child('playhub_mp/banned/' + auth.uid).exists() && !root.child('playhub_mp/locked/' + auth.uid).exists()) || (root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid))",
+            ".validate": "!newData.exists() || (root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) || (newData.hasChildren(['score', 'ts']) && newData.child('ts').val() === now && (!data.exists() || now - data.child('ts').val() >= 5000))",
+            "score": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && ((root.child('playhub_mp/lbcfg/' + $category + '/max').exists() && newData.val() <= root.child('playhub_mp/lbcfg/' + $category + '/max').val()) || (!root.child('playhub_mp/lbcfg/' + $category + '/max').exists() && newData.val() <= 10000000000000000 && ($category.matches(/^(garden_value|scratch_best|mmo_boss|nightfall|level|stealit_cps)$/) || newData.val() <= 1000000))) && (!root.child('playhub_mp/lbcfg/' + $category + '/min').exists() || newData.val() >= root.child('playhub_mp/lbcfg/' + $category + '/min').val())"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 24"
+            },
+            "$other": {
+              ".validate": true
+            }
+          }
+        }
+      },
+      "locked": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && ((auth.uid === $uid && !data.exists() && newData.exists()) || (root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid))"
+        }
+      },
+      "banned": {
+        ".read": true,
+        "$uid": {
+          ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)"
+        }
+      },
+      "banned_devices": {
+        ".read": true,
+        "$dev": {
+          ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)"
+        }
+      },
+      "admins": {
+        ".read": "auth != null",
+        ".write": false
+      },
+      "lbcfg": {
+        ".read": true,
+        ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)"
       }
     }
-  },
-  "banned": {
-    ".read": true,
-    "$uid": { ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)" }
-  },
-  "banned_devices": {
-    ".read": true,
-    "$dev": { ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)" }
-  },
-  "admins": {
-    ".read": "auth != null",
-    ".write": false
-  },
-  "lbcfg": {
-    ".read": true,
-    ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)"
-  },
-  "users_$uid_에_추가": {
-    "xp": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() <= data.val() + 3000 + (data.parent().child('xpTs').exists() ? (now - data.parent().child('xpTs').val()) / 20 : 0))" },
-    "xpTs": { ".validate": "newData.val() === now" },
-    "shards": {
-      ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)",
-      ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000 && ((root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) || (!data.exists() && newData.val() <= 60000) || (data.exists() && (newData.val() <= data.val() || (newData.val() <= data.val() + 25000 && (!data.parent().child('shardsTs').exists() || now - data.parent().child('shardsTs').val() >= 5000)))))"
-    },
-    "shardsTs": { ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)", ".validate": "newData.val() === now" },
-    "shardsReset": { ".write": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid)", ".validate": "(root.child('playhub_mp/admins/' + auth.uid).exists() || root.child('playhub_mp/admins').val() === auth.uid) && newData.val() === now" }
   }
 }
