@@ -2132,15 +2132,24 @@ const MP = (function () {
     if (!db || !uid) return;
     if (!devChecked) {
       devChecked = true;
-      const keys = [PH_DEV.pid, PH_DEV.fp, PH_DEV.hw];
-      Promise.all(keys.map(k => db.ref(`${MP_ROOT}/banned_devices/${k}`).once('value').then(s => s.val()).catch(() => null)))
+      const keys = [PH_DEV.pid, PH_DEV.hw];
+      const me = uid;
+      Promise.all(keys.map(k => db.ref(`${MP_ROOT}/banned_devices/${k}`).once('value').then(s => s.val()).catch(() => null))
+        .concat(db.ref(`${MP_ROOT}/admins`).once('value').then(s => s.val()).catch(() => null)))
         .then(r => {
-          const hit = r[0] || r[1] || (r[2] && r[2].hw);   // 하드웨어 지문은 '강하게 차단'했을 때만 써요
+          const a = r[2], admin = a === me || !!(a && typeof a === 'object' && a[me]);
+          if (admin) {   // 관리자는 어떤 차단 · 잠금에도 안 걸려요
+            let was = false; try { was = localStorage.getItem('ph_dban') === '1' || !!phLockMark.get(); localStorage.removeItem('ph_dban'); } catch (e) {}
+            phLockMark.clear(); if (was || window.__phBlocked) location.reload();
+            return;
+          }
+          // 기기 ID 로만 막아요. 지문(fp)은 같은 기종 · 같은 브라우저면 겹칠 수 있어서 안 써요
+          const hit = r[0] || (r[1] && r[1].hw);   // 하드웨어 지문은 '강하게 차단'했을 때만 써요
+          checkLock();
           if (hit) phBlockDevice();
           else { try { if (localStorage.getItem('ph_dban') === '1') { localStorage.removeItem('ph_dban'); location.reload(); } } catch (e) {} }
         });
     }
-    checkLock();
     db.ref(`${MP_ROOT}/users/${uid}/device`).set({ pid: PH_DEV.pid, fp: PH_DEV.fp, hw: PH_DEV.hw, gl: PH_DEV.gl, ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
   }
   // 잠긴 계정이면 막고, 이 브라우저에서 잠긴 계정이 있었으면 새 계정도 같이 잠가요
