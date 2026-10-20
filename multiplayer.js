@@ -2323,7 +2323,7 @@ const MP = (function () {
     return true;
   }
   function submitScore(category, score, direction, extra, cb) {
-    if (!isConfigured() || !db || !uid || window.__phBlocked) { cb && cb(false); return; }
+    if (!isConfigured() || !db || !uid || window.__phBlocked || window.__phTainted) { cb && cb(false); return; }
     score = Number(score);
     if (!isFinite(score) || score < 0 || score > 1e16) { cb && cb(false); return; }
     const ref = db.ref(`${MP_ROOT}/leaderboard/${category}/${uid}`);
@@ -2426,6 +2426,7 @@ const MP = (function () {
   function getLevel(){ return levelFromXP(getLocalXP()); }
   // 경험치를 더한다. 레벨이 올랐으면 결과에 leveledTo가 담긴다.
   function addXP(amount, cb){
+    if (window.__phTainted || window.__phBlocked) amount = 0;   // 조작이 감지된 페이지에서는 경험치를 안 줘요
     const before = levelFromXP(getLocalXP()).level;
     myXP = getLocalXP() + Math.min(3000, Math.max(0, Math.round(amount || 0)));   // 한 번에 너무 많이 못 올려요 (게임이 주는 최대치 3000)
     try { localStorage.setItem('mp_xp', String(myXP)); } catch (e) {}
@@ -2947,4 +2948,83 @@ const MP = (function () {
 
 // const/let 전역 선언은 window 객체에 자동으로 안 붙기 때문에,
 // 다른 <script> 태그에서 window.MP 로 체크하는 코드가 항상 실패하던 문제를 해결.
-window.MP = MP;
+// 확장 프로그램이 MP 를 바꿔치기하지 못하게 얼리고, 다시 덮어쓸 수 없게 해요.
+try { Object.freeze(MP); Object.defineProperty(window, 'MP', { value: MP, writable: false, configurable: false, enumerable: true }); } catch (e) { window.MP = MP; }
+
+// ================================================================
+// 핵 방지(브라우저 쪽)
+// - F12 · Ctrl+Shift+I/J/C/K · Ctrl+U · 우클릭 메뉴 막기
+// - 개발자 도구가 열리거나, 확장 프로그램이 게임 코드 · 통신 · 시간 함수를 바꾸면
+//   그 페이지에서는 점수 · 경험치 저장을 멈추고 화면을 가린 뒤, 관리 페이지에 기록을 남겨요.
+// 광고 차단기 · 번역기처럼 게임 코드를 건드리지 않는 확장은 막지 않아요.
+// ================================================================
+(function phGuard() {
+  const isTouch = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+  addEventListener('keydown', e => {
+    const k = (e.key || '').toLowerCase(), c = e.ctrlKey || e.metaKey;
+    if (e.key === 'F12' || (c && e.shiftKey && ['i', 'j', 'c', 'k'].includes(k)) || (e.metaKey && e.altKey && ['i', 'j', 'c', 'u'].includes(k)) || (c && !e.shiftKey && k === 'u')) {
+      e.preventDefault(); e.stopImmediatePropagation();
+    }
+  }, true);
+  addEventListener('contextmenu', e => { const t = e.target; if (t && t.closest && t.closest('input,textarea,[contenteditable="true"]')) return; e.preventDefault(); }, true);
+
+  const WHY = { devtools: '개발자 도구가 열려 있어요', tamper: '게임 코드나 통신이 바뀐 흔적이 있어요', extension: '확장 프로그램이 게임에 코드를 넣었어요' };
+  function showTaint(why) {
+    const draw = () => {
+      if (document.getElementById('phTaint')) return;
+      const d = document.createElement('div'); d.id = 'phTaint';
+      d.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(8,10,16,.96);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:16px -apple-system,"Malgun Gothic",sans-serif;text-align:center;padding:24px';
+      d.innerHTML = '<div style="font-size:22px;font-weight:800">게임을 계속할 수 없어요</div><div style="color:#9aa0b0;max-width:440px;line-height:1.6">' + WHY[why] + '.<br>개발자 도구와 게임을 바꾸는 확장 프로그램을 끄고 새로고침해 주세요.<br>이 페이지에서는 점수와 경험치가 저장되지 않아요.</div><button style="margin-top:6px;font:inherit;padding:9px 18px;border-radius:10px;border:0;background:#5b8cff;color:#fff;cursor:pointer">새로고침</button>';
+      d.querySelector('button').onclick = () => location.reload();
+      document.documentElement.appendChild(d);
+    };
+    if (document.body) draw(); else document.addEventListener('DOMContentLoaded', draw);
+    setInterval(draw, 1500);
+  }
+  function flag(why) {
+    if (window.__phTainted) return;
+    window.__phTainted = why; showTaint(why);
+    const report = tries => {
+      try {
+        const u = MP.uid;
+        if (u && window.firebase && firebase.apps && firebase.apps.length) {
+          const r = firebase.database().ref('playhub_mp/users/' + u + '/flags/' + why);
+          r.transaction(v => ({ n: ((v && v.n) || 0) + 1, ts: Date.now(), page: location.pathname.slice(-40) })).catch(() => {});
+          return;
+        }
+      } catch (e) {}
+      if (tries < 20) setTimeout(() => report(tries + 1), 1000);
+    };
+    report(0);
+  }
+  // 개발자 도구: 열려 있으면 debugger 문에서 멈추므로 시간이 길어져요 (닫혀 있으면 아무 일도 안 일어나요)
+  setInterval(() => {
+    if (window.__phTainted) return;
+    const t = performance.now();
+    // eslint-disable-next-line no-debugger
+    debugger;
+    if (performance.now() - t > 150) flag('devtools');
+  }, 1000);
+  // 함수 바꿔치기: 통신 · 시간 함수가 브라우저 원래 함수인지 확인
+  const nativeStr = Function.prototype.toString;
+  const isNative = f => { try { return typeof f === 'function' && /\{\s*\[native code\]\s*\}\s*$/.test(nativeStr.call(f)); } catch (e) { return false; } };
+  const probes = () => [
+    ['fetch', window.fetch], ['xhrSend', XMLHttpRequest.prototype.send], ['xhrOpen', XMLHttpRequest.prototype.open],
+    ['wsSend', window.WebSocket && WebSocket.prototype.send], ['dateNow', Date.now], ['perfNow', performance.now],
+    ['setTimeout', window.setTimeout], ['setInterval', window.setInterval], ['raf', window.requestAnimationFrame], ['toString', Function.prototype.toString]
+  ];
+  setInterval(() => {
+    if (window.__phTainted) return;
+    if (Function.prototype.toString !== nativeStr) return flag('tamper');
+    for (const [, f] of probes()) if (f && !isNative(f)) return flag('tamper');
+    if (window.MP !== MP) return flag('tamper');
+  }, 2000);
+  // 확장 프로그램이 페이지에 넣은 스크립트
+  const extRe = /^(chrome|moz|safari-web|ms-browser)-extension:\/\//i;
+  const checkNode = n => { if (n && n.tagName === 'SCRIPT' && n.src && extRe.test(n.src)) flag('extension'); };
+  try {
+    document.querySelectorAll('script[src]').forEach(checkNode);
+    new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) checkNode(n); }).observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+})();
+
