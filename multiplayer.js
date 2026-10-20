@@ -2081,6 +2081,42 @@ const MP = (function () {
     if (!open) return; try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
     box.innerHTML = EMOTES.filter(e=>!e.forest || ownsEmote(e.id)).map(e=>{ const own = ownsEmote(e.id); return '<button type="button" data-e="' + e.id + '" class="' + (own ? '' : 'lk') + '" title="/e ' + e.alias[0] + '"><span>' + e.icon + '</span><small>' + (own ? e.name : '🔒 🔷' + e.price) + '</small></button>'; }).join('') + '<div class="hint">/e 이름 으로도 쓸 수 있어요 · 움직이면 멈춰요 · 더 많은 이모트는 허브 마켓플레이스</div>'; }
 
+  // ---------- 샤드 계정 저장 ----------
+  // 예전에는 샤드가 이 브라우저(localStorage)에만 있어서 숫자를 고치면 그만이었어요.
+  // 이제 계정(users/<uid>/shards)에 저장하고, 서버 규칙이 한 번에 너무 많이 늘어나는 걸 거절하면
+  // 이 기기의 값을 서버 값으로 되돌려요.
+  let shardServer = null, shardTimer = null, shardBusy = false;
+  const getLocalShards = () => { const v = localStorage.getItem('shard_balance'); return v === null ? null : (parseInt(v, 10) || 0); };
+  const setLocalShards = v => { try { localStorage.setItem('shard_balance', String(v)); } catch (e) {} try { window.dispatchEvent(new Event('ph-shards')); } catch (e) {} };
+  function startShardSync() {
+    if (!db || !uid) return;
+    const ref = db.ref(`${MP_ROOT}/users/${uid}`);
+    Promise.all([ref.child('shards').once('value'), ref.child('shardsReset').once('value')]).then(([snap, rs]) => {
+      const srv = snap.val(), local = getLocalShards(), reset = rs.val();
+      let mark = null, seen = 0; try { mark = localStorage.getItem('shard_uid'); seen = +localStorage.getItem('shard_reset') || 0; } catch (e) {}
+      if (typeof srv === 'number') {
+        shardServer = srv;
+        const wasReset = typeof reset === 'number' && reset > seen;   // 관리자가 샤드를 초기화했어요
+        if (mark !== uid || local === null || wasReset) setLocalShards(srv);   // 새 기기 · 다른 계정이면 계정 값을 따라요
+        if (wasReset) try { localStorage.setItem('shard_reset', String(reset)); } catch (e) {}
+      }
+      try { localStorage.setItem('shard_uid', uid); } catch (e) {}
+      if (!shardTimer) shardTimer = setInterval(pushShards, 4000);
+      pushShards();
+    }).catch(() => {});
+  }
+  function pushShards() {
+    if (shardBusy || !db || !uid || window.__phBlocked) return;
+    const local = getLocalShards();
+    if (local === null || local === shardServer) return;
+    if (window.__phTainted) { if (shardServer !== null) setLocalShards(shardServer); return; }   // 조작이 감지된 페이지의 샤드는 인정 안 해요
+    shardBusy = true;
+    db.ref(`${MP_ROOT}/users/${uid}`).update({ shards: local, shardsTs: firebase.database.ServerValue.TIMESTAMP })
+      .then(() => { shardServer = local; })
+      .catch(() => { setLocalShards(shardServer !== null ? shardServer : 1240); })   // 서버가 거절한 값은 되돌려요
+      .then(() => { shardBusy = false; });
+  }
+
   // 기기 차단 확인 + 내 기기 정보 기록 (관리 페이지에서 같은 기기 계정을 찾을 때 써요)
   let devChecked = false;
   function checkDevice() {
@@ -2102,6 +2138,7 @@ const MP = (function () {
     if (user) {
       uid = user.uid;
       checkDevice();
+      startShardSync();
       ensureUserRecord();
       if (roomMode && currentRoom) joinRoom(user.uid);
       if (!firstCallbackFired && firstCallback) { firstCallback(user.uid, null); firstCallbackFired = true; }
