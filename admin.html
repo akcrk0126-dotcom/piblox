@@ -20,6 +20,7 @@ button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
 button.bad{color:var(--bad)}button.sm{padding:3px 9px;font-size:12px}
 code,pre{font-family:ui-monospace,Menlo,monospace;font-size:12px}
 pre{background:#0b0d12;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:260px;white-space:pre-wrap;word-break:break-all}
+#rules{-webkit-user-select:all;user-select:all}
 ol{padding-left:20px;margin:6px 0}ol li{margin:4px 0}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -118,7 +119,9 @@ let db=null,uid=null,isAdmin=false,ALL={},CFG={},BANNED={},USERS={},DBANS={},BYD
 const R='playhub_mp/';
 function fail(e){const c=(e&&(e.code||e.message))||'';toast(/permission/i.test(c)?'권한이 없어요. 위의 "서버 보호 켜기"를 먼저 해 주세요':'실패했어요: '+c)}
 fetch('anticheat-rules.json').then(r=>r.text()).then(t=>$('rules').textContent=t).catch(()=>$('rules').textContent='anticheat-rules.json 파일을 열지 못했어요');
-$('copyRules').onclick=()=>{navigator.clipboard.writeText($('rules').textContent).then(()=>toast('규칙을 복사했어요'),()=>toast('복사하지 못했어요'))};
+function copyText(t,ok){const old=()=>{const ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:0;left:0;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,t.length);let r=false;try{r=document.execCommand('copy')}catch(e){}ta.remove();toast(r?ok:'복사하지 못했어요. 규칙 글자를 길게 눌러 전체 선택해서 복사해 주세요')};
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(()=>toast(ok),old);else old()}
+$('copyRules').onclick=()=>copyText($('rules').textContent,'규칙을 복사했어요');
 function start(){if(!window.MP||!MP.isConfigured||!MP.isConfigured()){$('me').textContent='서버 설정을 찾지 못했어요';return}
   MP.initAuthOnly(u=>{if(!u){$('me').textContent='로그인 정보를 불러오는 중... (허브에서 로그인했는지 확인해 주세요)';return}
     uid=u.uid;db=firebase.database();
@@ -127,7 +130,7 @@ function start(){if(!window.MP||!MP.isConfigured||!MP.isConfigured()){$('me').te
 function renderMe(u){const name=(MP.getDisplayName&&MP.getDisplayName())||'플레이어';
   $('me').innerHTML=`<div class="row"><b>${esc(name)}</b>${isAdmin?'<span class="tag ok">관리자</span>':'<span class="tag warn">관리자 아님</span>'}${u.isAnonymous?'<span class="tag bad">로그인 안 됨 (익명)</span>':''}</div>
     <div class="row" style="margin-top:6px"><span class="mute">내 UID</span><code id="myUid">${esc(uid)}</code><button class="sm" id="cpUid">복사</button></div>`;
-  $('cpUid').onclick=()=>navigator.clipboard.writeText(uid).then(()=>toast('UID를 복사했어요'));if(isAdmin)$('setup').style.opacity=.6}
+  $('cpUid').onclick=()=>copyText(uid,'UID를 복사했어요');if(isAdmin)$('setup').style.opacity=.6}
 function loadAll(){Promise.all([db.ref(R+'leaderboard').once('value'),db.ref(R+'lbcfg').once('value').catch(()=>null),db.ref(R+'banned').once('value').catch(()=>null),db.ref(R+'users').once('value').catch(()=>null),db.ref(R+'banned_devices').once('value').catch(()=>null),db.ref(R+'locked').once('value').catch(()=>null)]).then(([lb,cfg,ban,us,db2,lk])=>{LOCKED=(lk&&lk.val())||{};
   ALL=lb.val()||{};CFG=(cfg&&cfg.val())||{};BANNED=(ban&&ban.val())||{};USERS=(us&&us.val())||{};DBANS=(db2&&db2.val())||{};BYDEV={};for(const u in USERS){const d=USERS[u]&&USERS[u].device;if(d&&d.fp)(BYDEV[d.fp]||(BYDEV[d.fp]=[])).push(u)}
   const sel=$('cat'),cur=sel.value;sel.innerHTML=Object.keys(ALL).sort().map(k=>`<option value="${esc(k)}">${esc(k)} (${Object.keys(ALL[k]||{}).length})</option>`).join('');if(cur&&ALL[cur])sel.value=cur;
