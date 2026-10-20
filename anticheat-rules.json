@@ -1,0 +1,29 @@
+{
+  "_설명": "Firebase 콘솔 > Realtime Database > 규칙 에서 playhub_mp 안의 leaderboard 부분을 아래 leaderboard 로 바꾸고, banned / admins / lbcfg 를 playhub_mp 안에 새로 넣으세요. users 안에는 $uid 아래에 xp / xpTs 두 줄만 추가하세요. 자세한 순서는 admin.html 에 있어요.",
+  "leaderboard": {
+    "$category": {
+      ".read": true,
+      ".indexOn": ["score"],
+      "$uid": {
+        ".write": "auth != null && ((auth.uid === $uid && !root.child('playhub_mp/banned/' + auth.uid).exists()) || root.child('playhub_mp/admins/' + auth.uid).val() === true)",
+        ".validate": "!newData.exists() || root.child('playhub_mp/admins/' + auth.uid).val() === true || (newData.hasChildren(['score', 'ts', 'name']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 10000000000000000 && newData.child('ts').val() === now && newData.child('name').isString() && newData.child('name').val().length <= 24 && (!data.exists() || now - data.child('ts').val() >= 5000) && (!root.child('playhub_mp/lbcfg/' + $category + '/max').exists() || newData.child('score').val() <= root.child('playhub_mp/lbcfg/' + $category + '/max').val()) && (!root.child('playhub_mp/lbcfg/' + $category + '/min').exists() || newData.child('score').val() >= root.child('playhub_mp/lbcfg/' + $category + '/min').val()))"
+      }
+    }
+  },
+  "banned": {
+    ".read": true,
+    "$uid": { ".write": "root.child('playhub_mp/admins/' + auth.uid).val() === true" }
+  },
+  "admins": {
+    ".read": "auth != null",
+    ".write": false
+  },
+  "lbcfg": {
+    ".read": true,
+    ".write": "root.child('playhub_mp/admins/' + auth.uid).val() === true"
+  },
+  "users_$uid_에_추가": {
+    "xp": { ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() <= data.val() + 3000 + (data.parent().child('xpTs').exists() ? (now - data.parent().child('xpTs').val()) / 20 : 0))" },
+    "xpTs": { ".validate": "newData.val() === now" }
+  }
+}
