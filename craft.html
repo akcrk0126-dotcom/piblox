@@ -19,6 +19,7 @@ canvas#gl{display:block;width:100%;height:100%}
 
 /* HUD */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 52%,rgba(0,0,0,.34) 100%)}
 #cross{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;mix-blend-mode:difference}
 #cross:before,#cross:after{content:'';position:absolute;background:#ddd}
 #cross:before{left:8px;top:0;width:2px;height:18px}
@@ -183,6 +184,7 @@ body.creative #stats,body.creative #air{visibility:hidden}
 <div id="bossBar" class="hide" style="position:fixed;left:50%;top:10px;transform:translateX(-50%);width:min(420px,70vw);text-align:center;color:#fff;font-size:14px;text-shadow:1px 1px 0 #000;z-index:5;pointer-events:none">엔더 드래곤<div style="height:8px;background:#3a0a3a;border:1px solid #000;margin-top:3px"><i id="bossFill" style="display:block;height:100%;width:100%;background:linear-gradient(#ff70ff,#b020c0)"></i></div></div>
 <div id="hurt"></div>
 <div id="hud" class="hide">
+  <div id="vig"></div>
   <div id="cross"></div>
   <div id="debug" class="hide"></div>
   <div id="toast"></div>
@@ -296,6 +298,8 @@ addTile('furnace_side',furn(31));addTile('furnace_top',paint(32,P=>{P.fill(['#7a
 addTile('furnace_front',furn(33,false));addTile('furnace_lit',furn(34,true));
 addTile('torch',paint(35,P=>{P.clear();for(let y=8;y<16;y++){P.set(7,y,'#8a6a3e');P.set(8,y,'#6b5130')}P.set(7,6,'#ffef9e');P.set(8,6,'#ffd84a');P.set(7,7,'#ffd84a');P.set(8,7,'#ff9f1a')}));
 addTile('water',paint(36,P=>P.fill(PAL.water)));
+{const c=tileList[TEX.water],g=c.getContext('2d'),im=g.getImageData(0,0,16,16),d=im.data,r=mulberry(36);   // 마크처럼 회색 물결 텍스처 + 바이옴별 물 색
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){const i=(y*16+x)*4,w=Math.sin((x*.9+y*.45))*.5+Math.sin(x*.35-y*1.1)*.5,v=Math.round(clamp(205+w*22+(r()-.5)*14+(w>.75?18:0),160,255));d[i]=d[i+1]=d[i+2]=v;d[i+3]=250}g.putImageData(im,0,0)}
 addTile('sapling',paint(37,P=>{P.clear();for(let y=9;y<16;y++)P.set(7,y,'#6b5130');const L=['#3f8f22','#4aa02a','#2c6a16','#5ab535'];for(let k=0;k<40;k++){const a=P.r()*Math.PI*2,d=P.r()*5;P.set(Math.round(7.5+Math.cos(a)*d),Math.round(6+Math.sin(a)*d*.9),P.pick(L))}}));
 addTile('tallgrass',paint(38,P=>{P.clear();for(let k=0;k<9;k++){const x=1+Math.floor(P.r()*14),h=5+Math.floor(P.r()*10);let xx=x;for(let i=0;i<h;i++){if(i>3&&P.r()<.2)xx+=P.r()<.5?-1:1;P.set(xx,15-i,P.pick(GRAYG),TA)}}}));
 addTile('dandelion',paint(39,P=>{P.clear();for(let y=9;y<16;y++)P.set(8,y,'#3f8f22');P.set(7,12,'#4aa02a');P.set(6,11,'#4aa02a');for(let y=5;y<9;y++)for(let x=6;x<11;x++)if(!((x===6||x===10)&&(y===5||y===8)))P.set(x,y,P.r()<.7?'#ffe600':'#f2b600')}));
@@ -968,7 +972,7 @@ const maxStack=id=>ITEM[id]?ITEM[id].stack:64;
 /* 아이콘 (인벤토리용 32×32) */
 const ICON={};
 const TCACHE={};function tintTile(t,tc){if(!tc)return tileList[t];const k=t+'|'+tc;if(TCACHE[k])return TCACHE[k];const c=cv(16,16),g=c.getContext('2d');g.drawImage(tileList[t],0,0);const im=g.getImageData(0,0,16,16),d=im.data;for(let i=0;i<d.length;i+=4)if(d[i+3]>200&&d[i+3]<255){d[i]*=tc[0];d[i+1]*=tc[1];d[i+2]*=tc[2];d[i+3]=255}g.putImageData(im,0,0);return TCACHE[k]=c}
-const ICON_TINT=id=>{const t=B[id]&&B[id].tint;return t==='grass'?[.57,.74,.35]:t==='fol'?[.36,.68,.19]:t||null};
+const ICON_TINT=id=>{if(id===WATER)return WATER_C[0];const t=B[id]&&B[id].tint;return t==='grass'?[.57,.74,.35]:t==='fol'?[.36,.68,.19]:t||null};
 function iconURL(id){if(ICON[id])return ICON[id];const c=cv(32,32),g=c.getContext('2d');g.imageSmoothingEnabled=false;const b=B[id],tc=ICON_TINT(id);
   if(b&&ITEM[id].block&&!b.cross&&!b.torch&&!b.icon2d&&id!==WATER){const tl=i=>tintTile(b.tex[i],tc);const front=b.face?tileList[TEX[b.face]]:tl(4);const hh=b.bh||1,yo=(1-hh)*15.5;
     g.setTransform(15/16,-7.5/16,15/16,7.5/16,1,8.5+yo);g.drawImage(tl(2),0,0);
@@ -989,16 +993,58 @@ const ek=(cx,cz)=>dimPre()+cx+','+cz;
 const encB=(id,m)=>id<256?id|(m<<8):65536+(id-1024)+(m|0)*1024,decId=v=>v<65536?v&255:1024+((v-65536)%1024),decM=v=>v<65536?v>>8:Math.floor((v-65536)/1024);
 function dimPre(){return typeof DIM==='undefined'||DIM==='over'?'':DIM==='nether'?'n':'e'}
 const bi=(x,y,z)=>x|(z<<4)|(y<<8);
-let WTYPE='default';
-function terrainH(x,z){if(WTYPE==='flat')return 4;
+let WTYPE='default';   // GEN 1 = 예전 지형, GEN 2 = 마크 1.18식 다중 노이즈 지형
+function terrainH(x,z){if(WTYPE==='flat')return 4;if(GEN===2)return terrainMC(x,z);
   const c=fbm2(x/300,z/300,SEED,3),d=fbm2(x/70,z/70,SEED+7,4),m=Math.max(0,fbm2(x/160,z/160,SEED+13,3)+.04);
   const [t,w]=climate(x,z),flat=clamp(1-(t>.25?.5:0)-(w<-.1?.2:0),.35,1);
   return Math.floor(clamp(SEA+3+c*24+d*7*flat+m*m*130*flat,4,H-16))}
-function climate(x,z){return [fbm2(x/480,z/480,SEED+201,3)*1.7,fbm2(x/400,z/400,SEED+301,3)*1.7]}
+function climate(x,z){if(GEN===2){const n=mnoise(x,z);return [n.T*.6,n.Hu*.5]}return [fbm2(x/480,z/480,SEED+201,3)*1.7,fbm2(x/400,z/400,SEED+301,3)*1.7]}
 const weird=(x,z)=>fbm2(x/300,z/300,SEED+501,2)*1.8;
-const BIO={OCEAN:0,FROZEN_OCEAN:1,BEACH:2,PLAINS:3,FOREST:4,BIRCH:5,TAIGA:6,SNOWY:7,DESERT:8,SAVANNA:9,JUNGLE:10,MOUNTAINS:11,SNOWY_PEAKS:12,SWAMP:13,DARK_FOREST:14,BADLANDS:15,MUSHROOM:16,FLOWER_FOREST:17,ICE_SPIKES:18,CHERRY:19,WINDSWEPT:20,DEEP_OCEAN:21,WARM_OCEAN:22,MEADOW:23,STONY_SHORE:24,BAMBOO_JUNGLE:25,SPARSE_JUNGLE:26,SAVANNA_PLATEAU:27,WOODED_BADLANDS:28,ERODED_BADLANDS:29,MANGROVE:30,OLD_BIRCH:31,OLD_TAIGA:32,SNOWY_TAIGA:33,GROVE:34,JAGGED_PEAKS:35,SUNFLOWER_PLAINS:36,COLD_OCEAN:37,LUKEWARM_OCEAN:38,SNOWY_BEACH:39};
-const BIO_N=['바다','얼어붙은 바다','해변','평원','숲','자작나무 숲','타이가','눈 덮인 평원','사막','사바나','정글','산','눈 덮인 봉우리','늪','어두운 숲','악지','버섯 들판','꽃 숲','역고드름','벚나무 숲','바람 부는 언덕','깊은 바다','따뜻한 바다','초원','돌 해안','대나무 정글','듬성듬성한 정글','사바나 고원','나무가 우거진 악지','침식된 악지','맹그로브 늪','오래된 자작나무 숲','오래된 소나무 타이가','눈 덮인 타이가','숲 언덕','뾰족한 봉우리','해바라기 평원','차가운 바다','미지근한 바다','눈 덮인 해변'];
-function biomeOf(x,z,h){const [t,w]=climate(x,z),q=weird(x,z);
+// ── 마크 1.18식 다중 노이즈 지형 (새 세계만: GEN 2)
+// 대륙성(C)·침식(E)·기묘함(W)→봉우리와 골짜기(PV)·온도(T)·습도(Hu) 다섯 노이즈로 높이와 바이옴을 정해요.
+let GEN=1;
+const erf=x=>{const t=x*x,r=Math.sqrt(1-Math.exp(-t*(1.2732+.147*t)/(1+.147*t)));return x<0?-r:r};
+const smf=(a,b,v)=>sm(clamp((v-a)/(b-a),0,1));
+let MNk=NaN,MNs=0,MNv=null;
+function mnoise(x,z){const k=x*1e5+z;if(k===MNk&&MNs===SEED)return MNv;
+  const wx=x+fbm2(x/96,z/96,SEED+1091,2)*30,wz=z+fbm2(x/96,z/96,SEED+1093,2)*30;
+  const C=erf(fbm2(wx/760,wz/760,SEED+1001,4)/.5)*1.1+.3,E=erf(fbm2(wx/460,wz/460,SEED+1011,3)/.4),W=erf(fbm2(wx/300,wz/300,SEED+1021,3)/.4);
+  const T=erf(fbm2(x/1150,z/1150,SEED+1031,3)/.55),Hu=erf(fbm2(x/850,z/850,SEED+1041,3)/.4),PV=1-Math.abs(3*Math.abs(W)-2);
+  const eo=clamp((-.2225-E)/.55,0,1),rv=C>-.19?lerp(smf(.045,.13,Math.abs(W)),1,smf(.45,.75,eo)):1;   // 강: |W|≈0 골짜기, 높은 산에선 사라져요
+  MNk=k;MNs=SEED;return MNv={C,E,W,T,Hu,PV,eo,rv}}
+const spl=(P,v)=>{if(v<=P[0][0])return P[0][1];for(let i=1;i<P.length;i++)if(v<P[i][0]){const [a,ya]=P[i-1],[b,yb]=P[i];return ya+(yb-ya)*sm((v-a)/(b-a))}return P[P.length-1][1]};
+// 대륙성 → 해수면 기준 높이: 버섯 섬 · 깊은 바다 · 바다 · 해안 · 가까운/중간/먼 내륙
+const CSPL=[[-1.2,3],[-.8,3],[-.72,-17],[-.455,-16],[-.3,-10],[-.19,-6],[-.11,-1],[-.06,1],[.1,3],[.35,5],[.7,8],[1.3,11]];
+function terrainMC(x,z){const n=mnoise(x,z),{C,E,PV,eo}=n;let h=spl(CSPL,C);
+  const inl=smf(-.11,.25,C),pk=sm(clamp((PV+.2)/1.2,0,1)),em=clamp(1-Math.abs(E+.08)/.32,0,1);
+  h+=inl*(eo*13+eo*eo*pk*32);                                   // 침식이 낮으면 고원과 봉우리
+  h+=inl*em*PV*6;                                               // 중간 침식: 언덕
+  h+=inl*smf(.43,.47,E)*(1-smf(.53,.57,E))*Math.max(0,n.W)*12;  // 바람 부는 언덕
+  const sw=inl*smf(.55,.62,E)*(1-smf(.25,.4,C));h=lerp(h,.5,sw);  // 늪: 해수면 근처로 평평하게
+  h+=fbm2(x/48,z/48,SEED+1051,3)*(1.6+eo*4+em*1.5)*(1-sw*.8)+fbm2(x/13,z/13,SEED+1061,2)*eo*2.5;
+  if(n.rv<1)h=Math.min(h,lerp(-4,h,n.rv));                         // 강: 골짜기(PV≈-1)를 파요
+  return Math.floor(clamp(SEA+h,5,H-14))}
+const TL=[-.45,-.15,.2,.55],HL=[-.35,-.1,.1,.3],EL=[-.78,-.375,-.2225,.05,.45,.55],lvl=(v,L)=>{let i=0;while(i<L.length&&v>=L[i])i++;return i};
+// 마크 바이옴 표 [온도][습도]
+const MID_T=[[7,7,7,33,6],[3,3,4,6,32],[17,3,4,5,14],[9,9,4,10,10],[8,8,8,8,8]],
+  VAR_T=[[18,-1,33,-1,-1],[-1,-1,-1,-1,32],[36,-1,-1,31,-1],[-1,-1,3,26,25],[-1,-1,-1,-1,-1]],
+  PLAT_T=[[7,7,7,33,33],[23,23,4,6,32],[23,23,23,23,14],[27,27,4,4,10],[15,15,15,28,28]];
+function badlandsOf(hi,W){return hi<2?(W<0?BIO.BADLANDS:BIO.ERODED_BADLANDS):hi===2?BIO.BADLANDS:BIO.WOODED_BADLANDS}
+function biomeMC(x,z,h){const n=mnoise(x,z),{C,E,W}=n,ti=lvl(n.T,TL),hi=lvl(n.Hu,HL),ei=lvl(E,EL);
+  if(C<-.75&&h>=SEA-1)return BIO.MUSHROOM;
+  if(n.rv<.55&&h<=SEA)return ti===0?BIO.FROZEN_RIVER:BIO.RIVER;
+  if(h<SEA-1){const deep=C<-.455||h<SEA-13;return ti===0?BIO.FROZEN_OCEAN:ti===4?BIO.WARM_OCEAN:deep?BIO.DEEP_OCEAN:ti===1?BIO.COLD_OCEAN:ti===3?BIO.LUKEWARM_OCEAN:BIO.OCEAN}
+  if(h<=SEA+2&&C<.02)return ei<=2&&W>.2?BIO.STONY_SHORE:ti===0?BIO.SNOWY_BEACH:ti===4?BIO.DESERT:BIO.BEACH;
+  if(h>SEA+34&&ei<=1)return ti<=2?(W<0?BIO.JAGGED_PEAKS:BIO.SNOWY_PEAKS):ti===3?BIO.MOUNTAINS:badlandsOf(hi,W);
+  if(h>SEA+20&&ei<=1&&ti<=2)return hi<=1?BIO.SNOWY_PEAKS:BIO.GROVE;
+  if((ei<=1&&h>SEA+9)||(ei===2&&h>SEA+13)){if(W>0&&(ti===1||ti===2)&&hi<=1)return BIO.CHERRY;return PLAT_T[ti][hi]}
+  if(ei===5&&W>0&&h>SEA+6)return ti<=2?BIO.WINDSWEPT:BIO.SAVANNA_PLATEAU;
+  if(ei===6&&h<=SEA+3&&ti>0)return ti<=2?BIO.SWAMP:BIO.MANGROVE;
+  if(ti===4&&ei<=3)return badlandsOf(hi,W);
+  const v=W>0?VAR_T[ti][hi]:-1;return v>=0?v:MID_T[ti][hi]}
+const BIO={OCEAN:0,FROZEN_OCEAN:1,BEACH:2,PLAINS:3,FOREST:4,BIRCH:5,TAIGA:6,SNOWY:7,DESERT:8,SAVANNA:9,JUNGLE:10,MOUNTAINS:11,SNOWY_PEAKS:12,SWAMP:13,DARK_FOREST:14,BADLANDS:15,MUSHROOM:16,FLOWER_FOREST:17,ICE_SPIKES:18,CHERRY:19,WINDSWEPT:20,DEEP_OCEAN:21,WARM_OCEAN:22,MEADOW:23,STONY_SHORE:24,BAMBOO_JUNGLE:25,SPARSE_JUNGLE:26,SAVANNA_PLATEAU:27,WOODED_BADLANDS:28,ERODED_BADLANDS:29,MANGROVE:30,OLD_BIRCH:31,OLD_TAIGA:32,SNOWY_TAIGA:33,GROVE:34,JAGGED_PEAKS:35,SUNFLOWER_PLAINS:36,COLD_OCEAN:37,LUKEWARM_OCEAN:38,SNOWY_BEACH:39,RIVER:40,FROZEN_RIVER:41};
+const BIO_N=['바다','얼어붙은 바다','해변','평원','숲','자작나무 숲','타이가','눈 덮인 평원','사막','사바나','정글','산','눈 덮인 봉우리','늪','어두운 숲','악지','버섯 들판','꽃 숲','역고드름','벚나무 숲','바람 부는 언덕','깊은 바다','따뜻한 바다','초원','돌 해안','대나무 정글','듬성듬성한 정글','사바나 고원','나무가 우거진 악지','침식된 악지','맹그로브 늪','오래된 자작나무 숲','오래된 소나무 타이가','눈 덮인 타이가','숲 언덕','뾰족한 봉우리','해바라기 평원','차가운 바다','미지근한 바다','눈 덮인 해변','강','얼어붙은 강'];
+function biomeOf(x,z,h){if(GEN===2)return biomeMC(x,z,h);const [t,w]=climate(x,z),q=weird(x,z);
   if(q>.62&&h>=SEA-2&&h<SEA+12&&fbm2(x/300,z/300,SEED,3)<-.05)return BIO.MUSHROOM;
   if(h<SEA-3){if(t<-.38)return BIO.FROZEN_OCEAN;if(h<SEA-12)return BIO.DEEP_OCEAN;if(t>.34)return BIO.WARM_OCEAN;if(t>.16)return BIO.LUKEWARM_OCEAN;if(t<-.18)return BIO.COLD_OCEAN;return BIO.OCEAN}
   if(h>SEA+40)return t<.15?(q>.22?BIO.JAGGED_PEAKS:BIO.SNOWY_PEAKS):BIO.MOUNTAINS;
@@ -1017,6 +1063,8 @@ function biomeOf(x,z,h){const [t,w]=climate(x,z),q=weird(x,z);
   if(w>.1){if(q>.3)return BIO.DARK_FOREST;if(q<-.3)return BIO.FLOWER_FOREST;return fbm2(x/220,z/220,SEED+401,2)>.12?(q>.12?BIO.OLD_BIRCH:BIO.BIRCH):BIO.FOREST}
   if(q<-.45)return BIO.FLOWER_FOREST;if(q>.42)return BIO.SUNFLOWER_PLAINS;
   return BIO.PLAINS}
+const hexC=h=>[(h>>16&255)/255,(h>>8&255)/255,(h&255)/255];
+const WATER_C=new Proxy({13:hexC(0x617B64),30:hexC(0x3A7A6A),22:hexC(0x43D5EE),38:hexC(0x45ADF2),37:hexC(0x3D57D6),1:hexC(0x3938C9),41:hexC(0x3938C9),0:hexC(0x3F76E4)},{get:(o,k)=>o[k]||o[0]});
 const C_COLD=[.5,.71,.59],C_DRY=[.75,.72,.33],C_WET=[.28,.8,.2],C_MID=[.57,.74,.35];
 const BIO_TINT={30:[.38,.55,.24],25:[.33,.74,.18],26:[.38,.72,.22],28:[.56,.52,.3],29:[.58,.5,.3],27:[.68,.66,.3],32:[.46,.6,.32],13:[.42,.5,.26],14:[.4,.62,.24],15:[.58,.5,.3],16:[.42,.72,.3],19:[.5,.76,.42],23:[.5,.77,.45]};
 function grassTint(x,z,bm){const T0=BIO_TINT[bm];const [t,w]=climate(x,z);const T=clamp((t+.6)/1.2,0,1),Wt=clamp((w+.5)/1.0,0,1);const hot=C_DRY.map((v,i)=>lerp(v,C_WET[i],Wt));
@@ -1025,7 +1073,7 @@ function grassTint(x,z,bm){const T0=BIO_TINT[bm];const [t,w]=climate(x,z);const 
 const VEG={3:['oak',.0012,.28,.025],4:['oakbirch',.035,.14,.012],5:['birch',.035,.12,.012],6:['spruce',.03,.16,0],7:['spruce',.004,.02,0],8:['cactus',.004,0,0],9:['savanna',.005,.22,0],10:['jungle',.06,.3,.004],11:['spruce',.005,.06,0],
   13:['swamp',.012,.2,.004],14:['darkoak',.07,.06,.004],15:['cactus',.002,0,0],16:['hugemush',.012,0,0],17:['oakbirch',.02,.12,.22],18:['spike',.008,0,0],19:['cherry',.025,.18,.06],20:['oak',.006,.08,0],23:['birch',.002,.4,.12],
   25:['bamboojungle',.09,.3,.004],26:['jungle',.008,.3,.004],27:['savanna',.006,.22,0],28:['oak',.012,.06,0],29:['cactus',.002,0,0],30:['mangrove',.045,.08,0],31:['tallbirch',.05,.12,.012],32:['megaspruce',.04,.12,0],33:['spruce',.035,.04,0],34:['spruce',.02,.02,0],36:['oak',.001,.3,.09],
-  2:['',0,0,0],0:['',0,0,0],35:['',0,0,0],37:['',0,0,0],38:['',0,0,0],39:['',0,0,0],1:['',0,0,0],12:['',0,0,0],21:['',0,0,0],22:['',0,0,0],24:['',0,0,0]};
+  2:['',0,0,0],0:['',0,0,0],40:['oak',.0008,.12,.006],41:['spruce',.0008,.02,0],35:['',0,0,0],37:['',0,0,0],38:['',0,0,0],39:['',0,0,0],1:['',0,0,0],12:['',0,0,0],21:['',0,0,0],22:['',0,0,0],24:['',0,0,0]};
 const FLOWERS_ALL=[DANDELION,POPPY,CORNFLOWER,ALLIUM,TULIP,OXEYE,AZURE_BLUET,PINK_TULIP,ORANGE_TULIP,WHITE_TULIP,LILY_VALLEY];
 const TC_BANDS=[TERRACOTTA,ORANGE_TC,TERRACOTTA,YELLOW_TC,TERRACOTTA,TERRACOTTA,RED_TC,WHITE_TC,TERRACOTTA,BROWN_TC,ORANGE_TC,LGRAY_TC,TERRACOTTA,RED_TC];
 const mcY=mc=>Math.round((mc+64)*34/127);   // 마크 높이(-64~320) → 이 세계 높이
@@ -1043,12 +1091,13 @@ function genChunk(cx,cz){
   const fld=(x,y,z,k)=>{const fx=x/4,fy=y/4,fz=z/4,x0=Math.floor(fx),y0=Math.min(GY-2,Math.floor(fy)),z0=Math.floor(fz),tx=fx-x0,ty=fy-y0,tz=fz-z0,x1=Math.min(GX-1,x0+1),z1=Math.min(GX-1,z0+1);
     const g=(a,b2,c)=>F[((c*GY+b2)*GX+a)*5+k];return lerp(lerp(lerp(g(x0,y0,z0),g(x1,y0,z0),tx),lerp(g(x0,y0+1,z0),g(x1,y0+1,z0),tx),ty),lerp(lerp(g(x0,y0,z1),g(x1,y0,z1),tx),lerp(g(x0,y0+1,z1),g(x1,y0+1,z1),tx),ty),tz)};
   for(let z=0;z<16;z++)for(let x=0;x<16;x++){const wx=ox+x,wz=oz+z,h=terrainH(wx,wz),c=x|z<<4;hm[c]=h;const bm=biomeOf(wx,wz,h);bio[c]=bm;gt.set(grassTint(wx,wz,bm),c*3);
-    const under=h<SEA,snowy=bm===BIO.SNOWY||bm===BIO.FROZEN_OCEAN||bm===BIO.SNOWY_PEAKS||bm===BIO.ICE_SPIKES||bm===BIO.SNOWY_TAIGA||bm===BIO.GROVE||bm===BIO.JAGGED_PEAKS||bm===BIO.SNOWY_BEACH;
+    const under=h<SEA,snowy=bm===BIO.SNOWY||bm===BIO.FROZEN_OCEAN||bm===BIO.SNOWY_PEAKS||bm===BIO.ICE_SPIKES||bm===BIO.SNOWY_TAIGA||bm===BIO.GROVE||bm===BIO.JAGGED_PEAKS||bm===BIO.SNOWY_BEACH||bm===BIO.FROZEN_RIVER;
     let topB,fill=DIRT,deep=3;
-    if(under){topB=bm===BIO.WARM_OCEAN||bm===BIO.LUKEWARM_OCEAN?SAND:bm===BIO.COLD_OCEAN?GRAVEL:bm===BIO.MANGROVE?MUD:bm===BIO.DEEP_OCEAN?GRAVEL:noise2(wx/9,wz/9,SEED+3)>.25?GRAVEL:h>SEA-6?SAND:(noise2(wx/7,wz/7,SEED+4)>.45?CLAY:DIRT)}
+    if(under){topB=bm===BIO.RIVER||bm===BIO.FROZEN_RIVER?(noise2(wx/6,wz/6,SEED+5)>.3?GRAVEL:noise2(wx/7,wz/7,SEED+4)>.55?CLAY:SAND):bm===BIO.WARM_OCEAN||bm===BIO.LUKEWARM_OCEAN?SAND:bm===BIO.COLD_OCEAN?GRAVEL:bm===BIO.MANGROVE?MUD:bm===BIO.DEEP_OCEAN?GRAVEL:noise2(wx/9,wz/9,SEED+3)>.25?GRAVEL:h>SEA-6?SAND:(noise2(wx/7,wz/7,SEED+4)>.45?CLAY:DIRT)}
     else if(bm===BIO.BEACH||bm===BIO.DESERT||bm===BIO.SNOWY_BEACH){topB=SAND;fill=SAND;deep=bm===BIO.DESERT?5:3}
     else if(bm===BIO.BADLANDS||bm===BIO.ERODED_BADLANDS||bm===BIO.WOODED_BADLANDS){topB=h>SEA+18?TERRACOTTA:RED_SAND;if(bm===BIO.WOODED_BADLANDS&&h>SEA+10)topB=noise2(wx/5,wz/5,SEED+63)>0?COARSE_DIRT:GRASS;fill=TERRACOTTA;deep=12}
     else if(bm===BIO.MANGROVE){topB=MUD;fill=DIRT}
+    else if((bm===BIO.RIVER||bm===BIO.FROZEN_RIVER)&&h<=SEA+1){topB=SAND;fill=SAND}
     else if(bm===BIO.OLD_TAIGA)topB=noise2(wx/4,wz/4,SEED+65)>-.1?PODZOL:noise2(wx/6,wz/6,SEED+66)>.3?COARSE_DIRT:GRASS;
     else if(bm===BIO.BAMBOO_JUNGLE)topB=noise2(wx/5,wz/5,SEED+67)>.25?PODZOL:GRASS;
     else if(bm===BIO.JAGGED_PEAKS)topB=h>SEA+44||noise2(wx/6,wz/6,SEED+9)>0?SNOW:STONE;
@@ -1137,7 +1186,7 @@ function genChunk(cx,cz){
 const DV0=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 function finishChunk(cx,cz,b,maxY,bio,gt){
   const m=new Uint8Array(16*16*H);if(b.__meta)for(const [i,v] of b.__meta)m[i]=v;const e=edits[ek(cx,cz)];if(e)for(const k in e){const v=e[k],id=decId(v);b[+k]=id;m[+k]=decM(v);const y=(+k)>>8;if(id&&y>maxY)maxY=y}
-  const ch={cx,cz,b,m,maxY:Math.min(H-1,maxY+1),mesh:null,wmesh:null,dirty:true,sky:null,bl:null,bio,gt,fresh:!e};if(!e&&Math.random()<.12&&typeof pendingAnimals!=='undefined')pendingAnimals.push([cx,cz]);
+  const ch={cx,cz,b,m,maxY:Math.min(H-1,maxY+1),mesh:null,wmesh:null,dirty:true,sky:null,bl:null,bio,gt,fresh:!e};if(!e&&Math.random()<.1&&typeof pendingAnimals!=='undefined')pendingAnimals.push([cx,cz]);
   chunks.set(ck(cx,cz),ch);return ch}
 function placeTree(kind,x,y,z,rnd,set){
   if(kind==='bamboojungle')kind=rnd<.3?'jungle':'bamboo';
@@ -1221,7 +1270,7 @@ const FACES=[
 const STR=[1,WW,W];
 FACES.forEach(f=>{f.k=f.d[0]?0:f.d[1]?1:2;f.off=f.d[0]*STR[0]+f.d[1]*STR[1]+f.d[2]*STR[2];
   f.co=f.c.map(c=>{const o=[];for(let ax=0;ax<3;ax++)if(ax!==f.k)o.push((c[ax]?1:-1)*STR[ax]);return o})});
-const AOK=[.5,.67,.83,1];
+const AOK=[.4,.6,.8,1];   // 마크 부드러운 조명: 막힌 칸마다 0.2
 function buildChunk(ch){
   const ox=ch.cx*16-PD,oz=ch.cz*16-PD;let top=0;const ems=[];
   for(let dcx=-1;dcx<=1;dcx++)for(let dcz=-1;dcz<=1;dcz++){const nc=chunks.get(ck(ch.cx+dcx,ch.cz+dcz));if(nc&&nc.maxY>top)top=nc.maxY}
@@ -1265,9 +1314,9 @@ function buildChunk(ch){
       quad(M,[[c,y,e],[c,y,d],[c,h,d],[c,h,e]],[u0,v0,u1,v1],ls);quad(M,[[a,y,d],[a,y,e],[a,h,e],[a,h,d]],[u0,v0,u1,v1],ls);
       const tv0=t[1]+(t[3]-t[1])*8/16,tv1=t[1]+(t[3]-t[1])*10/16;quad(M,[[a,h,e],[c,h,e],[c,h,d],[a,h,d]],[u0,tv0,u1,tv1],ls);continue}
     const MV=MM[x|(z<<4)|(y<<8)];
-    if(id===WATER||id===LAVA){const above=R[i+WW]===id,lv=MV&7,hh=above?1:(MV&8?.94:lv===0?.89:(8-lv)/9),tgt=id===WATER?WM:M,l0=[SL[i]/15,BLL[i]/15];
+    if(id===WATER||id===LAVA){const above=R[i+WW]===id,lv=MV&7,hh=above?1:(MV&8?.94:lv===0?.89:(8-lv)/9),tgt=id===WATER?WM:M,l0=[SL[i]/15,BLL[i]/15],wc=id===WATER?WATER_C[ch.bio?ch.bio[x|z<<4]:0]:ONE;
       for(let f=0;f<6;f++){const F=FACES[f],n=i+F.off,nid=R[n];if(nid===id||OP[nid])continue;if(f===3&&y===0)continue;if(f===3&&nid!==AIR&&id===LAVA)continue;
-        const l=id===LAVA?[l0[0],1,F.s]:[SL[n]/15,BLL[n]/15,F.s],uv=tileUV(b.tex[0]);quad(tgt,F.c.map(c=>[x+c[0],y+(c[1]?hh:0),z+c[2]]),uv,[l,l,l,l])}continue}
+        const l=id===LAVA?[l0[0],1,F.s]:[SL[n]/15,BLL[n]/15,F.s],uv=tileUV(b.tex[0]);quad(tgt,F.c.map(c=>[x+c[0],y+(c[1]?hh:0),z+c[2]]),uv,[l,l,l,l],0,wc)}continue}
     if(b.shape&&b.shape!=='slab'&&b.shape!=='cactus'){const L0=[SL[i]/15,BLL[i]/15],sh=b.shape;
       const boxQ=(bx,tx,tc,skip)=>{for(let f=0;f<6;f++){if(skip&&skip(f))continue;const F=FACES[f];const vs=F.c.map(c=>[x+(c[0]?bx[3]:bx[0]),y+(c[1]?bx[4]:bx[1]),z+(c[2]?bx[5]:bx[2])]);
           const t=typeof tx==='function'?tx(f):tx,T=tileUV(t);let u0,u1,v0,v1;if(F.k===1){u0=bx[0];u1=bx[3];v0=bx[2];v1=bx[5]}else{u0=F.k===0?bx[2]:bx[0];u1=F.k===0?bx[5]:bx[3];v0=bx[1];v1=bx[4]}
@@ -1345,9 +1394,10 @@ try{renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:false,powerPrefer
 renderer.setPixelRatio(Math.min(devicePixelRatio,isTouch?1.5:2));renderer.autoClear=false;
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,1,.05,1200);scene.add(camera);
 const atlasTex=new THREE.CanvasTexture(ATLAS);atlasTex.magFilter=atlasTex.minFilter=THREE.NearestFilter;atlasTex.generateMipmaps=false;
-const VS=`attribute vec3 lt;attribute vec3 tc;varying vec2 vUv;varying vec3 vL;varying vec3 vT;varying float vD;void main(){vUv=uv;vL=lt;vT=tc;vec4 mv=modelViewMatrix*vec4(position,1.);vD=length(mv.xyz);gl_Position=projectionMatrix*mv;}`;
+const VS=`attribute vec3 lt;attribute vec3 tc;varying vec2 vUv;varying vec3 vL;varying vec3 vT;varying float vD;void main(){vUv=uv;vL=lt;vT=tc;vec4 wp=modelMatrix*vec4(position,1.);vec3 dd=wp.xyz-cameraPosition;vD=max(length(dd.xz),abs(dd.y));gl_Position=projectionMatrix*viewMatrix*wp;}`;
 const FS=`uniform sampler2D map;uniform float day,fogN,fogF,alpha,amb;uniform vec3 fogC;varying vec2 vUv;varying vec3 vL;varying vec3 vT;varying float vD;
-void main(){vec4 t=texture2D(map,vUv);if(alpha>.99&&t.a<.5)discard;if(t.a<.995)t.rgb*=vT;float s=pow(.8,(1.-vL.x)*15.)*day;float b=pow(.8,(1.-vL.y)*15.);vec3 l=max(vec3(s),vec3(b*1.04,b*.94,b*.78));l=max(l,vec3(amb));vec3 c=t.rgb*l*vL.z;float f=smoothstep(fogN,fogF,vD);gl_FragColor=vec4(mix(c,fogC,f),alpha<.99?alpha:1.);}`;
+float lc(float f){float g=f/(4.-3.*f);return mix(g,1.-pow(1.-g,4.),.5);}
+void main(){vec4 t=texture2D(map,vUv);if(alpha>.99&&t.a<.5)discard;if(t.a<.995)t.rgb*=vT;float s=lc(vL.x)*day,b=lc(vL.y);vec3 sc=vec3(s)*mix(vec3(.7,.76,1.),vec3(1.),day),bc=vec3(b,b*((b*.6+.4)*.6+.4),b*(b*b*.6+.4));vec3 l=max(clamp(sc+bc,0.,1.),vec3(amb));vec3 c=t.rgb*l*vL.z;float f=smoothstep(fogN,fogF,vD);gl_FragColor=vec4(mix(c,fogC,f),alpha<.99?alpha:1.);}`;
 const mkU=a=>({map:{value:atlasTex},amb:{value:.035},day:{value:1},fogN:{value:40},fogF:{value:76},alpha:{value:a},fogC:{value:new THREE.Color(0x9ec3ff)}});
 const worldMat=new THREE.ShaderMaterial({uniforms:mkU(1),vertexShader:VS,fragmentShader:FS});
 const waterMat=new THREE.ShaderMaterial({uniforms:mkU(.72),vertexShader:VS,fragmentShader:FS,transparent:true,depthWrite:false,side:THREE.DoubleSide});
@@ -1368,16 +1418,24 @@ const cloudTex=(()=>{const c=cv(64,64),g=c.getContext('2d');for(let y=0;y<64;y++
 const clouds=new THREE.Mesh(new THREE.PlaneGeometry(1536,1536),new THREE.MeshBasicMaterial({map:cloudTex,transparent:true,opacity:.78,fog:false,depthWrite:false,side:THREE.DoubleSide}));
 clouds.rotation.x=-Math.PI/2;clouds.renderOrder=1;scene.add(clouds);
 const DAYLEN=1200;let worldTime=DAYLEN*.04,daylight=1;
-const C_DAY=new THREE.Color(0x7ba9ff),C_NIGHT=new THREE.Color(0x05070f),C_SET=new THREE.Color(0xf08a4b),C_FOGD=new THREE.Color(0xb4d0ff),tmpC=new THREE.Color(),fogCol=new THREE.Color();
-function updateSky(dt){if(dimSky(dt))return;
+const C_DAY=new THREE.Color(0x78a7ff),C_NIGHT=new THREE.Color(0x05070f),C_SET=new THREE.Color(0xf08a4b),C_FOGD=new THREE.Color(0xc0d8ff),C_SKYT=new THREE.Color(0x78a7ff),tmpC=new THREE.Color(),fogCol=new THREE.Color();
+const BIO_TEMP=[.5,0,.8,.8,.7,.6,.25,0,2,2,.95,1,-.7,.8,.7,2,.9,.7,0,.5,.2,.5,.5,.5,.2,.95,.95,2,2,2,.8,.6,.25,-.5,-.2,-.7,.8,.5,.5,.05,.5,0];
+function skyOfTemp(t,out){const k=clamp(t/3,-1,1),h=(.62222-k*.05)*6,sat=.5+k*.1,i=Math.floor(h),f=h-i,p=1-sat,q=1-sat*f,u=1-sat*(1-f);const c=[[1,u,p],[q,1,p],[p,1,u],[p,q,1],[u,p,1],[1,p,q]][i%6];return out.setRGB(c[0],c[1],c[2])}
+const skyDome=new THREE.Mesh(new THREE.SphereGeometry(500,24,12),new THREE.ShaderMaterial({uniforms:{top:{value:new THREE.Color()},hor:{value:new THREE.Color()}},
+  vertexShader:`varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`uniform vec3 top,hor;varying vec3 vP;void main(){float y=vP.y;vec3 c=y>0.?mix(hor,top,smoothstep(0.,.42,y)):mix(hor,hor*.55,smoothstep(0.,.3,-y));gl_FragColor=vec4(c,1.);}`,side:THREE.BackSide,depthWrite:false,fog:false}));
+skyDome.renderOrder=-3;scene.add(skyDome);const _skyT=new THREE.Color();
+function updateSky(dt){skyDome.position.copy(camera.position);skyDome.visible=DIM==='over'&&!underWater;if(dimSky(dt))return;
+  {const ch=chunks.get(ck(Math.floor(player.pos.x)>>4,Math.floor(player.pos.z)>>4));if(ch&&ch.bio){skyOfTemp(BIO_TEMP[ch.bio[(Math.floor(player.pos.x)&15)|((Math.floor(player.pos.z)&15)<<4)]]??.8,_skyT);C_SKYT.lerp(_skyT,Math.min(1,dt*.6))}}
   const a=(worldTime/DAYLEN)*Math.PI*2,s=Math.sin(a);const dl=sm(clamp((s+.18)/.5,0,1));daylight=.2+.8*dl;
   sky.position.copy(camera.position);sky.rotation.z=a-Math.PI/2;
-  tmpC.copy(C_NIGHT).lerp(C_DAY,dl);const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
+  tmpC.copy(C_NIGHT).lerp(C_SKYT,dl);const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
   fogCol.copy(C_NIGHT).lerp(C_FOGD,dl).lerp(C_SET,set*.45);
   if(underWater){fogCol.setRGB(.08,.16,.5);tmpC.copy(fogCol)}
   renderer.setClearColor(tmpC);
+  skyDome.material.uniforms.top.value.copy(tmpC);skyDome.material.uniforms.hor.value.copy(fogCol);
   stars.material.opacity=clamp(1-dl*1.6,0,1)*.9;
-  const far=underWater?14:RD*16-4,near=underWater?1:far*.58;
+  const far=underWater?14:RD*16-4,near=underWater?1:far-Math.max(12,far*.16);   // 마크 1.18: 시야 끝 몇 칸만 안개
   for(const m of [worldMat,waterMat]){m.uniforms.day.value=daylight;m.uniforms.fogC.value.copy(fogCol);m.uniforms.fogN.value=near;m.uniforms.fogF.value=far}
   scene.fog.color.copy(fogCol);scene.fog.near=near;scene.fog.far=far;
   clouds.position.set(camera.position.x,112,camera.position.z);cloudDrift+=dt*1.2;
@@ -1630,7 +1688,8 @@ function updateParts(dt){for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l
 
 /* ═════════════ 떨어진 아이템 ═════════════ */
 const ents=[];const geoCache={},texCache={};
-function lightK(x,y,z){const l=lightAt(x,y,z);return Math.max(.05,Math.pow(.8,15-l[0])*daylight,Math.pow(.8,15-l[1]))}
+const lcurve=f=>{const g=f/(4-3*f);return lerp(g,1-Math.pow(1-g,4),.5)};   // 마크 라이트맵 곡선 (밝기 50%)
+function lightK(x,y,z){const l=lightAt(x,y,z);return Math.max(.05,lcurve(l[0]/15)*daylight,lcurve(l[1]/15))}
 function boxUV(geo,tex){const a=geo.attributes.uv;for(let f=0;f<6;f++){const uv=tileUV(tex[f]);for(let k=0;k<4;k++){const i=f*4+k;a.setXY(i,uv[0]+a.getX(i)*(uv[2]-uv[0]),uv[1]+a.getY(i)*(uv[3]-uv[1]))}}return geo}
 function iconTex(id){if(texCache[id])return texCache[id];const b=B[id];const c=b&&ITEM[id].block?tileList[b.tex[0]]:ITEM[id].icon;const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;return texCache[id]=t}
 const isCube=id=>ITEM[id]&&ITEM[id].block&&!B[id].cross&&!B[id].torch&&!B[id].icon2d;
@@ -1733,7 +1792,7 @@ function updateMobs(dt){const pp=player.pos,eye=new V3(pp.x,pp.y+eyeH(),pp.z),ni
     if(D.custom){D.custom(m,dt);continue}
     if(D.ender&&m.angry<=0&&!player.dead&&!creative()&&m.pos.distanceTo(pp)<24){const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),hv=new V3(m.pos.x,m.pos.y+2.5,m.pos.z).sub(camera.position);const hl=hv.length();if(hv.normalize().dot(cd)>1-.025/Math.max(1,hl/8)&&los(camera.position,new V3(m.pos.x,m.pos.y+2.5,m.pos.z))){m.angry=30;sfx('ender')}}
     const dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,dist=Math.hypot(dx,dz),dy=pp.y-m.pos.y;
-    if(dist>112||(D.hostile&&dist>44&&Math.random()<dt*.02)){scene.remove(m.g);mobs.splice(i,1);continue}
+    if(dist>112||(D.hostile&&!D.boss&&dist>32&&Math.random()<dt*.025)){scene.remove(m.g);mobs.splice(i,1);continue}
     if(!chunks.has(ck(Math.floor(m.pos.x/16),Math.floor(m.pos.z/16))))continue;
     m.ai.t-=dt;if(m.hurtT>0)m.hurtT-=dt;if(m.atk>0)m.atk-=dt;if(m.panic>0)m.panic-=dt;if(m.love>0)m.love-=dt;if(m.breedCD>0)m.breedCD-=dt;if(m.angry>0)m.angry-=dt;
     if(m.baby>0){m.baby-=dt;if(m.baby<=0){m.g.scale.setScalar(1);m.hw=D.hw;m.h=D.h}}
@@ -1774,21 +1833,39 @@ const _itx={};function iconTexURL(u){if(_itx[u])return _itx[u];const img=new Ima
 function feedMob(m){const st=inv[sel];if(st&&m.D.tame&&!m.tamed&&st.id===BONE){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;m.angry=0;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('늑대를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}if(!st||st.id!==m.D.food||m.baby>0||m.breedCD>0||m.love>0)return false;m.love=30;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}for(let k=0;k<4;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);sfx('eat');return true}
 let spawnT=0;const pendingAnimals=[];
 const ANIMALS_BY={25:['panda','chicken','pig'],26:['chicken','pig'],27:['cow','sheep'],28:['rabbit'],29:['rabbit'],30:['frog','chicken'],31:['cow','sheep','rabbit'],32:['wolf','fox','rabbit','sheep'],33:['fox','rabbit','wolf'],34:['goat','fox','rabbit'],35:['goat'],36:['cow','sheep','pig','rabbit'],39:['rabbit'],12:['goat'],8:['rabbit'],1:['polar_bear'],3:['cow','sheep','pig','chicken'],4:['pig','chicken','cow','sheep'],5:['cow','sheep','chicken'],6:['wolf','fox','sheep','pig','rabbit'],7:['polar_bear','rabbit','sheep'],9:['cow','sheep'],10:['chicken','pig','panda'],11:['sheep','cow'],13:['frog','chicken','pig'],14:['pig','chicken'],16:['cow'],17:['pig','cow','sheep','chicken'],18:['sheep'],19:['pig','sheep'],20:['sheep','cow'],23:['cow','sheep','chicken']};
-function spawnTick(dt){spawnT-=dt;if(spawnT>0)return;spawnT=1;const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
+// 마크 스폰 규칙: 몬스터는 블록빛 0 + 하늘빛 ≤ 0~7 무작위, 무리 단위, 플레이어에게서 24칸 이상
+const PACK={rabbit:[2,3],goat:[1,3],polar_bear:[1,2],panda:[1,2],fox:[2,4],frog:[2,5],parrot:[1,2],enderman:[1,4],witch:[1,1],pillager:[1,1],slime:[1,4],bee:[1,3]};
+const packN=t=>{const p=PACK[t]||[4,4];return p[0]+Math.floor(Math.random()*(p[1]-p[0]+1))};
+function darkOK(x,y,z){const l=lightAt(x,y,z);if(l[1]>0||l[0]>Math.floor(Math.random()*32))return false;const dk=Math.round((1-clamp((daylight-.2)/.8,0,1))*11);return Math.max(0,l[0]-dk)<=Math.floor(Math.random()*8)}
+function spawnSpot(x,y,z){const f=getB(x,y-1,z),a=getB(x,y,z);return y>1&&y<H-2&&SOLID[f]&&!isLeaf(f)&&f!==BEDROCK&&f!==GLASS&&!SOLID[a]&&!SOLID[getB(x,y+1,z)]&&a!==WATER&&a!==LAVA}
+function packSpawn(t,x,y,z,ok,room){const n=Math.min(packN(t),room),pp=player.pos;let c=0,px=x,pz=z;
+  for(let k=0;k<n*4&&c<n;k++){if(k){px+=Math.floor(Math.random()*6)-Math.floor(Math.random()*6);pz+=Math.floor(Math.random()*6)-Math.floor(Math.random()*6)}
+    if(Math.hypot(px+.5-pp.x,pz+.5-pp.z,y-pp.y)<24||!spawnSpot(px,y,pz)||!ok(px,y,pz))continue;spawnMob(t,px+.5,y,pz+.5);c++}return c}
+const slimeChunk=(x,z)=>hash2(x>>4,z>>4,SEED+987)<.1;
+let aniT=0;
+function spawnTick(dt){aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
   if(DIM!=='over'){dimSpawn(hos);return}
-  // 청크가 처음 만들어질 때 동물 무리
+  // 청크가 처음 만들어질 때 동물 무리 (마크: 청크당 10%)
   for(let k=pendingAnimals.length-1;k>=0;k--){const [cx,cz]=pendingAnimals[k];const ch=chunks.get(ck(cx,cz));if(!ch){pendingAnimals.splice(k,1);continue}if(!ch.sky)continue;pendingAnimals.splice(k,1);if(ani>=40)continue;
     const x=cx*16+4+Math.floor(Math.random()*8),z=cz*16+4+Math.floor(Math.random()*8),bm=ch.bio[(x&15)|((z&15)<<4)],list=ANIMALS_BY[bm];if(!list)continue;const type=list[Math.floor(Math.random()*list.length)];
-    const y=surfaceY(x,z);if(y<0||!SOLID[getB(x,y-1,z)]||isLeaf(getB(x,y-1,z)))continue;const n=2+Math.floor(Math.random()*3);for(let i=0;i<n;i++){const ox=x+(i%2),oz=z+(i>>1);if(!SOLID[getB(ox,y,oz)])spawnMob(type,ox+.5,y,oz+.5);ani++}}
+    const y=surfaceY(x,z);if(y<0||!SOLID[getB(x,y-1,z)]||isLeaf(getB(x,y-1,z)))continue;const n=packN(type);for(let i=0;i<n;i++){const ox=x+(i%2)+(i>>2)*2,oz=z+((i>>1)&1);if(!SOLID[getB(ox,y,oz)]&&SOLID[getB(ox,y-1,oz)])spawnMob(type,ox+.5,y,oz+.5);ani++}}
+  // 몬스터 상한: 마크는 플레이어 주변 17×17 청크에 70마리 → 불러온 청크 수에 비례
+  const cap=clamp(Math.round(70*chunks.size/289),8,30);
+  for(let at=0;at<3&&hos<cap;at++){
+    const a=Math.random()*Math.PI*2,r=24+Math.random()*40,x=Math.floor(pp.x+Math.cos(a)*r),z=Math.floor(pp.z+Math.sin(a)*r);
+    const ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)continue;const bm=ch.bio[(x&15)|((z&15)<<4)];if(bm===BIO.MUSHROOM)continue;   // 버섯 들판엔 몬스터가 안 생겨요
+    if(at<2){const y=surfaceY(x,z);if(y>0&&darkOK(x,y,z)){const t=pickHostile(bm,y,true);hos+=packSpawn(t,x,y,z,darkOK,cap-hos)}}
+    else{const cy=2+Math.floor(Math.random()*Math.max(1,Math.min(H-4,pp.y+16)));if(spawnSpot(x,cy,z)){
+      if(cy<mcY(40)&&slimeChunk(x,z)&&Math.random()<.35)hos+=packSpawn('slime',x,cy,z,()=>true,cap-hos);
+      else if(darkOK(x,cy,z))hos+=packSpawn(pickHostile(bm,cy,false),x,cy,z,darkOK,cap-hos)}}}
   const a=Math.random()*Math.PI*2,r=24+Math.random()*28,x=Math.floor(pp.x+Math.cos(a)*r),z=Math.floor(pp.z+Math.sin(a)*r);
   const ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)return;
-  const pick=()=>{const q=Math.random();return q<.33?'zombie':q<.57?'skeleton':q<.8?'creeper':q<.95?'spider':'enderman'};
-  if(hos<14&&Math.random()<.6){const y=surfaceY(x,z);if(y>0){const l=lightAt(x,y,z);if(l[0]*daylight<7&&l[1]<7){const t=pickHostile(ch.bio[(x&15)|((z&15)<<4)],y,true);if(t!=='spider'||!SOLID[getB(x+1,y,z)])spawnMob(t,x+.5,y,z+.5)}}}
-  if(hos<14&&Math.random()<.35){const cy=4+Math.floor(Math.random()*Math.max(1,pp.y));if(!SOLID[getB(x,cy,z)]&&!SOLID[getB(x,cy+1,z)]&&SOLID[getB(x,cy-1,z)]&&getB(x,cy,z)!==WATER){const l2=lightAt(x,cy,z);if(l2[0]===0&&l2[1]<7)spawnMob(pickHostile(ch.bio[(x&15)|((z&15)<<4)],cy,false),x+.5,cy,z+.5)}}
   extraSpawns(ch,x,z,hos,ani);
-  if(ani<16&&daylight>.5&&Math.random()<.05){const y=surfaceY(x,z),bm=ch.bio[(x&15)|((z&15)<<4)],list=ANIMALS_BY[bm];if(y>0&&list&&getB(x,y-1,z)===GRASS)spawnMob(list[Math.floor(Math.random()*list.length)],x+.5,y,z+.5)}}
+  // 동물 재스폰: 마크처럼 20초(400틱)마다, 상한 10, 잔디 위 + 빛 9 이상
+  if(aniT<=0){aniT=20;if(ani<10){const y=surfaceY(x,z),bm=ch.bio[(x&15)|((z&15)<<4)],list=ANIMALS_BY[bm];
+    if(y>0&&list&&getB(x,y-1,z)===GRASS){const lit=(px,py,pz)=>{const l=lightAt(px,py,pz);return getB(px,py-1,pz)===GRASS&&Math.max(l[1],Math.round(l[0]*clamp((daylight-.2)/.8,0,1)))>8};packSpawn(list[Math.floor(Math.random()*list.length)],x,y,z,lit,10-ani)}}}}
 function extraSpawns(ch,x,z,hos,ani){const bm=ch.bio[(x&15)|((z&15)<<4)],night=daylight<.45,pp=player.pos;
-  if(night&&hos<16&&[0,21,22,37,38,1].includes(bm)&&Math.random()<.25&&getB(x,SEA-3,z)===WATER)spawnMob('drowned',x+.5,SEA-3,z+.5);
+  if(night&&hos<16&&[0,21,22,37,38,1,40,41].includes(bm)&&Math.random()<.25&&getB(x,SEA-2,z)===WATER)spawnMob('drowned',x+.5,SEA-2,z+.5);
   if(night&&hos<16&&Math.random()<.04&&mobs.filter(m=>m.type==='phantom').length<3&&pp.y>SEA-2&&lightAt(pp.x,pp.y+1,pp.z)[0]>12)spawnMob('phantom',pp.x+(Math.random()-.5)*20,pp.y+20,pp.z+(Math.random()-.5)*20);
   if(!night&&ani<20&&[17,23,36,3].includes(bm)&&Math.random()<.06&&mobs.filter(m=>m.type==='bee').length<6){const y=surfaceY(x,z);if(y>0)spawnMob('bee',x+.5,y+2,z+.5)}
   if(!night&&ani<20&&[10,25,26].includes(bm)&&Math.random()<.06&&mobs.filter(m=>m.type==='parrot').length<5){const y=surfaceY(x,z);if(y>0)spawnMob('parrot',x+.5,y+3,z+.5)}}
@@ -2282,10 +2359,10 @@ function phantomAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,A=m.ai;A
   if(Math.hypot(m.vel.x,m.vel.z)>.3)m.yaw=Math.atan2(m.vel.x,m.vel.z);m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*Math.sin(performance.now()/150)*.5)}
 function shootPotion(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.25,.3,.25),new THREE.MeshBasicMaterial({color:0x9a3ad0}));m.position.copy(from);scene.add(m);dir=dir.clone();dir.y+=.15;projs.push({pos:from.clone(),vel:dir.multiplyScalar(14),owner,dmg:4,m,life:0,stuck:false,fire:3});sfx('bow')}
 function spongeAbsorb(x,y,z){let n=0;for(let dy=-4;dy<=4;dy++)for(let dz=-4;dz<=4;dz++)for(let dx=-4;dx<=4;dx++){if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)>6)continue;if(getB(x+dx,y+dy,z+dz)===WATER){setBlock(x+dx,y+dy,z+dz,AIR,true);n++}}if(n)setBlock(x,y,z,WET_SPONGE)}
-function pickHostile(bm,y,surf){const q=Math.random();const snowy=[1,7,12,18,33,34,35,39].includes(bm);
-  if((bm===13||bm===30)&&q<.3)return q<.22?'slime':'witch';if(!surf&&y<DS_Y&&q<.08)return'slime';
-  if(surf&&q<.03)return'pillager';if(surf&&q<.05)return'witch';
-  const r=Math.random();let t=r<.33?'zombie':r<.57?'skeleton':r<.8?'creeper':r<.95?'spider':'enderman';
+function pickHostile(bm,y,surf){const q=Math.random();const snowy=[1,7,12,18,33,34,35,39,41].includes(bm);
+  if((bm===13||bm===30)&&surf&&q<.3)return q<.22?'slime':'witch';
+  if(surf&&q<.01)return'pillager';if(q<.012)return'witch';
+  const r=Math.random()*405;let t=r<95?'zombie':r<195?'skeleton':r<295?'creeper':r<395?'spider':'enderman';
   if(t==='zombie'&&(bm===8||bm===15||bm===28||bm===29)&&surf)t='husk';if(t==='skeleton'&&snowy&&surf)t='stray';return t}
 
 /* ═════════════ 캐릭터 (스킨 64×64) ═════════════ */
@@ -2683,11 +2760,11 @@ function menuAct(a){const keep=()=>{if($('nwName'))newW.name=$('nwName').value;i
   else if(a==='create'){newW=null;showMenu('create')}
   else if(a==='nwMode'||a==='nwMode2'){keep();newW.mode=newW.mode==='survival'?'creative':'survival';showMenu(a==='nwMode'?'create':'mkSrv')}
   else if(a==='nwType'||a==='nwType2'){keep();newW.type=newW.type==='default'?'flat':'default';showMenu(a==='nwType'?'create':'mkSrv')}
-  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;newW=null;enterWorld(w,null)}
+  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,gen:2,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;newW=null;enterWorld(w,null)}
   else if(a==='play'){const w=worldsList().find(x=>x.id===selWorld);if(!w)return;let d=null;try{d=JSON.parse(localStorage.getItem('bc_w_'+w.id))}catch(e){}enterWorld(w,d)}
   else if(a==='del'){const w=worldsList().find(x=>x.id===selWorld);if(!w||!confirm(`'${w.name}' 월드를 영원히 지울까요?`))return;saveWorldsList(worldsList().filter(x=>x.id!==w.id));localStorage.removeItem('bc_w_'+w.id);selWorld=null;showMenu('single')}
   else if(a==='mkSrv'){newW=null;showMenu('mkSrv')}
-  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,seed:seedOf(newW.seed)})}
+  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,gen:2,seed:seedOf(newW.seed)})}
   else if(a==='join'){if(selServer)joinServer(selServer)}
   else if(a==='joinCode'){const c=($('srvCode').value||'').trim().toLowerCase();if(c)joinServer(c)}
   else if(a==='resume'){hideMenu();lockPointer()}
@@ -2718,7 +2795,7 @@ function resetWorld(){DIM='over';for(const k in tilesByDim)tilesByDim[k].clear()
   started=false;worldTime=DAYLEN*.04;$('hud').classList.add('hide');$('touch').classList.add('hide');$('dead').classList.add('hide');viewMode=0;heldId=-1}
 function findSpawnXZ(){if(WTYPE==='flat')return[0,0];for(let k=0;k<600;k++){const a=k*2.4,r=k*6;const x=Math.round(Math.cos(a)*r),z=Math.round(Math.sin(a)*r);const h=terrainH(x,z),bm=biomeOf(x,z,h);if(h>SEA+2&&h<SEA+24&&bm!==BIO.DESERT&&bm!==BIO.SNOWY_PEAKS)return[x,z]}return[0,0]}
 let spawnFix=false;
-function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GAMEMODE=w.mode||'survival';
+function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen===2?2:1;GAMEMODE=w.mode||'survival';
   if(mpData){edits=mpData.edits||{};(mpData.tiles||[]).forEach(([k,v])=>{if(/^[ne]/.test(k))tilesByDim[k[0]==='n'?'nether':'end'].set(k.slice(1),v);else tilesByDim.over.set(k,v)})}
   else if(data){edits=data.edits||{};(data.tiles||[]).forEach(([k,v])=>tilesByDim.over.set(k,v));const td=data.tilesD||{};(td.nether||[]).forEach(([k,v])=>tilesByDim.nether.set(k,v));(td.end||[]).forEach(([k,v])=>tilesByDim.end.set(k,v));saplings=data.saplings||[];crops=data.crops||[]}
   if(data&&data.ds)dimState=Object.assign({dragonDead:false,crystals:0,egg:false},data.ds);DIM=(data&&data.dim)||'over';portalStay=true;portalT=0;for(const [k,v] of tilesByDim[DIM])tiles.set(k,v);dimVisual();
@@ -2731,7 +2808,7 @@ function finishEnter(){if(spawnFix){const x0=Math.floor(player.pos.x),z0=Math.fl
 function addCreativeStarter(){[GRASS,STONE,PLANKS,LOG,GLASS,TORCH,WOOL,BRICKS_ID(),SAND].forEach((id,i)=>{if(id&&ITEM[id])inv[i]={id,n:64,d:0}})}
 function BRICKS_ID(){return COBBLE}
 function quitToTitle(){save();if(MPS)mpLeave();WORLD=null;resetWorld();bootPanorama()}
-function bootPanorama(){SEED=20240611;WTYPE='default';GAMEMODE='survival';const [sx,sz]=findSpawnXZ();player.pos.set(sx+.5,terrainH(sx,sz)+14,sz+.5);player.pitch=-.15;phase='boot';loadDone=false;
+function bootPanorama(){SEED=20240611;WTYPE='default';GEN=2;GAMEMODE='survival';const [sx,sz]=findSpawnXZ();player.pos.set(sx+.5,terrainH(sx,sz)+14,sz+.5);player.pitch=-.15;phase='boot';loadDone=false;
   $('loadTxt').textContent='블록크래프트';$('loadSub').textContent='불러오는 중';$('loadBar').style.width='0%';$('loading').classList.remove('hide');hideMenu()}
 
 /* ═════════════ 멀티플레이 (Firebase) ═════════════
@@ -2750,7 +2827,7 @@ function loadServers(){waitMP(ok=>{const box=$('srvList');if(!box)return;if(!ok)
     if(!$('srvList'))return;$('srvList').innerHTML=L.length?L.map(x=>{const on=t-(x.upd||0)<90000;return`<div class="mitem${x.sid===selServer?' on':''}" data-s="${esc(x.sid)}"><b>${esc(x.name)}</b><small>${on?'<span style="color:#55ff55">● 접속 '+(x.players||1)+'명</span>':'<span style="color:#aaa">○ 비어 있음 (들어가면 다시 열려요)</span>'} · ${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'}</small><small>코드 ${esc(x.sid)} · 만든 사람 ${esc(x.hostName||'?')}</small></div>`}).join(''):'<div class="mempty">열린 서버가 없어요. 서버 만들기로 첫 서버를 열어 보세요</div>';
     $('srvList').querySelectorAll('[data-s]').forEach(el=>{el.onclick=()=>{selServer=el.dataset.s;$('srvList').querySelectorAll('.mitem').forEach(x=>x.classList.toggle('on',x===el));$('mJoin').disabled=false};el.ondblclick=()=>joinServer(el.dataset.s)})}).catch(e=>{if($('srvList'))$('srvList').innerHTML='<div class="mempty">서버 목록을 읽지 못했어요: '+esc(errMsg(e))+'</div>'})})}
 function createServer(o){waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}const uid=window.__mpUid,sid=Math.random().toString(36).slice(2,8);
-  const meta={name:o.name||'서버',seed:o.seed,type:o.type,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
+  const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
   Promise.all([dbr('bc_list/players/'+uid+'/'+sid).set(meta),dbr('bc_'+sid+'/players/'+uid+'/m').set(meta)]).then(()=>joinServer(sid)).catch(e=>showMenu('msg','서버를 만들지 못했어요. '+errMsg(e)))})}
 function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}
   showMenu('msg','서버 정보를 받는 중...');
@@ -2761,7 +2838,7 @@ function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');
       const t=all[u]&&all[u].t||{};for(const k in t){const r=t[k];if(!r)continue;if((r.t||0)>=(tt[k]||0)){tt[k]=r.t||0;tl[k]=r.j}}}
     const tiles2=[];for(const k in tl){if(!tl[k])continue;try{tiles2.push([k.replace(/_/g,','),JSON.parse(tl[k])])}catch(_){}}
     let d=null;try{d=JSON.parse(localStorage.getItem('bc_mp_'+sid))}catch(_){}
-    enterWorld({id:'mp_'+sid,name:meta.name,mode:meta.mode,type:meta.type,seed:meta.seed,mp:sid},d,{edits:ed,tiles:tiles2,time:meta.time});mpStart(sid,meta,lw,tt)}).catch(e=>showMenu('msg','접속하지 못했어요. '+errMsg(e)))})}
+    enterWorld({id:'mp_'+sid,name:meta.name,mode:meta.mode,type:meta.type,gen:meta.gen,seed:meta.seed,mp:sid},d,{edits:ed,tiles:tiles2,time:meta.time});mpStart(sid,meta,lw,tt)}).catch(e=>showMenu('msg','접속하지 못했어요. '+errMsg(e)))})}
 function mpStart(sid,meta,lw,tt){const uid=window.__mpUid,base='bc_'+sid+'/players/';
   MPS={sid,uid,meta,host:meta.host===uid,base,q:{},qt:0,st:0,count:1,refs:[],tq:{},lw:lw||{},tt:tt||{},watched:new Set(),mine:[]};
   const me=dbr(base+uid);MPS.me=me;me.child('p').onDisconnect().remove();
@@ -2783,7 +2860,7 @@ function mpEdit(cx,cz,i,v){if(!MPS)return;const t=now(),k=ek(cx,cz)+'/'+i;MPS.lw
 function mpTile(k,te){if(!MPS)return;const kk=dimPre()+k.replace(/,/g,'_'),t=now();MPS.tt[kk]=t;MPS.tq[kk]={j:te?JSON.stringify(te):'',t}}
 function mpChat(t){if(!MPS)return;const r=MPS.me.child('c').push({n:myName(),t:t.slice(0,120),ts:now()});MPS.mine.push(r.key);while(MPS.mine.length>15)MPS.me.child('c/'+MPS.mine.shift()).remove().catch(()=>{})}
 function mpSetTime(t){if(MPS&&MPS.host)MPS.me.child('m').update({time:Math.round(t)}).catch(()=>{})}
-function mpHeartbeat(){if(!MPS)return;const m=MPS.meta;dbr('bc_list/players/'+MPS.uid+'/'+MPS.sid).set({name:m.name,seed:m.seed,type:m.type,mode:m.mode,host:m.host,hostName:m.hostName,created:m.created||now(),upd:now(),players:MPS.count||1}).catch(()=>{});mpSetTime(worldTime)}
+function mpHeartbeat(){if(!MPS)return;const m=MPS.meta;dbr('bc_list/players/'+MPS.uid+'/'+MPS.sid).set({name:m.name,seed:m.seed,type:m.type,gen:m.gen||1,mode:m.mode,host:m.host,hostName:m.hostName,created:m.created||now(),upd:now(),players:MPS.count||1}).catch(()=>{});mpSetTime(worldTime)}
 function mpTick(dt){if(!MPS)return;MPS.qt+=dt;MPS.st+=dt;MPS.ht=(MPS.ht||0)+dt;
   if(MPS.qt>.15){MPS.qt=0;if(Object.keys(MPS.q).length){MPS.me.child('e').update(MPS.q).catch(e=>{if(!MPS.warned){MPS.warned=1;chatLine('블록 저장 실패: '+errMsg(e),'#ff5555')}});MPS.q={}}if(Object.keys(MPS.tq).length){MPS.me.child('t').update(MPS.tq).catch(()=>{});MPS.tq={}}}
   if(MPS.st>.1){MPS.st=0;const p=player,st=inv[sel];MPS.me.child('p').set({n:myName(),x:+p.pos.x.toFixed(2),y:+p.pos.y.toFixed(2),z:+p.pos.z.toFixed(2),ya:+p.yaw.toFixed(2),pi:+p.pitch.toFixed(2),sw:swingT<1?1:0,sn:p.sneak?1:0,h:st?st.id:0,d:p.dead?1:0}).catch(()=>{})}
