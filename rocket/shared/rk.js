@@ -333,7 +333,8 @@
     else if (c.boost > 0) c.v = Math.min(maxv, c.v + C.BOOSTA * dt);
     else if (brk) c.v = c.v > 0 ? Math.max(0, c.v - C.BRAKE * dt) : Math.max(-C.REVMAX, c.v - 14 * dt);
     else if (gas) { if (c.v < maxv) c.v = Math.min(maxv, c.v + C.ACC * (1 - Math.max(0, c.v) / maxv * 0.85) * dt); }
-    else c.v = c.v > 0 ? Math.max(0, c.v - C.DRAG * dt) : Math.min(0, c.v + C.DRAG * dt);
+    // 가속을 떼면 속도에 비례해 줄어서 2~3.5초쯤 뒤에 멈춰요
+    else c.v = c.v > 0 ? Math.max(0, c.v - (C.DRAG + c.v * 0.4) * dt) : Math.min(0, c.v + (C.DRAG - c.v * 0.4) * dt);
     if (c.v > maxv) c.v = Math.max(maxv, c.v - 18 * dt);
 
     // 조향 · 드리프트
