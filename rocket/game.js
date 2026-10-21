@@ -889,18 +889,18 @@ const localLb = {
   },
   get(track) { return this.d[track] || { race: [], lap: [] }; }
 };
-function localWS(join) {
-  const G = window.RKGame;
-  const r = new G.Room('', true, join.track | 0, localLb);
-  const L = { readyState: 1, onmessage: null, onclose: null, timer: 0 };
-  const conn = { sendRaw: s => { if (L.readyState === 1) queueMicrotask(() => { if (ws === L) onMsg(JSON.parse(s)); }); } };
-  const me = r.addHuman(conn, join.name || '나');
-  conn.sendRaw(JSON.stringify({ t: 'hi', id: me.id, code: '' }));
+// 방을 이 브라우저에서 돌려요 (혼자 달리기 · 온라인 방장). conn 은 나에게 오는 메시지 통로
+function hostLocal(r, name) {
+  const L = { readyState: 1, timer: 0, room: r };
+  const conn = { sendRaw: s => { if (L.readyState === 1) queueMicrotask(() => { if (L.readyState === 1) onMsg(JSON.parse(s)); }); } };
+  const me = r.addHuman(conn, name || '나');
+  conn.sendRaw(JSON.stringify({ t: 'hi', id: me.id, code: r.code }));
   let acc = 0, lastT = performance.now();
   L.timer = setInterval(() => {
     const now = performance.now(); acc += (now - lastT) / 1000; lastT = now;
     if (acc > 0.25) acc = 0.25;
     while (acc >= RK.DT) { acc -= RK.DT; r.step(); }
+    if (L.tick) L.tick();
   }, 5);
   L.send = str => {
     const m = JSON.parse(str);
@@ -909,14 +909,124 @@ function localWS(join) {
     else if (m.t === 'track') r.setTrack(m.v);
     else if (m.t === 'ping') conn.sendRaw(JSON.stringify({ t: 'pong', c: m.c, k: r.tick }));
   };
-  L.close = () => { L.readyState = 3; clearInterval(L.timer); };
-  r.startCountdown();
+  L.close = () => { L.readyState = 3; clearInterval(L.timer); if (L.onClose) L.onClose(); };
   return L;
 }
+function localWS(join) {
+  const L = hostLocal(new window.RKGame.Room('', true, join.track | 0, localLb), join.name);
+  L.room.startCountdown();
+  return L;
+}
+
+// ── 온라인 (서버 없이): 방을 만든 사람 브라우저가 서버 역할을 하고, Firebase 로 입력 · 화면 상태를 주고받아요 ──
+// 경로: playhub_mp/rooms/rk_<코드>/players/<uid>  (각자 자기 칸에만 써요)
+//   방장 칸: m = 방 정보, o/<손님uid>/{h,r,s,x,e} = 손님에게 보내는 최신 메시지
+//   손님 칸: j = 이름, i = 최근 입력 12개
+const fbUid = () => window.__rkFbUid || null;
+const fbr = p => firebase.database().ref('playhub_mp/rooms/' + p);
+const fbNow = () => { try { return MP.serverNow(); } catch (e) { return Date.now(); } };
+const cleanCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 5; i++) c += A[Math.random() * A.length | 0]; return c; };
+const cleanNm = s => String(s || '').replace(/[\u0000-\u001f<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 12) || ('레이서' + (Math.random() * 900 + 100 | 0));
+try { if (!window.__mpFail && window.MP && MP.isConfigured && MP.isConfigured()) MP.initAuthOnly(u => { if (u) { window.__rkFbUid = u.uid; fbAvail(); } }); } catch (e) {}
+
+function fbHost(join, priv, code) {
+  const uid = fbUid(); code = code || newCode();
+  const r = new window.RKGame.Room(code, priv, join.track | 0, localLb);
+  const L = hostLocal(r, join.name);
+  const base = 'rk_' + code + '/players/', mine = fbr(base + uid);
+  const guests = new Map(); let pend = {}, flushT = 0, beatT = 0;
+  mine.onDisconnect().remove();
+  mine.set({ m: { code, host: uid, priv: priv ? 1 : 0, ts: fbNow() } });
+  const listRef = fbr('rk_list/players/' + uid);
+  const beat = () => { if (!priv) listRef.set({ code, n: r.humans(), st: r.state, upd: fbNow() }).catch(() => {}); };
+  if (!priv) { listRef.onDisconnect().remove(); beat(); }
+  const KIND = { s: 's', room: 'r', res: 'x', hi: 'h', err: 'e' };
+  const onGuest = snap => {
+    const gid = snap.key; if (gid === uid) return;
+    const v = snap.val() || {}; let g = guests.get(gid);
+    if (!g && v.j) {
+      const conn = { sendRaw: str => { const t = str.slice(6, str.indexOf('"', 6)); const k = KIND[t]; if (k) pend[gid + '/' + k] = str; } };
+      const p = r.addHuman(conn, cleanNm(v.j.n));
+      if (!p) { pend[gid + '/e'] = JSON.stringify({ t: 'err', msg: '방이 꽉 찼어요', n: Date.now() }); return; }
+      g = { p, conn }; guests.set(gid, g);
+      conn.sendRaw(JSON.stringify({ t: 'hi', id: p.id, code }));
+      r.sendRoom(); beat();
+    }
+    if (g && v.i && Array.isArray(v.i.l)) r.pushInputs(g.p, v.i.l);
+  };
+  const playersRef = fbr('rk_' + code + '/players');
+  playersRef.on('child_added', onGuest); playersRef.on('child_changed', onGuest);
+  playersRef.on('child_removed', snap => {
+    const g = guests.get(snap.key); if (!g) return; guests.delete(snap.key);
+    if (r.state === 'race') { g.p.conn = null; g.p.name += ' (나감)'; } else r.remove(g.p.id);
+    beat();
+  });
+  L.tick = () => {
+    const t = performance.now();
+    if (t - flushT > 45) { flushT = t; const out = pend; pend = {}; if (Object.keys(out).length) mine.child('o').update(out).catch(() => {}); }
+    if (t - beatT > 3000) { beatT = t; beat(); }
+  };
+  L.onClose = () => { playersRef.off(); mine.remove().catch(() => {}); if (!priv) listRef.remove().catch(() => {}); };
+  return L;
+}
+
+function fbGuest(join, hostUid, code) {
+  const uid = fbUid(), base = 'rk_' + code + '/players/';
+  const mine = fbr(base + uid), out = fbr(base + hostUid + '/o/' + uid), meta = fbr(base + hostUid + '/m');
+  const L = { readyState: 1 }; let win = [], sendT = 0, got = false;
+  mine.onDisconnect().remove();
+  mine.set({ j: { n: cleanNm(join.name), ts: fbNow() } });
+  const deliver = snap => { const v = snap.val(); if (!v || L.readyState !== 1) return; got = true; try { onMsg(JSON.parse(v)); } catch (e) {} };
+  const subs = ['h', 'r', 's', 'x', 'e'].map(k => { const ref = out.child(k); ref.on('value', deliver); return ref; });
+  meta.on('value', snap => { if (!snap.exists() && L.readyState === 1) { L.close(); onMsg({ t: 'err', msg: '방장이 나갔어요' }); } });
+  const to = setTimeout(() => { if (!got && L.readyState === 1) { L.close(); onMsg({ t: 'err', msg: '방에 연결하지 못했어요' }); } }, 10000);
+  L.send = str => {
+    const m = JSON.parse(str);
+    if (m.t !== 'i') return;
+    win = win.concat(m.l).slice(-12);
+    const t = performance.now();
+    if (t - sendT > 45) { sendT = t; mine.child('i').set({ l: win }).catch(() => {}); }
+  };
+  L.close = () => { if (L.readyState !== 1) return; L.readyState = 3; clearTimeout(to); subs.forEach(s => s.off()); meta.off(); mine.remove().catch(() => {}); };
+  return L;
+}
+
+// 방 코드로 들어가기: 방이 없으면 그 코드로 내가 방을 만들어요 (허브 초대 링크도 같은 방으로 모여요)
+function fbJoinOrHost(join, L0) {
+  const code = cleanCode(join.code);
+  fbr('rk_' + code + '/players').once('value').then(s => {
+    if (L0.readyState !== 1) return;
+    const all = s.val() || {}; let host = null;
+    for (const u in all) if (all[u] && all[u].m && u !== fbUid()) host = u;
+    L0.inner = host ? fbGuest(join, host, code) : fbHost(join, true, code);
+  }).catch(() => { onMsg({ t: 'err', msg: '서버에 연결하지 못했어요' }); });
+}
+function fbQuick(join, L0) {
+  fbr('rk_list/players').once('value').then(s => {
+    if (L0.readyState !== 1) return;
+    const all = s.val() || {}, t = fbNow();
+    const ok = Object.entries(all).filter(([u, v]) => v && u !== fbUid() && v.st === 'lobby' && v.n < 8 && t - (v.upd || 0) < 10000).sort((a, b) => b[1].n - a[1].n);
+    L0.inner = ok.length ? fbGuest(join, ok[0][0], ok[0][1].code) : fbHost(join, false);
+  }).catch(() => { onMsg({ t: 'err', msg: '서버에 연결하지 못했어요' }); });
+}
+function fbConnect(join) {
+  // 연결 준비가 끝나기 전에도 ws 자리를 채워 둬요
+  const L0 = { readyState: 1, inner: null, send: str => { if (L0.inner) L0.inner.send(str); }, close: () => { L0.readyState = 3; if (L0.inner) L0.inner.close(); } };
+  if (join.mode === 'create') L0.inner = fbHost(join, true);
+  else if (join.mode === 'code') fbJoinOrHost(join, L0);
+  else fbQuick(join, L0);
+  return L0;
+}
+function fbAvail() { document.querySelectorAll('.onl').forEach(e => e.style.display = ''); }
 let online = false;
 function connect(join) {
   if (ws) try { ws.close(); } catch (e) {}
   if (join.mode === 'solo') { ws = localWS(join); return; }
+  if (!online) {
+    if (!fbUid()) { showErr('온라인 연결을 준비 중이에요. 잠시 뒤 다시 눌러 주세요'); toMenu(); return; }
+    ws = fbConnect(join); return;
+  }
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => ws.send(JSON.stringify(join));
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
@@ -1315,10 +1425,12 @@ $('bSolo').onclick = () => joinWith({ mode: 'solo', track: +$('trackSel').value 
 $('bQuick').onclick = () => joinWith({ mode: 'quick' });
 fetch('health', { cache: 'no-store' }).then(r => r.ok ? r.text() : '').catch(() => '').then(t => {
   online = t.trim() === 'ok';
-  document.querySelectorAll('.onl').forEach(e => e.style.display = online ? '' : 'none');
+  if (online || fbUid()) fbAvail(); else document.querySelectorAll('.onl').forEach(e => e.style.display = 'none');
+  const rq = cleanCode(new URLSearchParams(location.search).get('room'));
+  if (rq && rq !== 'PUBLIC') $('code').value = rq;
 });
 $('bCreate').onclick = () => joinWith({ mode: 'create', track: +$('trackSel').value });
-$('bJoin').onclick = () => { const c = $('code').value.trim().toUpperCase(); if (c.length !== 5) return showErr('방 코드 5글자를 넣어 주세요'); joinWith({ mode: 'code', code: c }); };
+$('bJoin').onclick = () => { const c = $('code').value.trim().toUpperCase(); if (c.length < (online ? 5 : 3)) return showErr(online ? '방 코드 5글자를 넣어 주세요' : '방 코드를 3글자 이상 넣어 주세요'); joinWith({ mode: 'code', code: c }); };
 $('bStart').onclick = () => send({ t: 'start' });
 $('lTrackSel').onchange = () => send({ t: 'track', v: +$('lTrackSel').value });
 $('bLeave').onclick = $('bLeave2').onclick = () => { send({ t: 'leave' }); toMenu(); };

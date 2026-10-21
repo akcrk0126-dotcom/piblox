@@ -16,6 +16,13 @@ npm start          # http://localhost:8080
 Railway 에서는 `npm start` 로 그대로 돌아가요 (PORT 환경 변수 사용).
 piblox 저장소 안에 있으니 Railway 서비스의 Root Directory 를 `rocketkart` 로 잡아 주세요.
 
+## 온라인 (서버 없이, Firebase)
+`/health` 서버가 없으면 piblox 의 Firebase 로 온라인 방을 열어요. **방을 만든 사람 브라우저가 서버 역할**(같은 `server/game.js` 로 판정)을 하고,
+손님은 입력만 보내요. 경로는 `playhub_mp/rooms/rk_<코드>/players/<uid>` (각자 자기 칸에만 씀), 빠른 시작 목록은 `rk_list`.
+- 빠른 시작: 대기 중인 공개 방에 들어가고, 없으면 새 공개 방을 열어요 (12초 뒤 출발).
+- 방 만들기 / 코드 참가: 코드로 모여요. 없는 코드로 참가하면 그 코드로 방을 만들어요 (허브 초대 링크 `?room=` 도 같은 방으로).
+- 방장이 나가면 방이 끝나요.
+
 ## 혼자 달리기 (서버 없이)
 서버(`/health`)가 없으면 메뉴에 **혼자 달리기**만 보이고, 방 코드(`server/game.js`)를 브라우저 안에서 그대로 돌려 봇 7대와 달려요.
 piblox 허브용 정적 버전은 이렇게 다시 만들어요:
