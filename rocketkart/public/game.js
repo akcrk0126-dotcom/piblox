@@ -326,7 +326,7 @@ function strip(T, edge, step, vScale, skipGap) {
     const f = RK.frame(T, s, _f);
     const [a, b] = edge(f);
     pos.push(...a, ...b); uv.push(0, s / vScale, 1, s / vScale);
-    const ok = !(skipGap && inGap(T, s));
+    const ok = !(typeof skipGap === 'function' ? skipGap(s) : skipGap && inGap(T, s));
     if (k > 0 && ok && prevOk) idx.push(vi - 2, vi, vi - 1, vi - 1, vi, vi + 1);
     prevOk = ok; vi += 2;
   }
@@ -366,19 +366,43 @@ function buildWorld(idx) {
   G.add(new THREE.Mesh(strip(T, f => [P(f, f.w / 2 + 0.36, -1.3), P(f, f.w / 2 + 0.3, -1.1)], 2, 24, true), glowLine));
   // 난간 (반투명 벽 + 빛나는 윗줄)
   const glass = new THREE.MeshBasicMaterial({ color: th.rail, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false });
-  if (!T.nowall) {
-  G.add(new THREE.Mesh(strip(T, f => [P(f, -f.w / 2, 0), P(f, -f.w / 2, 1.1)], 2, 24, true), glass));
-  G.add(new THREE.Mesh(strip(T, f => [P(f, f.w / 2, 1.1), P(f, f.w / 2, 0)], 2, 24, true), glass));
   const railTop = new THREE.MeshBasicMaterial({ color: new THREE.Color(th.rail).multiplyScalar(2.2), toneMapped: false, side: THREE.DoubleSide });
-  G.add(new THREE.Mesh(strip(T, f => [P(f, -f.w / 2 - 0.12, 1.1), P(f, -f.w / 2 + 0.12, 1.1)], 2, 24, true), railTop));
-  G.add(new THREE.Mesh(strip(T, f => [P(f, f.w / 2 - 0.12, 1.1), P(f, f.w / 2 + 0.12, 1.1)], 2, 24, true), railTop));
+  // 난간은 벽 없는 구간 · 지름길이 갈라지고 합쳐지는 곳에서 끊겨요
+  const railSkip = sg => s => inGap(T, s) || RK.inNoWall(T, s) || T.cuts.some(K => K.side === sg && (RK.mod(s - K.s0, T.L) < 30 || RK.mod(K.s1 - s, T.L) < 30));
+  const rails = (TT, skipL, skipR) => {
+    G.add(new THREE.Mesh(strip(TT, f => [P(f, -f.w / 2, 0), P(f, -f.w / 2, 1.1)], 2, 24, skipL), glass));
+    G.add(new THREE.Mesh(strip(TT, f => [P(f, f.w / 2, 1.1), P(f, f.w / 2, 0)], 2, 24, skipR), glass));
+    G.add(new THREE.Mesh(strip(TT, f => [P(f, -f.w / 2 - 0.12, 1.1), P(f, -f.w / 2 + 0.12, 1.1)], 2, 24, skipL), railTop));
+    G.add(new THREE.Mesh(strip(TT, f => [P(f, f.w / 2 - 0.12, 1.1), P(f, f.w / 2 + 0.12, 1.1)], 2, 24, skipR), railTop));
+  };
+  rails(T, railSkip(-1), railSkip(1));
+  // 벽 없는 구간 가장자리: 깜빡이는 빨간 경고줄
+  if (T.nowall.length) {
+    const warn = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2a40).multiplyScalar(2.5), toneMapped: false, side: THREE.DoubleSide });
+    const nw = s => !RK.inNoWall(T, s);
+    G.add(new THREE.Mesh(strip(T, f => [P(f, -f.w / 2, 0.05), P(f, -f.w / 2 + 0.7, 0.05)], 2, 24, nw), warn));
+    G.add(new THREE.Mesh(strip(T, f => [P(f, f.w / 2 - 0.7, 0.05), P(f, f.w / 2, 0.05)], 2, 24, nw), warn));
+    W.upd.push(t => warn.color.setScalar(0).add(new THREE.Color(0xff2a40).multiplyScalar((t * 3 | 0) % 2 ? 2.5 : 0.6)));
+  }
+  // 지름길: 같은 길 재질 · 양쪽 난간 · 입구 화살표 표지
+  for (const K of T.cuts) {
+    const KT = K.T;
+    G.add(new THREE.Mesh(strip(KT, f => [P(f, -f.w / 2, -0.03), P(f, f.w / 2, -0.03)], 2, 24, false), road.material));
+    G.add(new THREE.Mesh(strip(KT, f => [P(f, f.w / 2 + 0.4, -1.8), P(f, -f.w / 2 - 0.4, -1.8)], 2, 24, s => s < 30 || s > KT.L - 30), under));
+    rails(KT, false, false);
+    const sign = canvasTex(512, 128, (g, cw, ch) => { g.fillStyle = '#ffcc00'; g.fillRect(0, 0, cw, ch); g.fillStyle = '#111'; g.font = '900 72px "Black Han Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(K.side > 0 ? '지름길 ▶▶' : '◀◀ 지름길', cw / 2, ch / 2 + 4); });
+    const o = onTrack(T, K.s0 - 30, K.side * (RK.widthAt(T, K.s0 - 30) / 2 + 1.5), 4.5);
+    const bd = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.75), new THREE.MeshBasicMaterial({ map: sign, toneMapped: false, side: THREE.DoubleSide }));
+    basis(bd.matrix, o.x, o.y, o.z, o.fx, o.fy, o.fz, o.ux, o.uy, o.uz); bd.matrixAutoUpdate = false; G.add(bd);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4.5, 6), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+    const o2 = onTrack(T, K.s0 - 30, K.side * (RK.widthAt(T, K.s0 - 30) / 2 + 1.5), 2.2); post.position.set(o2.x, o2.y, o2.z); G.add(post);
   }
 
   // 부스트 판
-  const quad = (s, lat, len, wd, up, mat) => {
+  const quad = (s, lat, len, wd, up, mat, TT) => {
     const pos = [], uv = [], ix = [], n = Math.max(2, Math.ceil(len / 1.5));
     for (let k = 0; k <= n; k++) {
-      const ss = s + len * k / n, f = RK.frame(T, ss, _f);
+      const ss = s + len * k / n, f = RK.frame(TT || T, ss, _f);
       pos.push(...P(f, lat - wd / 2, up), ...P(f, lat + wd / 2, up)); uv.push(0, k / n, 1, k / n);
       if (k) ix.push(2 * k - 2, 2 * k, 2 * k - 1, 2 * k - 1, 2 * k, 2 * k + 1);
     }
@@ -386,10 +410,10 @@ function buildWorld(idx) {
     gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); gg.setIndex(ix); gg.computeVertexNormals();
     const m = new THREE.Mesh(gg, mat); G.add(m); return m;
   };
-  for (const b of T.boost) {
+  for (const [TT, b] of [...T.boost.map(b => [T, b]), ...T.cuts.flatMap(K => K.T.boost.map(b => [K.T, b]))]) {
     const mat = new THREE.MeshBasicMaterial({ map: boostTex.clone(), transparent: true, toneMapped: false, color: 0xbff6ff, depthWrite: false });
     mat.map.needsUpdate = true; mat.map.repeat.set(1, 2);
-    quad(b.s, b.lat, b.len, b.wd, 0.04, mat); W.boostMats.push(mat);
+    quad(b.s, b.lat, b.len, b.wd, 0.04, mat, TT); W.boostMats.push(mat);
   }
   for (const j of T.jumps) {
     const w = RK.widthAt(T, j.s) - 2;
@@ -454,7 +478,11 @@ function buildWorld(idx) {
   // 영역
   let cx = 0, cz = 0, R = 0; for (let i = 0; i < T.N; i += 10) { cx += T.px[i]; cz += T.pz[i]; } cx /= T.N / 10; cz /= T.N / 10;
   for (let i = 0; i < T.N; i += 10) R = Math.max(R, Math.hypot(T.px[i] - cx, T.pz[i] - cz));
-  const near = (x, z, d) => { for (let i = 0; i < T.N; i += 6) if (Math.hypot(T.px[i] - x, T.pz[i] - z) < d) return true; return false; };
+  const near = (x, z, d) => {
+    for (let i = 0; i < T.N; i += 6) if (Math.hypot(T.px[i] - x, T.pz[i] - z) < d) return true;
+    for (const K of T.cuts) for (let i = 0; i < K.T.N; i += 6) if (Math.hypot(K.T.px[i] - x, K.T.pz[i] - z) < d - 4) return true;   // 지름길 자리도 비워요
+    return false;
+  };
 
   const B = { city: buildCity, lava: buildLava, jungle: buildJungle, ice: buildIce, cyber: buildCyber, desert: buildDesert };
   if (def.theme === 'space') buildSpace(W, T, cx, cz, R, near);
@@ -1119,7 +1147,7 @@ function onEvent(e) {
     case 'drop': if (mine) Snd.play('drop'); break;
     case 'fire': if (mine || near(id) > 0.3) Snd.play('fire'); break;
     case 'emp': Snd.play('emp'); flash('#8fd6ff', 0.5); if (!mine) toast('⚡ EMP 쇼크!'); break;
-    case 'hit': if (mine) { Snd.play('hit'); camShake = 1; flash('#ff2040', 0.35); } else if (near(id) > 0.2) Snd.play('bump');
+    case 'hit': if (mine) { Snd.play('hit'); camShake = 0.6; flash('#ff2040', 0.25); } else if (near(id) > 0.2) Snd.play('bump');
       if (c) burst(c.root.position, 0xffa040, 40, 14); break;
     case 'boom': { const T = world.T, o = onTrack(T, e[2], e[3], 1); _v.set(o.x, o.y, o.z); burst(_v, 0xff7020, 70, 22); if (_v.distanceTo(camera.position) < 150) Snd.play('boom'); break; }
     case 'wall': if (mine) { Snd.play('wall'); camShake = Math.max(camShake, 0.25); } if (c) sparks(c, 12); break;
@@ -1130,10 +1158,11 @@ function onEvent(e) {
     case 'start': if (mine) { toast('로켓 스타트! 🚀'); Snd.play('boost'); } break;
     case 'near': if (mine) { combo('아슬아슬! +니트로', '#7af'); Snd.play('near'); } break;
     case 'draft': if (mine) { combo('슬립스트림!', '#6ff'); Snd.play('draft'); } break;
+    case 'cut': if (mine) { combo('지름길!', '#ffd23f'); Snd.play('near'); } break;
     case 'perfect': if (mine) { combo('퍼펙트 드리프트!', '#f7f'); } break;
     case 'trick': if (mine) combo('트릭 성공!', '#ff6'); break;
     case 'nitrofull': if (mine) { combo(isTouch ? '니트로 준비! ⚡ 버튼' : '니트로 준비! Q 키', '#0ff'); Snd.play('ready'); } break;
-    case 'nitro': if (mine) { bigText('NITRO!', 900); Snd.play('nitro'); camShake = 1.4; flash('#40e0ff', 0.45); nitroT = 2.8; } else if (near(id) > 0.2) Snd.play('boost'); if (c) burst(c.root.position, 0x40e0ff, 60, 18); break;
+    case 'nitro': if (mine) { bigText('NITRO!', 900); Snd.play('nitro'); camShake = 0.6; flash('#40e0ff', 0.25); nitroT = 2.8; } else if (near(id) > 0.2) Snd.play('boost'); if (c) burst(c.root.position, 0x40e0ff, 60, 18); break;
     case 'falloff': if (mine) { combo('추락!', '#f55'); Snd.play('fall'); } break;
     case 'hz': if (mine) { combo({ laser: '레이저에 맞았어요!', rock: '바위에 깔렸어요!', meteor: '운석 직격!' }[e[2]] || '앗!', '#f84'); if (e[2] === 'laser') Snd.play('laser'); } break;
     case 'zap': Snd.play('zap'); if (!mine) combo('🌩️ 번개!', '#fff'); break;
@@ -1159,6 +1188,9 @@ function interpCar(id, rt) {
   }
   const src = cb || ca;
   out.dr = src[6]; out.tier = src[7]; out.boost = src[8]; out.spin = src[9]; out.shield = src[10]; out.fall = src[11];
+  // 지름길 좌표 (같은 지름길 안에서만 부드럽게 이어요)
+  out.sc = src[15] | 0;
+  if (cb && (ca[15] | 0) === out.sc) { out.sp = lerp(ca[16], cb[16], t); out.sl = lerp(ca[17], cb[17], t); } else { out.sp = src[16]; out.sl = src[17]; }
   return out;
 }
 
@@ -1258,25 +1290,26 @@ let camInit = false, fov = 72, flyS = 0;
 function followCam(st, dt, isRace) {
   const T = world.T; RK.carPose(T, st, pose);
   const sp = Math.abs(st.v) / C.MAXV, dir = rearView ? -1 : 1;
-  const ca = st.yaw * 0.8 - (st.dr || 0) * 0.2;    // 드리프트 땐 미끄러지는 쪽을 조금 봐요
-  const f = RK.frame(T, st.p, _f);
+  // 카메라는 길 방향을 주로 봐서 차가 꺾이는 게 잘 보여요 (덜 어지럽게)
+  const ca = st.yaw * 0.3 - (st.dr || 0) * 0.12;
+  const f = RK.frame(RK.carTrack(T, st), RK.carS(T, st), _f);
   const cy = Math.cos(ca), sy = Math.sin(ca);
   const fx = f.tx * cy + f.rx * sy, fy = f.ty * cy + f.ry * sy, fz = f.tz * cy + f.rz * sy;
   const dist = 7.2 + sp * 2.2;
   const tx = pose.x - fx * dist * dir + f.ux * (2.6 + sp * 0.4), ty = pose.y - fy * dist * dir + f.uy * (2.6 + sp * 0.4), tz = pose.z - fz * dist * dir + f.uz * (2.6 + sp * 0.4);
-  const k = camInit ? 1 - Math.exp(-dt * 9) : 1;
+  const k = camInit ? 1 - Math.exp(-dt * 7) : 1;
   camPos.x = lerp(camPos.x, tx, k); camPos.y = lerp(camPos.y, ty, k); camPos.z = lerp(camPos.z, tz, k);
   camLook.set(pose.x + pose.fx * 5 * dir + f.ux * 1.2, pose.y + pose.fy * 5 * dir + f.uy * 1.2, pose.z + pose.fz * 5 * dir + f.uz * 1.2);
   // 커브 기울기는 반만 따라가고, 뒤집히는 구간은 다 따라가요
-  const wu = Math.max(0, f.uy) * 0.9;
+  const wu = Math.max(0, f.uy) * 2.2;
   _v.set(f.ux, f.uy + wu, f.uz).normalize();
   camUp.lerp(_v, camInit ? 1 - Math.exp(-dt * 5) : 1).normalize();
   camInit = true;
   camera.position.copy(camPos);
-  if (camShake > 0) { camera.position.x += (Math.random() - 0.5) * camShake * 0.8; camera.position.y += (Math.random() - 0.5) * camShake * 0.8; camShake = Math.max(0, camShake - dt * 2.5); }
+  if (camShake > 0) { camera.position.x += (Math.random() - 0.5) * camShake * 0.35; camera.position.y += (Math.random() - 0.5) * camShake * 0.35; camShake = Math.max(0, camShake - dt * 3.5); }
   camera.up.copy(camUp); camera.lookAt(camLook);
-  const tf = 72 + sp * 14 + (st.boost > 0 ? 10 : 0) + (nitroT > 0 ? 12 : 0);
-  fov = lerp(fov, tf, 1 - Math.exp(-dt * 4)); camera.fov = fov; camera.updateProjectionMatrix();
+  const tf = 70 + sp * 7 + (st.boost > 0 ? 4 : 0) + (nitroT > 0 ? 6 : 0);
+  fov = lerp(fov, tf, 1 - Math.exp(-dt * 2.5)); camera.fov = fov; camera.updateProjectionMatrix();
 }
 function flyCam(dt) {
   const T = world.T; flyS += dt * 38;
@@ -1304,8 +1337,11 @@ function drawMini(list) {
   g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 16; g.beginPath(); miniPts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.stroke();
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 7; g.stroke();
   const T = world.T;
+  g.setLineDash([6, 5]); g.strokeStyle = 'rgba(255,210,60,.95)'; g.lineWidth = 4;
+  for (const K of T.cuts) { g.beginPath(); for (let i = 0; i < K.T.N; i += 4) { const [x, y] = mm(K.T.px[i], K.T.pz[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  g.setLineDash([]);
   for (const [id, st] of list) {
-    const o = onTrack(T, st.p, st.lat, 0), [x, y] = mm(o.x, o.z), p = players.get(id);
+    const o = RK.carPose(T, st, {}), [x, y] = mm(o.x, o.z), p = players.get(id);
     g.fillStyle = p ? hex(p.color) : '#fff';
     g.beginPath(); g.arc(x, y, id === myId ? 11 : 7.5, 0, 7); g.fill();
     if (id === myId) { g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.stroke(); }
@@ -1357,8 +1393,8 @@ function drawFx(dt, st) {
   if (st && mode === 'race') {
     const sp = Math.abs(st.v) / C.MAXV, boosting = st.boost > 0, nit = nitroT > 0;
     if (nitroT > 0) nitroT -= dt;
-    const n = nit ? 110 : boosting ? 46 : sp > 0.85 ? 16 : 0;
-    fx2.strokeStyle = nit ? 'rgba(120,255,255,.7)' : boosting ? 'rgba(180,240,255,.45)' : 'rgba(255,255,255,.18)';
+    const n = nit ? 40 : boosting ? 14 : 0;
+    fx2.strokeStyle = nit ? 'rgba(120,255,255,.45)' : 'rgba(180,240,255,.25)';
     fx2.lineWidth = nit ? 3 : 2;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, r0 = (0.35 + Math.random() * 0.3) * Math.max(w, h), r1 = r0 + 40 + Math.random() * 120;
@@ -1367,7 +1403,7 @@ function drawFx(dt, st) {
   }
   if (st && mode === 'race' && (finalLap || nitroT > 0)) {
     const g = fx2.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
-    const a = nitroT > 0 ? 0.35 : 0.12 + 0.08 * Math.sin(performance.now() / 180);
+    const a = nitroT > 0 ? 0.2 : 0.08 + 0.04 * Math.sin(performance.now() / 400);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, nitroT > 0 ? `rgba(0,220,255,${a})` : `rgba(255,30,60,${a})`);
     fx2.fillStyle = g; fx2.fillRect(0, 0, w, h);
   }
@@ -1389,7 +1425,7 @@ function renderLobby() {
   const def = RK.TRACKS[room.track];
   $('lTrack').textContent = def.name;
   $('lCode').textContent = room.priv ? room.code : '';
-  $('lCodeHelp').textContent = !room.code && room.priv ? '혼자 달리기 · 봇 7대와 함께 달려요' : room.priv ? '친구에게 이 코드를 알려 주세요' : '빠른 시작 · 사람이 모자라면 봇이 함께 달려요';
+  $('lCodeHelp').textContent = !room.code && room.priv ? '혼자 달리기 · 봇 5대와 함께 달려요' : room.priv ? '친구에게 이 코드를 알려 주세요' : '빠른 시작 · 사람이 모자라면 봇이 함께 달려요';
   $('lPlayers').innerHTML = room.players.map(p => `<li><span class="dot" style="color:${hex(p.color)};background:currentColor"></span>${esc(p.name)}${p.id === room.host && room.priv ? ' 👑' : ''}${p.id === myId ? ' (나)' : ''}</li>`).join('');
   const host = room.priv && room.host === myId;
   $('hostBox').style.display = host ? 'block' : 'none';
@@ -1477,6 +1513,7 @@ function loop(now) {
         st.yaw = lerpA(pcPrev.yaw, pc.yaw, a) + err.yaw; st.v = pc.v; st.dr = pc.dr; st.boost = pc.boost; st.spin = pc.spin; st.fall = pc.fall; st.dc = pc.dc;
         st.tier = pc.dr ? (pc.dc >= RK.TIER[3] ? 3 : pc.dc >= RK.TIER[2] ? 2 : pc.dc >= RK.TIER[1] ? 1 : 0) : 0;
         const sc = lastSnap.cars.get(myId); st.shield = sc ? sc[10] : 0;
+        st.sc = pc.sc; if (pc.sc && pcPrev.sc === pc.sc) { st.sp = lerp(pcPrev.sp, pc.sp, a); st.sl = lerp(pcPrev.sl, pc.sl, a); } else { st.sp = pc.sp; st.sl = pc.sl; }
       } else {
         st = interpCar(id, rt); if (!st) continue;
         if (id === myId && lastSnap.st === 'count') { const sc = lastSnap.cars.get(id); st.p = sc[1]; st.lat = sc[2]; st.yaw = sc[5]; }
