@@ -6,6 +6,7 @@ const { DT, C, stepCar, newCar, clamp, mod, wrapA, curvAt, widthAt } = RK;
 
 const TRACKS = RK.TRACKS.map(RK.buildTrack);
 const MAX_CARS = 8;
+const FILL_CARS = 6;               // 사람이 모자라면 봇으로 이만큼까지만 채워요
 const COLORS = [0xff3b6b, 0x29b6ff, 0xffc928, 0x3dff8a, 0xb35cff, 0xff8a1f, 0x00ffe1, 0xff5cf0];
 const BOT_NAMES = ['블레이즈', '코멧', '노바', '터보', '제트', '스파크', '오비트', '네뷸라', '퀘이사', '플럭스', '볼트', '레이'];
 const SNAP_EVERY = 3;              // 60틱 중 3틱마다 = 초당 20번
@@ -64,7 +65,7 @@ class Room {
   startCountdown() {
     // 봇 채우기
     const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5);
-    while (this.players.size < MAX_CARS) { const b = this.mkPlayer(names.pop() || 'BOT', true); this.players.set(b.id, b); }
+    while (this.players.size < FILL_CARS) { const b = this.mkPlayer(names.pop() || 'BOT', true); this.players.set(b.id, b); }
     const list = [...this.players.values()].sort(() => Math.random() - 0.5);
     list.sort((a, b) => (a.bot - b.bot));          // 사람은 뒤쪽 출발 대신 섞어서
     list.forEach((p, i) => {
@@ -130,8 +131,9 @@ class Room {
         inp = p.q.shift();
         if (inp) { p.last = inp; p.ack = inp.q; } else inp = p.last;
       }
-      const c = p.car, wasAir = c.h > 0, fb = c.boost, wasDr = c.dr, dcB = c.dc, trB = c.tr, wasFall = c.fall;
+      const c = p.car, wasAir = c.h > 0, fb = c.boost, wasDr = c.dr, dcB = c.dc, trB = c.tr, wasFall = c.fall, wasSc = c.sc;
       stepCar(c, inp, T, DT);
+      if (c.sc && !wasSc) this.ev('cut', p.id);
       // 니트로 게이지: 드리프트 · 공중 묘기 · 슬립스트림 · 아슬아슬하게 피하기로 채워요
       if (wasDr && !c.dr && c.boost > fb) { const tier = dcB >= RK.TIER[3] ? 3 : dcB >= RK.TIER[2] ? 2 : 1; this.addNitro(p, [0, 10, 18, 28][tier]); if (tier === 3) this.ev('perfect', p.id); }
       if (wasAir && c.h === 0 && trB === 1) { this.addNitro(p, 15); this.ev('trick', p.id); }
@@ -211,7 +213,7 @@ class Room {
       RK.hazardState(T, k, this.raceT, o);
       if (!o.on) continue;
       for (const p of list) {
-        const c = p.car; if (c.fall || c.spin > 0) continue;
+        const c = p.car; if (c.fall || c.spin > 0 || c.sc) continue;
         let dp = c.p - o.s; dp -= Math.round(dp / L) * L;
         if (o.k === 'laser') { if (Math.abs(dp) < 1.2 && c.h < 1.6) this.hit(p, 0.9, 0.5, 'laser'); }
         else if (o.k === 'roll') { if (Math.abs(dp) < 2.6 && Math.abs(c.lat - o.lat) < o.r + 0.9 && c.h < 2) this.hit(p, 1.1, 0.35, 'rock'); }
@@ -328,7 +330,10 @@ class Room {
 
   // ── 봇 ──
   botInput(p) {
-    const c = p.car, T = this.T, ai = p.ai || (p.ai = { lane: 0, skill: 1, hold: 0, dr: 0 });
+    const ai = p.ai || (p.ai = { lane: 0, skill: 1, hold: 0, dr: 0 });
+    const MT = this.T, K = p.car.sc && MT.cuts[p.car.sc - 1];
+    // 지름길 위에서는 지름길 좌표로 운전해요
+    const c = K ? Object.assign({}, p.car, { p: p.car.sp, lat: p.car.sl }) : p.car, T = K ? K.T : MT;
     const v = Math.max(8, c.v), look = 10 + v * 0.45;
     // 앞쪽 휘어짐
     let kmax = 0, kav = 0;
@@ -336,15 +341,21 @@ class Room {
     kav /= Math.max(1, Math.floor((look + 10) / 8));
     const half = widthAt(T, c.p) / 2 - 2;
     let tl = clamp(-Math.sign(kav) * Math.min(1, Math.abs(kav) * 45) * 0.6 + ai.lane, -0.85, 0.85) * half;
+    // 지름길 앞: 정해 둔 봇은 갈라지는 차선으로 붙어요
+    let cutting = false;
+    if (!K && MT.cuts) for (let k = 0; k < MT.cuts.length; k++) {
+      const Q = MT.cuts[k], d = mod(Q.s0 - c.p, MT.L);
+      if (d < 70) { if (ai.cutLap !== Math.floor(c.p / MT.L) * 10 + k) { ai.cutLap = Math.floor(c.p / MT.L) * 10 + k; ai.cut = Math.random() < 0.35 + ai.skill * 0.2; } if (ai.cut) { tl = Q.side * Q.o0; cutting = true; } }
+    }
     // 앞 차 · 지뢰 피하기
     const L = T.L;
-    for (const pr of this.proj) if (pr.k === 3) {
+    if (!K) for (const pr of this.proj) if (pr.k === 3) {
       let dp = pr.p - c.p; dp -= Math.round(dp / L) * L;
       if (dp > 0 && dp < 35 && Math.abs(pr.lat - tl) < 2.5) tl = pr.lat + (pr.lat > 0 ? -3.5 : 3.5);
     }
     const desired = Math.atan2(tl - c.lat, look);
     const turn = C.TURN_LO + (C.TURN_HI - C.TURN_LO) * clamp(v / C.MAXV, 0, 1);
-    const ff = curvAt(T, c.p + 4) * v / turn;
+    const ff = curvAt(T, c.p + 4) * v / turn * (c.dr ? 1 : 0.45);
     let s = clamp(ff + wrapA(desired - c.yaw) * 2.6, -1, 1);
     const vsafe = 1.55 / Math.max(0.004, Math.abs(kmax)) * (ai.skill + 0.05);
     let a = 1, b = 0, d = 0;
@@ -353,6 +364,7 @@ class Room {
     if (ai.dr) { d = 1; if (Math.abs(kav) < 0.006 || c.dr === 0 && ai.dr > 1) ai.dr = 0; else ai.dr++; s = clamp(s, -1, 1); }
     else if (Math.abs(kav) > 0.016 && c.v > 30 && Math.abs(s) > 0.4) { ai.dr = 1; d = 1; }
     if (c.dr && Math.sign(kav) !== c.dr) d = 0;
+    if (cutting) { d = 0; ai.dr = 0; }
     // 거꾸로 가면 돌기
     if (Math.abs(c.yaw) > 1.6) { s = -Math.sign(c.yaw); a = 1; d = 0; }
     // 아이템
@@ -389,7 +401,7 @@ class Room {
       if (p.spect) continue;
       const c = p.car;
       const tier = c.dr ? (c.dc >= RK.TIER[3] ? 3 : c.dc >= RK.TIER[2] ? 2 : c.dc >= RK.TIER[1] ? 1 : 0) : 0;
-      cars.push([p.id, r2(c.p), r2(c.lat), r2(c.h), r2(c.v), r4(c.yaw), c.dr, tier, r2(c.boost), r2(c.spin), p.shield > 0 ? 1 : 0, r2(c.fall), p.place, p.fin, Math.min(C.LAPS, p.lapMax + 1)]);
+      cars.push([p.id, r2(c.p), r2(c.lat), r2(c.h), r2(c.v), r4(c.yaw), c.dr, tier, r2(c.boost), r2(c.spin), p.shield > 0 ? 1 : 0, r2(c.fall), p.place, p.fin, Math.min(C.LAPS, p.lapMax + 1), c.sc, r2(c.sp), r2(c.sl)]);
     }
     const proj = this.proj.map(pr => [pr.id, pr.k, r2(pr.p), r2(pr.lat), pr.h]);
     const boxes = this.boxes.map(t => t > 0 ? 0 : 1).join('');
@@ -400,7 +412,7 @@ class Room {
       if (p.bot || !p.conn) continue;
       const c = p.car;
       const me = { a: p.ack, i: p.item, u: p.uses, r: p.roul > 0 ? 1 : 0, b: r2(p.best), f: p.fin, ft: r2(p.finT), n: Math.round(p.nitro), df: p.draft > 0 ? r2(p.draft) : 0,
-        s: [r4(c.p), r4(c.lat), r4(c.h), r4(c.vh), r4(c.v), r4(c.yaw), c.dr, r4(c.dc), c.pd, c.dl, c.tr, r4(c.boost), r4(c.spin), r4(c.fall), r4(c.ma)] };
+        s: [r4(c.p), r4(c.lat), r4(c.h), r4(c.vh), r4(c.v), r4(c.yaw), c.dr, r4(c.dc), c.pd, c.dl, c.tr, r4(c.boost), r4(c.spin), r4(c.fall), r4(c.ma), c.sc, r4(c.sp), r4(c.sl), r4(c.pe)] };
       p.conn.sendRaw(baseStr + ',"me":' + JSON.stringify(me) + '}');
     }
   }
