@@ -869,10 +869,11 @@ let steerSm = 0, gp = null;
 addEventListener('keydown', e => {
   if (e.target && e.target.tagName === 'INPUT') return;
   keys.add(e.code);
+  if (mode === 'race' && document.activeElement && document.activeElement !== document.body) document.activeElement.blur();   // 스페이스가 버튼을 누르지 않게
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   Snd.init();
 });
-addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'Space' && !(e.target && e.target.tagName === 'INPUT') && mode === 'race') e.preventDefault(); });
 addEventListener('blur', () => keys.clear());
 function bindTouch(id, k) {
   const el = $(id);
@@ -884,9 +885,9 @@ bindTouch('tl', 'l'); bindTouch('tr', 'r'); bindTouch('tdrift', 'd'); bindTouch(
 function sampleInput() {
   const K = c => keys.has(c);
   let target = (K('KeyD') || K('ArrowRight') ? 1 : 0) - (K('KeyA') || K('ArrowLeft') ? 1 : 0) + touch.r - touch.l;
-  let a = K('KeyW') || K('ArrowUp') || (isTouch && !touch.b) ? 1 : 0;
+  let a = K('Space') || K('ArrowUp') || (isTouch && !touch.b) ? 1 : 0;
   let b = K('KeyS') || K('ArrowDown') || touch.b ? 1 : 0;
-  let d = K('Space') || K('ShiftLeft') || K('ShiftRight') || touch.d ? 1 : 0;
+  let d = K('ShiftLeft') || K('ShiftRight') || touch.d ? 1 : 0;
   let i = K('KeyE') || K('ControlLeft') || K('ControlRight') || K('KeyX') || touch.i ? 1 : 0;
   let n = K('KeyQ') || K('KeyR') || K('KeyF') || K('KeyN') || touch.n ? 1 : 0;
   rearView = K('KeyC');
@@ -1347,6 +1348,7 @@ function drawMini(list) {
     if (id === myId) { g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.stroke(); }
   }
 }
+let prevPlace = 0, placeT = 0;
 let centerT = 0, toastT = 0, nitroT = 0, finalLap = false, raceNow = 0;
 function combo(s, c) { const box = $('combo'); const d = document.createElement('div'); d.textContent = s; d.style.color = c; box.appendChild(d); setTimeout(() => d.remove(), 1300); while (box.children.length > 3) box.firstChild.remove(); }
 function bigText(s, ms) { const el = $('center'); el.textContent = s; el.style.opacity = 1; clearTimeout(centerT); centerT = setTimeout(() => el.style.opacity = 0, ms); }
@@ -1382,8 +1384,22 @@ function updateHud(dt, mineSt, sn) {
   nb.firstChild.style.width = nv + '%'; nb.classList.toggle('full', nv >= 100); $('tnitro').classList.toggle('ready', nv >= 100);
   $('wrong').style.display = mineSt && Math.abs(mineSt.yaw) > 2.0 && Math.abs(mineSt.v) > 4 && !myFin ? 'block' : 'none';
   $('net').textContent = rtt ? `${Math.round(rtt)}ms` : '';
-  // 순위표
+  // 앞차 · 뒤차와의 거리 (초) · 순위가 바뀌면 알려 줘요
   const rows = [...sn.cars.values()].sort((a, b) => a[12] - b[12]);
+  const gEl = $('gap');
+  if (mine && sn.st === 'race' && !myFin) {
+    const mp = mineSt ? mineSt.p : mine[1], spd = Math.max(25, Math.abs(mine[4]));
+    const ahead = rows.find(r => r[12] === mine[12] - 1), behind = rows.find(r => r[12] === mine[12] + 1);
+    const nm = r => esc((players.get(r[0]) || {}).name || '?');
+    gEl.innerHTML = (ahead ? `<div class="up">▲ ${nm(ahead)} <b>${Math.abs((ahead[1] - mp) / spd).toFixed(1)}초</b></div>` : '<div class="up">🏆 1등 달리는 중!</div>') +
+      (behind ? `<div class="dn">▼ ${nm(behind)} <b>${Math.abs((mp - behind[1]) / spd).toFixed(1)}초</b></div>` : '');
+    if (prevPlace && mine[12] !== prevPlace && performance.now() - placeT > 700) {
+      placeT = performance.now();
+      if (mine[12] < prevPlace) { combo(`추월! ${mine[12]}위`, '#7dff8a'); Snd.play('near'); $('place').classList.remove('pop'); void $('place').offsetWidth; $('place').classList.add('pop'); }
+      else combo(`추월당했어요 ${mine[12]}위`, '#ff6a6a');
+    }
+    prevPlace = mine[12];
+  } else { gEl.innerHTML = ''; prevPlace = 0; }
   $('board').innerHTML = rows.map(r => { const p = players.get(r[0]) || {}; return `<div class="${r[0] === myId ? 'me' : ''}"><b>${r[12]}</b><span class="dot" style="color:${hex(p.color || 0xffffff)};background:currentColor"></span>${esc(p.name || '?')}${r[13] ? ' 🏁' : ''}</div>`; }).join('');
 }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

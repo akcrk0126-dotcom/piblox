@@ -122,6 +122,7 @@ class Room {
   stepRace() {
     const T = this.T, L = T.L;
     const list = [...this.players.values()];
+    this.rubber(list);
     for (const p of list) {
       let inp;
       if (p.bot || p.fin || !p.conn) inp = this.botInput(p);
@@ -169,6 +170,19 @@ class Room {
     list.sort((a, b) => (b.fin - a.fin) || (a.fin ? a.finT - b.finT : b.car.p - a.car.p));
     list.forEach((p, i) => p.place = i + 1);
     this.order = list;
+  }
+
+  // 고무줄: 봇이 사람과 너무 멀어지지 않게 (앞서면 살짝 느려지고, 뒤처지면 빨라져요)
+  rubber(list) {
+    const hum = list.filter(p => !p.bot && p.conn && !p.fin && !p.spect);
+    if (!hum.length) return;
+    for (const p of list) {
+      if (!p.bot || p.car.mxT > 0) continue;
+      let best = Infinity;
+      for (const h of hum) { const d = p.car.p - h.car.p; if (Math.abs(d) < Math.abs(best)) best = d; }
+      const k = clamp(best / 150, -1, 1);
+      p.car.mx = p.ai.skill * (k > 0 ? 1 - k * 0.24 : 1 - k * 0.14);
+    }
   }
 
   addNitro(p, n) { const was = p.nitro; p.nitro = Math.min(100, p.nitro + n); if (was < 100 && p.nitro >= 100) this.ev('nitrofull', p.id); }
