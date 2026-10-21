@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#07061a">
+<title>로켓 카트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Orbitron:wght@600;900&family=Noto+Sans+KR:wght@500;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07061a;--fg:#f4f2ff;--mute:#a9a3d6;--acc:#ff3b8d;--acc2:#29d3ff;--gold:#ffd23f;--panel:rgba(14,10,40,.72);--line:rgba(160,140,255,.25)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'Noto Sans KR',system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+.scr{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.scr.on{display:flex}
+.scr{overflow-y:auto;align-items:safe center}
+.card{margin:auto}
+@media (max-height:720px){h1.logo{font-size:44px}.sub{margin-bottom:12px}.btn{padding:11px}input,select{padding:10px 12px}}
+@media (max-width:700px){#board{display:none}#place{font-size:48px}#lap{top:66px}}
+.card{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:22px;padding:24px;width:min(440px,100%);box-shadow:0 20px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
+h1.logo{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:clamp(46px,12vw,78px);line-height:.95;margin:0 0 4px;text-align:center;letter-spacing:1px;background:linear-gradient(180deg,#fff 0%,#ffd1f0 35%,#ff3b8d 70%,#7a2cff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px rgba(255,59,141,.55))}
+.sub{text-align:center;color:var(--mute);margin:0 0 20px;font-size:14px}
+.sub b{color:var(--acc2)}
+input,select{width:100%;font:inherit;font-size:16px;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--fg);outline:none}
+input:focus,select:focus{border-color:var(--acc2)}
+.btn{display:block;width:100%;font:inherit;font-weight:800;font-size:17px;padding:14px;border-radius:14px;border:0;cursor:pointer;color:#fff;background:linear-gradient(135deg,#ff3b8d,#a637ff);box-shadow:0 6px 24px rgba(255,59,141,.35);transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn.alt{background:rgba(255,255,255,.08);box-shadow:none;border:1px solid var(--line)}
+.btn.blue{background:linear-gradient(135deg,#29d3ff,#4a5bff);box-shadow:0 6px 24px rgba(41,211,255,.3)}
+.row{display:flex;gap:10px;align-items:center}
+.row>*{flex:1}
+.gap{height:10px}
+.small{font-size:12px;color:var(--mute);line-height:1.6}
+.kbd{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:6px;font-size:11px;margin:0 2px;background:rgba(255,255,255,.06)}
+#lobby .code{font-family:'Orbitron',sans-serif;font-size:30px;letter-spacing:6px;color:var(--gold);text-align:center}
+.plist{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.plist li{padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.06);display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dot{width:12px;height:12px;border-radius:50%;flex:0 0 12px;box-shadow:0 0 10px currentColor}
+.tname{font-family:'Black Han Sans';font-size:26px;text-align:center;margin:4px 0}
+.timer{text-align:center;color:var(--mute);font-size:14px}
+/* HUD */
+#hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;font-family:'Orbitron','Noto Sans KR',sans-serif}
+#hud.on{display:block}
+#place{position:absolute;left:max(18px,env(safe-area-inset-left));top:14px;font-weight:900;font-size:64px;line-height:1;color:#fff;text-shadow:0 0 18px rgba(255,59,141,.8),0 3px 0 #a0145a}
+#place small{font-size:24px;margin-left:2px}
+#lap{position:absolute;left:max(20px,env(safe-area-inset-left));top:84px;font-size:18px;font-weight:600;color:var(--fg);text-shadow:0 2px 6px #000}
+#time{position:absolute;right:max(18px,env(safe-area-inset-right));top:16px;font-size:20px;font-weight:600;text-align:right;text-shadow:0 2px 6px #000}
+#time .best{font-size:12px;color:var(--mute)}
+#itembox{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:76px;height:76px;border-radius:18px;border:2px solid rgba(255,255,255,.5);background:rgba(10,6,30,.55);display:flex;align-items:center;justify-content:center;font-size:44px;box-shadow:0 0 22px rgba(120,80,255,.5),inset 0 0 18px rgba(120,80,255,.4)}
+#itembox .n{position:absolute;right:4px;bottom:0;font-size:16px;font-weight:900}
+#speed{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:24px;text-align:right;font-weight:900;font-size:46px;line-height:1;text-shadow:0 0 16px rgba(41,211,255,.7)}
+#speed small{font-size:14px;color:var(--mute);margin-left:4px}
+#boostbar{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:78px;width:150px;height:8px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+#boostbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#29d3ff,#a637ff,#ff3b8d)}
+#mini{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:18px;width:170px;height:170px;opacity:.95}
+#center{position:absolute;left:0;right:0;top:34%;text-align:center;font-family:'Black Han Sans',sans-serif;font-size:min(22vw,150px);color:#fff;text-shadow:0 0 30px rgba(255,59,141,.9),0 6px 0 #6b1a8f;opacity:0;transition:opacity .2s}
+#toast{position:absolute;left:0;right:0;top:22%;text-align:center;font-family:'Black Han Sans';font-size:min(9vw,46px);color:var(--gold);text-shadow:0 0 18px rgba(255,180,0,.8),0 3px 0 #7a3b00;opacity:0;transition:opacity .25s}
+#wrong{position:absolute;left:0;right:0;top:46%;text-align:center;font-family:'Black Han Sans';font-size:40px;color:#ff4040;text-shadow:0 0 18px #f00;display:none}
+#net{position:absolute;right:max(18px,env(safe-area-inset-right));top:70px;font-size:11px;color:var(--mute)}
+#spect{position:absolute;left:0;right:0;bottom:30%;text-align:center;font-size:16px;color:var(--mute);display:none;font-family:'Noto Sans KR'}
+#board{position:absolute;right:max(14px,env(safe-area-inset-right));top:96px;font-family:'Noto Sans KR';font-size:12px;width:150px}
+#board div{display:flex;gap:6px;align-items:center;padding:2px 6px;border-radius:6px;margin-bottom:2px;background:rgba(0,0,0,.28);white-space:nowrap;overflow:hidden}
+#board div.me{background:rgba(255,59,141,.45)}
+#board b{width:14px;font-family:'Orbitron'}
+/* 터치 */
+#touch{position:fixed;inset:0;z-index:6;display:none;pointer-events:none}
+#touch.on{display:block}
+.tb{position:absolute;pointer-events:auto;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;backdrop-filter:blur(4px)}
+.tb.on{background:rgba(255,59,141,.45);border-color:#fff}
+#tl{left:max(16px,env(safe-area-inset-left));bottom:28px;width:92px;height:92px}
+#tr{left:calc(max(16px,env(safe-area-inset-left)) + 104px);bottom:28px;width:92px;height:92px}
+#tdrift{right:max(16px,env(safe-area-inset-right));bottom:120px;width:84px;height:84px;font-size:15px;font-weight:800}
+#titem{right:calc(max(16px,env(safe-area-inset-right)) + 96px);bottom:40px;width:84px;height:84px}
+#tbrake{right:max(16px,env(safe-area-inset-right));bottom:24px;width:84px;height:84px;font-size:15px;font-weight:800}
+body.touch #mini{bottom:140px;width:120px;height:120px}
+body.touch #speed{bottom:220px}
+body.touch #boostbar{bottom:274px}
+/* 결과 */
+table.res{width:100%;border-collapse:collapse;font-size:15px}
+table.res td{padding:7px 6px;border-bottom:1px solid var(--line)}
+table.res tr.me td{color:var(--gold);font-weight:800}
+table.res td:first-child{font-family:'Orbitron';font-weight:900;width:36px}
+table.res td.t{text-align:right;font-family:'Orbitron';font-size:13px}
+.tabs{display:flex;gap:6px;margin:14px 0 6px}
+.tabs button{flex:1;font:inherit;font-size:13px;padding:7px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--mute);cursor:pointer}
+.tabs button.on{background:rgba(255,255,255,.1);color:#fff}
+#load{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:'Black Han Sans';font-size:28px;transition:opacity .4s}
+#load i{width:180px;height:6px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;position:relative}
+#load i:after{content:'';position:absolute;inset:0;width:40%;background:linear-gradient(90deg,#29d3ff,#ff3b8d);animation:ld 1s infinite}
+@keyframes ld{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+#err{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#a0142e;color:#fff;padding:10px 16px;border-radius:12px;z-index:30;display:none;font-weight:700}
+.opt{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:13px;color:var(--mute)}
+.opt button{font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+#nitro{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:92px;width:150px;height:14px;border-radius:7px;background:rgba(255,255,255,.1);overflow:hidden;border:1px solid rgba(41,211,255,.35)}
+#nitro i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0af,#29d3ff,#c8f7ff);transition:width .15s}
+#nitro span{position:absolute;inset:0;font-size:9px;font-weight:900;letter-spacing:2px;text-align:center;line-height:13px;color:rgba(255,255,255,.75)}
+#nitro.full{box-shadow:0 0 18px #29d3ff;animation:np .5s infinite alternate}
+#nitro.full span{color:#fff}
+@keyframes np{to{box-shadow:0 0 34px #29d3ff,0 0 8px #fff}}
+#combo{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:120px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:4px;font-family:'Black Han Sans','Noto Sans KR';font-size:20px}
+#combo div{padding:2px 10px;border-radius:8px;background:rgba(0,0,0,.35);text-shadow:0 0 10px currentColor;animation:cb 1.6s forwards}
+@keyframes cb{0%{transform:translateX(40px) scale(1.4);opacity:0}12%{transform:none;opacity:1}75%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+#tnitro{right:calc(max(16px,env(safe-area-inset-right)) + 96px);bottom:136px;width:70px;height:70px;font-size:14px;font-weight:900;opacity:.5}
+#tnitro.ready{opacity:1;background:rgba(41,211,255,.45);border-color:#fff;box-shadow:0 0 20px #29d3ff}
+body.touch #nitro{bottom:290px}
+body.touch #combo{bottom:320px}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="fx"></canvas>
+<div id="load"><div>로켓 카트</div><i></i></div>
+
+<div id="menu" class="scr">
+  <div class="card">
+    <h1 class="logo">로켓<br>카트</h1>
+    <p class="sub">로켓 타고 달리는 3D 레이스 · <b>8개 맵 · 니트로 · 함정</b></p>
+    <input id="name" maxlength="12" placeholder="닉네임 (최대 12자)" autocomplete="off">
+    <div class="gap"></div>
+    <select id="trackSel"></select>
+    <div class="gap"></div>
+    <div class="row">
+      <button class="btn" id="bSolo">혼자 달리기</button>
+      <button class="btn blue onl" id="bCreate" style="flex:.8">방 만들기</button>
+    </div>
+    <div class="gap onl"></div>
+    <button class="btn alt onl" id="bQuick">빠른 시작 (온라인)</button>
+    <div class="gap onl"></div>
+    <div class="row onl">
+      <input id="code" maxlength="5" placeholder="방 코드" style="text-transform:uppercase">
+      <button class="btn alt" id="bJoin" style="flex:.8">참가</button>
+    </div>
+    <div class="gap"></div>
+    <div class="small">
+      <span class="kbd">W</span><span class="kbd">↑</span> 가속 · <span class="kbd">S</span><span class="kbd">↓</span> 브레이크 · <span class="kbd">A D</span><span class="kbd">← →</span> 조향<br>
+      <span class="kbd">Space</span><span class="kbd">Shift</span> 드리프트 (꾹 누르고 돌다가 떼면 부스트, 점프 중엔 묘기) · <span class="kbd">E</span><span class="kbd">Ctrl</span> 아이템 · <span class="kbd">C</span> 뒤 보기<br>
+      <span class="kbd">Q</span><span class="kbd">R</span> 니트로 (드리프트·묘기·추월·슬립스트림으로 게이지를 채워요) · 8개 맵, 함정과 낭떠러지 주의!<br>
+      출발 신호 직전에 가속을 누르면 로켓 스타트! · 게임패드도 돼요
+    </div>
+    <div class="opt"><span>그래픽</span><button id="bQual">높음</button></div>
+    <div class="opt"><span>소리</span><button id="bSnd">켜짐</button></div>
+  </div>
+</div>
+
+<div id="lobby" class="scr">
+  <div class="card">
+    <div class="tname" id="lTrack">-</div>
+    <div class="code" id="lCode"></div>
+    <div class="small" id="lCodeHelp" style="text-align:center;margin-bottom:4px"></div>
+    <ul class="plist" id="lPlayers"></ul>
+    <div class="timer" id="lTimer"></div>
+    <div class="gap"></div>
+    <div id="hostBox" style="display:none">
+      <div class="row"><select id="lTrackSel"></select><button class="btn" id="bStart" style="flex:.8">출발!</button></div>
+      <div class="gap"></div>
+    </div>
+    <button class="btn alt" id="bLeave">나가기</button>
+  </div>
+</div>
+
+<div id="results" class="scr">
+  <div class="card">
+    <div class="tname">레이스 결과</div>
+    <table class="res" id="rTable"></table>
+    <div class="tabs"><button class="on" data-k="race">완주 기록 TOP 10</button><button data-k="lap">한 바퀴 TOP 10</button></div>
+    <table class="res" id="lbTable"></table>
+    <div class="gap"></div>
+    <div class="timer" id="rTimer"></div>
+    <div class="gap"></div>
+    <button class="btn alt" id="bLeave2">나가기</button>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="place">-</div>
+  <div id="lap"></div>
+  <div id="time"></div>
+  <div id="net"></div>
+  <div id="board"></div>
+  <div id="itembox"></div>
+  <div id="boostbar"><i></i></div>
+  <div id="nitro"><i></i><span>NITRO</span></div>
+  <div id="combo"></div>
+  <div id="speed">0<small>km/h</small></div>
+  <canvas id="mini" width="340" height="340"></canvas>
+  <div id="center"></div>
+  <div id="toast"></div>
+  <div id="wrong">반대 방향!</div>
+  <div id="spect">레이스가 진행 중이에요. 다음 레이스부터 함께 달려요!</div>
+</div>
+
+<div id="touch">
+  <div class="tb" id="tl">◀</div><div class="tb" id="tr">▶</div>
+  <div class="tb" id="tdrift">드리프트</div><div class="tb" id="titem">🎁</div><div class="tb" id="tbrake">브레이크</div><div class="tb" id="tnitro">N2O</div>
+</div>
+<div id="err"></div>
+
+<script src="shared/rk.js"></script>
+<script src="room.js"></script>
+<script type="module" src="game.js"></script>
+</body>
+</html>
