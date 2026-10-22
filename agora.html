@@ -677,7 +677,7 @@ const COL = [];   // {t:'c',x,z,r} | {t:'b',x,z,hw,hd,c,s}
 const addCircle = (x, z, r) => COL.push({ t: 'c', x, z, r });
 const addBox = (x, z, hw, hd, ry) => COL.push({ t: 'b', x, z, hw, hd, c: Math.cos(ry), s: Math.sin(ry) });
 function collide(p, rad){
-  for (const o of COL){
+  for (const o of (AREA ? AREA.col : COL)){
     const dx = p.x - o.x, dz = p.z - o.z;
     if (o.t === 'c'){
       const d = Math.hypot(dx, dz), m = o.r + rad;
@@ -693,9 +693,12 @@ function collide(p, rad){
       p.x = o.x + nx * o.c + nz * o.s; p.z = o.z - nx * o.s + nz * o.c;
     }
   }
-  const r = Math.hypot(p.x, p.z); if (r > 75.5){ p.x *= 75.5 / r; p.z *= 75.5 / r; }
+  if (AREA) AREA.bound(p);
 }
-function groundY(x, z){
+function plazaBound(p){ const r = Math.hypot(p.x, p.z); if (r > 75.5){ p.x *= 75.5 / r; p.z *= 75.5 / r; } }
+let AREA = null; const AREAS = {};
+function groundY(x, z){ return AREA ? AREA.ground(x, z) : plazaGround(x, z); }
+function plazaGround(x, z){
   const r = Math.hypot(x, z);
   if (r >= 25.7 && r <= 28.3) return 0.44;
   if (r >= 25.4 && r <= 28.6) return 0.24;
@@ -1600,7 +1603,7 @@ B.build(M, world);
   }
   for (let j = 0; j < rows; j++) for (let i = 0; i < seg; i++){ const a = j * (seg + 1) + i, b = a + 1, c = a + seg + 1, d = c + 1; I.push(a, c, b, b, c, d); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
-  const mt = new THREE.Mesh(g, std({ vertexColors: true, roughness: 0.95, flatShading: true })); world.add(mt);
+  const mt = new THREE.Mesh(g, std({ vertexColors: true, roughness: 0.95, flatShading: true })); scene.add(mt);
 }
 
 // ───────────────────────── 깃발 (천 시뮬레이션) ─────────────────────────
@@ -1656,7 +1659,7 @@ function particles(count, bases, opts){
     fragmentShader: `varying float vL; varying float vS; void main(){ float d = length(gl_PointCoord - 0.5); ${opts.frag} }`,
     transparent: true, depthWrite: false, blending: opts.blend || THREE.AdditiveBlending,
   });
-  const pts = new THREE.Points(g, m); pts.frustumCulled = false; world.add(pts); PTS.push(m); return pts;
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; (opts.parent || world).add(pts); PTS.push(m); return pts;
 }
 // 불꽃
 particles(FIRES.length * 42, FIRES, {
@@ -1835,10 +1838,10 @@ function equipGuard(f){
 }
 
 const player = { fig: new Figure(CLAY), pos: new THREE.Vector3(0, 0.04, 22.5), vy: 0, yaw: 0, ground: true, ph: 0, speed: 0, run: false };
-player.fig.root.position.copy(player.pos); player.fig.root.rotation.y = Math.PI; world.add(player.fig.root);
+player.fig.root.position.copy(player.pos); player.fig.root.rotation.y = Math.PI; scene.add(player.fig.root);
 // 발밑 룬 서클
 const selRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.62, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7ff3ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-world.add(selRing);
+scene.add(selRing);
 
 // NPC 들 — 사진 속 포즈처럼
 const NPCS = [];
@@ -1956,11 +1959,11 @@ const mapBase = cnv(512), mapR = 86;
 }
 const mapC = $('mapc'), mx = mapC.getContext('2d');
 function drawMap(){
-  const W = 312, k = 256 / mapR, zoom = 1.25;
+  const W = 312, k = 256 / AREA.mapR, zoom = 1.25, plaza = AREA === AREAS.plaza;
   mx.fillStyle = '#1b2230'; mx.fillRect(0, 0, W, W);
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(camYaw); mx.scale(zoom * W / 512 * 1.6, zoom * W / 512 * 1.6);
-  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(mapBase, -256, -256);
-  mx.fillStyle = 'rgba(255,255,255,.75)'; for (const n of NPCS){ if (n.hidden) continue; mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
+  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(AREA.mapBase, -256, -256);
+  mx.fillStyle = 'rgba(255,255,255,.75)'; if (plaza) for (const n of NPCS){ if (n.hidden) continue; mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
   mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, e.big ? 5 : 3, 0, TAU); mx.fill(); }
   for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.fillStyle = '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
   mx.restore();
@@ -2050,7 +2053,7 @@ function updatePlayer(dt){
   }
   if (player.dir && player.speed > 0.01){ player.pos.x += player.dir[0] * player.speed * dt; player.pos.z += player.dir[1] * player.speed * dt; }
   collide(player.pos, 0.36);
-  for (const n of NPCS){ const ddx = player.pos.x - n.pos.x, ddz = player.pos.z - n.pos.z, d = Math.hypot(ddx, ddz); if (n.walker && !n.hidden && d < 0.7 && d > 1e-4){ player.pos.x = n.pos.x + ddx / d * 0.7; player.pos.z = n.pos.z + ddz / d * 0.7; } }
+  if (AREA === AREAS.plaza) for (const n of NPCS){ const ddx = player.pos.x - n.pos.x, ddz = player.pos.z - n.pos.z, d = Math.hypot(ddx, ddz); if (n.walker && !n.hidden && d < 0.7 && d > 1e-4){ player.pos.x = n.pos.x + ddx / d * 0.7; player.pos.z = n.pos.z + ddz / d * 0.7; } }
   const gy = groundY(player.pos.x, player.pos.z);
   if ((keys.Space || touchJump) && player.ground && !G.lock && !G.noJump){ player.vy = 7.6; player.ground = false; }
   touchJump = false;
@@ -2162,7 +2165,7 @@ function updateFX(dt){
 }
 function updateInteract(dt){
   let best = null, bd = 1e9;
-  for (const it of INTERACT){ const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z); if (d < it.r && d < bd){ bd = d; best = it; } }
+  for (const it of AREA.interact){ const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z); if (d < it.r && d < bd){ bd = d; best = it; } }
   if (best !== curInteract){ curInteract = best; const p = $('prompt'); if (best){ p.innerHTML = (IS_TOUCH ? '' : '<b>E</b>') + best.title; p.classList.add('on'); } else p.classList.remove('on'); }
   if (toastT > 0){ toastT -= dt; if (toastT <= 0) $('toast').classList.remove('on'); }
 }
@@ -2174,7 +2177,7 @@ function frame(){
   time += dt; TIMEU.value = time;
   if (playing){ updatePlayer(dt); for (const h of G.hooks) h(dt, rdt); updateCamera(rdt); updateInteract(dt); drawMap(); }
   else updateIntro(dt);
-  updateNPCs(dt); updateFX(dt); updateCreatures(dt);
+  if (AREA === AREAS.plaza){ updateNPCs(dt); updateFX(dt); updateCreatures(dt); }
   // 하늘
   camera.updateMatrixWorld();
   skyMat.uniforms.uInvProj.value.copy(camera.projectionMatrixInverse);
@@ -2202,7 +2205,18 @@ function setNight(k){
   if (!envMats){ envMats = new Set(); scene.traverse(o => { const m = o.material; if (m && m.isMeshStandardMaterial) envMats.add(m); }); }
   for (const m of envMats) m.envMapIntensity = 1 - 0.8 * k;
 }
+// 지역 (광장 / 스토리 맵)
+function addArea(name, a){ AREAS[name] = Object.assign({ name, col: [], interact: [], ground: () => 0.04, bound: () => {}, mapBase: null, mapR: 86, group: null }, a); return AREAS[name]; }
+function setArea(name){
+  for (const k in AREAS) if (AREAS[k].group) AREAS[k].group.visible = k === name;
+  AREA = AREAS[name]; curInteract = null; $('prompt').classList.remove('on');
+  document.body.dataset.area = name;
+}
+addArea('plaza', { group: world, col: COL, interact: INTERACT, ground: plazaGround, bound: plazaBound, mapBase, mapR: 86 });
+setArea('plaza');
 const G = {
+  addArea, setArea, get area(){ return AREA.name; }, setCam: (y, p, d) => { camYaw = y; camPitch = p; if (d){ camDistT = camDist = d; } startBlend = 0; },
+  Builder, Kit, boxG, latheG, ringBand, mergeGeos, tex, cnv, runeStrip, runeColumn, drawRune, glowC, particles, T, rr, R,
   THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight,
   hooks: [], lock: false, faceLock: false, noJump: false, speedMul: 1, moveMul: 1, poseMod: null, poseK: 0, camOverride: null, shake: 0, hitStop: 0,
   onKey: null, onClick: null, mapMarkers: [], mapEnemies: [],
