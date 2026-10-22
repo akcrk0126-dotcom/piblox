@@ -91,7 +91,7 @@ wss.on('connection', (ws, req) => {
         room = rooms.get(String(m.code || '').toUpperCase().slice(0, 5));
         if (!room) { conn.sendRaw(JSON.stringify({ t: 'err', msg: '그런 방이 없어요' })); return; }
       } else room = quickRoom();
-      me = room.addHuman(conn, name);
+      me = room.addHuman(conn, name, m.kart);
       if (!me) { conn.sendRaw(JSON.stringify({ t: 'err', msg: '방이 꽉 찼어요' })); room = null; return; }
       conn.sendRaw(JSON.stringify({ t: 'hi', id: me.id, code: room.code }));
       room.sendRoom();

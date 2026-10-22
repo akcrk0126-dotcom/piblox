@@ -124,6 +124,69 @@
       jumps: [[0.6, 18]],
       items: [0.11, 0.42, 0.63, 0.92],
       hazards: [['meteor', 0.25, 50, 4], ['meteor', 0.75, 50, 4.5], ['laser', 0.45, 3, 1]]
+    },
+    {
+      id: 'gp', name: '로켓 그랑프리 서킷', theme: 'gp', bank: 0.15, sky: [0x4a8ad8, 0xbfe2ff],
+      pts: [
+        [0, 0, 0, 22],
+        [0, 0, -200, 22],
+        [0, 1, -380, 20],
+        [28, 2, -448, 17],
+        [85, 2, -458, 17],
+        [112, 2, -412, 17],
+        [108, 2, -345, 16],
+        [126, 2, -290, 16],
+        [112, 2, -238, 16],
+        [145, 3, -200, 17],
+        [220, 4, -198, 18],
+        [380, 6, -205, 18],
+        [435, 6, -165, 17],
+        [445, 5, -85, 17],
+        [432, 4, 0, 17],
+        [425, 3, 48, 16],
+        [392, 2, 80, 16],
+        [330, 2, 84, 18],
+        [210, 1, 82, 18],
+        [168, 1, 72, 16],
+        [118, 1, 102, 16],
+        [64, 0, 88, 16],
+        [24, 0, 86, 17],
+        [2, 0, 40, 20]
+      ],
+      boost: [[0.06, 0], [0.16, 0], [0.42, -4], [0.5, 0], [0.58, 4], [0.66, 0], [0.82, 0], [0.9, 0]],
+      cuts: [],
+      jumps: [],
+      items: [0.12, 0.38, 0.62, 0.86]
+    },
+    {
+      id: 'street', name: '선셋 시가지 그랑프리', theme: 'gpn', bank: 0.15, sky: [0x1a0f3a, 0xff8a4a],
+      pts: [
+        [0, 0, 0, 17],
+        [0, 0, -260, 17],
+        [12, 0, -322, 16],
+        [62, 0, -342, 16],
+        [200, 0, -342, 16],
+        [252, 1, -330, 15],
+        [272, 2, -285, 15],
+        [272, 3, -185, 15],
+        [256, 3, -140, 14],
+        [238, 3, -102, 14],
+        [258, 3, -62, 14],
+        [272, 2, -20, 15],
+        [272, 1, 40, 15],
+        [252, 0, 88, 15],
+        [200, 0, 102, 16],
+        [120, 0, 102, 16],
+        [90, 0, 136, 15],
+        [76, 0, 188, 14],
+        [24, 0, 188, 14],
+        [6, 0, 128, 15],
+        [0, 0, 60, 16]
+      ],
+      boost: [[0.05, 0], [0.14, 0], [0.3, 0], [0.48, 0], [0.62, -4], [0.62, 4], [0.76, 0], [0.92, 0]],
+      cuts: [],
+      jumps: [],
+      items: [0.1, 0.36, 0.58, 0.84]
     }
   ];
 
@@ -211,7 +274,7 @@
       let ux = -ty * tx, uy = 1 - ty * ty, uz = -ty * tz;
       const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
       let rx = ty * uz - tz * uy, ry = tz * ux - tx * uz, rz = tx * uy - ty * ux;
-      const bank = clamp(Math.atan(T.k[i] * 900 / 9.8), -0.55, 0.55) + T.roll[i];
+      const bank = clamp(Math.atan(T.k[i] * 900 / 9.8), -0.55, 0.55) * (def.bank == null ? 1 : def.bank) + T.roll[i];
       const cb = Math.cos(bank), sb = Math.sin(bank);
       T.ux[i] = ux * cb + rx * sb; T.uy[i] = uy * cb + ry * sb; T.uz[i] = uz * cb + rz * sb;
       T.rx[i] = rx * cb - ux * sb; T.ry[i] = ry * cb - uy * sb; T.rz[i] = rz * cb - uz * sb;
@@ -440,9 +503,26 @@
     { id: 5, name: 'EMP 쇼크', icon: '⚡' },
     { id: 6, name: '트리플 부스트', icon: '🔥' },
     { id: 7, name: '번개', icon: '🌩️' },
-    { id: 8, name: '1등 저격 로켓', icon: '☄️' }
+    { id: 8, name: '1등 저격 로켓', icon: '☄️' },
+    { id: 9, name: '기름 웅덩이', icon: '🛢️' },
+    { id: 10, name: '자석', icon: '🧲' },
+    { id: 11, name: '유령', icon: '👻' },
+    { id: 12, name: '거대화', icon: '🍄' },
+    { id: 13, name: '블랙홀', icon: '🌀' },
+    { id: 14, name: '먹물', icon: '🦑' }
   ];
 
-  const RK = { DT, C, TIER, TIER_T, TRACKS, ITEMS, STATE_KEYS, buildTrack, frame, widthAt, curvAt, newCar, copyCar, stepCar, carPose, carTrack, carS, carL, inNoWall, hazardState, clamp, wrapA, mod };
+  // ── 카트 꾸미기 ─────────────────────────────────────────
+  // b 차체 · c 색 · a 포인트 색 · w 날개 · f 불꽃 · d 무늬 · h 머리 장식 · n 번호
+  const PALETTE = [0xff3b6b, 0x29b6ff, 0xffc928, 0x3dff8a, 0xb35cff, 0xff8a1f, 0x00ffe1, 0xff5cf0, 0xffffff, 0x2a2a35, 0xd4202a, 0x1f5cff];
+  const KART_OPTS = { b: 4, c: PALETTE.length, a: PALETTE.length, w: 4, f: 6, d: 5, h: 6, n: 100 };
+  function cleanKart(k) {
+    const o = {}; k = k && typeof k === 'object' ? k : {};
+    for (const key in KART_OPTS) { const v = Math.floor(+k[key]); o[key] = v >= 0 && v < KART_OPTS[key] ? v : 0; }
+    return o;
+  }
+  function randKart(c) { const o = {}; for (const key in KART_OPTS) o[key] = Math.floor(Math.random() * KART_OPTS[key]); if (c != null) o.c = c; return o; }
+
+  const RK = { PALETTE, KART_OPTS, cleanKart, randKart, DT, C, TIER, TIER_T, TRACKS, ITEMS, STATE_KEYS, buildTrack, frame, widthAt, curvAt, newCar, copyCar, stepCar, carPose, carTrack, carS, carL, inNoWall, hazardState, clamp, wrapA, mod };
   if (typeof module !== 'undefined' && module.exports) module.exports = RK; else root.RK = RK;
 })(typeof self !== 'undefined' ? self : this);
