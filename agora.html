@@ -138,6 +138,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2500);
 
 // 해 — 늦은 오후의 금빛
+const NIGHTU = { value: 0 };
 const SUN = new THREE.Vector3(-0.78, 0.42, 0.46).normalize();
 const HAZE = new THREE.Color().setRGB(0.44, 0.54, 0.70);   // 선형 공간
 scene.fog = new THREE.FogExp2(HAZE.clone(), 0.0034);
@@ -560,11 +561,11 @@ const GLSL_COMMON = `
   }
 `;
 const skyMat = new THREE.ShaderMaterial({
-  uniforms: { uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uSun: { value: SUN }, uTime: { value: 0 }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) }, uExposure: { value: 0.92 }, uCamPos: { value: new THREE.Vector3() }, uSteps: { value: IS_TOUCH ? 12 : 18 } },
+  uniforms: { uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uSun: { value: SUN }, uTime: { value: 0 }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) }, uExposure: { value: 0.92 }, uCamPos: { value: new THREE.Vector3() }, uNight: NIGHTU, uSteps: { value: IS_TOUCH ? 12 : 18 } },
   vertexShader: `varying vec2 vNdc; void main(){ vNdc = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     precision highp float;
-    uniform mat4 uInvProj, uCamWorld; uniform vec3 uSun, uHaze, uCamPos; uniform float uTime, uExposure; uniform int uSteps;
+    uniform mat4 uInvProj, uCamWorld; uniform vec3 uSun, uHaze, uCamPos; uniform float uTime, uExposure, uNight; uniform int uSteps;
     varying vec2 vNdc;
     ${GLSL_COMMON}
     float hash13(vec3 p3){ p3 = fract(p3*0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
@@ -626,6 +627,8 @@ const skyMat = new THREE.ShaderMaterial({
         cc = mix(uHaze * 1.05, cc, fade);
         col = mix(col, cc, alpha);
       }
+      col = mix(col, col * vec3(0.2, 0.12, 0.36) + vec3(0.02, 0.003, 0.045), uNight);
+      col += vec3(0.32, 0.06, 0.5) * pow(max(rd.y, 0.0), 2.0) * uNight * 0.35;
       col = acesTM(col, uExposure);
       gl_FragColor = vec4(toSRGB(col), 1.0);
     }`,
@@ -667,7 +670,7 @@ sun.castShadow = true; sun.shadow.mapSize.set(Q.shadow, Q.shadow);
 const sc = sun.shadow.camera; sc.left = -64; sc.right = 64; sc.top = 64; sc.bottom = -64; sc.near = 10; sc.far = 260;
 sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.035;
 scene.add(sun, sun.target);
-scene.add(new THREE.HemisphereLight(0xbcd2ff, 0x6a5a44, 0.35));
+const hemi = new THREE.HemisphereLight(0xbcd2ff, 0x6a5a44, 0.35); scene.add(hemi);
 
 // ───────────────────────── 충돌 ─────────────────────────
 const COL = [];   // {t:'c',x,z,r} | {t:'b',x,z,hw,hd,c,s}
@@ -807,9 +810,9 @@ const FX = {};   // 애니메이션 대상
 
   // 물 (셰이더)
   const waterMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: TIMEU, uSun: { value: SUN }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) } },
+    uniforms: { uTime: TIMEU, uNight: NIGHTU, uSun: { value: SUN }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) } },
     vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: `uniform float uTime; uniform vec3 uSun, uHaze; varying vec3 vW; ${GLSL_COMMON}
+    fragmentShader: `uniform float uTime, uNight; uniform vec3 uSun, uHaze; varying vec3 vW; ${GLSL_COMMON}
       void main(){
         vec2 p = vW.xz; float r = length(p);
         vec2 g = vec2(0.0);
@@ -826,7 +829,7 @@ const FX = {};   // 애니메이션 대상
         c += vec3(0.1, 0.8, 0.9) * 0.25 * pow(0.5 + 0.5 * sin(r * 3.0 - uTime * 2.0), 10.0);
         c = mix(c, sky, fr);
         c += vec3(1.0, 0.85, 0.6) * pow(max(dot(rf, uSun), 0.0), 220.0) * 6.0;
-        gl_FragColor = vec4(toSRGB(acesTM(c, 1.0)), 0.9);
+        gl_FragColor = vec4(toSRGB(acesTM(c * mix(1.0, 0.3, uNight) + vec3(0.05, 0.0, 0.1) * uNight, 1.0)), 0.9);
       }`,
     transparent: true,
   });
@@ -1301,6 +1304,7 @@ M.sign = std({ map: tex(signC), roughness: 0.8 });
         col: [[0, -2.2, 4.65, 3.15], [-2.6, 2.3, 1.3, 1.0]],
         after: (x, z, ry) => {
           const S2 = new THREE.Vector3(5.1, 0, 4.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry).add(new THREE.Vector3(x, 0, z));
+          FX.smithy = { x, z, ry };
           INTERACT.push({ x: x + Math.sin(ry) * 6.5, z: z + Math.cos(ry) * 6.5, r: 5, title: '대장간', sub: '장비 제작 · 강화 — 곧 문을 엽니다' });
           K.push(x, 0.02, z, ry);
           K.box('woodD', 0.2, 3.4, 0.2, 5.3, 1.7, 4.2); K.box('woodD', 1.4, 0.14, 0.14, 4.7, 3.3, 4.2);
@@ -1844,7 +1848,7 @@ function npc(x, z, ry, poseName, opts = {}){
   Object.assign(f.cur, POSES[poseName]); f.set(POSES[poseName]); f.apply();
   world.add(f.root);
   const n = { f, pose: poseName, anim: opts.anim, walker: opts.walker, t: R() * 10, pos: f.root.position, target: null, wait: rr(1, 4), ph: 0 };
-  if (!opts.walker && !opts.noCol) addCircle(x, z, 0.38);
+  if (!opts.walker && !opts.noCol){ addCircle(x, z, 0.38); n.col = COL[COL.length - 1]; }
   NPCS.push(n); return n;
 }
 {
@@ -1956,7 +1960,9 @@ function drawMap(){
   mx.fillStyle = '#1b2230'; mx.fillRect(0, 0, W, W);
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(camYaw); mx.scale(zoom * W / 512 * 1.6, zoom * W / 512 * 1.6);
   mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(mapBase, -256, -256);
-  mx.fillStyle = 'rgba(255,255,255,.75)'; for (const n of NPCS){ mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
+  mx.fillStyle = 'rgba(255,255,255,.75)'; for (const n of NPCS){ if (n.hidden) continue; mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
+  mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, e.big ? 5 : 3, 0, TAU); mx.fill(); }
+  for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.fillStyle = '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
   mx.restore();
   // 플레이어 화살표
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(-(player.fig.root.rotation.y - camYaw));
@@ -1968,12 +1974,13 @@ function drawMap(){
 const keys = {};
 let camYaw = 0, camPitch = 0.32, camDist = 7.5, camDistT = 7.5;
 let playing = false, introT = 0;
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyE') interact(); if (e.code === 'Space') e.preventDefault(); });
+addEventListener('keydown', e => { if (e.code === 'Space') e.preventDefault(); if (playing && G.onKey && !e.repeat && G.onKey(e.code, e)) return; keys[e.code] = true; if (e.code === 'KeyE') interact(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 let drag = null;
-canvas.addEventListener('pointerdown', e => { if (!playing) return; if (e.pointerType === 'touch') return; drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerdown', e => { if (!playing) return; if (e.pointerType === 'touch') return; drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), b: e.button }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointermove', e => { if (!drag) return; camYaw -= (e.clientX - drag.x) * 0.006; camPitch = Math.max(-0.25, Math.min(1.25, camPitch + (e.clientY - drag.y) * 0.004)); drag.x = e.clientX; drag.y = e.clientY; });
-canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointerup', e => { if (drag && G.onClick && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 7 && performance.now() - drag.t < 400) G.onClick(drag.b); drag = null; });
 addEventListener('wheel', e => { camDistT = Math.max(2.8, Math.min(18, camDistT * (1 + Math.sign(e.deltaY) * 0.1))); }, { passive: true });
 // 터치
 const joy = { id: null, x: 0, y: 0, dx: 0, dy: 0 }, look = { id: null, x: 0, y: 0 };
@@ -1998,6 +2005,7 @@ $('gfx').addEventListener('click', () => { const nx = { auto: 'high', high: 'low
 let curInteract = null, toastT = 0;
 function interact(){
   if (!curInteract) return;
+  if (curInteract.action){ curInteract.action(); return; }
   const t = $('toast'); t.querySelector('.h').textContent = curInteract.title; t.querySelector('.s').textContent = curInteract.sub; t.classList.add('on'); toastT = 2.6;
 }
 
@@ -2021,28 +2029,30 @@ const clock = new THREE.Clock();
 let time = 0, frameAvg = 16, slowT = 0;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmpV = new THREE.Vector3();
 const introCam = new THREE.Vector3(), introLook = new THREE.Vector3();
+let ovK = 0; const ovPos = new THREE.Vector3(), ovLook = new THREE.Vector3();
 
 function updatePlayer(dt){
   let ix = 0, iz = 0;
   if (keys.KeyW || keys.ArrowUp) iz += 1; if (keys.KeyS || keys.ArrowDown) iz -= 1;
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1;
   if (joy.id !== null){ ix += joy.dx; iz -= joy.dy; }
+  if (G.lock){ ix = 0; iz = 0; }
   const il = Math.hypot(ix, iz); if (il > 1){ ix /= il; iz /= il; }
   const run = keys.ShiftLeft || keys.ShiftRight || touchRun;
   const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
   const dx = fx * iz + rx * ix, dz = fz * iz + rz * ix, mag = Math.min(1, Math.hypot(dx, dz));
-  const maxSp = run ? 9.6 : 4.6, tsp = mag * maxSp;
+  const maxSp = (run ? 9.6 : 4.6) * G.speedMul * G.moveMul, tsp = mag * maxSp;
   player.speed += (tsp - player.speed) * (1 - Math.exp(-8 * dt));
-  if (mag > 0.05){
+  if (mag > 0.05 && !G.faceLock){
     const want = Math.atan2(dx, dz); let d = want - player.fig.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
     player.fig.root.rotation.y += d * (1 - Math.exp(-12 * dt));
     player.dir = [dx / mag, dz / mag];
   }
   if (player.dir && player.speed > 0.01){ player.pos.x += player.dir[0] * player.speed * dt; player.pos.z += player.dir[1] * player.speed * dt; }
   collide(player.pos, 0.36);
-  for (const n of NPCS){ const ddx = player.pos.x - n.pos.x, ddz = player.pos.z - n.pos.z, d = Math.hypot(ddx, ddz); if (n.walker && d < 0.7 && d > 1e-4){ player.pos.x = n.pos.x + ddx / d * 0.7; player.pos.z = n.pos.z + ddz / d * 0.7; } }
+  for (const n of NPCS){ const ddx = player.pos.x - n.pos.x, ddz = player.pos.z - n.pos.z, d = Math.hypot(ddx, ddz); if (n.walker && !n.hidden && d < 0.7 && d > 1e-4){ player.pos.x = n.pos.x + ddx / d * 0.7; player.pos.z = n.pos.z + ddz / d * 0.7; } }
   const gy = groundY(player.pos.x, player.pos.z);
-  if ((keys.Space || touchJump) && player.ground){ player.vy = 7.6; player.ground = false; }
+  if ((keys.Space || touchJump) && player.ground && !G.lock && !G.noJump){ player.vy = 7.6; player.ground = false; }
   touchJump = false;
   player.vy -= 22 * dt; player.pos.y += player.vy * dt;
   if (player.pos.y <= gy){ if (!player.ground && player.vy < -2) player.land = 0.18; player.pos.y = gy; player.vy = 0; player.ground = true; }
@@ -2057,11 +2067,13 @@ function updatePlayer(dt){
   else if (amt > 0.05) tp = f.gait(player.ph, Math.min(1, amt), player.speed > 6, time);
   else tp = pose({ hy: 0.86 + Math.sin(time * 2) * 0.004, sp: Math.sin(time * 2) * 0.015, laz: 0.1 + Math.sin(time * 2) * 0.02, raz: -0.1 - Math.sin(time * 2) * 0.02, hdy: Math.sin(time * 0.37) * 0.3 });
   if (player.land > 0){ player.land -= dt; tp.hy -= 0.12; tp.lk += 0.5; tp.rk += 0.5; tp.llx -= 0.35; tp.rlx -= 0.35; }
-  f.set(tp); f.blend(dt, amt > 0.05 ? 18 : 10);
+  if (G.poseMod){ const r = G.poseMod(tp, dt); if (r) tp = r; }
+  f.set(tp); f.blend(dt, G.poseK || (amt > 0.05 ? 18 : 10));
   selRing.position.set(player.pos.x, gy + 0.03, player.pos.z); selRing.rotation.y += dt * 0.5;
 }
 function updateNPCs(dt){
   for (const n of NPCS){
+    if (n.hidden){ n.f.root.visible = false; continue; }
     const cd = camera.position.distanceTo(n.pos);
     n.f.root.visible = cd < 110; n.f.mesh.castShadow = cd < 45;
     n.t += dt; const f = n.f;
@@ -2109,6 +2121,10 @@ function updateCamera(dt){
   want.y = Math.max(want.y, groundY(want.x, want.z) + 0.3);
   if (startBlend > 0){ startBlend = Math.max(0, startBlend - dt * 0.55); const e = startBlend * startBlend * (3 - 2 * startBlend); camPos.lerpVectors(want, introCam, e); camLook.lerpVectors(tgt, introLook, e); }
   else { camPos.copy(want); camLook.copy(tgt); }
+  if (G.camOverride){ if (ovK === 0){ ovPos.copy(camera.position); ovLook.copy(camLook); } ovK = Math.min(1, ovK + dt * 1.4); const a = 1 - Math.exp(-3.5 * dt); ovPos.lerp(G.camOverride.pos, a); ovLook.lerp(G.camOverride.look, a); }
+  else ovK = Math.max(0, ovK - dt * 1.4);
+  if (ovK > 0){ const e = ovK * ovK * (3 - 2 * ovK); camPos.lerp(ovPos, e); camLook.lerp(ovLook, e); }
+  if (G.shake > 0){ G.shake = Math.max(0, G.shake - dt * 2.5); const k = G.shake * G.shake * 0.5; camPos.x += (R() - 0.5) * k; camPos.y += (R() - 0.5) * k; camPos.z += (R() - 0.5) * k; }
   camera.position.copy(camPos); camera.lookAt(camLook);
 }
 function updateIntro(dt){
@@ -2121,9 +2137,11 @@ function updateIntro(dt){
 function updateFX(dt){
   const C = FX.crystal;
   C.crys.position.y = 5.6 + Math.sin(time * 1.1) * 0.25; C.crys.rotation.y += dt * 0.6;
-  C.halo.position.y = C.crys.position.y; C.halo.material.opacity = 0.7 + Math.sin(time * 2.3) * 0.15;
-  for (const r of C.rings){ r.piv.rotation.y += dt * r.spd; r.piv.position.y = C.crys.position.y; }
-  C.pl.intensity = 24 + Math.sin(time * 2.3) * 5;
+  const pw = FX.crystalPower ?? 1;
+  C.halo.position.y = C.crys.position.y; C.halo.material.opacity = (0.7 + Math.sin(time * 2.3) * 0.15) * Math.min(1.6, pw);
+  C.halo.scale.setScalar(9 * (0.6 + 0.4 * pw)); C.crys.material.emissiveIntensity = 2.4 * pw;
+  for (const r of C.rings){ r.piv.rotation.y += dt * r.spd * (0.3 + 0.7 * Math.min(1, pw)); r.piv.position.y = C.crys.position.y; r.piv.visible = pw > 0.25; }
+  C.pl.intensity = (24 + Math.sin(time * 2.3) * 5) * pw; C.beam.visible = pw > 0.3;
   forgeLight.intensity = 26 + Math.sin(time * 13) * 4 + Math.sin(time * 31) * 3 + (R() - 0.5) * 4;
   if (FX.torchMat) FX.torchMat.opacity = 0.5 + 0.1 * Math.sin(time * 11) + 0.05 * Math.sin(time * 27);
   if (FX.fireGlows) FX.fireGlows.forEach((g, i) => { g.material.opacity = 0.55 + 0.12 * Math.sin(time * 9 + i * 3) + 0.06 * Math.sin(time * 23 + i); });
@@ -2151,8 +2169,10 @@ function updateInteract(dt){
 
 function frame(){
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, clock.getDelta()); time += dt; TIMEU.value = time;
-  if (playing){ updatePlayer(dt); updateCamera(dt); updateInteract(dt); drawMap(); }
+  const rdt = Math.min(0.05, clock.getDelta()); let dt = rdt;
+  if (G.hitStop > 0){ G.hitStop -= rdt; dt = rdt * 0.06; }
+  time += dt; TIMEU.value = time;
+  if (playing){ updatePlayer(dt); for (const h of G.hooks) h(dt, rdt); updateCamera(rdt); updateInteract(dt); drawMap(); }
   else updateIntro(dt);
   updateNPCs(dt); updateFX(dt); updateCreatures(dt);
   // 하늘
@@ -2170,11 +2190,32 @@ function frame(){
     else slowT = 0;
   }
 }
+// 낮 → 밤 (공허의 침공)
+const NIGHT_FOG = new THREE.Color().setRGB(0.05, 0.025, 0.09), SUN_DAY = sun.color.clone(), SUN_NIGHT = new THREE.Color(0.55, 0.38, 1.0);
+let envMats = null;
+function setNight(k){
+  NIGHTU.value = k;
+  sun.intensity = 3.1 * (1 - 0.8 * k); sun.color.copy(SUN_DAY).lerp(SUN_NIGHT, k);
+  hemi.intensity = 0.35 * (1 - 0.3 * k); hemi.color.setHex(0xbcd2ff).lerp(new THREE.Color(0x7a4ad0), k);
+  scene.fog.color.copy(HAZE).lerp(NIGHT_FOG, k);
+  renderer.toneMappingExposure = 0.92 * (1 - 0.3 * k); skyMat.uniforms.uExposure.value = renderer.toneMappingExposure;
+  if (!envMats){ envMats = new Set(); scene.traverse(o => { const m = o.material; if (m && m.isMeshStandardMaterial) envMats.add(m); }); }
+  for (const m of envMats) m.envMapIntensity = 1 - 0.8 * k;
+}
+const G = {
+  THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight,
+  hooks: [], lock: false, faceLock: false, noJump: false, speedMul: 1, moveMul: 1, poseMod: null, poseK: 0, camOverride: null, shake: 0, hitStop: 0,
+  onKey: null, onClick: null, mapMarkers: [], mapEnemies: [],
+  get time(){ return time; }, get camYaw(){ return camYaw; }, get playing(){ return playing; },
+  toast(h, sub){ const t = $('toast'); t.querySelector('.h').textContent = h; t.querySelector('.s').textContent = sub; t.classList.add('on'); toastT = 2.6; },
+  resize,
+};
 // 첫 프레임 그린 뒤 로딩 해제
 renderer.compile(scene, camera);
 frame();
 setTimeout(() => $('load').classList.add('off'), 250);
-window.__agora = { player, camera, scene, renderer, setCam: (y, p, d) => { camYaw = y; camPitch = p; camDistT = camDist = d; startBlend = 0; }, start: () => $('enter').click() };
+window.__agora = { player, camera, scene, renderer, setCam: (y, p, d) => { camYaw = y; camPitch = p; camDistT = camDist = d; startBlend = 0; }, start: () => $('enter').click(), G };
+import('./agora-story.js').then(m => m.init(G)).catch(e => console.error('story load failed', e));
 </script>
 </body>
 </html>
