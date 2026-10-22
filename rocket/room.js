@@ -7,7 +7,7 @@ const { DT, C, stepCar, newCar, clamp, mod, wrapA, curvAt, widthAt } = RK;
 const TRACKS = RK.TRACKS.map(RK.buildTrack);
 const MAX_CARS = 8;
 const FILL_CARS = 6;               // 사람이 모자라면 봇으로 이만큼까지만 채워요
-const COLORS = [0xff3b6b, 0x29b6ff, 0xffc928, 0x3dff8a, 0xb35cff, 0xff8a1f, 0x00ffe1, 0xff5cf0];
+const COLORS = RK.PALETTE.slice(0, 8);
 const BOT_NAMES = ['블레이즈', '코멧', '노바', '터보', '제트', '스파크', '오비트', '네뷸라', '퀘이사', '플럭스', '볼트', '레이'];
 const SNAP_EVERY = 3;              // 60틱 중 3틱마다 = 초당 20번
 const LOBBY_T = 12, COUNT_T = 4, DONE_T = 12, FINISH_WAIT = 25;
@@ -28,9 +28,9 @@ class Room {
   }
   humans() { let n = 0; for (const p of this.players.values()) if (!p.bot && p.conn) n++; return n; }
 
-  addHuman(conn, name) {
+  addHuman(conn, name, kart) {
     if (this.players.size >= MAX_CARS && !this.dropBot()) return null;
-    const p = this.mkPlayer(name, false);
+    const p = this.mkPlayer(name, false, kart);
     p.conn = conn;
     if (!this.hostId) this.hostId = p.id;
     if (this.state === 'race' || this.state === 'count') { p.spect = true; }
@@ -43,11 +43,13 @@ class Room {
     for (const [id, p] of this.players) if (p.bot) { this.players.delete(id); return true; }
     return false;
   }
-  mkPlayer(name, bot) {
+  mkPlayer(name, bot, kart) {
     const used = new Set([...this.players.values()].map(p => p.color));
-    const color = COLORS.find(c => !used.has(c)) || COLORS[0];
+    let color = COLORS.find(c => !used.has(c)) || COLORS[0];
+    // 사람은 꾸민 색, 봇은 남는 색으로 아무렇게나 꾸며요
+    if (bot) kart = RK.randKart(RK.PALETTE.indexOf(color)); else { kart = RK.cleanKart(kart); color = RK.PALETTE[kart.c]; }
     return {
-      id: nextId++, name, bot, color, conn: null, car: newCar(0, 0),
+      id: nextId++, name, bot, color, kart, conn: null, car: newCar(0, 0), mag: 0, ghost: 0, mega: 0,
       q: [], last: { s: 0, a: 0, b: 0, d: 0, i: 0 }, ack: 0, lastSeq: 0,
       item: 0, uses: 0, roul: 0, ib: 0, shield: 0, lapMax: 0, lapStart: 0, best: 0,
       fin: 0, finT: 0, place: 1, spect: false, gasAt: -1, nitro: 0, nb: 0, draft: 0, near: new Map(), combo: 0,
@@ -72,7 +74,7 @@ class Room {
       const row = Math.floor(i / 2), side = i % 2 ? 1 : -1;
       p.car = newCar(-8 - row * 9, side * 3.2);
       if (p.bot) p.car.mx = p.ai.skill;
-      Object.assign(p, { q: [], item: 0, uses: 0, roul: 0, ib: 0, shield: 0, lapMax: 0, best: 0, fin: 0, finT: 0, spect: false, gasAt: -1, nitro: 0, nb: 0, draft: 0, near: new Map() });
+      Object.assign(p, { q: [], item: 0, uses: 0, roul: 0, ib: 0, shield: 0, lapMax: 0, best: 0, fin: 0, finT: 0, spect: false, gasAt: -1, nitro: 0, nb: 0, draft: 0, near: new Map(), mag: 0, ghost: 0, mega: 0 });
       p.last = { s: 0, a: 0, b: 0, d: 0, i: 0, n: 0 };
     });
     this.boxes = this.T.boxes.map(() => 0);
@@ -149,6 +151,15 @@ class Room {
       if (p.shield > 0) p.shield = Math.max(0, p.shield - DT);
       if (c.mxT > 0) { c.mxT -= DT; c.mx = Math.min(c.mx, 0.8); if (c.mxT <= 0) c.mx = p.bot ? p.ai.skill : 1; }
       if (p.roul > 0) { p.roul -= DT; if (p.roul <= 0) { p.roul = 0; this.rollItem(p); } }
+      if (p.ghost > 0) p.ghost = Math.max(0, p.ghost - DT);
+      if (p.mega > 0) { p.mega = Math.max(0, p.mega - DT); if (!c.fall) c.boost = Math.max(c.boost, 0.05); }
+      if (p.mag > 0) {
+        // 자석: 바로 앞 차에 끌려가요
+        p.mag = Math.max(0, p.mag - DT);
+        let tgt = null, best = 95;
+        for (const o of list) { if (o === p || o.car.fall || o.car.sc) continue; let dp = o.car.p - c.p; dp -= Math.round(dp / L) * L; if (dp > 5 && dp < best) { best = dp; tgt = o; } }
+        if (tgt && !c.sc && !c.fall) { c.boost = Math.max(c.boost, 0.25); c.lat += clamp(tgt.car.lat - c.lat, -9 * DT, 9 * DT); }
+      }
       // 바퀴
       const lap = Math.floor(c.p / L);
       if (lap > p.lapMax) {
@@ -241,7 +252,7 @@ class Room {
     const L = this.T.L;
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i].car, b = list[j].car;
-      if (a.fall || b.fall || Math.abs(a.h - b.h) > 1.5) continue;
+      if (a.fall || b.fall || Math.abs(a.h - b.h) > 1.5 || list[i].ghost > 0 || list[j].ghost > 0 || a.sc || b.sc) continue;
       let dp = b.p - a.p; dp = dp - Math.round(dp / L) * L;
       const dl = b.lat - a.lat;
       if (Math.abs(dp) < 3.2 && Math.abs(dl) < 2.1) {
@@ -252,6 +263,8 @@ class Room {
           if (back.v > front.v) { const m = (back.v + front.v) / 2; back.v = m - 1; front.v = m + 1; }
         }
         if (Math.abs(a.v - b.v) > 6 || Math.abs(dl) < 1.2) this.ev('bump', list[i].id);
+        // 거대화한 차에 부딪히면 튕겨 나가요
+        if (list[i].mega > 0 && !(list[j].mega > 0)) this.hit(list[j], 0.8, 0.6); else if (list[j].mega > 0 && !(list[i].mega > 0)) this.hit(list[i], 0.8, 0.6);
       }
     }
   }
@@ -275,8 +288,10 @@ class Room {
 
   rollItem(p) {
     const n = this.players.size, f = n > 1 ? (p.place - 1) / (n - 1) : 0;
-    // [부스트, 미사일, 지뢰, 실드, EMP, 트리플]
-    const W = f < 0.25 ? [30, 10, 35, 25, 0, 0, 0, 0] : f < 0.7 ? [22, 28, 14, 12, 3, 13, 2, 6] : [14, 22, 3, 5, 12, 22, 10, 12];
+    // 1부스트 2미사일 3지뢰 4실드 5EMP 6트리플 7번개 8저격로켓 9기름 10자석 11유령 12거대화 13블랙홀 14먹물
+    const W = f < 0.25 ? [22, 8, 22, 20, 0, 0, 0, 0, 20, 0, 4, 0, 4, 0]
+      : f < 0.7 ? [16, 20, 10, 8, 3, 10, 1, 4, 8, 8, 6, 4, 6, 6]
+      : [8, 14, 2, 3, 10, 16, 8, 9, 2, 10, 6, 12, 4, 8];
     let r = Math.random() * W.reduce((a, b) => a + b, 0), k = 0;
     while (r >= W[k]) { r -= W[k]; k++; }
     p.item = k + 1; p.uses = p.item === 6 ? 3 : 1;
@@ -304,10 +319,27 @@ class Room {
       this.proj.push({ id: this.projId++, k: 8, p: c.p + 3, lat: c.lat, h: 3, v: Math.max(110, c.v + 40), own: p.id, tgt: lead ? lead.id : 0, t: 0, life: 14 });
       this.ev('fire', p.id);
     }
+    else if (it === 9) { this.proj.push({ id: this.projId++, k: 9, p: c.p - 4, lat: c.lat, h: 0, v: 0, own: p.id, t: 0, life: 35 }); this.ev('drop', p.id); }
+    else if (it === 10) { p.mag = 3.2; this.ev('magnet', p.id); }
+    else if (it === 11) {
+      // 유령: 4초 동안 안 맞고, 앞쪽 누군가의 아이템을 훔쳐요
+      p.ghost = 4;
+      const vs = [...this.players.values()].filter(o => o !== p && o.item && !o.fin).sort((a, b) => a.place - b.place);
+      const v = vs[0];
+      if (v) { p.item = v.item; p.uses = v.uses; v.item = 0; v.uses = 0; this.ev('ghost', p.id, v.id); } else this.ev('ghost', p.id, 0);
+    }
+    else if (it === 12) { p.mega = 6; this.ev('mega', p.id); }
+    else if (it === 13) { this.proj.push({ id: this.projId++, k: 13, p: c.p + 45, lat: clamp(c.lat, -3, 3), h: 0, v: 0, own: p.id, t: 0, life: 10, hits: [] }); this.ev('hole', p.id); }
+    else if (it === 14) {
+      const ids = [];
+      for (const o of this.players.values()) if (o.place < p.place && !o.fin && !(o.ghost > 0)) { ids.push(o.id); o.car.mxT = Math.max(o.car.mxT || 0, 1.5); }
+      this.ev('ink', p.id, ...ids);
+    }
     if (this.proj.length > 40) this.proj.splice(0, this.proj.length - 40);
   }
 
   hit(o, spin, keep, why) {
+    if (o.ghost > 0 || o.mega > 0) return;
     if (o.shield > 0) { o.shield = 0; this.ev('pop', o.id); return; }
     if (why) this.ev('hz', o.id, why);
     const c = o.car; c.spin = spin || 1.3; c.v *= keep == null ? 0.3 : keep; c.dr = 0; c.dc = 0; c.boost = 0;
@@ -329,9 +361,24 @@ class Room {
         pr.p += pr.v * DT;
         const half = widthAt(this.T, pr.p) / 2 - 0.8; pr.lat = clamp(pr.lat, -half, half);
       }
+      if (pr.k === 13) {
+        // 블랙홀: 가까운 차를 빨아들이고, 가운데에 닿으면 빙글
+        for (const o of list) {
+          const c = o.car; if (c.fall || c.sc || o.ghost > 0 || (o.id === pr.own && pr.t < 1.5)) continue;
+          let dp = c.p - pr.p; dp -= Math.round(dp / L) * L;
+          if (Math.abs(dp) < 16 && Math.abs(c.lat - pr.lat) < 9) { c.lat += clamp(pr.lat - c.lat, -7 * DT, 7 * DT); c.v *= 1 - 0.6 * DT; }
+          if (Math.abs(dp) < 2.6 && Math.abs(c.lat - pr.lat) < 2.6 && !pr.hits.includes(o.id)) { pr.hits.push(o.id); this.hit(o, 1.2, 0.4); }
+        }
+        continue;
+      }
       for (const o of list) {
-        if (o.car.fall || o.car.h > 2.5) continue;
-        if (o.id === pr.own && pr.t < (pr.k === 3 ? 1.2 : 0.5)) continue;
+        if (o.car.fall || o.car.h > 2.5 || o.ghost > 0) continue;
+        if (o.id === pr.own && pr.t < (pr.k === 3 || pr.k === 9 ? 1.2 : 0.5)) continue;
+        if (pr.k === 9) {
+          let dp = o.car.p - pr.p; dp -= Math.round(dp / L) * L;
+          if (Math.abs(dp) < 2.4 && Math.abs(o.car.lat - pr.lat) < 2.6) { this.hit(o, 0.9, 0.65); pr.life = 0; this.ev('slip', o.id); break; }
+          continue;
+        }
         if (pr.k === 8 && pr.tgt && o.id !== pr.tgt) continue;
         let dp = o.car.p - pr.p; dp -= Math.round(dp / L) * L;
         if (Math.abs(dp) < (pr.k === 2 ? 2.6 : 1.9) && Math.abs(o.car.lat - pr.lat) < 1.8) {
@@ -415,7 +462,7 @@ class Room {
       if (p.spect) continue;
       const c = p.car;
       const tier = c.dr ? (c.dc >= RK.TIER[3] ? 3 : c.dc >= RK.TIER[2] ? 2 : c.dc >= RK.TIER[1] ? 1 : 0) : 0;
-      cars.push([p.id, r2(c.p), r2(c.lat), r2(c.h), r2(c.v), r4(c.yaw), c.dr, tier, r2(c.boost), r2(c.spin), p.shield > 0 ? 1 : 0, r2(c.fall), p.place, p.fin, Math.min(C.LAPS, p.lapMax + 1), c.sc, r2(c.sp), r2(c.sl)]);
+      cars.push([p.id, r2(c.p), r2(c.lat), r2(c.h), r2(c.v), r4(c.yaw), c.dr, tier, r2(c.boost), r2(c.spin), p.shield > 0 ? 1 : 0, r2(c.fall), p.place, p.fin, Math.min(C.LAPS, p.lapMax + 1), c.sc, r2(c.sp), r2(c.sl), (p.mega > 0 ? 1 : 0) | (p.ghost > 0 ? 2 : 0) | (p.mag > 0 ? 4 : 0)]);
     }
     const proj = this.proj.map(pr => [pr.id, pr.k, r2(pr.p), r2(pr.lat), pr.h]);
     const boxes = this.boxes.map(t => t > 0 ? 0 : 1).join('');
@@ -431,7 +478,7 @@ class Room {
     }
   }
   sendRoom() {
-    const players = [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, spect: p.spect }));
+    const players = [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kart: p.kart, spect: p.spect }));
     this.broadcast({ t: 'room', code: this.priv ? this.code : '', priv: this.priv, track: this.track, st: this.state, tm: r2(this.timer), host: this.hostId, players, laps: C.LAPS, lb: this.lb.get(this.T.id) });
   }
   broadcast(m) { const s = JSON.stringify(m); for (const p of this.players.values()) if (p.conn) p.conn.sendRaw(s); }

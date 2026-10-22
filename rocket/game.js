@@ -271,6 +271,8 @@ const THEME = {
   ice: { road: '#1a2a3e', line: '#bff4ff', rail: 0x8fe8ff, rail2: 0xffffff, fog: 0x6f9cc4, fogD: 0.0012, sun: 0xeef8ff, hemiT: 0xb8d8f0, hemiB: 0x2a4060, exp: 0.82, bth: 0.95 },
   cyber: { road: '#0a0a18', line: '#00ffd5', rail: 0x00ffd5, rail2: 0xff2bd6, fog: 0x05020f, fogD: 0.0011, sun: 0xc8b8ff, hemiT: 0x9a8aff, hemiB: 0x10002a },
   desert: { road: '#3a2a1e', line: '#ffcf5a', rail: 0xff9a3a, rail2: 0xffe08a, fog: 0xd9a46a, fogD: 0.0011, sun: 0xffe2b0, hemiT: 0xffe6c0, hemiB: 0x6a4020, exp: 0.92, bth: 0.9 },
+  gp: { road: '#5c606a', line: '#ffffff', rail: 0xffffff, rail2: 0xd4202a, fog: 0xa8d0f0, fogD: 0.0007, sun: 0xfff6e0, hemiT: 0xd8ecff, hemiB: 0x4a6a3a, exp: 0.95, bth: 0.92, gp: 1 },
+  gpn: { road: '#4a4a55', line: '#ffffff', rail: 0xffb070, rail2: 0xff3b8d, fog: 0x5a3050, fogD: 0.001, sun: 0xffb070, hemiT: 0xffc8a0, hemiB: 0x2a1830, gp: 1 },
   rainbow: { road: '#000', line: '#fff', rail: 0xffffff, rail2: 0xff3bd4, fog: 0x050818, fogD: 0.0005, sun: 0xffffff, hemiT: 0xd0c8ff, hemiB: 0x101030, rainbow: 1 }
 };
 function roadTex(th) {
@@ -278,6 +280,12 @@ function roadTex(th) {
     const cs = ['#ff3b3b', '#ff9a2b', '#ffe83b', '#3dff6a', '#2bd6ff', '#5a6bff', '#c03bff'];
     cs.forEach((c, i) => { g.fillStyle = c; g.fillRect(i * w / 7, 0, w / 7 + 1, h); });
     g.fillStyle = 'rgba(255,255,255,.35)'; for (let y = 0; y < h; y += 64) g.fillRect(0, y, w, 6);
+  }, true);
+  if (th.gp) return canvasTex(256, 512, (g, w, h) => {
+    g.fillStyle = th.road; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 6000; i++) { const v = Math.random(); g.fillStyle = `rgba(${v < 0.5 ? '0,0,0' : '255,255,255'},${Math.random() * 0.08})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(w * 0.3, 0, w * 0.14, h); g.fillRect(w * 0.56, 0, w * 0.14, h);   // 타이어 자국 (레이싱 라인)
+    g.fillStyle = '#f2f2f2'; g.fillRect(4, 0, 6, h); g.fillRect(w - 10, 0, 6, h);
   }, true);
   return canvasTex(256, 512, (g, w, h) => {
     g.fillStyle = th.road; g.fillRect(0, 0, w, h);
@@ -338,6 +346,145 @@ function strip(T, edge, step, vScale, skipGap) {
 }
 const P = (f, lat, up) => [f.px + f.rx * lat + f.ux * up, f.py + f.ry * lat + f.uy * up, f.pz + f.rz * lat + f.uz * up];
 
+// ── 그랑프리 꾸밈: 연석 · 출발 신호등 · 그리드 · 광고판 · 관중석 ──
+const kerbTex = canvasTex(64, 64, (g, w, h) => { g.fillStyle = '#e8e8ee'; g.fillRect(0, 0, w, h); g.fillStyle = '#d4202a'; g.fillRect(0, 0, w, h / 2); }, true);
+const SPONSORS = ['ROCKET', 'NITRO+', 'PIBLOX', 'TURBO', 'HYPER', 'BOOST', 'ORBIT', 'GP 2026'];
+const sponsorTex = SPONSORS.map((s, i) => canvasTex(512, 96, (g, w, h) => {
+  const cs = [['#d4202a', '#fff'], ['#111', '#ffd23f'], ['#1f5cff', '#fff'], ['#fff', '#d4202a'], ['#3dff8a', '#111'], ['#ff8a1f', '#111'], ['#7a2cff', '#fff'], ['#111', '#fff']][i];
+  g.fillStyle = cs[0]; g.fillRect(0, 0, w, h); g.fillStyle = cs[1]; g.font = '900 64px Orbitron, "Black Han Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, w / 2, h / 2 + 3);
+}));
+function buildGPDress(W, T, def, th, groundY) {
+  const G = W.group, L = T.L;
+  const floating = def.theme === 'space' || def.theme === 'rainbow';
+  // 연석: 커브에서 길 양쪽 가장자리에 빨강·하양 줄
+  const corner = s => Math.abs(RK.curvAt(T, s)) > 0.0085 && !RK.inNoWall(T, s);
+  const km = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.6 });
+  for (const sd of [-1, 1]) G.add(new THREE.Mesh(strip(T, f => sd < 0 ? [P(f, -f.w / 2, 0.04), P(f, -f.w / 2 + 1.3, 0.04)] : [P(f, f.w / 2 - 1.3, 0.04), P(f, f.w / 2, 0.04)], 1, 4, s => !corner(s) || inGap(T, s)), km));
+  // 출발 그리드: 차 자리마다 흰 꺾쇠
+  const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const gm = (s, lat, len, wd) => {
+    const pos = [], n = 2, f = {};
+    for (let k = 0; k <= n; k++) { RK.frame(T, s + len * k / n, f); pos.push(...P(f, lat - wd / 2, 0.05), ...P(f, lat + wd / 2, 0.05)); }
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setIndex([0, 2, 1, 1, 2, 3, 2, 4, 3, 3, 4, 5]); gg.computeVertexNormals();
+    G.add(new THREE.Mesh(gg, white));
+  };
+  for (let i = 0; i < 6; i++) {
+    const s = -8 - Math.floor(i / 2) * 9, lat = (i % 2 ? 1 : -1) * 3.2;
+    gm(s - 1.6, lat, 0.25, 2.6); gm(s - 1.6, lat - 1.3, 2.2, 0.22); gm(s - 1.6, lat + 1.3, 2.2, 0.22);
+  }
+  // 출발 신호등 (F1 처럼 빨간불 5개가 하나씩 켜졌다가 한꺼번에 꺼져요)
+  {
+    const o = onTrack(T, 3, 0, 0);
+    const grp = new THREE.Group(); grp.matrixAutoUpdate = false;
+    const box = new THREE.MeshStandardMaterial({ color: 0x15151a, metalness: 0.6, roughness: 0.4 });
+    W.lights = [];
+    for (let i = 0; i < 5; i++) {
+      const x = (i - 2) * 1.3;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1, 2.2, 0.5), box); b.position.set(x, 7.6, 0); grp.add(b);
+      for (const y of [8.1, 7.1]) {
+        const l = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), new THREE.MeshBasicMaterial({ color: 0x220000, toneMapped: false })); l.position.set(x, y, 0.26); grp.add(l); W.lights.push(l);
+      }
+    }
+    basis(grp.matrix, o.x, o.y, o.z, o.fx, o.fy, o.fz, o.ux, o.uy, o.uz); G.add(grp);
+  }
+  // 광고판: 곧은 길 벽 바깥에
+  const boardGeo = new THREE.PlaneGeometry(9, 1.7);
+  let bi = 0;
+  for (let s = -160; s < L - 160; s += 70) {
+    if (Math.abs(RK.curvAt(T, s)) > 0.004 || inGap(T, s) || RK.inNoWall(T, s)) continue;
+    for (const sd of [-1, 1]) {
+      if (T.cuts.some(K => K.side === sd && (RK.mod(s - K.s0, L) < 40 || RK.mod(K.s1 - s, L) < 40))) continue;
+      const o = onTrack(T, s, sd * (RK.widthAt(T, s) / 2 + 0.35), 1.0);
+      const m = new THREE.Mesh(boardGeo, new THREE.MeshBasicMaterial({ map: sponsorTex[bi++ % sponsorTex.length], toneMapped: false }));
+      m.matrixAutoUpdate = false;
+      basis(m.matrix, o.x, o.y, o.z, sd * o.rx, sd * o.ry, sd * o.rz, o.ux, o.uy, o.uz); G.add(m);
+    }
+  }
+  if (floating || !th.gp) return;
+  // 관중석: 출발선 앞뒤 곧은 길 양쪽
+  const stand = new THREE.MeshStandardMaterial({ color: 0x8a8f9a, roughness: 0.8 });
+  const roof = new THREE.MeshStandardMaterial({ color: th.gp ? 0xd4202a : th.rail, roughness: 0.5, metalness: 0.3 });
+  const crowdN = quality === 'high' ? 1400 : 600;
+  const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.55, 0.8, 0.45), new THREE.MeshStandardMaterial({ roughness: 0.9 }), crowdN);
+  const col = new THREE.Color(); let ci = 0;
+  const f = {};
+  for (const [s0, s1, sd] of [[-150, -30, 1], [20, 170, 1], [-120, 60, -1]]) {
+    for (let s = s0; s < s1; s += 6) {
+      RK.frame(T, s, f);
+      const base = RK.widthAt(T, s) / 2 + 6;
+      for (let tier = 0; tier < 5; tier++) {
+        const lat = sd * (base + tier * 1.6), up = tier * 1.1;
+        const p = P(f, lat, up - 1.6);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 6.2), stand);
+        b.position.set(p[0], p[1], p[2]); b.lookAt(p[0] + f.tx, p[1], p[2] + f.tz); G.add(b);
+        for (let q = 0; q < 6 && ci < crowdN; q++) {
+          const cp = P(f, lat, up - 0.6), off = (q - 2.5) * 0.95;
+          _m.makeRotationY(Math.atan2(-sd * f.rx, -sd * f.rz)); _m.setPosition(cp[0] + f.tx * off, cp[1] + Math.random() * 0.15, cp[2] + f.tz * off);
+          crowd.setMatrixAt(ci, _m); crowd.setColorAt(ci++, col.setHSL(Math.random(), 0.7, 0.55));
+        }
+      }
+      // 기둥 + 지붕
+      const rp = P(f, sd * (base + 8), 6.5);
+      const r = new THREE.Mesh(new THREE.BoxGeometry(11, 0.3, 6.2), roof); r.position.set(rp[0], rp[1], rp[2]); r.lookAt(rp[0] + f.tx, rp[1], rp[2] + f.tz); G.add(r);
+    }
+  }
+  crowd.count = ci; crowd.instanceColor.needsUpdate = true; G.add(crowd);
+  W.upd.push(t => { crowd.position.y = Math.max(0, Math.sin(t * 9)) * (W.cheer || 0) * 0.25; if (W.cheer) W.cheer = Math.max(0, W.cheer - 0.004); });
+}
+// 출발 신호등: 카운트다운 동안 하나씩 켜지고 출발에 꺼져요
+function updateLights(W, st, tm) {
+  if (!W.lights) return;
+  const n = st === 'count' ? Math.max(0, Math.min(5, Math.floor((4 - tm) / 0.62) + 1)) : 0;
+  W.lights.forEach((l, i) => l.material.color.setHex(Math.floor(i / 2) < n ? 0xff1010 : 0x220000).multiplyScalar(Math.floor(i / 2) < n ? 3 : 1));
+  const hud = $('lights');
+  if (hud) { hud.style.display = st === 'count' ? 'flex' : 'none'; [...hud.children].forEach((c, i) => c.classList.toggle('on', i < n)); }
+}
+
+// 그랑프리 서킷 주변: 잔디 · 자갈 · 나무 · 타이어 벽 · (밤) 조명탑 · 건물
+function buildGP(W, T, cx, cz, R, groundY, near, night) {
+  const G = W.group, def = RK.TRACKS[W.idx];
+  const gnd = natureGround(night ? 0x16301a : 0x2f6a2a, night ? 0x2a4a2a : 0x6ab04a, groundY, night ? 0x4a2a4a : 0xa8d0f0, 'grass'); G.add(gnd);
+  W.upd.push(t => { gnd.material.uniforms.uT.value = t; gnd.material.uniforms.cam.value.copy(camera.position); });
+  // 자갈 (커브 바깥)
+  const grav = new THREE.MeshStandardMaterial({ color: night ? 0x6a5a4a : 0xd8c49a, roughness: 1 });
+  const corner = s => Math.abs(RK.curvAt(T, s)) < 0.0085;
+  for (const sd of [-1, 1]) G.add(new THREE.Mesh(strip(T, f => sd < 0 ? [P(f, -f.w / 2 - 14, -2.0), P(f, -f.w / 2 - 0.5, -0.5)] : [P(f, f.w / 2 + 0.5, -0.5), P(f, f.w / 2 + 14, -2.0)], 2, 24, corner), grav));
+  // 타이어 벽 (커브 바깥 끝)
+  const tires = new THREE.InstancedMesh(new THREE.TorusGeometry(0.45, 0.22, 6, 10), new THREE.MeshStandardMaterial({ color: 0x18181c, roughness: 0.9 }), 1200);
+  let ti = 0; const f = {};
+  for (let s = 0; s < T.L && ti < 1190; s += 1.1) {
+    const k = RK.curvAt(T, s); if (Math.abs(k) < 0.0085) continue;
+    RK.frame(T, s, f); const sd = k > 0 ? -1 : 1, p = P(f, sd * (f.w / 2 + 14.5), -0.6);
+    for (let y = 0; y < 2; y++) { _m.makeRotationX(Math.PI / 2); _m.setPosition(p[0], groundY + 0.3 + y * 0.45, p[2]); tires.setMatrixAt(ti++, _m); }
+  }
+  tires.count = ti; G.add(tires);
+  // 나무
+  const N = quality === 'high' ? 260 : 120;
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.4, 0.6, 1, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a20 }), N);
+  const leaf = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: night ? 0x1a3a1a : 0x2e7a2a, flatShading: true, roughness: 0.9 }), N);
+  const fn = (k, x, z) => { const h = 6 + Math.random() * 6, r = 3 + Math.random() * 3; _m.makeScale(1, h, 1); _m.setPosition(x, groundY + h / 2, z); trunk.setMatrixAt(k, _m); _m.makeScale(r, r * 1.2, r); _m.setPosition(x, groundY + h + r * 0.6, z); leaf.setMatrixAt(k, _m); };
+  fn.size = () => 6; const n = scatter(N, cx, cz, R * 0.9, near, 32, fn); trunk.count = leaf.count = n; G.add(trunk, leaf);
+  // 멀리 언덕
+  const hill = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 8), new THREE.MeshStandardMaterial({ color: night ? 0x1a2a1e : 0x4a8a3a, roughness: 1 }), 24);
+  for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2, d = R + 500 + Math.random() * 500, s = 200 + Math.random() * 250; _m.makeScale(s, s * 0.35, s); _m.setPosition(cx + Math.cos(a) * d, groundY - 10, cz + Math.sin(a) * d); hill.setMatrixAt(i, _m); }
+  G.add(hill);
+  if (night) {
+    // 시가지: 낮은 건물 + 창문 불빛, 조명탑
+    const win = canvasTex(64, 128, (g, w, h) => { g.fillStyle = '#1a1622'; g.fillRect(0, 0, w, h); for (let y = 4; y < h; y += 12) for (let x = 4; x < w; x += 12) { g.fillStyle = Math.random() < 0.5 ? `rgba(255,${190 + Math.random() * 50 | 0},120,.9)` : 'rgba(40,36,60,1)'; g.fillRect(x, y, 7, 8); } }, true);
+    const bm = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: win, emissiveMap: win, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.7 }), 160);
+    const bf = (k, x, z) => { const w = 18 + Math.random() * 25, h = 15 + Math.random() * 45; _m.makeScale(w, h, w); _m.setPosition(x, groundY + h / 2, z); bm.setMatrixAt(k, _m); };
+    bf.size = () => 22; bm.count = scatter(160, cx, cz, R, near, 30, bf); G.add(bm);
+    const pole = new THREE.MeshStandardMaterial({ color: 0x3a3a44, metalness: 0.7 });
+    for (let s = 20; s < T.L; s += 90) {
+      RK.frame(T, s, f); const sd = (s / 90 | 0) % 2 ? 1 : -1, p = P(f, sd * (f.w / 2 + 5), 0);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 18, 8), pole); m.position.set(p[0], groundY + 9, p[2]); G.add(m);
+      const l = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff0d0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); l.scale.set(14, 14, 1); l.position.set(p[0], groundY + 18.5, p[2]); G.add(l);
+    }
+  }
+  const sunS = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: night ? 0xff7a3a : 0xfff4d0, fog: false, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+  sunS.scale.set(night ? 2200 : 1200, night ? 2200 : 1200, 1); sunS.position.set(cx - 2600, night ? 220 : 1200, cz - 2200); G.add(sunS);
+}
+
 function buildWorld(idx) {
   if (world && world.idx === idx) return;
   if (world) { scene.remove(world.group); world.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map && m.map !== boxTex) m.map.dispose(); m.dispose(); }); } }); }
@@ -353,6 +500,7 @@ function buildWorld(idx) {
   const rt = roadTex(th);
   const road = new THREE.Mesh(strip(T, f => [P(f, -f.w / 2, 0), P(f, f.w / 2, 0)], 2, 24, true),
     th.rainbow ? new THREE.MeshBasicMaterial({ map: rt, color: 0xb0b0b0, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+      : th.gp ? new THREE.MeshStandardMaterial({ map: rt, roughness: 0.9, metalness: 0, color: 0xffffff })
       : new THREE.MeshStandardMaterial({ map: rt, roughness: def.theme === 'ice' ? 0.08 : 0.55, metalness: def.theme === 'ice' ? 0.6 : 0.25, envMapIntensity: def.theme === 'ice' ? 1.4 : 0.6 }));
   if (th.rainbow) W.upd.push((t, dt) => { rt.offset.y -= dt * 0.4; });
   G.add(road);
@@ -450,7 +598,7 @@ function buildWorld(idx) {
 
   // 기둥 (도시 · 용암)
   let minY = Infinity; for (let i = 0; i < T.N; i++) minY = Math.min(minY, T.py[i]);
-  const groundY = minY - 45;
+  const groundY = th.gp ? minY - 2.2 : minY - 45;
   if (def.theme !== 'space' && def.theme !== 'rainbow') {
     const ps = []; for (let s = 20; s < T.L; s += 55) { if (inGap(T, s)) continue; const f = RK.frame(T, s, _f); if (f.uy < 0.85) continue; ps.push([f.px - f.ux * 1.8, f.py - f.uy * 1.8, f.pz - f.uz * 1.8]); }
     const pg = new THREE.CylinderGeometry(1, 1.4, 1, 10);
@@ -484,11 +632,12 @@ function buildWorld(idx) {
     return false;
   };
 
-  const B = { city: buildCity, lava: buildLava, jungle: buildJungle, ice: buildIce, cyber: buildCyber, desert: buildDesert };
+  const B = { city: buildCity, lava: buildLava, jungle: buildJungle, ice: buildIce, cyber: buildCyber, desert: buildDesert, gp: (...a) => buildGP(...a, false), gpn: (...a) => buildGP(...a, true) };
   if (def.theme === 'space') buildSpace(W, T, cx, cz, R, near);
   else if (def.theme === 'rainbow') buildRainbow(W, T, cx, cz, R, near);
   else B[def.theme](W, T, cx, cz, R, groundY, near);
   buildHazards(W, T);
+  buildGPDress(W, T, def, th, groundY);
 
   scene.add(G); world = W;
   drawMiniBase(T);
@@ -801,53 +950,144 @@ function nameSprite(name, color) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
   s.scale.set(4.4, 1.1, 1); s.position.y = 2.6; s.renderOrder = 10; return s;
 }
-function makeCar(color, name, isMe) {
+// 카트 꾸미기 선택지 (이름 · 불꽃 색)
+const KART_NAMES = {
+  b: ['로켓', '포뮬러', '버기', '셔틀'],
+  w: ['기본 스포일러', '없음', 'GT 윙', '쌍둥이 핀'],
+  f: ['주황', '파랑', '초록', '분홍', '보라', '하양'],
+  d: ['가운데 줄', '없음', '두 줄', '체크무늬', '번개'],
+  h: ['없음', '왕관', '안테나 공', '악마 뿔', '천사 고리', '고양이 귀']
+};
+const FLAME_C = [0xff6a10, 0x30b8ff, 0x40ff60, 0xff40c8, 0xa860ff, 0xf0f4ff];
+const numTexCache = new Map();
+function numTex(n) {
+  if (numTexCache.has(n)) return numTexCache.get(n);
+  const t = canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(w / 2, h / 2, 60, 0, 7); g.fill();
+    g.fillStyle = '#111'; g.font = '900 78px Orbitron, "Black Han Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), w / 2, h / 2 + 4);
+  });
+  numTexCache.set(n, t); return t;
+}
+function makeCar(color, name, isMe, kart) {
+  const k = RK.cleanKart(kart || {});
   const root = new THREE.Group(); root.matrixAutoUpdate = false;
   const g = new THREE.Group(); root.add(g);
+  const accC = RK.PALETTE[k.a];
   const body = new THREE.MeshPhysicalMaterial({ color, metalness: 0.6, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.12 });
+  const acc = new THREE.MeshPhysicalMaterial({ color: accC, metalness: 0.5, roughness: 0.3, clearcoat: 1 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15151f, metalness: 0.85, roughness: 0.3 });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12 });
+  const tire = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.9 });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x0a1a33, metalness: 0.3, roughness: 0.05, clearcoat: 1, emissive: 0x081a40, emissiveIntensity: 0.6 });
   const glowC = new THREE.Color(color).multiplyScalar(2.2);
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.scale.set(sx, sy, sz); g.add(m); return m; };
-  add(new THREE.CapsuleGeometry(0.5, 2.1, 8, 20), body, 0, 0.05, 0.05, Math.PI / 2, 0, 0, 1.3, 1, 0.72);
-  add(new THREE.ConeGeometry(0.5, 1.3, 20), body, 0, 0.0, -1.75, -Math.PI / 2, 0, 0, 1.25, 1, 0.6);
-  add(new THREE.SphereGeometry(0.45, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.28, -0.25, 0, 0, 0, 0.95, 0.85, 1.7);
-  add(new THREE.BoxGeometry(0.55, 0.38, 2.0), body, -0.98, -0.12, 0.35, 0, 0.05, 0);
-  add(new THREE.BoxGeometry(0.55, 0.38, 2.0), body, 0.98, -0.12, 0.35, 0, -0.05, 0);
-  add(new THREE.BoxGeometry(2.9, 0.08, 0.5), dark, 0, -0.25, -1.45);
-  add(new THREE.BoxGeometry(0.1, 0.3, 0.55), body, -1.42, -0.15, -1.45);
-  add(new THREE.BoxGeometry(0.1, 0.3, 0.55), body, 1.42, -0.15, -1.45);
-  add(new THREE.BoxGeometry(2.4, 0.08, 0.5), dark, 0, 0.78, 1.25);
-  add(new THREE.BoxGeometry(0.08, 0.7, 0.65), body, -0.85, 0.42, 1.2, 0.25, 0, 0);
-  add(new THREE.BoxGeometry(0.08, 0.7, 0.65), body, 0.85, 0.42, 1.2, 0.25, 0, 0);
-  // 줄무늬
-  add(new THREE.BoxGeometry(0.18, 0.02, 2.2), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0.42, 0.3).scale.set(1, 1, 1);
-  // 로켓 엔진
+  const wheel = (x, z, r, wdt) => { add(new THREE.CylinderGeometry(r, r, wdt, 18), tire, x, -0.25 + (r - 0.42), z, 0, 0, Math.PI / 2); add(new THREE.CylinderGeometry(r * 0.55, r * 0.55, wdt + 0.02, 12), acc, x, -0.25 + (r - 0.42), z, 0, 0, Math.PI / 2); };
+  let topY = 0.6, sideX = 0.68, numZ = 0.3;
+  // ── 차체 ──
+  if (k.b === 1) {
+    // 포뮬러: 길고 낮은 코 · 바퀴 4개 · 앞날개 · 사이드포드 · 헤일로
+    add(new THREE.BoxGeometry(0.7, 0.4, 3.6), body, 0, -0.05, -0.2);
+    add(new THREE.ConeGeometry(0.36, 1.2, 4), body, 0, -0.1, -2.55, -Math.PI / 2, Math.PI / 4, 0, 1, 1, 0.55);
+    add(new THREE.BoxGeometry(2.6, 0.06, 0.45), acc, 0, -0.28, -2.75);
+    for (const sx of [-1.28, 1.28]) add(new THREE.BoxGeometry(0.06, 0.3, 0.5), acc, sx, -0.18, -2.75);
+    for (const sx of [-0.62, 0.62]) add(new THREE.BoxGeometry(0.5, 0.42, 1.6), body, sx, -0.08, 0.3);
+    add(new THREE.SphereGeometry(0.32, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.14, -0.35, 0, 0, 0, 1, 0.9, 1.6);
+    add(new THREE.TorusGeometry(0.38, 0.05, 6, 16, Math.PI), dark, 0, 0.18, -0.55, 0, 0, 0, 1, 1.1, 1);
+    for (const [x, z, r] of [[-1.0, -1.7, 0.36], [1.0, -1.7, 0.36], [-1.05, 1.05, 0.44], [1.05, 1.05, 0.44]]) wheel(x, z, r, 0.42);
+    sideX = 0.88; topY = 0.45; numZ = 0.3;
+  } else if (k.b === 2) {
+    // 버기: 통통한 상자 · 큰 바퀴 · 롤케이지
+    add(new THREE.BoxGeometry(1.7, 0.7, 2.8), body, 0, 0.05, 0.05);
+    add(new THREE.BoxGeometry(1.5, 0.35, 1.0), body, 0, 0.2, -1.55, -0.35, 0, 0);
+    add(new THREE.BoxGeometry(1.2, 0.45, 1.0), glass, 0, 0.55, -0.15);
+    for (const sx of [-0.7, 0.7]) { add(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 6), acc, sx, 0.9, 0.35, 0.3); add(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 6), acc, sx, 0.9, -0.6, -0.3); }
+    add(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), acc, 0, 1.38, -0.12, 0, 0, Math.PI / 2);
+    for (const [x, z] of [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.05], [1.0, 1.05]]) wheel(x, z, 0.55, 0.5);
+    sideX = 0.87; topY = 1.5; numZ = 0.25;
+  } else if (k.b === 3) {
+    // 셔틀: 넓은 삼각 날개 · 둥근 지붕
+    const sh = new THREE.Shape(); sh.moveTo(0, -2.4); sh.lineTo(1.6, 1.4); sh.lineTo(-1.6, 1.4); sh.lineTo(0, -2.4);
+    const wg = new THREE.ExtrudeGeometry(sh, { depth: 0.18, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.05, bevelSegments: 2 });
+    add(wg, body, 0, -0.15, 0, Math.PI / 2, 0, 0);
+    add(new THREE.CapsuleGeometry(0.42, 1.6, 8, 16), body, 0, 0.1, -0.1, Math.PI / 2, 0, 0, 1.1, 1, 0.75);
+    add(new THREE.SphereGeometry(0.4, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.3, -0.5, 0, 0, 0, 0.9, 0.8, 1.5);
+    for (const sx of [-1.35, 1.35]) add(new THREE.BoxGeometry(0.08, 0.6, 0.6), acc, sx, 0.15, 1.15, 0.2, 0, 0);
+    sideX = 0.5; topY = 0.75; numZ = 0.6;
+  } else {
+    // 로켓 (기본)
+    add(new THREE.CapsuleGeometry(0.5, 2.1, 8, 20), body, 0, 0.05, 0.05, Math.PI / 2, 0, 0, 1.3, 1, 0.72);
+    add(new THREE.ConeGeometry(0.5, 1.3, 20), body, 0, 0.0, -1.75, -Math.PI / 2, 0, 0, 1.25, 1, 0.6);
+    add(new THREE.SphereGeometry(0.45, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, 0.28, -0.25, 0, 0, 0, 0.95, 0.85, 1.7);
+    add(new THREE.BoxGeometry(0.55, 0.38, 2.0), body, -0.98, -0.12, 0.35, 0, 0.05, 0);
+    add(new THREE.BoxGeometry(0.55, 0.38, 2.0), body, 0.98, -0.12, 0.35, 0, -0.05, 0);
+    add(new THREE.BoxGeometry(2.9, 0.08, 0.5), dark, 0, -0.25, -1.45);
+    add(new THREE.BoxGeometry(0.1, 0.3, 0.55), acc, -1.42, -0.15, -1.45);
+    add(new THREE.BoxGeometry(0.1, 0.3, 0.55), acc, 1.42, -0.15, -1.45);
+    sideX = 1.27; topY = 0.62; numZ = 0.35;
+  }
+  // ── 날개 ──
+  if (k.w === 0) {
+    add(new THREE.BoxGeometry(2.4, 0.08, 0.5), dark, 0, 0.78, 1.25);
+    add(new THREE.BoxGeometry(0.08, 0.7, 0.65), acc, -0.85, 0.42, 1.2, 0.25, 0, 0);
+    add(new THREE.BoxGeometry(0.08, 0.7, 0.65), acc, 0.85, 0.42, 1.2, 0.25, 0, 0);
+  } else if (k.w === 2) {
+    add(new THREE.BoxGeometry(2.8, 0.1, 0.7), acc, 0, 1.25, 1.35, -0.12, 0, 0);
+    for (const sx of [-1.4, 1.4]) add(new THREE.BoxGeometry(0.06, 0.55, 0.85), body, sx, 1.15, 1.35);
+    for (const sx of [-0.55, 0.55]) add(new THREE.BoxGeometry(0.08, 0.9, 0.12), dark, sx, 0.75, 1.3);
+  } else if (k.w === 3) {
+    for (const sx of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.08, 1.1, 0.9), acc, sx, 0.75, 1.2, -0.35, 0, sx * 0.25);
+  }
+  // ── 무늬 ──
+  const decal = new THREE.MeshBasicMaterial({ color: k.d === 0 ? 0xffffff : accC });
+  if (k.d === 0) add(new THREE.BoxGeometry(0.18, 0.02, 2.2), decal, 0, topY - 0.2, 0.3);
+  else if (k.d === 2) for (const sx of [-0.22, 0.22]) add(new THREE.BoxGeometry(0.12, 0.02, 2.2), decal, sx, topY - 0.2, 0.3);
+  else if (k.d === 3) add(new THREE.BoxGeometry(0.7, 0.025, 0.5), new THREE.MeshBasicMaterial({ map: checkTex }), 0, topY - 0.19, 0.6);
+  else if (k.d === 4) for (const sx of [-1, 1]) {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.5, 0.18); sh.lineTo(0.35, 0.26); sh.lineTo(0.95, 0.5); sh.lineTo(0.42, 0.34); sh.lineTo(0.55, 0.25); sh.lineTo(0, 0);
+    const m = add(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: accC, side: THREE.DoubleSide }), sx * (sideX + 0.01), -0.25, 0.9, 0, sx * Math.PI / 2, 0, 1.6, 1.6, 1);
+    m.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+  }
+  // ── 번호판 (양옆) ──
+  if (k.n > 0) for (const sx of [-1, 1]) {
+    const m = add(new THREE.PlaneGeometry(0.62, 0.62), new THREE.MeshBasicMaterial({ map: numTex(k.n), transparent: true }), sx * (sideX + 0.02), 0.0, numZ);
+    m.rotation.y = sx * Math.PI / 2;
+  }
+  // ── 머리 장식 ──
+  const gold = new THREE.MeshStandardMaterial({ color: 0xffc928, metalness: 1, roughness: 0.25, emissive: 0x3a2800 });
+  if (k.h === 1) { add(new THREE.CylinderGeometry(0.32, 0.28, 0.25, 10, 1, true), gold, 0, topY + 0.15, -0.2); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; add(new THREE.ConeGeometry(0.07, 0.22, 6), gold, Math.cos(a) * 0.3, topY + 0.38, -0.2 + Math.sin(a) * 0.3); } }
+  else if (k.h === 2) { add(new THREE.CylinderGeometry(0.025, 0.025, 1.2, 6), dark, 0.3, topY + 0.6, 0.6); add(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(accC).multiplyScalar(2), toneMapped: false }), 0.3, topY + 1.22, 0.6); }
+  else if (k.h === 3) for (const sx of [-1, 1]) add(new THREE.ConeGeometry(0.12, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0xc81e28, roughness: 0.4 }), sx * 0.3, topY + 0.25, -0.25, 0, 0, -sx * 0.45);
+  else if (k.h === 4) add(new THREE.TorusGeometry(0.38, 0.05, 8, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2a0).multiplyScalar(2.5), toneMapped: false }), 0, topY + 0.65, -0.2, Math.PI / 2, 0, 0);
+  else if (k.h === 5) for (const sx of [-1, 1]) { add(new THREE.ConeGeometry(0.2, 0.42, 4), body, sx * 0.3, topY + 0.2, -0.3, 0, Math.PI / 4, -sx * 0.25); add(new THREE.ConeGeometry(0.1, 0.24, 4), new THREE.MeshBasicMaterial({ color: 0xff9ac8 }), sx * 0.3, topY + 0.2, -0.24, 0, Math.PI / 4, -sx * 0.25); }
+  // ── 로켓 엔진 ──
+  const flameC = FLAME_C[k.f];
   const thr = new THREE.CylinderGeometry(0.27, 0.34, 0.8, 18);
   const flames = [], cores = [];
+  const ey = k.b === 2 ? 0.25 : 0.08, ez = k.b === 1 ? 1.45 : 1.38;
   for (const sx of [-0.5, 0.5]) {
-    add(thr, dark, sx, 0.08, 1.38, Math.PI / 2);
-    add(new THREE.TorusGeometry(0.31, 0.05, 8, 20), chrome, sx, 0.08, 1.78);
-    const core = add(new THREE.CircleGeometry(0.25, 18), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8a30).multiplyScalar(3), toneMapped: false }), sx, 0.08, 1.77);
+    add(thr, dark, sx, ey, ez, Math.PI / 2);
+    add(new THREE.TorusGeometry(0.31, 0.05, 8, 20), chrome, sx, ey, ez + 0.4);
+    const core = add(new THREE.CircleGeometry(0.25, 18), new THREE.MeshBasicMaterial({ color: new THREE.Color(flameC).multiplyScalar(3), toneMapped: false }), sx, ey, ez + 0.39);
     cores.push(core);
-    const fm = flameMat(0xff7a20);
+    const fm = flameMat(flameC);
     const fl = new THREE.Mesh(new THREE.ConeGeometry(0.26, 1, 14, 1, true), fm);
     // 넓은 쪽이 엔진, 꼭짓점이 뒤로 (uv.y 1 = 엔진 쪽)
-    fl.geometry.translate(0, 0.5, 0); fl.rotation.x = Math.PI / 2; fl.position.set(sx, 0.08, 1.8);
+    fl.geometry.translate(0, 0.5, 0); fl.rotation.x = Math.PI / 2; fl.position.set(sx, ey, ez + 0.42);
     const uv = fl.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
     g.add(fl); flames.push(fl);
   }
-  // 전조등
-  for (const sx of [-0.35, 0.35]) add(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xcff6ff).multiplyScalar(3), toneMapped: false }), sx, 0.02, -2.25);
-  // 꼬리등
+  // 전조등 · 꼬리등
+  const nz = k.b === 1 ? -3.0 : k.b === 2 ? -2.05 : k.b === 3 ? -2.3 : -2.25;
+  for (const sx of [-0.35, 0.35]) add(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xcff6ff).multiplyScalar(3), toneMapped: false }), sx, 0.02, nz);
   for (const sx of [-0.98, 0.98]) add(new THREE.BoxGeometry(0.5, 0.1, 0.06), new THREE.MeshBasicMaterial({ color: glowC, toneMapped: false }), sx, -0.02, 1.36);
   // 바닥 빛
   const hov = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 5), new THREE.MeshBasicMaterial({ map: glowTex, color: glowC, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   hov.rotation.x = -Math.PI / 2; hov.position.y = -0.5; g.add(hov);
   const shield = new THREE.Mesh(new THREE.SphereGeometry(2.4, 24, 16), shieldMat()); shield.visible = false; root.add(shield);
   let tag = null; if (!isMe && name) { tag = nameSprite(name, color); root.add(tag); }
-  return { root, g, flames, cores, hov, shield, tag, color, glowC };
+  // 유령 효과용: 모든 재질을 반투명으로 바꿀 수 있게 모아 둬요
+  const mats = []; g.traverse(o => { if (o.isMesh && o !== hov && !flames.includes(o)) mats.push(o.material); });
+  return { root, g, flames, cores, hov, shield, tag, color, glowC, flameC, mats, sc: 1, ghost: false };
 }
 
 // ── 상태 ──────────────────────────────────────────────────
@@ -922,7 +1162,7 @@ const localLb = {
 function hostLocal(r, name) {
   const L = { readyState: 1, timer: 0, room: r };
   const conn = { sendRaw: s => { if (L.readyState === 1) queueMicrotask(() => { if (L.readyState === 1) onMsg(JSON.parse(s)); }); } };
-  const me = r.addHuman(conn, name || '나');
+  const me = r.addHuman(conn, name || '나', myKart);
   conn.sendRaw(JSON.stringify({ t: 'hi', id: me.id, code: r.code }));
   let acc = 0, lastT = performance.now();
   L.timer = setInterval(() => {
@@ -976,7 +1216,7 @@ function fbHost(join, priv, code) {
     const v = snap.val() || {}; let g = guests.get(gid);
     if (!g && v.j) {
       const conn = { sendRaw: str => { const t = str.slice(6, str.indexOf('"', 6)); const k = KIND[t]; if (k) pend[gid + '/' + k] = str; } };
-      const p = r.addHuman(conn, cleanNm(v.j.n));
+      const p = r.addHuman(conn, cleanNm(v.j.n), v.j.kart);
       if (!p) { pend[gid + '/e'] = JSON.stringify({ t: 'err', msg: '방이 꽉 찼어요', n: Date.now() }); return; }
       g = { p, conn }; guests.set(gid, g);
       conn.sendRaw(JSON.stringify({ t: 'hi', id: p.id, code }));
@@ -1005,7 +1245,7 @@ function fbGuest(join, hostUid, code) {
   const mine = fbr(base + uid), out = fbr(base + hostUid + '/o/' + uid), meta = fbr(base + hostUid + '/m');
   const L = { readyState: 1 }; let win = [], sendT = 0, got = false;
   mine.onDisconnect().remove();
-  mine.set({ j: { n: cleanNm(join.name), ts: fbNow() } });
+  mine.set({ j: { n: cleanNm(join.name), ts: fbNow(), kart: myKart } });
   const deliver = snap => { const v = snap.val(); if (!v || L.readyState !== 1) return; got = true; try { onMsg(JSON.parse(v)); } catch (e) {} };
   const subs = ['h', 'r', 's', 'x', 'e'].map(k => { const ref = out.child(k); ref.on('value', deliver); return ref; });
   meta.on('value', snap => { if (!snap.exists() && L.readyState === 1) { L.close(); onMsg({ t: 'err', msg: '방장이 나갔어요' }); } });
@@ -1155,11 +1395,17 @@ function onEvent(e) {
     case 'bump': if (mine) Snd.play('bump'); break;
     case 'land': if (mine) { Snd.play('land'); camShake = Math.max(camShake, 0.3); } break;
     case 'lap': if (mine) { Snd.play('lap'); if (e[2] >= C.LAPS) { bigText('FINAL LAP', 1400); finalLap = true; if (Snd.music) Snd.music.bpm = 152; } else toast(`${e[2]}바퀴째`); } break;
-    case 'fin': if (mine) { Snd.play('fin'); const p = players.get(myId); bigText('완주!', 1600); } break;
+    case 'fin': if (world) world.cheer = 1; if (mine) { Snd.play('fin'); const p = players.get(myId); bigText('완주!', 1600); } break;
     case 'start': if (mine) { toast('로켓 스타트! 🚀'); Snd.play('boost'); } break;
     case 'near': if (mine) { combo('아슬아슬! +니트로', '#7af'); Snd.play('near'); } break;
     case 'draft': if (mine) { combo('슬립스트림!', '#6ff'); Snd.play('draft'); } break;
     case 'cut': if (mine) { combo('지름길!', '#ffd23f'); Snd.play('near'); } break;
+    case 'magnet': if (mine) { combo('🧲 자석! 앞차에 끌려가요', '#7ab8ff'); Snd.play('draft'); } break;
+    case 'ghost': if (mine) { combo(e[2] ? '👻 유령! 아이템을 훔쳤어요' : '👻 유령!', '#d0d0ff'); Snd.play('shield'); } else if (e[2] === myId) { combo('👻 아이템을 도둑맞았어요!', '#ff8a8a'); } break;
+    case 'mega': if (mine) { bigText('거대화!', 900); Snd.play('nitro'); } else if (near(id) > 0.2) Snd.play('boost'); break;
+    case 'hole': if (mine) combo('🌀 블랙홀 설치!', '#c080ff'); Snd.play('emp'); break;
+    case 'slip': if (mine) { combo('🛢️ 미끄덩!', '#ffb060'); } Snd.play('bump'); break;
+    case 'ink': if (e.slice(2).includes(myId)) { inkT = 4; combo('🦑 먹물 공격!', '#aaa'); Snd.play('hit'); } else if (mine) combo('🦑 앞차들에 먹물!', '#ccc'); break;
     case 'perfect': if (mine) { combo('퍼펙트 드리프트!', '#f7f'); } break;
     case 'trick': if (mine) combo('트릭 성공!', '#ff6'); break;
     case 'nitrofull': if (mine) { combo(isTouch ? '니트로 준비! ⚡ 버튼' : '니트로 준비! Q 키', '#0ff'); Snd.play('ready'); } break;
@@ -1190,7 +1436,7 @@ function interpCar(id, rt) {
   const src = cb || ca;
   out.dr = src[6]; out.tier = src[7]; out.boost = src[8]; out.spin = src[9]; out.shield = src[10]; out.fall = src[11];
   // 지름길 좌표 (같은 지름길 안에서만 부드럽게 이어요)
-  out.sc = src[15] | 0;
+  out.sc = src[15] | 0; out.fx = src[18] | 0;
   if (cb && (ca[15] | 0) === out.sc) { out.sp = lerp(ca[16], cb[16], t); out.sl = lerp(ca[17], cb[17], t); } else { out.sp = src[16]; out.sl = src[17]; }
   return out;
 }
@@ -1206,7 +1452,7 @@ function burst(p, col, n, sp) {
 function drawCar(id, st, dt, t, isMe) {
   const p = players.get(id); if (!p) return;
   let c = cars.get(id);
-  if (!c) { c = makeCar(p.color, p.name, isMe); cars.set(id, c); scene.add(c.root); }
+  if (!c) { c = makeCar(p.color, p.name, isMe, p.kart); cars.set(id, c); scene.add(c.root); }
   const T = world.T;
   RK.carPose(T, st, pose);
   // 회전 (스핀)
@@ -1217,6 +1463,13 @@ function drawCar(id, st, dt, t, isMe) {
   let px = pose.x, py = pose.y, pz = pose.z;
   if (st.fall > 0) { const o = st.fall * st.fall * 30; px += pose.ux * o; py += pose.uy * o; pz += pose.uz * o; }
   basis(c.root.matrix, px, py, pz, fx, fy, fz, pose.ux, pose.uy, pose.uz);
+  // 아이템 효과: 거대화(크게) · 유령(반투명) · 자석(파란 빛)
+  const fxb = st.fx | 0;
+  c.sc = lerp(c.sc, fxb & 1 ? 1.8 : 1, 1 - Math.exp(-dt * 6));
+  if (Math.abs(c.sc - 1) > 0.01) { _v.set(c.sc, c.sc, c.sc); c.root.matrix.scale(_v); }
+  const gh = !!(fxb & 2);
+  if (gh !== c.ghost) { c.ghost = gh; for (const m of c.mats) { m.transparent = gh; m.opacity = gh ? 0.28 : 1; m.depthWrite = !gh; m.needsUpdate = true; } }
+  if (fxb & 4) c.hov.material.color.set(0x40a0ff).multiplyScalar(3); else c.hov.material.color.copy(c.glowC);
   c.root.matrixWorldNeedsUpdate = true;
   c.root.visible = !(st.fall > 0 && (t * 12 | 0) % 2);
   // 몸 기울기 · 흔들림
@@ -1227,7 +1480,7 @@ function drawCar(id, st, dt, t, isMe) {
   // 불꽃
   const boosting = st.boost > 0, sp = Math.abs(st.v) / C.MAXV;
   const len = 0.5 + sp * 1.4 + (boosting ? 2.6 : 0) + Math.random() * 0.3;
-  const col = boosting ? 0x40c8ff : st.dr && st.tier ? [0, 0x3aa8ff, 0xff8a10, 0xc050ff][st.tier] : 0xff6a10;
+  const col = boosting ? 0x40c8ff : st.dr && st.tier ? [0, 0x3aa8ff, 0xff8a10, 0xc050ff][st.tier] : c.flameC;
   for (const f of c.flames) { f.scale.set(boosting ? 1.35 : 1, len, boosting ? 1.35 : 1); f.material.uniforms.uC.value.set(col); f.material.uniforms.uT.value = t; f.material.uniforms.uI.value = 0.6 + sp * 0.6 + (boosting ? 0.8 : 0); }
   for (const cr of c.cores) cr.material.color.set(col).multiplyScalar(3);
   c.shield.visible = !!st.shield; c.shield.material.uniforms.uT.value = t;
@@ -1267,6 +1520,15 @@ function drawProj(sn, t) {
       } else if (pr[1] === 2) {
         const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.4, 12), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.8, roughness: 0.3 })); b.rotation.x = Math.PI / 2; m.add(b);
         const n = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3030).multiplyScalar(2), toneMapped: false })); n.rotation.x = -Math.PI / 2; n.position.z = -0.95; m.add(n);
+      } else if (pr[1] === 9) {
+        // 기름 웅덩이: 무지갯빛이 도는 검은 웅덩이
+        const b = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), new THREE.MeshStandardMaterial({ color: 0x0a0a10, metalness: 0.9, roughness: 0.05, envMapIntensity: 2.5 })); b.rotation.x = -Math.PI / 2; m.add(b);
+        const sh = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.6, 24), new THREE.MeshBasicMaterial({ color: 0x8a40ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.01; m.add(sh); m.userData.spin = sh;
+      } else if (pr[1] === 13) {
+        // 블랙홀: 검은 공 + 보라 소용돌이
+        const b = new THREE.Mesh(new THREE.SphereGeometry(1.3, 24, 16), new THREE.MeshBasicMaterial({ color: 0x000000 })); m.add(b);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.35, 8, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xa040ff).multiplyScalar(2.5), toneMapped: false, transparent: true, opacity: 0.8 })); ring.rotation.x = Math.PI / 2; m.add(ring); m.userData.spin = ring;
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x8a30ff, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); halo.scale.set(10, 10, 1); m.add(halo);
       } else {
         const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 0), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7, roughness: 0.4, flatShading: true })); m.add(b);
         for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 6), b.material); const d = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]][i]; s.position.set(d[0] * 0.6, d[1] * 0.6, d[2] * 0.6); s.lookAt(d[0] * 2, d[1] * 2, d[2] * 2); s.rotateX(Math.PI / 2); m.add(s); }
@@ -1276,11 +1538,13 @@ function drawProj(sn, t) {
     }
     let p = pr[2];
     if ((pr[1] === 2 || pr[1] === 8) && sn) p += (pr[1] === 8 ? 110 : 80) * Math.min(0.15, (performance.now() - sn.t) / 1000);
-    const o = onTrack(world.T, p, pr[3], pr[1] === 8 ? pr[4] + 0.6 : pr[1] === 2 ? 1.0 : 0.5);
+    const o = onTrack(world.T, p, pr[3], pr[1] === 8 ? pr[4] + 0.6 : pr[1] === 2 ? 1.0 : pr[1] === 9 ? 0.06 : pr[1] === 13 ? 1.6 : 0.5);
     basis(m.matrix, o.x, o.y, o.z, o.fx, o.fy, o.fz, o.ux, o.uy, o.uz); m.matrixWorldNeedsUpdate = true;
     if (pr[1] === 8) for (let i = 0; i < 5; i++) parts.spawn(o.x - o.fx * 2, o.y - o.fy * 2, o.z - o.fz * 2, (Math.random() - 0.5) * 3, Math.random() * 3, (Math.random() - 0.5) * 3, 0.8, 1.3, 0.7, 0.3, 1, 1.5, -1);
+    if (m.userData.spin) m.userData.spin.rotation.z += 0.08;
+    if (pr[1] === 13 && Math.random() < 0.8) { const a = Math.random() * 7, r = 7; parts.spawn(o.x + Math.cos(a) * r, o.y + (Math.random() - 0.3) * 2, o.z + Math.sin(a) * r, -Math.cos(a) * 9, 0, -Math.sin(a) * 9, 0.7, 0.5, 0.6, 0.2, 1, 1.5, 0); }
     if (pr[1] === 2) for (let i = 0; i < 3; i++) parts.spawn(o.x - o.fx * 1.2, o.y - o.fy * 1.2, o.z - o.fz * 1.2, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, 0.6, 0.8, 1, 0.5, 0.2, 1.5, -1);
-    else if (m.userData.light) m.userData.light.visible = (t * 4 | 0) % 2 === 0;
+    else if (m.userData && m.userData.light) m.userData.light.visible = (t * 4 | 0) % 2 === 0;
   }
   for (const [id, m] of projMesh) if (!seen.has(id)) { scene.remove(m); projMesh.delete(id); }
 }
@@ -1348,7 +1612,7 @@ function drawMini(list) {
     if (id === myId) { g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.stroke(); }
   }
 }
-let prevPlace = 0, placeT = 0;
+let prevPlace = 0, placeT = 0, inkT = 0;
 let centerT = 0, toastT = 0, nitroT = 0, finalLap = false, raceNow = 0;
 function combo(s, c) { const box = $('combo'); const d = document.createElement('div'); d.textContent = s; d.style.color = c; box.appendChild(d); setTimeout(() => d.remove(), 1300); while (box.children.length > 3) box.firstChild.remove(); }
 function bigText(s, ms) { const el = $('center'); el.textContent = s; el.style.opacity = 1; clearTimeout(centerT); centerT = setTimeout(() => el.style.opacity = 0, ms); }
@@ -1373,7 +1637,7 @@ function updateHud(dt, mineSt, sn) {
   // 아이템
   const ib = $('itembox');
   if (myRoul) {
-    rollT -= dt; if (rollT <= 0) { rollT = 0.07; rollIcon = rollIcon % 6 + 1; Snd.play('roll'); }
+    rollT -= dt; if (rollT <= 0) { rollT = 0.07; rollIcon = rollIcon % (RK.ITEMS.length - 1) + 1; Snd.play('roll'); }
     ib.innerHTML = RK.ITEMS[rollIcon].icon;
   } else if (myItem) {
     if (ib.dataset.k !== String(myItem)) Snd.play('get');
@@ -1423,11 +1687,12 @@ function drawFx(dt, st) {
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, nitroT > 0 ? `rgba(0,220,255,${a})` : `rgba(255,30,60,${a})`);
     fx2.fillStyle = g; fx2.fillRect(0, 0, w, h);
   }
+  if (inkT > 0) { inkT -= dt; $('ink').style.opacity = Math.min(1, inkT / 1.2); } else $('ink').style.opacity = 0;
   if (flashA > 0) { fx2.fillStyle = flashC; fx2.globalAlpha = flashA; fx2.fillRect(0, 0, w, h); fx2.globalAlpha = 1; flashA = Math.max(0, flashA - dt * 1.5); }
 }
 
 // ── 화면 전환 ─────────────────────────────────────────────
-function showScreen(id) { for (const s of ['menu', 'lobby', 'results']) $(s).classList.toggle('on', s === id); }
+function showScreen(id) { for (const s of ['menu', 'lobby', 'results', 'garage']) $(s).classList.toggle('on', s === id); }
 function showErr(m) { const e = $('err'); e.textContent = m; e.style.display = 'block'; setTimeout(() => e.style.display = 'none', 3000); }
 function toMenu() {
   mode = 'menu'; room = null; myId = 0; showScreen('menu'); $('hud').classList.remove('on'); $('touch').classList.remove('on');
@@ -1471,8 +1736,11 @@ $('name').value = store.get('name', '');
 const joinWith = (extra) => {
   Snd.init();
   const name = $('name').value.trim(); store.set('name', name);
-  connect(Object.assign({ t: 'join', name }, extra));
+  connect(Object.assign({ t: 'join', name, kart: myKart }, extra));
 };
+$('bGarage').onclick = openGarage;
+$('bGarageDone').onclick = closeGarage;
+$('bGarageRand').onclick = () => { myKart = RK.randKart(); myKart.n = 1 + Math.floor(Math.random() * 99); saveKart(); renderGarage(); rebuildGarageCar(); };
 $('bSolo').onclick = () => joinWith({ mode: 'solo', track: +$('trackSel').value });
 $('bQuick').onclick = () => joinWith({ mode: 'quick' });
 fetch('health', { cache: 'no-store' }).then(r => r.ok ? r.text() : '').catch(() => '').then(t => {
@@ -1491,6 +1759,52 @@ $('bQual').onclick = () => { quality = quality === 'high' ? 'low' : 'high'; stor
 $('bSnd').textContent = soundOn ? '켜짐' : '꺼짐';
 $('bSnd').onclick = () => { soundOn = !soundOn; store.set('snd', soundOn ? '1' : '0'); $('bSnd').textContent = soundOn ? '켜짐' : '꺼짐'; Snd.init(); Snd.setOn(soundOn); };
 addEventListener('pointerdown', () => Snd.init(), { once: true });
+
+// ── 차고: 경기 전에 카트 꾸미기 ─────────────────────────────
+let myKart = (() => { try { const k = JSON.parse(store.get('kart', 'null')); if (k) return RK.cleanKart(k); } catch (e) {} const k = RK.randKart(); k.n = 1 + Math.floor(Math.random() * 99); return k; })();
+let garageCar = null, garageA = 0;
+function saveKart() { store.set('kart', JSON.stringify(myKart)); }
+function swatches(key) {
+  return RK.PALETTE.map((c, i) => `<button class="sw${myKart[key] === i ? ' on' : ''}" data-k="${key}" data-v="${i}" style="background:${hex(c)}"></button>`).join('');
+}
+function stepper(key, label) {
+  const names = KART_NAMES[key];
+  return `<div class="grow"><span>${label}</span><div class="stp"><button data-k="${key}" data-d="-1">‹</button><b>${names[myKart[key]]}</b><button data-k="${key}" data-d="1">›</button></div></div>`;
+}
+function renderGarage() {
+  $('gOpts').innerHTML =
+    stepper('b', '차체') +
+    `<div class="grow col"><span>색</span><div class="sws">${swatches('c')}</div></div>` +
+    `<div class="grow col"><span>포인트 색</span><div class="sws">${swatches('a')}</div></div>` +
+    stepper('w', '날개') + stepper('f', '불꽃') + stepper('d', '무늬') + stepper('h', '머리 장식') +
+    `<div class="grow"><span>번호</span><div class="stp"><button data-k="n" data-d="-1">‹</button><b>${myKart.n || '없음'}</b><button data-k="n" data-d="1">›</button></div></div>`;
+  $('gOpts').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const k = b.dataset.k, n = RK.KART_OPTS[k];
+    if (b.dataset.v != null) myKart[k] = +b.dataset.v; else myKart[k] = (myKart[k] + +b.dataset.d + n) % n;
+    saveKart(); renderGarage(); rebuildGarageCar(); Snd.play('box');
+  });
+}
+function rebuildGarageCar() {
+  if (garageCar) { scene.remove(garageCar.root); garageCar = null; }
+  if (mode !== 'garage') return;
+  garageCar = makeCar(RK.PALETTE[myKart.c], '', true, myKart); scene.add(garageCar.root);
+}
+function openGarage() { Snd.init(); mode = 'garage'; showScreen('garage'); renderGarage(); rebuildGarageCar(); }
+function closeGarage() { mode = 'menu'; if (garageCar) { scene.remove(garageCar.root); garageCar = null; } showScreen('menu'); }
+// 차고 카메라: 출발선 앞에서 빙글빙글 돌며 보여 줘요
+function garageCam(dt, t) {
+  if (!garageCar) return;
+  const T = world.T, o = onTrack(T, -14, 0, 0.75);
+  garageA += dt * 0.5;
+  basis(garageCar.root.matrix, o.x, o.y, o.z, o.fx * Math.cos(garageA) + o.rx * Math.sin(garageA), o.fy * Math.cos(garageA) + o.ry * Math.sin(garageA), o.fz * Math.cos(garageA) + o.rz * Math.sin(garageA), o.ux, o.uy, o.uz);
+  garageCar.root.matrixWorldNeedsUpdate = true;
+  for (const f of garageCar.flames) { f.scale.set(1, 0.9 + Math.random() * 0.3, 1); f.material.uniforms.uC.value.set(garageCar.flameC); f.material.uniforms.uT.value = t; f.material.uniforms.uI.value = 1; }
+  // 화면 오른쪽에 차가 보이게 살짝 비켜서 봐요
+  const side = innerWidth > 760 ? -3.2 : 0;
+  camera.position.set(o.x - o.fx * 7.5 + o.rx * (4.5 + side) + o.ux * 2.4, o.y - o.fy * 7.5 + o.ry * (4.5 + side) + o.uy * 2.4, o.z - o.fz * 7.5 + o.rz * (4.5 + side) + o.uz * 2.4);
+  camera.up.set(0, 1, 0); camera.lookAt(o.x + o.rx * side * 0.6, o.y + 0.3, o.z + o.rz * side * 0.6);
+  camera.fov = 50; camera.updateProjectionMatrix(); camInit = false;
+}
 
 // ── 메인 루프 ─────────────────────────────────────────────
 let last = performance.now(), clock = 0;
@@ -1529,6 +1843,7 @@ function loop(now) {
         st.yaw = lerpA(pcPrev.yaw, pc.yaw, a) + err.yaw; st.v = pc.v; st.dr = pc.dr; st.boost = pc.boost; st.spin = pc.spin; st.fall = pc.fall; st.dc = pc.dc;
         st.tier = pc.dr ? (pc.dc >= RK.TIER[3] ? 3 : pc.dc >= RK.TIER[2] ? 2 : pc.dc >= RK.TIER[1] ? 1 : 0) : 0;
         const sc = lastSnap.cars.get(myId); st.shield = sc ? sc[10] : 0;
+        st.fx = sc ? sc[18] | 0 : 0;
         st.sc = pc.sc; if (pc.sc && pcPrev.sc === pc.sc) { st.sp = lerp(pcPrev.sp, pc.sp, a); st.sl = lerp(pcPrev.sl, pc.sl, a); } else { st.sp = pc.sp; st.sl = pc.sl; }
       } else {
         st = interpCar(id, rt); if (!st) continue;
@@ -1545,13 +1860,16 @@ function loop(now) {
     let follow = mineSt;
     if (!follow && shown.length) { const lead = [...lastSnap.cars.values()].sort((a, b) => a[12] - b[12])[0]; const f = shown.find(s => s[0] === lead[0]); follow = f && f[1]; }
     if (follow) followCam(follow, rdt, true);
+    updateLights(world, lastSnap.st, lastSnap.tm);
     if (mineSt) Snd.engine(mineSt.v, mineSt.boost > 0, !!mineSt.dr); else Snd.silence();
     updateHud(dt, mineSt, lastSnap);
     drawMini(shown);
     // 상자
     for (const b of world.boxes) { b.visible = lastSnap.bx[b.userData.k] !== '0'; }
+  } else if (mode === 'garage') {
+    garageCam(dt, clock); updateLights(world, '', 0);
   } else {
-    flyCam(dt);
+    flyCam(dt); updateLights(world, '', 0);
     for (const b of world.boxes) b.visible = true;
   }
   // 공통 움직임
@@ -1572,3 +1890,4 @@ showScreen('menu');
 setTimeout(() => { $('load').style.opacity = 0; setTimeout(() => $('load').remove(), 400); }, 300);
 requestAnimationFrame(loop);
 if (location.search.includes('debug')) window.__rk = { scene, camera, cars, THREE, makeCar, renderer, get me() { return myId; }, get pc() { return pc; }, get pred() { return predicting; } };
+if (location.search.includes('debug')) window.__g = { setKart(k) { myKart = RK.cleanKart(k); saveKart(); renderGarage(); rebuildGarageCar(); }, toMenu };
