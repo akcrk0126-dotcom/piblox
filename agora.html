@@ -140,7 +140,7 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 25
 // 해 — 늦은 오후의 금빛
 const SUN = new THREE.Vector3(-0.78, 0.42, 0.46).normalize();
 const HAZE = new THREE.Color().setRGB(0.44, 0.54, 0.70);   // 선형 공간
-scene.fog = new THREE.FogExp2(HAZE.clone(), 0.0043);
+scene.fog = new THREE.FogExp2(HAZE.clone(), 0.0034);
 
 // ───────────────────────── 난수 / 노이즈 ─────────────────────────
 function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -452,7 +452,7 @@ function triG(a, b, c, nHint){
 }
 function normBand(g, r, y0, h){ const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / (TAU * r), (uv.getY(i) - y0) / h); return g; }
 // 고리 띠 (바깥/안/윗/아랫면) — u 는 미터 단위
-function ringBand(rIn, rOut, y0, y1, seg, f = { o: 1, i: 1, t: 1, b: 1 }){
+function ringBand(rIn, rOut, y0, y1, seg, f = { o: 1, i: 1, t: 1, b: 1 }, A0 = 0, A1 = TAU){
   const P = [], N = [], U = [];
   const quad = (p, n, uv) => { // p: 4 corners, CCW 보정
     const A = new THREE.Vector3(...p[0]), B = new THREE.Vector3(...p[1]), C = new THREE.Vector3(...p[2]);
@@ -461,7 +461,7 @@ function ringBand(rIn, rOut, y0, y1, seg, f = { o: 1, i: 1, t: 1, b: 1 }){
     for (const i of order){ P.push(...p[i]); N.push(...n[i]); U.push(...uv[i]); }
   };
   for (let i = 0; i < seg; i++){
-    const a = i / seg * TAU, b = (i + 1) / seg * TAU, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+    const a = A0 + i / seg * (A1 - A0), b = A0 + (i + 1) / seg * (A1 - A0), ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
     if (f.o) quad([[rOut * ca, y0, rOut * sa], [rOut * cb, y0, rOut * sb], [rOut * cb, y1, rOut * sb], [rOut * ca, y1, rOut * sa]], [[ca, 0, sa], [cb, 0, sb], [cb, 0, sb], [ca, 0, sa]], [[a * rOut, y0], [b * rOut, y0], [b * rOut, y1], [a * rOut, y1]]);
     if (f.i) quad([[rIn * ca, y0, rIn * sa], [rIn * cb, y0, rIn * sb], [rIn * cb, y1, rIn * sb], [rIn * ca, y1, rIn * sa]], [[-ca, 0, -sa], [-cb, 0, -sb], [-cb, 0, -sb], [-ca, 0, -sa]], [[-a * rIn, y0], [-b * rIn, y0], [-b * rIn, y1], [-a * rIn, y1]]);
     if (f.t) quad([[rIn * ca, y1, rIn * sa], [rOut * ca, y1, rOut * sa], [rOut * cb, y1, rOut * sb], [rIn * cb, y1, rIn * sb]], [[0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0]], [[a * rIn, rIn], [a * rOut, rOut], [b * rOut, rOut], [b * rIn, rIn]]);
@@ -690,7 +690,7 @@ function collide(p, rad){
       p.x = o.x + nx * o.c + nz * o.s; p.z = o.z - nx * o.s + nz * o.c;
     }
   }
-  const r = Math.hypot(p.x, p.z); if (r > 96){ p.x *= 96 / r; p.z *= 96 / r; }
+  const r = Math.hypot(p.x, p.z); if (r > 75.5){ p.x *= 75.5 / r; p.z *= 75.5 / r; }
 }
 function groundY(x, z){
   const r = Math.hypot(x, z);
@@ -880,7 +880,7 @@ const FX = {};   // 애니메이션 대상
 }
 
 // ───────────────────────── 오벨리스크 / 화로 / 벤치 / 가로등 ─────────────────────────
-const FIRES = [], SMOKES = [], SPARKS = [];
+const FIRES = [], SMOKES = [], SPARKS = [], TORCHES = [];
 {
   const runeVT = tex(runeColumn(128, 1024, 9, '#3fe6ff', 1), true, 1, 1);
   const runeVMat = ADD(runeVT, 0xffffff, 1);
@@ -948,112 +948,251 @@ const FIRES = [], SMOKES = [], SPARKS = [];
   }
 }
 
+// ───────────────────────── 중세 마을: 텍스처 / 재질 ─────────────────────────
+function shingleC(base, seed){
+  const c = cnv(512), x = c.getContext('2d'); x.fillStyle = rgb(base[0] * .3, base[1] * .3, base[2] * .3); x.fillRect(0, 0, 512, 512);
+  const rows = 10, h = 512 / rows, n = 7, w = 512 / n;
+  for (let r = 0; r < rows; r++) for (let i = -1; i <= n; i++){
+    const X = i * w + (r % 2) * w / 2, Y = r * h, k = 0.72 + R() * 0.42;
+    x.fillStyle = rgb(base[0] * k, base[1] * k, base[2] * k); x.beginPath(); x.roundRect(X + 2, Y - 2, w - 4, h + 2, [1, 1, 9, 9]); x.fill();
+    x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(X + 4, Y, w - 8, 3);
+    x.fillStyle = 'rgba(0,0,0,.45)'; x.fillRect(X + 2, Y + h - 4, w - 4, 4);
+  }
+  const im = x.getImageData(0, 0, 512, 512), d = im.data;
+  for (let j = 0; j < 512; j++) for (let i = 0; i < 512; i++){ const q = (j * 512 + i) * 4, f = 0.8 + 0.35 * fbm(i / 128, j / 128, 4, 4, seed); d[q] *= f; d[q + 1] *= f; d[q + 2] *= f; }
+  x.putImageData(im, 0, 0); return c;
+}
+const thatchC = pixels(512, (u, v, o) => {
+  const n = fbm(u * 96, v * 5, 96, 3, 61), m = fbm(u * 6, v * 6, 6, 3, 62), row = (v * 7) % 1;
+  const k = (0.5 + 0.55 * n) * (0.72 + 0.3 * m) * (0.62 + 0.38 * smooth(0, 0.35, row));
+  o[0] = 196 * k; o[1] = 156 * k; o[2] = 88 * k;
+});
+function stripeC(c1, c2){
+  const c = cnv(256, 64), x = c.getContext('2d');
+  for (let i = 0; i < 4; i++){ x.fillStyle = i % 2 ? c2 : c1; x.fillRect(i * 64, 0, 64, 64); }
+  x.fillStyle = 'rgba(0,0,0,.08)'; for (let i = 0; i < 256; i += 4) x.fillRect(i, 0, 1, 64);
+  return c;
+}
+const SIGNS = [['여 관', 'mug'], ['빵 집', 'bread'], ['잡화점', 'bag'], ['약초상', 'herb'], ['무구점', 'shield'], ['마법서점', 'book']];
+function signTexC(label, icon){
+  const c = cnv(256, 192), x = c.getContext('2d');
+  x.fillStyle = '#4a3220'; x.fillRect(0, 0, 256, 192);
+  for (let i = 0; i < 6; i++){ x.fillStyle = `rgba(0,0,0,${0.08 + R() * 0.1})`; x.fillRect(0, i * 32 + 30, 256, 2); }
+  x.strokeStyle = '#c99a48'; x.lineWidth = 7; x.strokeRect(9, 9, 238, 174);
+  x.fillStyle = '#e8c878'; x.strokeStyle = '#e8c878'; x.lineWidth = 7; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.save(); x.translate(128, 76);
+  if (icon === 'mug'){ x.fillRect(-26, -30, 44, 58); x.beginPath(); x.arc(22, -2, 16, -1.3, 1.3); x.stroke(); x.fillStyle = '#fff5dc'; x.beginPath(); x.ellipse(-4, -34, 28, 9, 0, 0, TAU); x.fill(); }
+  else if (icon === 'bread'){ x.beginPath(); x.ellipse(0, 0, 50, 26, 0, 0, TAU); x.fill(); x.strokeStyle = '#4a3220'; x.lineWidth = 5; for (const o of [-24, 0, 24]){ x.beginPath(); x.moveTo(o - 8, -14); x.lineTo(o + 8, 10); x.stroke(); } }
+  else if (icon === 'bag'){ x.beginPath(); x.moveTo(-30, -6); x.quadraticCurveTo(-44, 34, 0, 34); x.quadraticCurveTo(44, 34, 30, -6); x.closePath(); x.fill(); x.fillRect(-18, -24, 36, 18); x.beginPath(); x.moveTo(-20, -24); x.lineTo(20, -24); x.stroke(); }
+  else if (icon === 'herb'){ x.beginPath(); x.moveTo(0, 36); x.lineTo(0, -34); x.stroke(); for (const s of [-1, 1]) for (const y of [-18, 2, 20]){ x.beginPath(); x.ellipse(s * 18, y - 4, 18, 8, s * -0.6, 0, TAU); x.fill(); } }
+  else if (icon === 'shield'){ x.beginPath(); x.moveTo(-34, -34); x.lineTo(34, -34); x.lineTo(30, 6); x.quadraticCurveTo(0, 40, 0, 40); x.quadraticCurveTo(0, 40, -30, 6); x.closePath(); x.fill(); x.strokeStyle = '#4a3220'; x.lineWidth = 6; x.beginPath(); x.moveTo(0, -30); x.lineTo(0, 30); x.moveTo(-26, -8); x.lineTo(26, -8); x.stroke(); }
+  else if (icon === 'book'){ x.fillRect(-40, -26, 38, 52); x.fillRect(2, -26, 38, 52); x.strokeStyle = '#4a3220'; x.lineWidth = 3; for (const y of [-12, 0, 12]){ x.beginPath(); x.moveTo(-34, y); x.lineTo(-8, y); x.moveTo(8, y); x.lineTo(34, y); x.stroke(); } x.fillStyle = '#7ff3ff'; x.shadowColor = '#7ff3ff'; x.shadowBlur = 12; x.beginPath(); x.arc(0, -38, 6, 0, TAU); x.fill(); }
+  x.restore();
+  x.fillStyle = '#f1dcae'; x.font = '900 34px "Gowun Batang", serif'; x.textAlign = 'center'; x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 4; x.fillText(label, 128, 166);
+  return c;
+}
+{
+  const slT = tex(shingleC([96, 104, 118], 81), true, 1 / 2.2), shT = tex(shingleC([120, 84, 56], 82), true, 1 / 2.2), thT = tex(thatchC, true, 1 / 2.6);
+  Object.assign(M, {
+    slate: std({ map: slT, roughness: 0.7, metalness: 0.05 }),
+    shingle: std({ map: shT, roughness: 0.85 }),
+    thatch: std({ map: thT, roughness: 1.0 }),
+    beam: std({ map: T.wood, roughness: 0.85, color: 0x3a2a1e }),
+    crate: std({ map: T.wood, roughness: 0.85, color: 0xb59a74 }),
+    hay: std({ map: thT, roughness: 1.0, color: 0xfff0c0 }),
+    sack: std({ map: T.plaster, roughness: 1.0, color: 0xc4a678 }),
+    bread: std({ color: 0xc27a36, roughness: 0.75 }),
+    fruitR: std({ color: 0xc0281e, roughness: 0.45 }), fruitG: std({ color: 0x86b23a, roughness: 0.5 }), fruitO: std({ color: 0xe78a1e, roughness: 0.55 }),
+    wicker: std({ map: thT, roughness: 0.95, color: 0xd8a868 }),
+    rope: std({ color: 0x5a4632, roughness: 1 }),
+    pen0: std({ color: 0xb8262a, roughness: 0.8 }), pen1: std({ color: 0xe0b23a, roughness: 0.8 }), pen2: std({ color: 0x2a4f9a, roughness: 0.8 }), pen3: std({ color: 0x2f7a46, roughness: 0.8 }),
+    potionP: std({ color: 0x5a1a8a, emissive: 0x8a30ff, emissiveIntensity: 0.9, roughness: 0.1 }), potionG: std({ color: 0x1a6a3a, emissive: 0x30ff80, emissiveIntensity: 0.7, roughness: 0.1 }),
+    hill: std({ map: tex(grassC, true, 1 / 3, 1 / 3), roughness: 0.95, color: 0xa8b890 }),
+    awnR: std({ map: tex(stripeC('#b8302a', '#efe4cc'), true, 1 / 1.4, 1), roughness: 0.9 }),
+    awnB: std({ map: tex(stripeC('#2a4f8a', '#efe4cc'), true, 1 / 1.4, 1), roughness: 0.9 }),
+    awnG: std({ map: tex(stripeC('#2f6a3e', '#e8d9a8'), true, 1 / 1.4, 1), roughness: 0.9 }),
+    awnY: std({ map: tex(stripeC('#c88a1e', '#6a2a1e'), true, 1 / 1.4, 1), roughness: 0.9 }),
+  });
+  SIGNS.forEach((s, i) => { const t = tex(signTexC(s[0], s[1])); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; M['sign' + i] = std({ map: t, roughness: 0.8 }); });
+  M.pBlue.color.setHex(0x2e4a66); M.pGreen.color.setHex(0x3f5a38); M.pRed.color.setHex(0x7a3328); M.pTeal.color.setHex(0x8a6a2e);
+  M.glass.emissive.setHex(0xffa040);
+}
+
 // ───────────────────────── 집들 ─────────────────────────
-const PAINTS = ['pBlue', 'pGreen', 'pRed', 'pTeal', 'pBlue'];
+const PAINTS = ['pBlue', 'pGreen', 'pRed', 'pTeal', 'pGreen'];
 const WALLS = ['plaster', 'plaster', 'plaster2', 'plaster3'];
+const ROOFS = ['slate', 'slate', 'shingle', 'shingle', 'roof2'];
 // 창문 (면 로컬: x 오른쪽, y 위, z 바깥)
 function windowAt(k, x, y, w, h, paint, shutters = true){
   k.box('glass', w, h, 0.06, x, y, 0.02);
-  k.box('wood', w + 0.18, 0.1, 0.14, x, y + h / 2 + 0.05, 0.06); k.box('stone', w + 0.34, 0.1, 0.24, x, y - h / 2 - 0.05, 0.1);
-  k.box('wood', 0.09, h, 0.14, x - w / 2 - 0.045, y, 0.06); k.box('wood', 0.09, h, 0.14, x + w / 2 + 0.045, y, 0.06);
-  k.box('woodD', 0.05, h, 0.08, x, y, 0.06); k.box('woodD', w, 0.05, 0.08, x, y + h * 0.1, 0.06);
-  if (shutters){ for (const s of [-1, 1]) k.box(paint, w * 0.5, h + 0.06, 0.05, x + s * (w * 0.75 + 0.1), y, 0.04); }
+  k.box('beam', w + 0.18, 0.1, 0.14, x, y + h / 2 + 0.05, 0.07); k.box('stone', w + 0.3, 0.1, 0.24, x, y - h / 2 - 0.05, 0.1);
+  k.box('beam', 0.09, h, 0.14, x - w / 2 - 0.045, y, 0.07); k.box('beam', 0.09, h, 0.14, x + w / 2 + 0.045, y, 0.07);
+  k.box('beam', 0.05, h, 0.08, x, y, 0.07); k.box('beam', w, 0.05, 0.08, x, y + h * 0.12, 0.07);
+  if (shutters){ for (const s of [-1, 1]) k.box(paint, w * 0.5, h + 0.06, 0.05, x + s * (w * 0.75 + 0.1), y, 0.05); }
 }
 function doorAt(k, x, w, h, paint){
   k.box('stone', w + 0.5, 0.18, 0.5, x, 0.09, 0.25);
   k.box(paint, w, h, 0.1, x, h / 2 + 0.18, 0.03);
-  k.box('stone', 0.22, h + 0.2, 0.2, x - w / 2 - 0.11, (h + 0.2) / 2 + 0.18, 0.08); k.box('stone', 0.22, h + 0.2, 0.2, x + w / 2 + 0.11, (h + 0.2) / 2 + 0.18, 0.08);
-  k.box('stone', w + 0.66, 0.24, 0.24, x, h + 0.4, 0.1);
-  k.geo('gold', new THREE.SphereGeometry(0.05, 8, 6), x + w * 0.32, h * 0.5 + 0.18, 0.12);
+  for (let i = 0; i < 3; i++) k.box('iron', w * 0.8, 0.05, 0.03, x, 0.5 + i * h * 0.35, 0.09);
+  k.box('beam', 0.2, h + 0.2, 0.18, x - w / 2 - 0.1, (h + 0.2) / 2 + 0.18, 0.08); k.box('beam', 0.2, h + 0.2, 0.18, x + w / 2 + 0.1, (h + 0.2) / 2 + 0.18, 0.08);
+  k.box('beam', w + 0.6, 0.22, 0.22, x, h + 0.4, 0.1);
+  k.geo('iron', new THREE.TorusGeometry(0.07, 0.015, 4, 12), x + w * 0.3, h * 0.5 + 0.18, 0.1);
 }
 function lanternAt(k, x, y){
   k.box('iron', 0.04, 0.04, 0.4, x, y + 0.35, 0.2);
   k.box('lamp', 0.2, 0.28, 0.2, x, y, 0.42); k.geo('iron', new THREE.ConeGeometry(0.2, 0.16, 4), x, y + 0.22, 0.42, 0, Math.PI / 4, 0);
 }
 function flowerBox(k, x, y, w){
-  k.box('terra', w, 0.2, 0.26, x, y, 0.16);
+  k.box('beam', w, 0.2, 0.26, x, y, 0.16);
   for (let i = 0; i < Math.round(w / 0.16); i++) k.geo(R() < 0.55 ? 'flower' : (R() < 0.5 ? 'flowerY' : 'leaf'), new THREE.IcosahedronGeometry(rr(0.07, 0.11), 0), x - w / 2 + 0.1 + i * 0.16, y + 0.14 + rr(0, 0.06), 0.16 + rr(-0.05, 0.05));
 }
-function gableRoof(k, w, d, y, pitch, oh, key){
+function wallTorch(k, x, y){
+  k.box('iron', 0.1, 0.32, 0.06, x, y - 0.12, 0.03);
+  k.box('iron', 0.04, 0.04, 0.3, x, y - 0.06, 0.17);
+  k.geo('woodD', new THREE.CylinderGeometry(0.045, 0.03, 0.55, 6), x, y + 0.06, 0.3, 0.32, 0, 0);
+  k.geo('ember', new THREE.SphereGeometry(0.075, 6, 5), x, y + 0.31, 0.38);
+  TORCHES.push(new THREE.Vector3(x, y + 0.36, 0.39).applyMatrix4(k.top()));
+}
+function hangingSign(k, x, y, idx){
+  k.box('iron', 0.05, 0.05, 1.2, x, y, 0.6);
+  k.box('iron', 0.04, 0.04, 0.8, x, y - 0.27, 0.3, -0.76);
+  for (const z of [0.36, 0.86]) k.box('iron', 0.02, 0.14, 0.02, x, y - 0.08, z);
+  k.box('beam', 0.06, 0.62, 0.84, x, y - 0.46, 0.61);
+  k.geo('sign' + idx, new THREE.PlaneGeometry(0.78, 0.56), x + 0.032, y - 0.46, 0.61, 0, Math.PI / 2, 0);
+  k.geo('sign' + idx, new THREE.PlaneGeometry(0.78, 0.56), x - 0.032, y - 0.46, 0.61, 0, -Math.PI / 2, 0);
+}
+function barrel(k, x, y, z){
+  k.geo('wood', latheG([[0, 0], [0.3, 0], [0.36, 0.22], [0.38, 0.45], [0.36, 0.68], [0.3, 0.9], [0, 0.9]], 14, 0.4), x, y, z);
+  for (const h of [0.18, 0.72]) k.geo('iron', new THREE.TorusGeometry(0.36, 0.02, 4, 16), x, y + h, z, Math.PI / 2);
+}
+function clutter(k, x, z, n){
+  for (let i = 0; i < n; i++){
+    const t = R(), px = x + rr(-0.6, 0.6), pz = z + rr(-0.35, 0.35);
+    if (t < 0.4) barrel(k, px, 0, pz);
+    else if (t < 0.78){ const s = rr(0.5, 0.75), r0 = rr(-0.4, 0.4); k.box('crate', s, s, s, px, s / 2, pz, 0, r0); k.box('beam', s + 0.02, 0.06, s + 0.02, px, s * 0.5, pz, 0, r0); if (R() < 0.45) k.box('crate', s * 0.75, s * 0.75, s * 0.75, px, s + s * 0.375, pz, 0, rr(-0.5, 0.5)); }
+    else k.geo('sack', new THREE.SphereGeometry(0.3, 10, 8), px, 0.24, pz, 0, R() * 3, 0, 1, 0.85, 0.75);
+  }
+  const p = k.world(x, z); addCircle(p.x, p.z, 0.85);
+}
+function gableRoof(k, w, d, y, pitch, oh, key, th = 0.16){
   const hd = d / 2 + oh, rise = (d / 2) * Math.tan(pitch), L = hd / Math.cos(pitch), yr = y + rise;
-  for (const s of [-1, 1]) k.box(key, w + oh * 2, 0.16, L, 0, yr - (hd / 2) * Math.tan(pitch) + 0.08, s * hd / 2, s * pitch, 0, 0);
-  k.geo(key, new THREE.CylinderGeometry(0.13, 0.13, w + oh * 2 + 0.05, 8), 0, yr + 0.12, 0, 0, 0, Math.PI / 2);
+  for (const s of [-1, 1]) k.box(key, w + oh * 2, th, L, 0, yr - (hd / 2) * Math.tan(pitch) + th / 2, s * hd / 2, s * pitch, 0, 0);
+  k.geo(key === 'thatch' ? 'thatch' : 'beam', new THREE.CylinderGeometry(th * 0.8, th * 0.8, w + oh * 2 + 0.05, 8), 0, yr + th * 0.75, 0, 0, 0, Math.PI / 2);
   return rise;
 }
-function gables(k, w, d, y, rise, key){
-  for (const s of [-1, 1]) k.geo(key, triG([s * w / 2, y, -d / 2], [s * w / 2, y, d / 2], [s * w / 2, y + rise, 0], new THREE.Vector3(s, 0, 0)));
-}
-function quoins(k, w, d, h){
-  for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) for (let y = 0.6; y < h - 0.2; y += 0.6){ const alt = (Math.round(y / 0.6) % 2); k.box('stone', alt ? 0.5 : 0.32, 0.28, alt ? 0.32 : 0.5, sx * (w / 2 - (alt ? 0.2 : 0.11)), y, sz * (d / 2 - (alt ? 0.11 : 0.2))); }
-}
-// 1층 오두막
-function cottage(k, w, d){
-  const wall = pick(WALLS), paint = pick(PAINTS), roof = R() < 0.5 ? 'roof' : 'roof2', h = 3.3;
-  k.box('stone', w + 0.25, 0.55, d + 0.25, 0, 0.275, 0);
-  k.box(wall, w, h, d, 0, 0.5 + h / 2, 0);
-  quoins(k, w, d, h + 0.5);
-  const rise = gableRoof(k, w, d, h + 0.5, 0.52, 0.45, roof); gables(k, w, d, h + 0.5, rise, wall);
-  k.push(0, 0, d / 2); doorAt(k, -w * 0.18, 1.1, 2.1, paint); windowAt(k, w * 0.25, 2.0, 1.0, 1.15, paint); flowerBox(k, w * 0.25, 1.33, 1.3); lanternAt(k, -w * 0.18 + 0.95, 2.55); k.pop();
-  k.push(w / 2, 0, 0, Math.PI / 2); windowAt(k, 0, 2.0, 0.9, 1.1, paint); k.pop();
-  k.push(-w / 2, 0, 0, -Math.PI / 2); windowAt(k, 0, 2.0, 0.9, 1.1, paint); k.pop();
-  if (R() < 0.8){ const cx = w * rr(-0.3, 0.3), smk = R() < 0.45; k.box('stone', 0.7, 2.2, 0.7, cx, h + 0.5 + rise * 0.55 + 0.6, -d * 0.18); k.box('stoneD', 0.85, 0.15, 0.85, cx, h + 0.5 + rise * 0.55 + 1.75, -d * 0.18); if (smk) SMOKES.push(k.world(cx, -d * 0.18).setY(h + 0.5 + rise * 0.55 + 1.9)); }
-  if (R() < 0.45){ // 차양
-    const aw = pick(['cloth', 'cloth2']); k.push(w * 0.25, 3.0, d / 2 + 0.45); k.box(aw, 1.7, 0.05, 0.95, 0, 0, 0, 0.35); k.pop();
+function gables(k, w, d, y, rise, key, timber = true){
+  for (const s of [-1, 1]){
+    k.geo(key, triG([s * w / 2, y, -d / 2], [s * w / 2, y, d / 2], [s * w / 2, y + rise, 0], new THREE.Vector3(s, 0, 0)));
+    if (!timber) continue;
+    k.push(s * w / 2, 0, 0, s * Math.PI / 2);
+    k.box('beam', d, 0.16, 0.12, 0, y + 0.08, 0.05);
+    k.box('beam', 0.16, rise - 0.15, 0.12, 0, y + (rise - 0.15) / 2, 0.05);
+    k.box('beam', d * 0.5, 0.14, 0.12, 0, y + rise * 0.45, 0.05);
+    const L = Math.hypot(d * 0.22, rise * 0.4), a = Math.atan2(rise * 0.4, d * 0.22);
+    k.box('beam', L, 0.12, 0.1, -d * 0.12, y + rise * 0.22, 0.05, 0, 0, a); k.box('beam', L, 0.12, 0.1, d * 0.12, y + rise * 0.22, 0.05, 0, 0, -a);
+    k.pop();
   }
 }
-// 2층 집
-function twostory(k, w, d){
-  const wall = pick(WALLS), paint = pick(PAINTS), roof = R() < 0.5 ? 'roof' : 'roof2', h1 = 3.2, h2 = 2.9;
-  k.box('stone', w + 0.3, 0.5, d + 0.3, 0, 0.25, 0);
-  k.box('stone', w, h1, d, 0, 0.5 + h1 / 2, 0);
-  k.box('woodD', w + 0.4, 0.26, d + 0.4, 0, 0.5 + h1 + 0.13, 0);
-  for (let i = 0; i < Math.floor(w / 0.8); i++) k.box('woodD', 0.14, 0.14, 0.4, -w / 2 + 0.4 + i * 0.8, 0.5 + h1 - 0.07, d / 2 + 0.2);
-  const y2 = 0.5 + h1 + 0.26;
-  k.box(wall, w + 0.2, h2, d + 0.2, 0, y2 + h2 / 2, 0);
-  // 반목조 프레임
-  for (const sx of [-1, 1]) k.box('woodD', 0.16, h2, 0.08, sx * (w / 2 + 0.06), y2 + h2 / 2, d / 2 + 0.12);
-  k.box('woodD', w + 0.3, 0.14, 0.08, 0, y2 + h2 - 0.07, d / 2 + 0.12);
-  const rise = gableRoof(k, w + 0.2, d + 0.2, y2 + h2, 0.6, 0.5, roof); gables(k, w + 0.2, d + 0.2, y2 + h2, rise, wall);
+// 반목조 (하프팀버) 면 — bays: '/', '\\', 'x', 'v', 'w'(창), 'd'(빈칸)
+function timberFace(k, w, y0, h, pat){
+  const t = 0.17, z = 0.05, n = pat.length, bw = w / n, ih = h - 2 * t;
+  k.box('beam', w + 0.04, t, 0.12, 0, y0 + t / 2, z); k.box('beam', w + 0.04, t, 0.12, 0, y0 + h - t / 2, z);
+  for (let i = 0; i <= n; i++) k.box('beam', t, h, 0.12, -w / 2 + i * bw + (i === 0 ? t / 2 : i === n ? -t / 2 : 0), y0 + h / 2, z);
+  pat.forEach((ty, i) => {
+    const cx = -w / 2 + (i + 0.5) * bw, iw = bw - t;
+    if (ty === 'x' || ty === '/' || ty === '\\'){
+      const L = Math.hypot(iw, ih), a = Math.atan2(ih, iw);
+      if (ty !== '\\') k.box('beam', L, t * 0.8, 0.1, cx, y0 + h / 2, z, 0, 0, a);
+      if (ty !== '/') k.box('beam', L, t * 0.8, 0.1, cx, y0 + h / 2, z, 0, 0, -a);
+    } else if (ty === 'w') k.box('beam', iw, t * 0.8, 0.1, cx, y0 + h * 0.3, z);
+    else if (ty === 'v'){
+      const hh = ih * 0.5, L = Math.hypot(iw / 2, hh), a = Math.atan2(hh, iw / 2);
+      k.box('beam', L, t * 0.8, 0.1, cx - iw / 4, y0 + t + hh / 2, z, 0, 0, -a); k.box('beam', L, t * 0.8, 0.1, cx + iw / 4, y0 + t + hh / 2, z, 0, 0, a);
+    }
+  });
+  return bw;
+}
+function bayPat(n){ const a = []; for (let i = 0; i < n; i++) a.push(i === 0 ? '/' : i === n - 1 ? '\\' : (i % 2 ? 'w' : 'v')); return a; }
+function frameFace(k, w, y0, h, paint, pat, flowers){
+  pat = pat || bayPat(Math.max(3, Math.round(w / 1.3)));
+  const bw = timberFace(k, w, y0, h, pat);
+  pat.forEach((t, i) => {
+    if (t !== 'w') return;
+    const cx = -w / 2 + (i + 0.5) * bw, ww = Math.min(0.85, bw - 0.55), wh = Math.min(1.05, h * 0.42);
+    windowAt(k, cx, y0 + h * 0.58, ww, wh, paint, false);
+    if (flowers && R() < 0.5) flowerBox(k, cx, y0 + h * 0.58 - wh / 2 - 0.2, ww + 0.2);
+  });
+}
+const faces = (w, d) => [[0, d / 2, 0, w], [0, -d / 2, Math.PI, w], [w / 2, 0, Math.PI / 2, d], [-w / 2, 0, -Math.PI / 2, d]];
+// 1층 초가/너와 오두막
+function cottage(k, w, d, o = {}){
+  const wall = pick(WALLS), paint = pick(PAINTS), h = 3.1, y0 = 0.5, thatch = R() < 0.55;
+  k.box('stone', w + 0.25, 0.5, d + 0.25, 0, 0.25, 0);
+  k.box(wall, w, h, d, 0, y0 + h / 2, 0);
+  faces(w, d).forEach(([fx, fz, fr, fw], i) => {
+    k.push(fx, 0, fz, fr);
+    if (i === 0){
+      const n = Math.max(4, Math.round(fw / 1.3)), pat = bayPat(n); pat[1] = 'd'; if (n > 3) pat[2] = 'w';
+      const bw = timberFace(k, fw, y0, h, pat);
+      doorAt(k, -fw / 2 + 1.5 * bw, Math.min(1.05, bw - 0.35), 2.1, paint);
+      windowAt(k, -fw / 2 + 2.5 * bw, y0 + h * 0.58, Math.min(0.85, bw - 0.55), 1.0, paint, true);
+      if (o.ring1) wallTorch(k, -fw / 2 + 1.5 * bw + bw * 0.5, 2.55);
+      if (o.sign != null) hangingSign(k, fw / 2 - 0.5, 3.25, o.sign);
+    } else frameFace(k, fw, y0, h, paint, null, true);
+    k.pop();
+  });
+  const roof = thatch ? 'thatch' : pick(ROOFS);
+  const rise = gableRoof(k, w, d, h + y0, 0.86, thatch ? 0.6 : 0.45, roof, thatch ? 0.42 : 0.16); gables(k, w, d, h + y0, rise, wall);
+  if (R() < 0.85){ const cx = w * rr(-0.3, 0.3), smk = R() < 0.45, cy = h + y0 + rise * 0.55; k.box('stone', 0.7, 2.6, 0.7, cx, cy + 0.8, -d * 0.18); k.box('stoneD', 0.85, 0.15, 0.85, cx, cy + 2.1, -d * 0.18); if (smk) SMOKES.push(k.world(cx, -d * 0.18).setY(cy + 2.25)); }
+  if (o.ring1 && R() < 0.65) clutter(k, (R() < 0.5 ? -1 : 1) * (w / 2 - 0.5), d / 2 + 0.75, 2 + (R() * 2 | 0));
+}
+// 2층 하프팀버 (위층이 튀어나온 제티)
+function twostory(k, w, d, o = {}){
+  const wall = pick(WALLS), paint = pick(PAINTS), roof = pick(ROOFS), h1 = 3.1, h2 = 2.8, jet = 0.42;
+  k.box('stone', w + 0.3, 0.45, d + 0.3, 0, 0.225, 0);
+  k.box('stone', w, h1, d, 0, 0.45 + h1 / 2, 0);
+  const y2 = 0.45 + h1;
+  k.box('beam', w + 0.12, 0.22, d + jet * 2, 0, y2 + 0.11, 0);
+  for (let i = 0; i < Math.floor(w / 0.55); i++) for (const s of [-1, 1]) k.box('beam', 0.14, 0.14, 0.4, -w / 2 + 0.32 + i * 0.55, y2 - 0.07, s * (d / 2 + 0.2));
+  const W2 = w + 0.2, D2 = d + jet * 2, yy = y2 + 0.22;
+  k.box(wall, W2, h2, D2, 0, yy + h2 / 2, 0);
+  faces(W2, D2).forEach(([fx, fz, fr, fw]) => { k.push(fx, 0, fz, fr); frameFace(k, fw, yy, h2, paint, null, true); k.pop(); });
+  const rise = gableRoof(k, W2, D2, yy + h2, 0.9, 0.5, roof); gables(k, W2, D2, yy + h2, rise, wall);
+  // 1층 정면
   k.push(0, 0, d / 2);
-  doorAt(k, 0, 1.2, 2.3, paint); windowAt(k, -w * 0.3, 2.0, 0.9, 1.2, paint, false); windowAt(k, w * 0.3, 2.0, 0.9, 1.2, paint, false);
-  lanternAt(k, 0.95, 2.7);
+  doorAt(k, o.wide ? -w * 0.18 : 0, 1.2, 2.3, paint);
+  for (const s of (o.wide ? [-0.4, 0.12, 0.36] : [-0.3, 0.3])) windowAt(k, s * w, 2.0, 0.9, 1.15, paint, true);
+  if (o.ring1){ wallTorch(k, (o.wide ? -w * 0.18 : 0) - 1.0, 2.7); wallTorch(k, (o.wide ? -w * 0.18 : 0) + 1.0, 2.7); }
+  if (o.sign != null) hangingSign(k, w / 2 - 0.45, 3.35, o.sign);
   k.pop();
-  // 발코니
-  k.push(0, y2, d / 2 + 0.1);
-  k.box('woodD', w * 0.62, 0.14, 1.15, 0, 0, 0.58);
-  for (let i = 0; i <= 8; i++) k.box('wood', 0.06, 0.9, 0.06, -w * 0.3 + i * (w * 0.6 / 8), 0.5, 1.1);
-  k.box('wood', w * 0.62, 0.08, 0.1, 0, 0.98, 1.1);
-  for (const s of [-1, 1]){ k.box('wood', 0.06, 0.9, 1.1, s * w * 0.31, 0.5, 0.58); k.box('woodD', 0.14, 0.14, 1.1, s * w * 0.28, -0.14, 0.58); }
-  flowerBox(k, -w * 0.12, 1.08, w * 0.3);
-  k.box(paint, 1.0, 2.0, 0.08, 0, 1.0, 0.04); k.box('glass', 0.5, 1.2, 0.04, 0, 1.2, 0.09);
-  k.pop();
-  k.push(0, 0, d / 2 + 0.1); for (const s of [-1, 1]) windowAt(k, s * w * 0.4, y2 + 1.5, 0.7, 1.0, paint); k.pop();
-  for (const s of [-1, 1]){ k.push(s * (w / 2 + 0.1), 0, 0, s * Math.PI / 2); windowAt(k, 0, y2 + 1.5, 0.8, 1.05, paint); windowAt(k, 0, 2.0, 0.8, 1.1, paint, false); k.pop(); }
-  const cx = w * 0.3; k.box('stone', 0.75, 2.6, 0.75, cx, y2 + h2 + rise * 0.4 + 0.8, -d * 0.2); if (R() < 0.35) SMOKES.push(k.world(cx, -d * 0.2).setY(y2 + h2 + rise * 0.4 + 2.2));
+  for (const s of [-1, 1]){ k.push(s * w / 2, 0, 0, s * Math.PI / 2); windowAt(k, 0, 2.0, 0.8, 1.1, paint, true); k.pop(); }
+  const cx = w * 0.3, cy = yy + h2 + rise * 0.4; k.box('stone', 0.75, 3.0, 0.75, cx, cy + 0.9, -d * 0.2); k.box('stoneD', 0.9, 0.16, 0.9, cx, cy + 2.45, -d * 0.2); if (R() < 0.35) SMOKES.push(k.world(cx, -d * 0.2).setY(cy + 2.6));
+  if (o.ring1 && R() < 0.6) clutter(k, (R() < 0.5 ? -1 : 1) * (w / 2 - 0.5), d / 2 + 0.8, 2 + (R() * 2 | 0));
 }
-// 3층 탑집 (사각뿔 지붕)
-function towerHouse(k, w){
-  const wall = pick(WALLS), paint = pick(PAINTS), roof = R() < 0.5 ? 'roof' : 'roof2', h = 8.2;
+// 석조 탑집 + 하프팀버 꼭대기층 + 뾰족 지붕
+function towerHouse(k, w, o = {}){
+  const wall = pick(WALLS), paint = pick(PAINTS), h = 6.0;
   k.box('stone', w + 0.3, 0.6, w + 0.3, 0, 0.3, 0);
-  k.box('stone', w, 2.8, w, 0, 0.6 + 1.4, 0);
-  k.box(wall, w, h - 2.8, w, 0, 0.6 + 2.8 + (h - 2.8) / 2, 0);
-  quoins(k, w, w, h + 0.6);
-  k.box('stoneD', w + 0.3, 0.22, w + 0.3, 0, h + 0.6 + 0.11, 0);
-  const rg = new THREE.ConeGeometry(w * 0.82, 2.8, 4, 1); rg.rotateY(Math.PI / 4);
-  const ruv = rg.attributes.uv; for (let i = 0; i < ruv.count; i++) ruv.setXY(i, ruv.getX(i) * w * 3, ruv.getY(i) * 3);
-  k.geo(roof, rg, 0, h + 0.72 + 1.4, 0);
-  k.geo('gold', new THREE.ConeGeometry(0.08, 0.9, 6), 0, h + 0.72 + 3.1, 0);
-  k.geo('gold', new THREE.SphereGeometry(0.13, 10, 8), 0, h + 0.72 + 2.75, 0);
-  k.push(0, 0, w / 2); doorAt(k, 0, 1.1, 2.1, paint); windowAt(k, 0, 4.4, 0.8, 1.1, paint); windowAt(k, 0, 6.9, 0.8, 1.1, paint); flowerBox(k, 0, 3.75, 1.1); k.pop();
-  for (const s of [-1, 1]){ k.push(s * w / 2, 0, 0, s * Math.PI / 2); windowAt(k, 0, 4.4, 0.7, 1.0, paint); windowAt(k, 0, 6.9, 0.7, 1.0, paint); k.pop(); }
+  k.box('stone', w, h, w, 0, 0.6 + h / 2, 0);
+  const yj = 0.6 + h; k.box('beam', w + 0.7, 0.22, w + 0.7, 0, yj + 0.11, 0);
+  const W2 = w + 0.6, h2 = 2.6, yy = yj + 0.22;
+  k.box(wall, W2, h2, W2, 0, yy + h2 / 2, 0);
+  faces(W2, W2).forEach(([fx, fz, fr, fw]) => { k.push(fx, 0, fz, fr); frameFace(k, fw, yy, h2, paint, ['/', 'w', '\\'], false); k.pop(); });
+  const rh = 4.6, rg = new THREE.ConeGeometry(W2 * 0.8, rh, 4, 1); rg.rotateY(Math.PI / 4);
+  const ruv = rg.attributes.uv; for (let i = 0; i < ruv.count; i++) ruv.setXY(i, ruv.getX(i) * W2 * 3, ruv.getY(i) * 5);
+  k.geo('slate', rg, 0, yy + h2 + rh / 2 + 0.05, 0);
+  k.geo('iron', new THREE.ConeGeometry(0.06, 1.0, 6), 0, yy + h2 + rh + 0.4, 0);
+  k.push(0, 0, w / 2); doorAt(k, 0, 1.05, 2.1, paint); windowAt(k, 0, 4.4, 0.6, 1.0, paint, true); if (o.ring1) wallTorch(k, 0.95, 2.6); if (o.sign != null) hangingSign(k, w / 2 - 0.4, 3.3, o.sign); k.pop();
+  for (const s of [-1, 1]){ k.push(s * w / 2, 0, 0, s * Math.PI / 2); windowAt(k, 0, 4.4, 0.55, 0.95, paint, true); k.box('dark', 0.14, 0.7, 0.05, 0, 2.2, 0.02); k.pop(); }
 }
+
 // 대장간
 function smithy(k){
   const w = 9, d = 6, h = 4.2;
   k.push(0, 0, -2.2);
   k.box('stone', w + 0.3, 0.5, d + 0.3, 0, 0.25, 0);
   k.box('stone', w, h, d, 0, 0.5 + h / 2, 0);
-  const rise = gableRoof(k, w, d, h + 0.5, 0.55, 0.5, 'roof2'); gables(k, w, d, h + 0.5, rise, 'stone');
+  const rise = gableRoof(k, w, d, h + 0.5, 0.55, 0.5, 'shingle'); gables(k, w, d, h + 0.5, rise, 'stone');
   k.push(0, 0, d / 2);
   k.box('dark', 2.6, 2.8, 0.08, 1.8, 0.5 + 1.4, 0.02);
   k.box('woodD', 3.0, 0.3, 0.3, 1.8, 3.45, 0.12); for (const s of [-1, 1]) k.box('woodD', 0.25, 2.95, 0.25, 1.8 + s * 1.4, 0.5 + 1.47, 0.12);
@@ -1065,7 +1204,7 @@ function smithy(k){
   for (const x of [-4.3, -0.3, 4.3]) k.box('woodD', 0.3, 3.3, 0.3, x, 0.5 + 1.0, zb - 0.2);
   k.box('woodD', 9.2, 0.3, 0.32, 0, 3.15, zb - 0.2);
   const lt = Math.atan2(1.0, 4.6), ll = Math.hypot(1.0, 4.9);
-  k.box('roof2', 9.8, 0.16, ll, 0, 3.85, zf + 2.3, lt, 0, 0);
+  k.box('shingle', 9.8, 0.16, ll, 0, 3.85, zf + 2.3, lt, 0, 0);
   k.box('stoneD', w + 0.2, 0.12, 4.6, 0, 0.06, zf + 2.3);
   // 화덕
   k.push(-2.6, 0, zf + 1.5);
@@ -1125,12 +1264,11 @@ M.sign = std({ map: tex(signC), roughness: 0.8 });
 
 {
   const ring1 = 37.6, ring2 = 54;
-  const placeRow = (rFront, quadrant, list, startA, endA) => {
+  const placeRow = (rFront, list, startA, endA) => {
     let arc = startA * rFront;
     for (const it of list){
       const width = it.w, depth = it.d;
-      const rc = rFront + depth / 2, a = (arc + width / 2) / rFront * (rFront / rc) * (rc / rFront);
-      const ang = (arc + width / 2) / rFront; arc += width + it.gap;
+      const rc = rFront + depth / 2, ang = (arc + width / 2) / rFront; arc += width + it.gap;
       if (ang > endA) break;
       const x = Math.cos(ang) * rc, z = Math.sin(ang) * rc, ry = Math.atan2(-Math.cos(ang), -Math.sin(ang));
       K.push(x, 0.02, z, ry); it.fn(K); K.pop();
@@ -1141,14 +1279,22 @@ M.sign = std({ map: tex(signC), roughness: 0.8 });
       if (it.after) it.after(x, z, ry, ang);
     }
   };
+  let signI = 1;
+  const nextSign = () => (R() < 0.5 ? (signI++ % (SIGNS.length - 1)) + 1 : null);
+  const randHouse = (o) => {
+    const t = R();
+    if (t < 0.38){ const w = rr(5.8, 7), sg = nextSign(); return { w, d: 6.2, gap: rr(0.9, 1.6), fn: k => cottage(k, w, 6.2, { ring1: o.ring1, sign: o.ring1 ? sg : null }) }; }
+    if (t < 0.8){ const w = rr(7, 8.2), sg = nextSign(); return { w, d: 6.4, gap: rr(1.1, 1.8), fn: k => twostory(k, w, 6.4, { ring1: o.ring1, sign: o.ring1 ? sg : null }) }; }
+    const w = rr(5, 5.8), sg = nextSign(); return { w, d: w, gap: rr(1.1, 1.6), fn: k => towerHouse(k, w, { ring1: o.ring1, sign: o.ring1 ? sg : null }) };
+  };
   for (let q = 0; q < 4; q++){
     const qc = Math.PI / 4 + q * Math.PI / 2, a0 = qc - 0.66, a1 = qc + 0.66;
     let list = [];
     if (q === 2){
       // 대장간 사분면 (북서쪽)
       const c1 = rr(6, 6.8), t1 = rr(5, 5.6);
-      list.push({ w: c1, d: 6.2, gap: 1.2, fn: k => cottage(k, c1, 6.2) });
-      list.push({ w: 7.6, d: 6.4, gap: 1.6, fn: k => twostory(k, 7.6, 6.4) });
+      list.push({ w: c1, d: 6.2, gap: 1.2, fn: k => cottage(k, c1, 6.2, { ring1: 1, sign: 3 }) });
+      list.push({ w: 7.6, d: 6.4, gap: 1.6, fn: k => twostory(k, 7.6, 6.4, { ring1: 1, sign: 4 }) });
       list.push({
         w: 10, d: 11, gap: 1.8, smithy: 1,
         fn: k => smithy(k),
@@ -1156,32 +1302,44 @@ M.sign = std({ map: tex(signC), roughness: 0.8 });
         after: (x, z, ry) => {
           const S2 = new THREE.Vector3(5.1, 0, 4.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry).add(new THREE.Vector3(x, 0, z));
           INTERACT.push({ x: x + Math.sin(ry) * 6.5, z: z + Math.cos(ry) * 6.5, r: 5, title: '대장간', sub: '장비 제작 · 강화 — 곧 문을 엽니다' });
-          // 간판 기둥
           K.push(x, 0.02, z, ry);
           K.box('woodD', 0.2, 3.4, 0.2, 5.3, 1.7, 4.2); K.box('woodD', 1.4, 0.14, 0.14, 4.7, 3.3, 4.2);
           K.box('iron', 0.03, 0.4, 0.03, 4.3, 3.05, 4.2); K.box('iron', 0.03, 0.4, 0.03, 4.9, 3.05, 4.2);
-          K.push(4.6, 2.35, 4.2, Math.PI / 2 - 0.0); K.box('sign', 0.06, 1.0, 1.4, 0, 0, 0); K.pop();
+          K.push(4.6, 2.35, 4.2, Math.PI / 2); K.box('sign', 0.06, 1.0, 1.4, 0, 0, 0); K.pop();
           K.pop();
           addCircle(S2.x + 0.2, S2.z, 0.3);
         },
       });
-      list.push({ w: 5.6, d: 5.6, gap: 1.4, fn: k => towerHouse(k, 5.6) });
-      list.push({ w: t1 + 1, d: 6, gap: 1.2, fn: k => cottage(k, t1 + 1, 6) });
-    } else {
-      for (let i = 0; i < 8; i++){
-        const t = R();
-        if (t < 0.4){ const w = rr(5.8, 7); list.push({ w, d: 6.2, gap: rr(1, 1.8), fn: k => cottage(k, w, 6.2) }); }
-        else if (t < 0.8){ const w = rr(7, 8.2); list.push({ w, d: 6.4, gap: rr(1.2, 2), fn: k => twostory(k, w, 6.4) }); }
-        else { const w = rr(5, 5.8); list.push({ w, d: w, gap: rr(1.2, 1.8), fn: k => towerHouse(k, w) }); }
-      }
-    }
-    placeRow(ring1, q, list, a0, a1);
+      list.push({ w: 5.6, d: 5.6, gap: 1.4, fn: k => towerHouse(k, 5.6, { ring1: 1, sign: 5 }) });
+      list.push({ w: t1 + 1, d: 6, gap: 1.2, fn: k => cottage(k, t1 + 1, 6, { ring1: 1 }) });
+    } else if (q === 0){
+      // 여관 사분면 (남동쪽)
+      list.push(randHouse({ ring1: 1 }));
+      list.push({
+        w: 11, d: 7, gap: 1.6, fn: k => {
+          twostory(k, 11, 7, { ring1: 1, sign: 0, wide: 1 });
+          // 바깥 테이블
+          for (const tx of [1.6, 4.0]){
+            k.box('wood', 1.5, 0.08, 0.9, tx, 0.8, 4.7); k.box('beam', 0.12, 0.76, 0.12, tx - 0.6, 0.4, 4.7); k.box('beam', 0.12, 0.76, 0.12, tx + 0.6, 0.4, 4.7);
+            for (const bz of [4.0, 5.4]) k.box('wood', 1.5, 0.07, 0.3, tx, 0.48, bz);
+            for (let m = 0; m < 3; m++) k.geo('wood', new THREE.CylinderGeometry(0.06, 0.055, 0.15, 8), tx + rr(-0.5, 0.5), 0.92, 4.7 + rr(-0.25, 0.25));
+          }
+          barrel(k, -4.6, 0, 4.2); barrel(k, -4.0, 0, 4.4);
+        },
+        after: (x, z, ry) => {
+          for (const tx of [1.6, 4.0]){ const wx = x + tx * Math.cos(ry) + 4.7 * Math.sin(ry), wz = z - tx * Math.sin(ry) + 4.7 * Math.cos(ry); addBox(wx, wz, 0.8, 0.9, ry); FX.tavernSeats = (FX.tavernSeats || []).concat([[wx, wz, ry]]); }
+          INTERACT.push({ x: x + Math.sin(ry) * 5.5, z: z + Math.cos(ry) * 5.5, r: 4.5, title: '여관 「취한 그리핀」', sub: '퀘스트 · 휴식 — 곧 문을 엽니다' });
+        },
+      });
+      for (let i = 0; i < 6; i++) list.push(randHouse({ ring1: 1 }));
+    } else for (let i = 0; i < 8; i++) list.push(randHouse({ ring1: 1 }));
+    placeRow(ring1, list, a0, a1);
     const list2 = [];
     for (let i = 0; i < 9; i++){
       if (R() < 0.55){ const w = rr(7.2, 8.4); list2.push({ w, d: 6.6, gap: rr(2, 4), fn: k => twostory(k, w, 6.6) }); }
       else { const w = rr(5.2, 6.2); list2.push({ w, d: w, gap: rr(2, 4), fn: k => towerHouse(k, w) }); }
     }
-    placeRow(ring2, q, list2, qc - 0.58, qc + 0.58);
+    placeRow(ring2, list2, qc - 0.58, qc + 0.58);
   }
 }
 
@@ -1196,7 +1354,197 @@ M.sign = std({ map: tex(signC), roughness: 0.8 });
   }
 }
 
+// ───────────────────────── 시장 노점 ─────────────────────────
+const STALLS = [];
+function stall(k, awn, goods){
+  for (const [x, z, h] of [[-1.55, 0.95, 2.3], [1.55, 0.95, 2.3], [-1.55, -0.85, 2.95], [1.55, -0.85, 2.95]]) k.box('woodD', 0.12, h, 0.12, x, h / 2, z);
+  k.box('wood', 3.2, 0.9, 0.7, 0, 0.45, 0.6); k.box('beam', 3.3, 0.08, 0.82, 0, 0.94, 0.6);
+  const L = Math.hypot(2.4, 0.75), a = Math.atan2(0.75, 2.4);
+  k.box(awn, 3.6, 0.04, L, 0, 2.66, 0.1, a);
+  k.box(awn, 3.6, 0.32, 0.03, 0, 2.15, 1.3);
+  for (const s of [-1, 1]) k.box(awn, 0.03, 0.32, L, s * 1.8, 2.5, 0.1, a);
+  k.box('wood', 3.2, 0.06, 0.5, 0, 1.6, -0.75); // 뒤 선반
+  const top = 0.98;
+  if (goods === 'fruit'){
+    for (const bx of [-1.0, 0, 1.0]){
+      k.geo('wicker', latheG([[0, 0], [0.3, 0.02], [0.38, 0.2], [0.34, 0.2], [0.26, 0.05], [0, 0.04]], 14, 0.4), bx, top, 0.6);
+      const key = pick(['fruitR', 'fruitG', 'fruitO']);
+      for (let i = 0; i < 9; i++) k.geo(key, new THREE.SphereGeometry(0.075, 8, 6), bx + rr(-0.2, 0.2), top + 0.17 + rr(0, 0.08), 0.6 + rr(-0.2, 0.2));
+    }
+  } else if (goods === 'bread'){
+    for (let i = 0; i < 9; i++) k.geo('bread', new THREE.CapsuleGeometry(0.08, 0.22, 4, 8), -1.2 + i * 0.3, top + 0.08, 0.6 + rr(-0.15, 0.15), 0, rr(-0.3, 0.3), Math.PI / 2);
+    for (let i = 0; i < 4; i++) k.geo('bread', new THREE.SphereGeometry(0.14, 10, 8), -0.9 + i * 0.6, 1.72, -0.75, 0, 0, 0, 1, 0.6, 1);
+  } else if (goods === 'pots'){
+    for (let i = 0; i < 6; i++){ const s = rr(0.7, 1.2); k.geo('terra', latheG([[0, 0], [0.12, 0], [0.18, 0.12], [0.16, 0.28], [0.08, 0.36], [0.1, 0.42], [0, 0.42]], 12, 0.3), -1.25 + i * 0.5, top, 0.6 + rr(-0.12, 0.12), 0, 0, 0, s, s, s); }
+    for (let i = 0; i < 5; i++) k.geo('terra', latheG([[0, 0], [0.1, 0], [0.13, 0.15], [0.06, 0.24], [0, 0.24]], 10, 0.3), -1.2 + i * 0.6, 1.63, -0.75);
+  } else if (goods === 'cloth'){
+    const cl = ['cloth', 'cloth2', 'pen1', 'pen3', 'awnR'];
+    for (let i = 0; i < 5; i++) k.geo(cl[i], new THREE.CylinderGeometry(0.11, 0.11, 0.62, 10), -1.2 + i * 0.6, top + 0.11, 0.6, Math.PI / 2, 0, 0);
+    for (let i = 0; i < 3; i++) k.box(pick(cl), 0.7, 0.16, 0.4, -1.0 + i * 1.0, 1.71, -0.75);
+  } else {
+    for (let i = 0; i < 12; i++){ const key = i % 2 ? 'potionP' : 'potionG', bx = -1.3 + (i % 6) * 0.5, bz = 0.45 + Math.floor(i / 6) * 0.3; k.geo(key, new THREE.SphereGeometry(0.08, 8, 6), bx, top + 0.08, bz); k.geo(key, new THREE.CylinderGeometry(0.025, 0.03, 0.12, 6), bx, top + 0.2, bz); k.geo('woodD', new THREE.CylinderGeometry(0.03, 0.03, 0.04, 6), bx, top + 0.27, bz); }
+  }
+  // 옆에 쌓인 상자/통
+  if (R() < 0.6) barrel(k, 2.15, 0, 0.1); else { k.box('crate', 0.6, 0.6, 0.6, 2.15, 0.3, 0.2, 0, 0.3); k.box('crate', 0.45, 0.45, 0.45, 2.15, 0.82, 0.2, 0, -0.2); }
+  if (R() < 0.5) k.geo('sack', new THREE.SphereGeometry(0.3, 10, 8), -2.1, 0.24, 0.3, 0, R() * 3, 0, 1, 0.85, 0.75);
+}
+{
+  const goodsT = ['fruit', 'bread', 'pots', 'cloth', 'potion', 'fruit', 'bread', 'cloth', 'pots', 'potion'];
+  const awns = ['awnR', 'awnB', 'awnG', 'awnY'];
+  let gi = 0;
+  for (let q = 0; q < 4; q++){
+    const qc = Math.PI / 4 + q * Math.PI / 2, offs = q === 2 ? [-0.52, 0.52] : [-0.52, -0.13, 0.13, 0.52];
+    for (const o of offs){
+      const a = qc + o, r = 34.3, x = Math.cos(a) * r, z = Math.sin(a) * r, ry = Math.atan2(-Math.cos(a), -Math.sin(a));
+      K.push(x, 0.02, z, ry); stall(K, awns[gi % 4], goodsT[gi % goodsT.length]); K.pop(); gi++;
+      addBox(x + Math.sin(ry) * 0.05, z + Math.cos(ry) * 0.05, 1.75, 1.05, ry); MAPDATA.boxes.push([x, z, 1.75, 1.05, ry, 2]);
+      STALLS.push([x, z, ry]);
+    }
+  }
+  INTERACT.push({ x: Math.cos(Math.PI / 4) * 31.5, z: Math.sin(Math.PI / 4) * 31.5, r: 4, title: '룬 시장', sub: '물건 사고팔기 — 곧 열립니다' });
+}
+
+// ───────────────────────── 수레 / 우물 ─────────────────────────
+{
+  const cart = (a, r) => {
+    const x = Math.cos(a) * r, z = Math.sin(a) * r, ry = -a + rr(-0.3, 0.3);
+    K.push(x, 0.02, z, ry);
+    K.box('wood', 2.2, 0.12, 1.3, 0, 0.78, 0);
+    for (const s of [-1, 1]){ K.box('wood', 2.2, 0.4, 0.06, 0, 1.02, s * 0.63); K.box('wood', 0.06, 0.4, 1.3, s * 1.07, 1.02, 0); }
+    for (const s of [-1, 1]){
+      K.geo('woodD', new THREE.TorusGeometry(0.5, 0.06, 6, 18), 0.1, 0.52, s * 0.78);
+      for (let i = 0; i < 4; i++) K.box('woodD', 0.06, 0.96, 0.05, 0.1, 0.52, s * 0.78, 0, 0, i * Math.PI / 4);
+    }
+    K.box('iron', 0.06, 0.06, 1.7, 0.1, 0.52, 0);
+    for (const s of [-1, 1]) K.box('woodD', 1.8, 0.08, 0.08, -1.9, 0.55, s * 0.45, 0, 0, -0.22);
+    K.geo('hay', new THREE.SphereGeometry(1, 12, 8), 0, 1.2, 0, 0, 0, 0, 1.05, 0.48, 0.62);
+    K.pop();
+    addBox(x - Math.cos(ry) * 0.6, z + Math.sin(ry) * 0.6, 1.9, 0.9, ry);
+  };
+  cart(Math.PI / 4 * 3 + 0.3, 30.8); cart(Math.PI / 4 * 7 - 0.3, 30.8); cart(Math.PI / 4 - 0.3, 30.8);
+  // 우물
+  const a = Math.PI / 4 * 3 + Math.PI, x = Math.cos(a) * 31.2, z = Math.sin(a) * 31.2;
+  K.push(x, 0.02, z, -a);
+  K.geo('stone', latheG([[0.9, 0], [1.15, 0], [1.15, 0.85], [1.22, 0.92], [0.9, 0.92]], 24, 0.5));
+  K.geo('basalt', new THREE.CircleGeometry(0.9, 20).rotateX(-Math.PI / 2), 0, 0.5, 0);
+  for (const s of [-1, 1]) K.box('beam', 0.14, 2.3, 0.14, s * 1.0, 1.15, 0);
+  K.box('beam', 2.3, 0.1, 0.1, 0, 2.1, 0);
+  K.geo('wood', new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8), 0, 1.75, 0, 0, 0, Math.PI / 2);
+  K.box('rope', 0.02, 0.6, 0.02, 0, 1.4, 0); barrel(K, 0, 0.92, 0);
+  for (const s of [-1, 1]) K.box('shingle', 2.7, 0.08, 1.0, 0, 2.55, s * 0.42, s * 0.6);
+  K.pop(); addCircle(x, z, 1.35);
+}
+
+// ───────────────────────── 축제 깃발줄 ─────────────────────────
+{
+  const BB = new Builder(), cols = ['pen0', 'pen1', 'pen2', 'pen3'];
+  const string = (p0, p1, sag) => {
+    const L = p0.distanceTo(p1), n = Math.max(4, Math.floor(L / 0.62)), dir = new THREE.Vector3().subVectors(p1, p0); dir.y = 0; dir.normalize();
+    let prev = null; const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i <= n; i++){
+      const t = i / n, p = new THREE.Vector3().lerpVectors(p0, p1, t); p.y -= sag * 4 * t * (1 - t);
+      if (prev){
+        const seg = p.distanceTo(prev), mid = p.clone().add(prev).multiplyScalar(0.5);
+        BB.add('rope', new THREE.CylinderGeometry(0.014, 0.014, seg, 4).rotateX(Math.PI / 2), new THREE.Matrix4().lookAt(prev, p, up).setPosition(mid));
+        const c = mid;
+        BB.add(cols[i % 4], triG([c.x - dir.x * 0.21, c.y, c.z - dir.z * 0.21], [c.x + dir.x * 0.21, c.y, c.z + dir.z * 0.21], [c.x, c.y - 0.44, c.z]), new THREE.Matrix4());
+      }
+      prev = p;
+    }
+  };
+  const P = (a, r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+  for (let q = 0; q < 4; q++){
+    const qc = Math.PI / 4 + q * Math.PI / 2;
+    for (const o of [-0.45, -0.25, 0.25, 0.45]) string(P(qc + o, 27.9, 8.7), P(qc + o * 1.15, 37.5, 5.8), 1.1);
+    const s = q * Math.PI / 2;
+    string(P(s - 0.12, 37.8, 6.0), P(s + 0.12, 37.8, 6.0), 1.0);
+    string(P(s - 0.1, 46, 6.2), P(s + 0.1, 46, 6.2), 0.9);
+  }
+  BB.build(M, world, false, false);
+}
+
+// ───────────────────────── 성벽 + 성문 ─────────────────────────
+const WALL_R = 80;
+{
+  const WT = 2.6, WH = 8, rI = WALL_R - WT / 2, rO = WALL_R + WT / 2, gap = 0.085;
+  for (let q = 0; q < 4; q++){
+    const a0 = q * Math.PI / 2 + gap, a1 = (q + 1) * Math.PI / 2 - gap, seg = 56;
+    K.geo('stone', ringBand(rI, rO, 0, WH, seg, { o: 1, i: 1, t: 1 }, a0, a1));
+    K.geo('stone', ringBand(rO - 0.55, rO, WH, WH + 1.0, seg, { o: 1, i: 1, t: 1 }, a0, a1));
+    K.geo('stone', ringBand(rI, rI + 0.4, WH, WH + 0.6, seg, { o: 1, i: 1, t: 1 }, a0, a1));
+    const n = Math.floor((a1 - a0) * rO / 2.1);
+    for (let i = 0; i < n; i++){ const a = a0 + (i + 0.5) / n * (a1 - a0); K.box('stone', 1.1, 0.95, 0.55, Math.cos(a) * (rO - 0.27), WH + 1.47, Math.sin(a) * (rO - 0.27), 0, -a + Math.PI / 2, 0); }
+  }
+  // 탑
+  const tower = (a, r0, h) => {
+    const x = Math.cos(a) * WALL_R, z = Math.sin(a) * WALL_R;
+    const tg = new THREE.CylinderGeometry(r0, r0 * 1.08, h, 24, 1, true), tuv = tg.attributes.uv; for (let i = 0; i < tuv.count; i++) tuv.setXY(i, tuv.getX(i) * TAU * r0, tuv.getY(i) * h);
+    K.geo('stone', tg, x, h / 2, z);
+    K.geo('stone', ringBand(r0 - 0.3, r0 + 0.35, h, h + 0.9, 24), x, 0, z);
+    for (let i = 0; i < 10; i++){ const b = i / 10 * TAU; K.box('stone', 0.9, 0.8, 0.45, x + Math.cos(b) * (r0 + 0.12), h + 1.3, z + Math.sin(b) * (r0 + 0.12), 0, -b + Math.PI / 2, 0); }
+    const cg = new THREE.ConeGeometry(r0 + 0.5, r0 * 2.0, 20); const cuv = cg.attributes.uv; for (let i = 0; i < cuv.count; i++) cuv.setXY(i, cuv.getX(i) * TAU * r0, cuv.getY(i) * r0 * 2.2);
+    K.geo('slate', cg, x, h + 2.0 + r0, z);
+    K.geo('iron', new THREE.CylinderGeometry(0.05, 0.05, 2.4, 5), x, h + 2.0 + r0 * 2 + 1.0, z);
+    for (let i = 0; i < 4; i++){ const b = i / 4 * TAU + a; K.box('dark', 0.18, 1.0, 0.1, x + Math.cos(b) * (r0 + 0.02), h * 0.55, z + Math.sin(b) * (r0 + 0.02), 0, -b + Math.PI / 2, 0); }
+    FX.towerFlags = (FX.towerFlags || []).concat([new THREE.Vector3(x, h + 2.0 + r0 * 2 + 2.0, z)]);
+  };
+  for (let i = 0; i < 12; i++) tower(i * Math.PI / 6 + Math.PI / 12, 3.0, 12);
+  // 성문 (각 큰길)
+  for (let s = 0; s < 4; s++){
+    const g = s * Math.PI / 2;
+    for (const sg of [-1, 1]){
+      const a = g + sg * (gap + 0.03), x = Math.cos(a) * WALL_R, z = Math.sin(a) * WALL_R;
+      K.push(x, 0, z, -a + Math.PI / 2);
+      K.box('stone', 5, 14, 5, 0, 7, 0);
+      for (let i = 0; i < 4; i++) for (const t of [-1, 1]){ K.box('stone', 0.9, 0.9, 0.5, -1.8 + i * 1.2, 14.45, t * 2.3); K.box('stone', 0.5, 0.9, 0.9, t * 2.3, 14.45, -1.8 + i * 1.2); }
+      K.box('dark', 0.2, 1.2, 0.1, 0, 9, 2.52); K.box('dark', 0.2, 1.2, 0.1, 0, 9, -2.52);
+      K.pop();
+    }
+    // 아치 + 내린 쇠창살
+    const x = Math.cos(g) * WALL_R, z = Math.sin(g) * WALL_R;
+    K.push(x, 0, z, -g + Math.PI / 2);
+    K.box('stone', 14.6, 4.4, 4.2, 0, 10.6, 0);
+    for (let i = 0; i < 7; i++) K.box('stone', 0.9, 0.9, 0.5, -5.4 + i * 1.8, 13.25, 1.85);
+    for (let i = 0; i < 9; i++) K.box('iron', 0.09, 2.2, 0.09, -4.4 + i * 1.1, 7.5, 0);
+    for (let i = 0; i < 2; i++) K.box('iron', 9.2, 0.09, 0.09, 0, 6.8 + i * 1.2, 0);
+    K.pop();
+    for (const sg of [-1, 1]){ const a = g + sg * 0.115, r = WALL_R - 2.5; K.push(Math.cos(a) * r, 0, Math.sin(a) * r, -a - Math.PI / 2); wallTorch(K, 0, 3.0); K.pop(); }
+  }
+}
+
+// ───────────────────────── 언덕 위의 성 (북쪽) ─────────────────────────
+{
+  const CX = 0, CZ = -250;
+  K.push(CX, 0, CZ, 0);
+  K.geo('hill', latheG([[0, 32], [24, 31.5], [36, 27], [52, 16], [70, 6], [90, 0.5], [100, 0]], 48, 10));
+  const y0 = 31.4;
+  // 성벽 (사각) + 모서리 탑
+  const wallSeg = (x, z, len, rot) => {
+    K.box('stone', len, 11, 3, x, y0 + 5.5, z, 0, rot, 0);
+    const n = Math.floor(len / 2.2);
+    for (let i = 0; i < n; i++){ const o = -len / 2 + (i + 0.5) * len / n; K.box('stone', 1.1, 1.0, 0.6, x + Math.cos(rot) * o, y0 + 11.5, z - Math.sin(rot) * o, 0, rot, 0); }
+  };
+  wallSeg(0, 22, 44, 0); wallSeg(0, -22, 44, 0); wallSeg(22, 0, 44, Math.PI / 2); wallSeg(-22, 0, 44, Math.PI / 2);
+  K.box('dark', 4.5, 6, 0.2, 0, y0 + 3, 23.55);
+  const ctower = (x, z, r, h, roofH) => {
+    K.geo('stone', new THREE.CylinderGeometry(r, r * 1.08, h, 20), x, y0 + h / 2, z);
+    const cg = new THREE.ConeGeometry(r + 0.6, roofH, 20); const cuv = cg.attributes.uv; for (let i = 0; i < cuv.count; i++) cuv.setXY(i, cuv.getX(i) * TAU * r, cuv.getY(i) * roofH);
+    K.geo('slate', cg, x, y0 + h + roofH / 2, z);
+    for (let i = 0; i < 3; i++) K.box('glass', 0.5, 1.0, 0.1, x + Math.cos(i * 2.1) * (r + 0.02), y0 + h * 0.7, z + Math.sin(i * 2.1) * (r + 0.02), 0, -i * 2.1 + Math.PI / 2, 0);
+    FX.castleFlags = (FX.castleFlags || []).concat([new THREE.Vector3(CX + x, y0 + h + roofH + 1.6, CZ + z)]);
+  };
+  for (const [x, z] of [[22, 22], [-22, 22], [22, -22], [-22, -22]]) ctower(x, z, 4, 17, 9);
+  // 본성 (킵)
+  K.box('stone', 18, 26, 16, -2, y0 + 13, -5);
+  for (let i = 0; i < 8; i++) for (const t of [-1, 1]){ K.box('stone', 1.1, 1.1, 0.6, -2 - 7.7 + i * 2.2, y0 + 26.5, -5 + t * 7.7); }
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 4; i++) K.box('glass', 0.9, 1.6, 0.1, -2 - 6 + i * 4, y0 + 8 + r * 6, 3.05);
+  for (const [x, z] of [[7, 3], [-11, 3], [7, -13], [-11, -13]]) ctower(x, z, 1.9, 30, 6);
+  ctower(10, -2, 4.2, 40, 12);
+  K.pop();
+}
+
 K.st.length = 1;
+for (const k in M) M[k].side = THREE.DoubleSide;
 B.build(M, world);
 
 // ───────────────────────── 나무 (인스턴스) ─────────────────────────
@@ -1208,6 +1556,8 @@ B.build(M, world);
     const a = R() * TAU, r = rr(62, 190);
     const nearStreet = Math.min(...[0, 1, 2, 3, 4].map(i => Math.abs(((a - i * Math.PI / 2) + Math.PI * 3) % TAU - Math.PI))) * r < 7;
     if (nearStreet) continue;
+    if (r > 70 && r < 90) continue;
+    if (Math.hypot(Math.cos(a) * r, Math.sin(a) * r + 250) < 95) continue;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (COL.some(o => Math.hypot(o.x - x, o.z - z) < (o.t === 'c' ? o.r : Math.max(o.hw, o.hd)) + 2.5)) continue;
     if (R() < 0.6) cyp.push([x, 0, z, rr(0.8, 1.35), 'c']); else oli.push([x, 0, z, rr(0.8, 1.3)]);
@@ -1250,7 +1600,7 @@ B.build(M, world);
 }
 
 // ───────────────────────── 깃발 (천 시뮬레이션) ─────────────────────────
-const BANNERS = [];
+const BANNERS = [], FLAGS = [];
 {
   const c = cnv(256, 640), x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, 0, 640); g.addColorStop(0, '#5a0f14'); g.addColorStop(1, '#8e1b20'); x.fillStyle = g;
@@ -1267,11 +1617,25 @@ const BANNERS = [];
     const geo = new THREE.PlaneGeometry(1.3, 3.6, 6, 18); geo.translate(0, -1.8, 0);
     const mesh = new THREE.Mesh(geo, bm); mesh.position.set(Math.cos(a) * r, 7.08, Math.sin(a) * r); mesh.rotation.y = -a - Math.PI / 2;
     mesh.castShadow = true; world.add(mesh);
-    BANNERS.push({ mesh, base: Float32Array.from(geo.attributes.position.array), seed: R() * 10 });
+    BANNERS.push({ mesh, base: Float32Array.from(geo.attributes.position.array), seed: R() * 10, len: 3.6 });
+  }
+  // 성문 탑에 거는 큰 깃발
+  for (let s = 0; s < 4; s++) for (const sg of [-1, 1]){
+    const a = s * Math.PI / 2 + sg * 0.115, r = WALL_R - 2.56;
+    const geo = new THREE.PlaneGeometry(2.2, 5.6, 6, 18); geo.translate(0, -2.8, 0);
+    const mesh = new THREE.Mesh(geo, bm); mesh.position.set(Math.cos(a) * r, 12.6, Math.sin(a) * r); mesh.rotation.y = -a - Math.PI / 2;
+    world.add(mesh); BANNERS.push({ mesh, base: Float32Array.from(geo.attributes.position.array), seed: R() * 10, len: 5.6 });
   }
   // 깃대 봉 (금)
   const RBb = new Builder(); for (const b of BANNERS){ RBb.add('g', new THREE.CylinderGeometry(0.04, 0.04, 1.55, 8).rotateZ(Math.PI / 2), b.mesh.matrix.clone().compose(b.mesh.position, b.mesh.quaternion, new THREE.Vector3(1, 1, 1))); }
   RBb.build({ g: M.gold }, world);
+  // 탑 꼭대기 깃발
+  const fm = [M.pen0, M.pen2, M.pen1];
+  for (const p of (FX.towerFlags || []).concat(FX.castleFlags || [])){
+    const big = p.y > 40, geo = new THREE.PlaneGeometry(big ? 4 : 1.8, big ? 2.4 : 1.1, 8, 2); geo.translate(big ? 2 : 0.9, 0, 0);
+    const mesh = new THREE.Mesh(geo, fm[FLAGS.length % 3]); mesh.position.copy(p); mesh.rotation.y = 0.6; world.add(mesh);
+    FLAGS.push({ mesh, base: Float32Array.from(geo.attributes.position.array), seed: R() * 10, len: big ? 4 : 1.8 });
+  }
 }
 
 // ───────────────────────── 파티클 ─────────────────────────
@@ -1335,18 +1699,62 @@ particles(IS_TOUCH ? 220 : 380, [new THREE.Vector3(0, 3.42, 0)], {
   frag: `float a = smoothstep(0.5, 0.1, d) * (1.0 - vL * 0.6) * 0.75; gl_FragColor = vec4(vec3(0.8, 0.95, 1.0) * a, a);`,
 });
 
+// 벽 횃불
+{
+  const tm = new THREE.SpriteMaterial({ map: FX.glowTW, color: 0xff9a40, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.6 });
+  for (const p of TORCHES){ const g = new THREE.Sprite(tm); g.scale.set(2.0, 2.0, 1); g.position.copy(p); world.add(g); }
+  FX.torchMat = tm;
+  if (TORCHES.length) particles(TORCHES.length * 14, TORCHES, {
+    vert: `float life = fract(uTime * (1.3 + 0.6 * fract(aSeed * 7.13)) + aSeed); vL = life;
+      float an = aSeed * 81.0, rad = (0.08 * (1.0 - life) + 0.01) * fract(aSeed * 3.7);
+      vec3 p = position + vec3(cos(an) * rad + sin(uTime * 4.0 + aSeed * 20.0) * 0.03 * life, life * 0.55, sin(an) * rad);
+      float sz = 0.32 * (1.0 - life * 0.6);`,
+    frag: `float a = smoothstep(0.5, 0.0, d) * (1.0 - vL) * smoothstep(0.0, 0.08, vL); vec3 c = mix(vec3(1.0, 0.85, 0.45), vec3(1.0, 0.3, 0.05), smoothstep(0.05, 0.55, vL)); gl_FragColor = vec4(c * a * 1.6, a);`,
+  });
+}
 // 대장간 화덕 불빛
 const forgeLight = new THREE.PointLight(0xff7a2a, 30, 14, 1.8);
 if (FX.forgePos){ forgeLight.position.copy(FX.forgePos); world.add(forgeLight); }
 
 // ───────────────────────── 캐릭터 (졸라맨 같은 점토 피규어) ─────────────────────────
-const CLAY = std({ color: 0xeeede8, roughness: 0.55, metalness: 0 });
-const CLAY_B = std({ color: 0x1e1f24, roughness: 0.45, metalness: 0 });
-const GEO = {
-  head: new THREE.SphereGeometry(0.205, 32, 22), torso: new THREE.CapsuleGeometry(0.19, 0.32, 10, 24), neck: new THREE.CylinderGeometry(0.075, 0.09, 0.14, 14),
-  upper: new THREE.CapsuleGeometry(0.088, 0.22, 8, 16), lower: new THREE.CapsuleGeometry(0.084, 0.22, 8, 16),
-  thigh: new THREE.CapsuleGeometry(0.112, 0.24, 8, 16), shin: new THREE.CapsuleGeometry(0.104, 0.26, 8, 16),
-};
+const CLAY = std({ color: 0xf0efea, roughness: 0.48, metalness: 0, side: THREE.DoubleSide });
+const CLAY_B = std({ color: 0x1e1f24, roughness: 0.42, metalness: 0, side: THREE.DoubleSide });
+// 하나로 이어진 매끈한 몸 (스킨드 메시) — 관절이 부드럽게 휘어진다
+const BONE = { hips: 0, spine: 1, head: 2, shL: 3, elL: 4, shR: 5, elR: 6, hpL: 7, knL: 8, hpR: 9, knR: 10 };
+function limbProfile(L, r0, r1){
+  const pts = [], cB = -L + r1;
+  for (let i = 0; i <= 4; i++){ const t = -Math.PI / 2 + i / 4 * Math.PI / 2; pts.push(new THREE.Vector2(r1 * Math.cos(t), cB + r1 * Math.sin(t))); }
+  for (let i = 1; i < 9; i++){ const f = i / 9; pts.push(new THREE.Vector2(r1 + (r0 - r1) * f + Math.sin(f * Math.PI) * 0.006, cB * (1 - f))); }
+  for (let i = 0; i <= 4; i++){ const t = i / 4 * Math.PI / 2; pts.push(new THREE.Vector2(r0 * Math.cos(t), r0 * Math.sin(t))); }
+  return pts;
+}
+const FIG_GEO = (() => {
+  const P = [], N = [], SI = [], SW = [];
+  const add = (geo, m, wf) => {
+    const g = geo.index ? geo.toNonIndexed() : geo, loc = g.attributes.position.clone();
+    g.applyMatrix4(m); const p = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < p.count; i++){
+      P.push(p.getX(i), p.getY(i), p.getZ(i)); N.push(n.getX(i), n.getY(i), n.getZ(i));
+      const w = wf(loc.getY(i)); SI.push(w[0], w[2] || 0, 0, 0); SW.push(w[1], w[3] || 0, 0, 0);
+    }
+  };
+  const S = (x, y, z, sx = 1, sy = 1, sz = 1) => mat(x, y, z, 0, 0, 0, sx, sy, sz);
+  add(new THREE.SphereGeometry(0.2, 18, 10), S(0, 0.86, 0, 1.12, 0.74, 0.82), () => [BONE.hips, 1]);
+  const torso = new THREE.LatheGeometry([[0, -0.1], [0.12, -0.09], [0.18, -0.03], [0.2, 0.08], [0.197, 0.22], [0.204, 0.36], [0.212, 0.48], [0.2, 0.57], [0.16, 0.65], [0.09, 0.7], [0, 0.72]].map(p => new THREE.Vector2(p[0], p[1])), 22);
+  add(torso, S(0, 0.9, 0, 1.15, 1, 0.8), y => { const w = smooth(-0.04, 0.2, y); return [BONE.spine, w, BONE.hips, 1 - w]; });
+  add(new THREE.CylinderGeometry(0.072, 0.09, 0.18, 16), S(0, 1.6, 0), y => { const w = smooth(-0.02, 0.09, y) * 0.6; return [BONE.head, w, BONE.spine, 1 - w]; });
+  add(new THREE.SphereGeometry(0.205, 26, 16), S(0, 1.82, 0), () => [BONE.head, 1]);
+  for (const s of [1, -1]){
+    const arm = new THREE.LatheGeometry(limbProfile(0.7, 0.092, 0.086), 14);
+    add(arm, S(s * 0.26, 1.46, 0), y => { const w = smooth(-0.25, -0.43, y); return [s > 0 ? BONE.elL : BONE.elR, w, s > 0 ? BONE.shL : BONE.shR, 1 - w]; });
+    const leg = new THREE.LatheGeometry(limbProfile(0.84, 0.12, 0.104), 14);
+    add(leg, S(s * 0.11, 0.84, 0), y => { const w = smooth(-0.33, -0.51, y); return [s > 0 ? BONE.knL : BONE.knR, w, s > 0 ? BONE.hpL : BONE.hpR, 1 - w]; });
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+  return g;
+})();
 const PK = ['hy', 'hrx', 'sp', 'sz', 'hd', 'hdy', 'lax', 'laz', 'le', 'rax', 'raz', 're', 'llx', 'llz', 'lk', 'rlx', 'rlz', 'rk'];
 const P0 = { hy: 0.86, hrx: 0, sp: 0, sz: 0, hd: 0, hdy: 0, lax: 0, laz: 0.09, le: -0.08, rax: 0, raz: -0.09, re: -0.08, llx: 0, llz: 0.02, lk: 0, rlx: 0, rlz: -0.02, rk: 0 };
 const pose = o => Object.assign({}, P0, o);
@@ -1354,6 +1762,7 @@ const POSES = {
   stand: pose({}),
   wave: pose({ raz: -2.55, re: -0.4, hd: -0.1 }),
   sit: pose({ hy: 1.12, llx: -1.5, rlx: -1.45, lk: 1.45, rk: 1.5, lax: -0.25, rax: -0.25, laz: 0.2, raz: -0.2, le: -0.5, re: -0.5 }),
+  bench: pose({ hy: 0.8, llx: -1.5, rlx: -1.5, lk: 1.5, rk: 1.5, lax: -0.35, rax: -0.35, laz: 0.12, raz: -0.12, le: -0.6, re: -0.6, sp: 0.06 }),
   lie: pose({ hy: 0.21, hrx: Math.PI / 2, laz: 0.05, raz: -0.05, hd: -0.4, llz: 0.0, rlz: 0.0 }),
   kneel: pose({ hy: 0.5, lk: 1.57, rk: 1.57, sp: 0.05, lax: -0.1, rax: -0.1 }),
   xpose: pose({ hy: 0.8, laz: 2.1, raz: -2.1, le: 0, re: 0, llz: 0.42, rlz: -0.42 }),
@@ -1363,22 +1772,23 @@ const POSES = {
   cross: pose({ lax: -0.55, laz: -0.18, le: -2.05, rax: -0.62, raz: 0.18, re: -2.0 }),
   think: pose({ rax: -0.9, raz: 0.3, re: -2.4, lax: -0.4, laz: -0.2, le: -1.6, hd: 0.15, hdy: 0.2 }),
   point: pose({ rax: -2.5, raz: -0.2, re: 0, hd: -0.5, sp: -0.08 }),
+  guard: pose({ rax: -0.2, re: -0.95, raz: -0.12, lax: -0.35, le: -1.1, laz: 0.25 }),
+  vendor: pose({ lax: -0.5, rax: -0.5, le: -1.0, re: -1.0, laz: 0.1, raz: -0.1, sp: 0.08 }),
 };
 class Figure {
   constructor(mat, scale = 0.86){
-    const mk = (g, parent, x, y, z) => { const m = new THREE.Mesh(g, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-    const grp = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
     this.root = new THREE.Group(); this.root.scale.setScalar(scale);
-    this.hips = grp(this.root, 0, 0.86, 0);
-    mk(GEO.thigh, this.hips, 0, 0.0, 0).scale.set(1.95, 0.8, 1.1);
-    this.spine = grp(this.hips, 0, 0.04, 0);
-    mk(GEO.torso, this.spine, 0, 0.3, 0).scale.set(1.13, 1, 0.82);
-    mk(GEO.neck, this.spine, 0, 0.7, 0);
-    this.head = grp(this.spine, 0, 0.74, 0); mk(GEO.head, this.head, 0, 0.18, 0);
-    const arm = s => { const sh = grp(this.spine, s * 0.26, 0.56, 0); mk(GEO.upper, sh, 0, -0.17, 0); const el = grp(sh, 0, -0.34, 0); mk(GEO.lower, el, 0, -0.17, 0); return [sh, el]; };
-    const leg = s => { const hp = grp(this.hips, s * 0.11, -0.02, 0); mk(GEO.thigh, hp, 0, -0.2, 0); const kn = grp(hp, 0, -0.42, 0); mk(GEO.shin, kn, 0, -0.2, 0); return [hp, kn]; };
-    [this.shL, this.elL] = arm(1); [this.shR, this.elR] = arm(-1);
-    [this.hpL, this.knL] = leg(1); [this.hpR, this.knR] = leg(-1);
+    const bones = [], bn = (parent, x, y, z) => { const b = new THREE.Bone(); b.position.set(x, y, z); if (parent) parent.add(b); bones.push(b); return b; };
+    this.hips = bn(null, 0, 0.86, 0); this.spine = bn(this.hips, 0, 0.04, 0); this.head = bn(this.spine, 0, 0.74, 0);
+    this.shL = bn(this.spine, 0.26, 0.56, 0); this.elL = bn(this.shL, 0, -0.34, 0);
+    this.shR = bn(this.spine, -0.26, 0.56, 0); this.elR = bn(this.shR, 0, -0.34, 0);
+    this.hpL = bn(this.hips, 0.11, -0.02, 0); this.knL = bn(this.hpL, 0, -0.42, 0);
+    this.hpR = bn(this.hips, -0.11, -0.02, 0); this.knR = bn(this.hpR, 0, -0.42, 0);
+    const mesh = this.mesh = new THREE.SkinnedMesh(FIG_GEO, mat);
+    mesh.add(this.hips); mesh.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones));
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.6);
+    this.root.add(mesh);
     this.cur = Object.assign({}, P0); this.tgt = Object.assign({}, P0);
     this.apply();
   }
@@ -1395,16 +1805,29 @@ class Figure {
   set(p){ Object.assign(this.tgt, p); }
   // 걷기/달리기 사이클
   gait(ph, amt, run, t){
-    const s = Math.sin(ph), c = Math.cos(ph), A = run ? 0.95 : 0.62;
+    const s = Math.sin(ph), c = Math.cos(ph), A = run ? 1.0 : 0.66;
     const o = Object.assign({}, P0);
     o.llx = -s * A * amt; o.rlx = s * A * amt;
-    o.lk = (Math.max(0, c) * (run ? 1.35 : 0.85) + 0.08) * amt; o.rk = (Math.max(0, -c) * (run ? 1.35 : 0.85) + 0.08) * amt;
-    o.lax = s * (run ? 0.85 : 0.5) * amt; o.rax = -s * (run ? 0.85 : 0.5) * amt;
-    o.le = -(run ? 1.2 : 0.35) * amt - 0.08; o.re = o.le;
-    o.sp = (run ? 0.2 : 0.06) * amt; o.hy = 0.86 - Math.abs(Math.sin(ph)) * 0.04 * amt + (run ? -0.03 : 0) * amt;
+    o.lk = (Math.max(0, c) * (run ? 1.45 : 0.9) + 0.08) * amt; o.rk = (Math.max(0, -c) * (run ? 1.45 : 0.9) + 0.08) * amt;
+    o.lax = s * (run ? 0.9 : 0.55) * amt; o.rax = -s * (run ? 0.9 : 0.55) * amt;
+    o.le = -(run ? 1.25 : 0.35) * amt - 0.08; o.re = o.le;
+    o.sp = (run ? 0.24 : 0.07) * amt; o.hy = 0.86 - Math.abs(Math.sin(ph)) * 0.045 * amt + (run ? -0.03 : 0) * amt;
     o.sz = Math.sin(ph) * 0.04 * amt; o.hd = -o.sp * 0.6;
     return o;
   }
+}
+// 경비병 장비 (창 · 방패 · 투구)
+function equipGuard(f){
+  const sp = new THREE.Group(); sp.position.set(0, -0.36, 0.02); sp.rotation.x = 1.15; f.elR.add(sp);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.6, 6), M.woodD); shaft.position.y = 0.55; sp.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.32, 6), M.steel); tip.position.y = 2.0; sp.add(tip);
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 20), M.pRed); sh.rotation.z = Math.PI / 2; sh.position.set(0.12, -0.2, 0.08); f.elL.add(sh);
+  const boss = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), M.bronze); boss.position.set(0.15, -0.2, 0.08); f.elL.add(boss);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.025, 6, 24), M.bronze); rim.rotation.y = Math.PI / 2; rim.position.set(0.12, -0.2, 0.08); f.elL.add(rim);
+  const hel = new THREE.Mesh(new THREE.SphereGeometry(0.225, 20, 12, 0, TAU, 0, Math.PI / 2), M.steel); hel.position.y = 0.2; f.head.add(hel);
+  const crest = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 8), M.steel); crest.position.y = 0.48; f.head.add(crest);
+  const brim = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.025, 6, 24), M.iron); brim.rotation.x = Math.PI / 2; brim.position.y = 0.2; f.head.add(brim);
+  for (const m of [shaft, tip, sh, boss, rim, hel, crest, brim]) m.castShadow = true;
 }
 
 const player = { fig: new Figure(CLAY), pos: new THREE.Vector3(0, 0.04, 22.5), vy: 0, yaw: 0, ground: true, ph: 0, speed: 0, run: false };
@@ -1440,11 +1863,80 @@ function npc(x, z, ry, poseName, opts = {}){
   p = at(4.2, 23.0); npc(p[0], p[1], 2.2, 'stretch', { anim: 'stretch' });
   p = at(5.1, 8.0); npc(p[0], p[1], 0.3, 'point', { anim: 'look' });
   p = at(5.5, 8.6); npc(p[0], p[1], -0.4, 'think');
-  for (let i = 0; i < 6; i++){ p = at(R() * TAU, rr(8, 23)); npc(p[0], p[1], R() * TAU, 'stand', { walker: 1, dark: i === 3 }); }
+  for (let i = 0; i < 7; i++){ p = at(R() * TAU, rr(8, 23)); npc(p[0], p[1], R() * TAU, 'stand', { walker: 1, dark: i === 3 }); }
+  // 자갈길을 오가는 마을 사람들
+  for (let i = 0; i < 9; i++){ p = at(R() * TAU, rr(29.6, 31.8)); npc(p[0], p[1], R() * TAU, 'stand', { walker: 2, dark: i === 5 }); }
+  // 벤치에 앉은 사람들
+  for (const i of [0, 3, 5]){ const a = Math.PI / 8 + i * Math.PI / 4; p = at(a, 21.3); npc(p[0], p[1], Math.atan2(-p[0], -p[1]), 'bench', { noCol: 1 }); }
+  // 시장 상인
+  for (const [x, z, ry] of STALLS){ if (R() < 0.8){ const wx = x - Math.sin(ry) * 0.35, wz = z - Math.cos(ry) * 0.35; npc(wx, wz, ry, 'vendor', { anim: 'vendor', noCol: 1, dark: R() < 0.15 }); } }
+  // 여관 앞 손님
+  for (const [x, z, ry] of (FX.tavernSeats || [])){ npc(x - Math.sin(ry) * 0.62, z - Math.cos(ry) * 0.62, ry, 'bench', { noCol: 1, anim: 'drink' }); }
+  // 경비병
+  const guard = (x, z, ry) => { const n = npc(x, z, ry, 'guard', { scale: 0.92 }); equipGuard(n.f); };
+  for (const s of [1, 3]) for (const sg of [-1, 1]){ const a = s * Math.PI / 2 + sg * 0.065, r = 30.0; p = at(a, r); guard(p[0], p[1], Math.atan2(p[0], p[1])); }
+  for (let s = 0; s < 4; s++) for (const sg of [-1, 1]){ const a = s * Math.PI / 2 + sg * 0.05; p = at(a, 75.2); guard(p[0], p[1], Math.atan2(-p[0], -p[1])); }
+}
+
+// ───────────────────────── 비둘기 / 하늘의 새 ─────────────────────────
+const PIGEONS = [], BIRDS = [];
+{
+  const body = new THREE.SphereGeometry(0.1, 10, 8); body.scale(0.85, 0.78, 1.35);
+  const head = new THREE.SphereGeometry(0.055, 8, 6); head.translate(0, 0.1, 0.12);
+  const tail = boxG(0.09, 0.02, 0.14); tail.rotateX(-0.3); tail.translate(0, 0.02, -0.16);
+  const beak = new THREE.ConeGeometry(0.015, 0.04, 4); beak.rotateX(Math.PI / 2); beak.translate(0, 0.095, 0.18);
+  const g = mergeGeos([body, head, tail, beak]); g.translate(0, 0.09, 0);
+  const im = new THREE.InstancedMesh(g, std({ color: 0x8c919c, roughness: 0.7 }), 34); im.castShadow = true; im.frustumCulled = false; world.add(im);
+  for (let i = 0; i < 34; i++){ const a = R() * TAU, r = rr(5.6, 11.5); PIGEONS.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, y: 0.04, ang: R() * TAU, mode: 0, t: R() * 5, vx: 0, vy: 0, vz: 0 }); }
+  FX.pigeons = im;
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.18, 0, 0, -0.12, 1.1, 0, -0.05], 3)); wg.computeVertexNormals();
+  const bmat = new THREE.MeshBasicMaterial({ color: 0x1a1d24, side: THREE.DoubleSide });
+  for (let i = 0; i < 16; i++){
+    const grp = new THREE.Group(), l = new THREE.Mesh(wg, bmat), r = new THREE.Mesh(wg, bmat); r.scale.x = -1;
+    const bd = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4).scale(0.8, 0.6, 2.2), bmat);
+    grp.add(l, r, bd); grp.scale.setScalar(rr(1.4, 2.2)); world.add(grp);
+    BIRDS.push({ grp, l, r, cx: rr(-40, 40), cz: rr(-40, 40), R: rr(40, 110), h: rr(32, 60), sp: rr(7, 11) * (R() < 0.5 ? 1 : -1), ph: R() * TAU });
+  }
+}
+function updateCreatures(dt){
+  const im = FX.pigeons, m = new THREE.Matrix4();
+  PIGEONS.forEach((p, i) => {
+    p.t += dt;
+    if (p.mode === 0){
+      const dx = p.x - player.pos.x, dz = p.z - player.pos.z, d = Math.hypot(dx, dz);
+      if (d < 2.6 && playing){ p.mode = 1; p.t = 0; const k = 1 / (d || 1); p.vx = dx * k * 4 + rr(-1, 1); p.vz = dz * k * 4 + rr(-1, 1); p.vy = rr(4, 6); p.ang = Math.atan2(p.vx, p.vz); }
+      else if (Math.sin(p.t * 1.7 + i) > 0.95){ p.x += Math.sin(p.ang) * dt * 1.0; p.z += Math.cos(p.ang) * dt * 1.0; }
+      if (R() < dt * 0.4) p.ang += rr(-1.5, 1.5);
+      if (Math.hypot(p.x, p.z) < 5.3){ p.ang = Math.atan2(p.x, p.z); }
+      const peck = Math.pow(Math.max(0, Math.sin(p.t * 5 + i * 1.3)), 6) * 0.7;
+      m.copy(mat(p.x, p.y, p.z, peck, p.ang, 0));
+    } else if (p.mode === 1){
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vy -= dt * 1.2;
+      m.copy(mat(p.x, p.y, p.z, -0.3, p.ang, Math.sin(p.t * 30) * 0.3));
+      if (p.t > 1.6){ const a = R() * TAU, r = rr(5.8, 11.5); p.tx = Math.cos(a) * r; p.tz = Math.sin(a) * r; p.mode = 2; }
+    } else {
+      const dx = p.tx - p.x, dz = p.tz - p.z, d = Math.hypot(dx, dz), sp = 7;
+      p.ang = Math.atan2(dx, dz);
+      if (d > 0.15){ p.x += dx / d * Math.min(d, sp * dt); p.z += dz / d * Math.min(d, sp * dt); }
+      p.y += (Math.max(0.04, Math.min(p.y, d * 0.5)) - p.y) * Math.min(1, dt * 3);
+      m.copy(mat(p.x, p.y, p.z, 0.1, p.ang, Math.sin(p.t * 26) * 0.25));
+      if (d < 0.2 && p.y < 0.1){ p.mode = 0; p.y = 0.04; }
+    }
+    im.setMatrixAt(i, m);
+  });
+  im.instanceMatrix.needsUpdate = true;
+  for (const b of BIRDS){
+    const a = b.ph + time * b.sp / b.R, x = b.cx + Math.cos(a) * b.R, z = b.cz + Math.sin(a) * b.R;
+    b.grp.position.set(x, b.h + Math.sin(time * 0.3 + b.ph) * 3, z);
+    b.grp.rotation.y = Math.atan2(-Math.sin(a) * Math.sign(b.sp), Math.cos(a) * Math.sign(b.sp));
+    b.grp.rotation.z = -0.25 * Math.sign(b.sp);
+    const flap = Math.sin(time * 0.45 + b.ph) > -0.2 ? Math.sin(time * 10 + b.ph) * 0.55 : 0.12;
+    b.l.rotation.z = flap; b.r.rotation.z = -flap;
+  }
 }
 
 // ───────────────────────── 미니맵 ─────────────────────────
-const mapBase = cnv(512), mapR = 75;
+const mapBase = cnv(512), mapR = 86;
 {
   const x = mapBase.getContext('2d'), k = 256 / mapR, C = 256;
   x.fillStyle = '#26301f'; x.fillRect(0, 0, 512, 512);
@@ -1454,7 +1946,8 @@ const mapBase = cnv(512), mapR = 75;
   x.strokeStyle = '#3fe6ff'; x.lineWidth = 2; x.beginPath(); x.arc(C, C, 12.7 * k, 0, TAU); x.stroke();
   x.strokeStyle = '#c9a050'; x.lineWidth = 1.5; x.beginPath(); x.arc(C, C, 24.85 * k, 0, TAU); x.stroke();
   x.fillStyle = '#efe9db'; for (const d of MAPDATA.dots){ x.fillStyle = d[3] === 'f' ? '#2f8fa8' : d[3] === 'o' ? '#30343e' : d[3] === 'b' ? '#ff8a3a' : '#f7f2e6'; x.beginPath(); x.arc(C + d[0] * k, C + d[1] * k, Math.max(2, d[2] * k), 0, TAU); x.fill(); }
-  for (const b of MAPDATA.boxes){ x.save(); x.translate(C + b[0] * k, C + b[1] * k); x.rotate(-b[4]); x.fillStyle = b[5] ? '#8a3b2a' : '#b5653f'; x.fillRect(-b[2] * k, -b[3] * k, b[2] * 2 * k, b[3] * 2 * k); x.strokeStyle = 'rgba(0,0,0,.4)'; x.strokeRect(-b[2] * k, -b[3] * k, b[2] * 2 * k, b[3] * 2 * k); x.restore(); }
+  for (const b of MAPDATA.boxes){ x.save(); x.translate(C + b[0] * k, C + b[1] * k); x.rotate(-b[4]); x.fillStyle = b[5] === 2 ? '#d9a443' : b[5] ? '#8a3b2a' : '#b5653f'; x.fillRect(-b[2] * k, -b[3] * k, b[2] * 2 * k, b[3] * 2 * k); x.strokeStyle = 'rgba(0,0,0,.4)'; x.strokeRect(-b[2] * k, -b[3] * k, b[2] * 2 * k, b[3] * 2 * k); x.restore(); }
+  x.strokeStyle = '#6b665c'; x.lineWidth = 2.6 * k; x.beginPath(); x.arc(C, C, WALL_R * k, 0, TAU); x.stroke();
   x.fillStyle = '#7ff3ff'; x.beginPath(); x.arc(C, C, 3, 0, TAU); x.fill();
 }
 const mapC = $('mapc'), mx = mapC.getContext('2d');
@@ -1538,7 +2031,7 @@ function updatePlayer(dt){
   const run = keys.ShiftLeft || keys.ShiftRight || touchRun;
   const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
   const dx = fx * iz + rx * ix, dz = fz * iz + rz * ix, mag = Math.min(1, Math.hypot(dx, dz));
-  const maxSp = run ? 7.2 : 3.4, tsp = mag * maxSp;
+  const maxSp = run ? 9.6 : 4.6, tsp = mag * maxSp;
   player.speed += (tsp - player.speed) * (1 - Math.exp(-8 * dt));
   if (mag > 0.05){
     const want = Math.atan2(dx, dz); let d = want - player.fig.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -1557,11 +2050,11 @@ function updatePlayer(dt){
   else player.ground = false;
   player.fig.root.position.copy(player.pos);
   // 포즈
-  const f = player.fig, amt = Math.min(1, player.speed / 3.4);
-  player.ph += dt * (player.speed > 4 ? 11.5 : 7.6) * Math.min(1.4, 0.4 + player.speed / 4);
+  const f = player.fig, amt = Math.min(1, player.speed / 4.6);
+  player.ph += dt * (player.speed > 6 ? 13.5 : 9.2) * Math.min(1.4, 0.45 + player.speed / 5.5);
   let tp;
   if (!player.ground) tp = pose({ llx: -0.9, rlx: 0.35, lk: 1.4, rk: 0.6, laz: 1.0, raz: -1.0, lax: -0.3, rax: -0.3, le: -0.6, re: -0.6, sp: 0.1 });
-  else if (amt > 0.05) tp = f.gait(player.ph, Math.min(1, amt), player.speed > 4.5, time);
+  else if (amt > 0.05) tp = f.gait(player.ph, Math.min(1, amt), player.speed > 6, time);
   else tp = pose({ hy: 0.86 + Math.sin(time * 2) * 0.004, sp: Math.sin(time * 2) * 0.015, laz: 0.1 + Math.sin(time * 2) * 0.02, raz: -0.1 - Math.sin(time * 2) * 0.02, hdy: Math.sin(time * 0.37) * 0.3 });
   if (player.land > 0){ player.land -= dt; tp.hy -= 0.12; tp.lk += 0.5; tp.rk += 0.5; tp.llx -= 0.35; tp.rlx -= 0.35; }
   f.set(tp); f.blend(dt, amt > 0.05 ? 18 : 10);
@@ -1569,23 +2062,30 @@ function updatePlayer(dt){
 }
 function updateNPCs(dt){
   for (const n of NPCS){
+    const cd = camera.position.distanceTo(n.pos);
+    n.f.root.visible = cd < 110; n.f.mesh.castShadow = cd < 45;
     n.t += dt; const f = n.f;
+    if (!n.f.root.visible && !n.walker) continue;
     if (n.walker){
       if (n.target){
         const dx = n.target[0] - n.pos.x, dz = n.target[1] - n.pos.z, d = Math.hypot(dx, dz);
         if (d < 0.4){ n.target = null; n.wait = rr(2, 6); n.idle = pick(['stand', 'stand', 'wave', 'stretch', 'think', 'point', 'cross']); }
         else {
-          const sp = 1.25; n.pos.x += dx / d * sp * dt; n.pos.z += dz / d * sp * dt;
+          const sp = n.walker === 2 ? 1.7 : 1.5; n.pos.x += dx / d * sp * dt; n.pos.z += dz / d * sp * dt;
           const want = Math.atan2(dx, dz); let a = want - f.root.rotation.y; a = Math.atan2(Math.sin(a), Math.cos(a)); f.root.rotation.y += a * Math.min(1, dt * 6);
           collide(n.pos, 0.35); n.pos.y = groundY(n.pos.x, n.pos.z);
-          n.ph += dt * 6.4; f.set(f.gait(n.ph, 0.85, false, time)); f.blend(dt, 14);
+          n.ph += dt * 7.4; f.set(f.gait(n.ph, 0.85, false, time)); f.blend(dt, 14);
           if (n.t > 30){ n.target = null; n.wait = 1; }
         }
       } else {
         n.wait -= dt; const ip = POSES[n.idle || 'stand'];
         const p = Object.assign({}, ip); if (n.idle === 'wave') p.raz = ip.raz + Math.sin(n.t * 7) * 0.3;
         f.set(p); f.blend(dt, 6);
-        if (n.wait <= 0){ const a = R() * TAU, r = rr(7.5, 23.5); n.target = [Math.cos(a) * r, Math.sin(a) * r]; n.t = 0; }
+        if (n.wait <= 0){
+          if (n.walker === 2){ const a = Math.atan2(n.pos.z, n.pos.x) + rr(-0.4, 0.4), r = rr(29.6, 31.8); n.target = [Math.cos(a) * r, Math.sin(a) * r]; }
+          else { const a = R() * TAU, r = rr(7.5, 23.5); n.target = [Math.cos(a) * r, Math.sin(a) * r]; }
+          n.t = 0;
+        }
       }
       continue;
     }
@@ -1595,6 +2095,8 @@ function updateNPCs(dt){
     else if (n.anim === 'bowing'){ const k = 0.5 + 0.5 * Math.sin(n.t * 1.3); p.sp = 0.2 + base.sp * k; p.lax = base.lax * k; p.rax = base.rax * k; }
     else if (n.anim === 'jacks'){ const k = 0.5 + 0.5 * Math.sin(n.t * 6); Object.assign(p, { laz: 0.2 + 2.6 * k, raz: -0.2 - 2.6 * k, llz: 0.03 + 0.4 * k, rlz: -0.03 - 0.4 * k }); f.root.position.y = 0.04 + Math.abs(Math.sin(n.t * 6)) * 0.22; }
     else if (n.anim === 'stretch'){ p.sz = Math.sin(n.t * 0.9) * 0.35; }
+    else if (n.anim === 'vendor'){ const k = Math.pow(Math.max(0, Math.sin(n.t * 0.6)), 8); p.raz = base.raz - 2.3 * k; p.rax = base.rax * (1 - k); p.re = base.re * (1 - k) - 0.3 * k + Math.sin(n.t * 8) * 0.25 * k; p.hdy = Math.sin(n.t * 0.4) * 0.5; }
+    else if (n.anim === 'drink'){ const k = Math.pow(Math.max(0, Math.sin(n.t * 0.5)), 6); p.rax = base.rax - 0.9 * k; p.re = base.re - 1.3 * k; p.hd = -0.3 * k; }
     else if (n.anim === 'look'){ p.hdy = Math.sin(n.t * 0.5) * 0.5; p.rax = base.rax + Math.sin(n.t * 0.5) * 0.1; }
     f.set(p); f.blend(dt, n.anim === 'jacks' ? 20 : 8);
   }
@@ -1623,15 +2125,21 @@ function updateFX(dt){
   for (const r of C.rings){ r.piv.rotation.y += dt * r.spd; r.piv.position.y = C.crys.position.y; }
   C.pl.intensity = 24 + Math.sin(time * 2.3) * 5;
   forgeLight.intensity = 26 + Math.sin(time * 13) * 4 + Math.sin(time * 31) * 3 + (R() - 0.5) * 4;
+  if (FX.torchMat) FX.torchMat.opacity = 0.5 + 0.1 * Math.sin(time * 11) + 0.05 * Math.sin(time * 27);
   if (FX.fireGlows) FX.fireGlows.forEach((g, i) => { g.material.opacity = 0.55 + 0.12 * Math.sin(time * 9 + i * 3) + 0.06 * Math.sin(time * 23 + i); });
   for (const b of BANNERS){
     const p = b.mesh.geometry.attributes.position, a = p.array, base = b.base;
     for (let i = 0; i < p.count; i++){
-      const x = base[i * 3], y = base[i * 3 + 1], hang = -y / 3.6;
+      const x = base[i * 3], y = base[i * 3 + 1], hang = -y / b.len;
       a[i * 3 + 2] = (Math.sin(time * 2.1 + y * 1.6 + b.seed) * 0.16 + Math.sin(time * 3.7 + x * 3 + y * 2.2 + b.seed) * 0.05) * hang * hang + hang * 0.12;
       a[i * 3] = x + Math.sin(time * 1.6 + y + b.seed) * 0.03 * hang;
     }
     p.needsUpdate = true; b.mesh.geometry.computeVertexNormals();
+  }
+  for (const f of FLAGS){
+    const p = f.mesh.geometry.attributes.position, a = p.array, base = f.base;
+    for (let i = 0; i < p.count; i++){ const x = base[i * 3], u = x / f.len; a[i * 3 + 2] = Math.sin(time * 5 + x * 2.2 + f.seed) * 0.22 * u * f.len / 1.8; }
+    p.needsUpdate = true;
   }
 }
 function updateInteract(dt){
@@ -1646,7 +2154,7 @@ function frame(){
   const dt = Math.min(0.05, clock.getDelta()); time += dt; TIMEU.value = time;
   if (playing){ updatePlayer(dt); updateCamera(dt); updateInteract(dt); drawMap(); }
   else updateIntro(dt);
-  updateNPCs(dt); updateFX(dt);
+  updateNPCs(dt); updateFX(dt); updateCreatures(dt);
   // 하늘
   camera.updateMatrixWorld();
   skyMat.uniforms.uInvProj.value.copy(camera.projectionMatrixInverse);
