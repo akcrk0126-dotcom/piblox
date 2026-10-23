@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS</title>
+<style>
+  :root { --bg:#07090f; --bg2:#0d111a; --panel:#111726; --line:#1c2436; --fg:#e6ecf7; --muted:#7d8aa5; --accent:#39c7ff; --accent2:#7b5cff; --user:#1b2a4a; --ok:#3ddc97; --err:#ff5c7a; color-scheme:dark; }
+  *{box-sizing:border-box} html,body{height:100%;margin:0}
+  body{font-family:-apple-system,"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:radial-gradient(1200px 500px at 50% -200px,#14213a,var(--bg) 60%);color:var(--fg);display:flex;flex-direction:column;font-size:14px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:rgba(7,9,15,.7);backdrop-filter:blur(8px)}
+  .brand{display:flex;align-items:center;gap:12px} .name{font-weight:800;letter-spacing:4px;color:var(--accent)} .status{font-size:11px;color:var(--muted);margin-top:2px}
+  .icon-btn{background:transparent;border:1px solid transparent;color:var(--muted);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:15px}
+  .icon-btn:hover{background:var(--panel);color:var(--fg);border-color:var(--line)} .icon-btn.on{color:var(--accent);border-color:var(--accent)}
+  .core{position:relative;width:38px;height:38px;flex-shrink:0} .core .ring,.core .dot{position:absolute;border-radius:50%}
+  .core .ring{inset:0;border:2px solid var(--accent);opacity:.55;border-top-color:transparent;border-left-color:transparent;animation:spin 6s linear infinite}
+  .core .ring.r2{inset:6px;border-color:var(--accent2);border-right-color:transparent;animation:spin 3s linear infinite reverse}
+  .core .dot{inset:13px;background:var(--accent);box-shadow:0 0 10px var(--accent),0 0 24px rgba(57,199,255,.5);animation:pulse 2.4s ease-in-out infinite}
+  .core.thinking .dot{animation-duration:.6s} .core.listening .dot{background:var(--ok);box-shadow:0 0 12px var(--ok);animation-duration:.9s} .core.speaking .dot{background:var(--accent2);box-shadow:0 0 12px var(--accent2);animation-duration:.35s}
+  @keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.78);opacity:.7}}
+  .modes{display:flex;gap:4px;padding:8px 12px;overflow-x:auto;border-bottom:1px solid var(--line);background:rgba(13,17,26,.6);scrollbar-width:none}
+  .modes button{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:1px solid transparent;border-radius:10px;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:16px;font-family:inherit;min-width:56px}
+  .modes button span{font-size:10px} .modes button:hover{background:var(--panel);color:var(--fg);border-color:var(--line)} .modes button.on{color:var(--accent);border-color:var(--accent);background:rgba(57,199,255,.08)}
+  .wrap{flex:1;min-height:0;display:flex;flex-direction:column;max-width:760px;width:100%;margin:0 auto}
+  .studio{border-bottom:1px solid var(--line);background:var(--bg2);max-height:62vh;display:flex;flex-direction:column} .studio[hidden]{display:none}
+  .studio-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 4px 16px} .studio-title{font-weight:700;font-size:13px;color:var(--accent)}
+  .studio-body{padding:4px 16px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:8px} .row{display:flex;gap:6px;flex-wrap:wrap} .row>*{flex:1}
+  .sbtn{background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:9px 10px;border-radius:10px;cursor:pointer;font-size:12.5px;font-family:inherit;white-space:nowrap}
+  .sbtn:hover{border-color:var(--accent);color:var(--accent)} .sbtn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:600} .sbtn:disabled{opacity:.5;cursor:default}
+  .sin,.sta,.ssel{width:100%;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:13.5px;font-family:inherit;outline:none} .sin:focus,.sta:focus{border-color:var(--accent)} .sta{min-height:70px;resize:vertical}
+  .preview{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;max-height:240px;object-fit:contain;display:block}
+  .sresult{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow-y:auto} .sresult:empty{display:none}
+  .sresult ul,.sresult ol,.msg ul,.msg ol{margin:4px 0;padding-left:18px} .sresult code,.msg code{background:#0a0e18;padding:1px 5px;border-radius:4px;font-size:12px} .sresult pre,.msg pre{background:#0a0e18;padding:8px;border-radius:8px;overflow-x:auto;font-size:11.5px} .sresult strong,.msg strong{color:#fff} .msg a{color:var(--accent)}
+  .calc-display{font-family:ui-monospace,monospace;font-size:22px;text-align:right;padding:10px 12px;background:#0a0e18;border:1px solid var(--line);border-radius:10px;min-height:48px;word-break:break-all} .calc-sub{font-size:12px;color:var(--muted);text-align:right;min-height:16px}
+  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px} .calc-grid button{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:11px 0;font-size:15px;cursor:pointer;font-family:inherit} .calc-grid button.op{color:var(--accent)} .calc-grid button.eq{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;grid-column:span 2}
+  .vault{display:flex;flex-direction:column;gap:6px} .vault-item{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px} .vault-item .meta{flex:1;min-width:0} .vault-item .t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .vault-item .d{font-size:11px;color:var(--muted)} .vault-item .k{font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--line);color:var(--accent)} .vault-item button{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:12px}
+  .gen-img{width:100%;border-radius:10px;border:1px solid var(--line);background:#0a0e18;min-height:120px} .small{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:14px 16px}
+  .welcome{margin:auto 0;text-align:center;padding:20px 6px} .welcome-title{font-size:18px;font-weight:700;margin:0 0 6px;color:#c7d4ee} .welcome-sub{color:var(--muted);font-size:12.5px;margin:0 0 16px;line-height:1.5}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center} .chip{background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:7px 11px;border-radius:999px;cursor:pointer;font-size:12px;font-family:inherit} .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .msg{max-width:92%;padding:10px 13px;border-radius:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .msg.user{align-self:flex-end;background:var(--user);border-bottom-right-radius:4px} .msg.assistant{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.error{align-self:flex-start;background:rgba(255,92,122,.1);border:1px solid rgba(255,92,122,.4);color:#ffb3c1;font-size:12.5px} .msg.system{align-self:center;color:var(--muted);font-size:12px}
+  .typing{align-self:flex-start;display:flex;gap:4px;padding:10px 14px} .typing i{width:6px;height:6px;border-radius:50%;background:var(--accent);display:block;animation:blink 1.2s infinite} .typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s} @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  .composer{border-top:1px solid var(--line);background:var(--bg2);padding:8px 16px 10px} .tool-log{display:flex;flex-direction:column;gap:3px;margin-bottom:6px;max-height:110px;overflow-y:auto} .tool-log:empty{display:none}
+  .tool-item{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center} .tool-item .tag{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--accent);font-family:ui-monospace,monospace;font-size:10.5px} .tool-item.ok .tag{color:var(--ok)} .tool-item.fail .tag{color:var(--err)}
+  .input-row{display:flex;gap:6px;align-items:flex-end} textarea.main{flex:1;min-width:0;resize:none;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-family:inherit;font-size:14px;line-height:1.4;max-height:140px;outline:none} textarea.main:focus{border-color:var(--accent)}
+  .send,.mic{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;font-size:16px;flex-shrink:0} .send{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff} .send:disabled{opacity:.45}
+  .mic.on{background:rgba(61,220,151,.18);border-color:var(--ok);color:var(--ok)} .hint{font-size:10.5px;color:var(--muted);margin-top:6px;text-align:center}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--panel);border:1px solid var(--accent);color:var(--fg);padding:10px 16px;border-radius:12px;font-size:13px;z-index:30;box-shadow:0 0 20px rgba(57,199,255,.3);max-width:90%}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:40;display:flex;flex-direction:column} .overlay[hidden]{display:none}
+  .overlay header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#0d111a;border-bottom:1px solid var(--line)} .overlay header h2{flex:1;margin:0;font-size:15px} .overlay iframe{flex:1;border:none;background:#000} .overlay .doc{flex:1;overflow:auto;padding:24px;background:var(--bg);max-width:760px;margin:0 auto;width:100%;line-height:1.7}
+  .overlay .doc h1{color:#fff;font-size:24px} .overlay .doc h2{color:var(--accent);font-size:18px} .overlay .doc img{max-width:100%;border-radius:10px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><div class="core" id="core"><div class="ring"></div><div class="ring r2"></div><div class="dot"></div></div><div><div class="name">JARVIS</div><div class="status" id="status">대기 중</div></div></div>
+  <div class="row" style="flex:0">
+    <select class="ssel" id="model" style="width:auto;padding:6px 8px;font-size:12px"></select>
+    <button class="icon-btn on" id="btnTts" title="음성 답변">🔊</button>
+    <button class="icon-btn" id="btnClear" title="대화 지우기">🗑</button>
+    <button class="icon-btn" id="btnAcct" title="계정">👤</button>
+  </div>
+</header>
+<div class="wrap">
+  <nav class="modes" id="modes">
+    <button data-mode="camera">📷<span>카메라</span></button>
+    <button data-mode="quiz">📸<span>문제</span></button>
+    <button data-mode="dict">📖<span>사전</span></button>
+    <button data-mode="calc">🧮<span>계산</span></button>
+    <button data-mode="image">🎨<span>이미지</span></button>
+    <button data-mode="game">🎮<span>게임</span></button>
+    <button data-mode="docs">🗂<span>보관함</span></button>
+  </nav>
+  <section class="studio" id="studio" hidden><div class="studio-head"><div class="studio-title" id="studioTitle"></div><button class="icon-btn" id="studioClose">✕</button></div><div class="studio-body" id="studioBody"></div></section>
+  <main class="chat" id="chat">
+    <div class="welcome" id="welcome">
+      <p class="welcome-title">무엇을 도와드릴까요?</p>
+      <p class="welcome-sub">API 키 없이 무료로 쓰는 자비스예요. 첫 대화 때 Puter 로그인 창이 한 번 떠요 (구글 계정으로 가입, 무료).</p>
+      <div class="chips">
+        <button class="chip" data-q="지금 몇 시야? 오늘 무슨 요일?">지금 몇 시?</button>
+        <button class="chip" data-q="3분 뒤에 물 마시라고 알려줘">3분 뒤 알림</button>
+        <button class="chip" data-q="내 자전거 자물쇠 비번은 0415야. 기억해둬">기억해둬</button>
+        <button class="chip" data-q="1인당 23,500원씩 7명이면 총 얼마고, 10% 할인하면?">계산해줘</button>
+        <button class="chip" data-q="유튜브에서 lo-fi 검색해서 열어줘">유튜브 열어줘</button>
+        <button class="chip" data-q="양자컴퓨터를 초등학생한테 설명하듯이 알려줘">아무거나 물어보기</button>
+      </div>
+    </div>
+  </main>
+  <footer class="composer">
+    <div class="tool-log" id="toolLog"></div>
+    <div class="input-row"><button class="mic" id="btnMic">🎤</button><textarea class="main" id="input" rows="1" placeholder="자비스에게 말하기…"></textarea><button class="send" id="btnSend">➤</button></div>
+    <div class="hint">Enter 보내기 · Shift+Enter 줄바꿈 · 데이터는 이 브라우저에만 저장</div>
+  </footer>
+</div>
+<div class="overlay" id="overlay" hidden><header><h2 id="ovTitle"></h2><button class="sbtn" id="ovDown">다운로드</button><button class="sbtn" id="ovClose">닫기</button></header><div id="ovBody" style="flex:1;display:flex;min-height:0"></div></div>
+
+<script src="https://js.puter.com/v2/"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const chatEl=$('#chat'), inputEl=$('#input'), sendBtn=$('#btnSend'), micBtn=$('#btnMic'), statusEl=$('#status'), coreEl=$('#core'), toolLog=$('#toolLog'), welcomeEl=$('#welcome'), ttsBtn=$('#btnTts');
+  const studio=$('#studio'), sBody=$('#studioBody'), sTitle=$('#studioTitle'), modesEl=$('#modes');
+
+  // ---------- 저장 ----------
+  const store={ get(k,d){try{const v=localStorage.getItem('jarvis.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem('jarvis.'+k,JSON.stringify(v))}catch(e){}} };
+  const MODELS=[['gpt-4o-mini','GPT-4o mini (빠름)'],['gpt-4.1','GPT-4.1'],['claude-sonnet-4','Claude Sonnet 4'],['gemini-2.0-flash','Gemini 2.0 Flash'],['gpt-5-nano','GPT-5 nano']];
+  let cfg={model:'gpt-4o-mini',tts:true,...store.get('cfg',{})};
+  for(const [v,l] of MODELS){const o=document.createElement('option');o.value=v;o.textContent=l;$('#model').appendChild(o)}
+  $('#model').value=cfg.model; $('#model').onchange=()=>{cfg.model=$('#model').value;store.set('cfg',cfg)};
+  ttsBtn.classList.toggle('on',cfg.tts);
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function md(src){const b=[];let t=src.replace(/```(\w*)\n([\s\S]*?)```/g,(_,l,c)=>{b.push('<pre><code>'+esc(c)+'</code></pre>');return '\u0000'+(b.length-1)+'\u0000'});
+    t=esc(t).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/(^|\n)#{1,3} (.+)/g,'$1<strong>$2</strong>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/(^|\s)(https?:\/\/[^\s<]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    t=t.replace(/(?:^|\n)((?:[-*] .+(?:\n|$))+)/g,m=>'\n<ul>'+m.trim().split('\n').map(l=>'<li>'+l.replace(/^[-*] /,'')+'</li>').join('')+'</ul>').replace(/(?:^|\n)((?:\d+\. .+(?:\n|$))+)/g,m=>'\n<ol>'+m.trim().split('\n').map(l=>'<li>'+l.replace(/^\d+\. /,'')+'</li>').join('')+'</ol>');
+    return t.replace(/\u0000(\d+)\u0000/g,(_,i)=>b[i]).replace(/^\n+/,'')}
+  function toast(m,ms=5000){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),ms)}
+  function setStatus(t,mode){statusEl.textContent=t;coreEl.className='core'+(mode?' '+mode:'')}
+  function addBubble(role,text,animate=true){if(welcomeEl.isConnected)welcomeEl.remove();const el=document.createElement('div');el.className='msg '+role;if(role==='assistant')el.innerHTML=md(text);else el.textContent=text;chatEl.appendChild(el);chatEl.scrollTop=chatEl.scrollHeight;return el}
+  function showTyping(){const el=document.createElement('div');el.className='typing';el.innerHTML='<i></i><i></i><i></i>';chatEl.appendChild(el);chatEl.scrollTop=chatEl.scrollHeight;return el}
+  function logTool(name,input){const el=document.createElement('div');el.className='tool-item';const d=input?.expression||input?.value||input?.message||input?.key||input?.text||input?.url||input?.query||'';el.innerHTML='<span class="tag">'+name+'</span><span>'+(LABEL[name]||name)+(d?' · '+String(d).slice(0,40):'')+'</span>';toolLog.appendChild(el);toolLog.scrollTop=toolLog.scrollHeight;return el}
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+  // ---------- 보관함 ----------
+  const vaultAll=()=>store.get('vault',[]);
+  function vaultAdd(it){const v=vaultAll();it.id='v'+Date.now();it.at=new Date().toISOString();v.unshift(it);store.set('vault',v.slice(0,40));return it}
+  function vaultDel(id){store.set('vault',vaultAll().filter(i=>i.id!==id))}
+  function download(name,content,type){const a=document.createElement('a');a.href=typeof content==='string'&&content.startsWith('data:')?content:URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click()}
+  function openViewer(it){const ov=$('#overlay'),b=$('#ovBody');$('#ovTitle').textContent=it.title;b.innerHTML='';const safe=it.title.replace(/[\\/:*?"<>|]/g,'_').slice(0,40);
+    if(it.kind==='game'){const f=document.createElement('iframe');f.sandbox='allow-scripts allow-pointer-lock allow-same-origin';f.srcdoc=it.body;b.appendChild(f);$('#ovDown').onclick=()=>download(safe+'.html',it.body,'text/html')}
+    else if(it.kind==='image'){b.innerHTML=`<div style="flex:1;display:grid;place-items:center;padding:20px"><img src="${it.body}" style="max-width:100%;max-height:100%;border-radius:12px"></div>`;$('#ovDown').onclick=()=>download(safe+'.png',it.body)}
+    else{const d=document.createElement('div');d.className='doc';d.innerHTML=(it.image?`<img src="${it.image}"><br><br>`:'')+md(it.body).replace(/\n/g,'<br>');b.appendChild(d);$('#ovDown').onclick=()=>download(safe+'.md',it.body,'text/markdown')}
+    ov.hidden=false}
+  $('#ovClose').onclick=()=>{$('#overlay').hidden=true;$('#ovBody').innerHTML=''};
+
+  // ---------- 도구 ----------
+  const TOOLS=[
+    {name:'get_time',description:'현재 날짜/시간/요일',parameters:{type:'object',properties:{}}},
+    {name:'calculate',description:'수식 계산. 사칙연산, 괄호, %, sqrt/pow/round 등. 예 "23500*7*0.9"',parameters:{type:'object',properties:{expression:{type:'string'}},required:['expression']}},
+    {name:'save_note',description:'사용자가 기억해달라고 한 것을 key-value로 저장',parameters:{type:'object',properties:{key:{type:'string'},value:{type:'string'}},required:['key','value']}},
+    {name:'get_notes',description:'저장된 메모 전부 조회. 사용자가 전에 말한 것을 물으면 먼저 호출',parameters:{type:'object',properties:{}}},
+    {name:'delete_note',description:'메모 삭제',parameters:{type:'object',properties:{key:{type:'string'}},required:['key']}},
+    {name:'set_timer',description:'N분 뒤 화면 알림 + 음성 알림 (이 탭이 열려 있어야 함)',parameters:{type:'object',properties:{minutes:{type:'number'},message:{type:'string'}},required:['minutes','message']}},
+    {name:'open_url',description:'사이트를 새 탭으로 연다. kind: url|google|naver|youtube, value: URL 또는 검색어',parameters:{type:'object',properties:{kind:{type:'string'},value:{type:'string'}},required:['kind','value']}},
+    {name:'copy_to_clipboard',description:'텍스트 클립보드 복사',parameters:{type:'object',properties:{text:{type:'string'}},required:['text']}}
+  ];
+  const LABEL={get_time:'시간 확인',calculate:'계산',save_note:'기억',get_notes:'기억 조회',delete_note:'기억 삭제',set_timer:'타이머',open_url:'열기',copy_to_clipboard:'복사'};
+  const evalExpr=s=>{const js=String(s).replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/\^/g,'**').replace(/√\(?([\d.]+)\)?/g,'Math.sqrt($1)').replace(/(\d+(?:\.\d+)?)\s*%/g,'($1/100)').replace(/,/g,'');if(!/^[\d\s+\-*/().%a-zA-Z]+$/.test(js))throw new Error('허용되지 않는 문자');const v=Function('"use strict";const {sqrt,pow,round,floor,ceil,abs,min,max,PI}=Math;return ('+js+')')();if(typeof v!=='number'||!isFinite(v))throw new Error('계산 불가');return v};
+  const handlers={
+    get_time(){const d=new Date();return{local:d.toLocaleString('ko-KR'),weekday:d.toLocaleDateString('ko-KR',{weekday:'long'})}},
+    calculate({expression}){const r=evalExpr(expression);return{expression,result:r,formatted:r.toLocaleString('ko-KR')}},
+    save_note({key,value}){const n=store.get('notes',{});n[key]={value,at:new Date().toISOString()};store.set('notes',n);return{ok:true}},
+    get_notes(){return{notes:store.get('notes',{})}},
+    delete_note({key}){const n=store.get('notes',{});const ok=key in n;delete n[key];store.set('notes',n);return{ok}},
+    set_timer({minutes,message}){const ms=Math.max(0.05,minutes)*60000;setTimeout(()=>{toast('⏰ '+message,15000);speak(message);addBubble('system','⏰ '+message)},ms);return{ok:true,fires_at:new Date(Date.now()+ms).toLocaleTimeString('ko-KR')}},
+    open_url({kind,value}){const q=encodeURIComponent(value);const map={google:'https://www.google.com/search?q='+q,naver:'https://search.naver.com/search.naver?query='+q,youtube:'https://www.youtube.com/results?search_query='+q};let url=map[kind]||value;if(!/^https?:\/\//i.test(url))url='https://'+url;const w=window.open(url,'_blank');return{ok:!!w,url,note:w?'열었음':'팝업이 차단됨. 답변에 링크를 넣어줄 것'}},
+    async copy_to_clipboard({text}){await navigator.clipboard.writeText(text);toast('복사했어요');return{ok:true}}
+  };
+  const SYS=()=>`너는 "자비스"다. 영화 아이언맨의 JARVIS처럼 유능하고 침착하며 약간의 위트가 있는 개인 AI 비서다. 한국어, 존댓말이되 딱딱하지 않게. 답변은 짧고 핵심만. 마크다운은 목록/링크/코드가 꼭 필요할 때만.
+- 요청은 말로만 하지 말고 도구로 실제 실행한다. 시간은 get_time, 계산은 calculate, 사이트/검색은 open_url로 연다.
+- "기억해"는 save_note, 전에 말한 것은 get_notes로 확인한다. 모르면 지어내지 않는다.
+- 도구 사용 후엔 무엇을 했는지 한두 문장으로만 보고한다. 지금 시각: ${new Date().toLocaleString('ko-KR')}`;
+
+  // ---------- Puter AI ----------
+  function extractText(res){if(!res)return'';if(typeof res==='string')return res;const m=res.message||res;const c=m.content;if(typeof c==='string')return c;if(Array.isArray(c))return c.map(p=>p.text||'').join('');return res.text||''}
+  function toolCallsOf(res){const m=res?.message||res;return m?.tool_calls||[]}
+  async function chat(messages,opts={}){
+    try{return await puter.ai.chat(messages,{model:cfg.model,...opts})}
+    catch(e){
+      const msg=(e&&(e.message||e.error?.message))||JSON.stringify(e);
+      if(/model|not found|unsupported|invalid/i.test(msg)&&cfg.model!=='gpt-4o-mini'){toast('이 모델은 지금 안 돼서 GPT-4o mini로 바꿨어요');cfg.model='gpt-4o-mini';$('#model').value=cfg.model;store.set('cfg',cfg);return puter.ai.chat(messages,{model:cfg.model,...opts})}
+      throw new Error(msg)
+    }
+  }
+  async function askModel({system,text,imageDataUrl,maxTokens=2500}){
+    const sys=system||'너는 자비스다. 한국어로 간결하게 답한다.';
+    if(imageDataUrl){const r=await chat([{role:'system',content:sys},{role:'user',content:[{type:'text',text},{type:'image_url',image_url:{url:imageDataUrl}}]}],{max_tokens:maxTokens});return extractText(r).trim()}
+    const r=await chat([{role:'system',content:sys},{role:'user',content:text}],{max_tokens:maxTokens});return extractText(r).trim()
+  }
+
+  // ---------- 대화 루프 ----------
+  let messages=store.get('history',[]),busy=false;
+  for(const m of store.get('uiLog',[]))addBubble(m.role,m.text,false);
+  function persist(ui){const log=store.get('uiLog',[]);if(ui)log.push(ui);while(messages.length>40){messages.shift();while(messages.length&&messages[0].role!=='user')messages.shift()}store.set('history',messages);store.set('uiLog',log.slice(-80))}
+  async function converse(text){
+    busy=true;sendBtn.disabled=true;toolLog.innerHTML='';
+    addBubble('user',text);messages.push({role:'user',content:text});persist({role:'user',text});
+    let typing=showTyping();setStatus('생각 중…','thinking');
+    try{
+      for(let round=0;round<8;round++){
+        const res=await chat([{role:'system',content:SYS()},...messages],{tools:TOOLS.map(t=>({type:'function',function:t}))});
+        const calls=toolCallsOf(res),txt=extractText(res).trim();
+        if(!calls.length){typing.remove();const final=txt||'(응답이 비어있어요)';messages.push({role:'assistant',content:final});addBubble('assistant',final);persist({role:'assistant',text:final});speak(final);break}
+        messages.push({role:'assistant',content:txt||null,tool_calls:calls});
+        if(txt){typing.remove();addBubble('system',txt);typing=showTyping()}
+        for(const c of calls){
+          const name=c.function?.name,args=(()=>{try{return JSON.parse(c.function?.arguments||'{}')}catch(e){return{}}})();
+          setStatus(LABEL[name]||name,'thinking');const item=logTool(name,args);let out;
+          try{out=await handlers[name](args);item.classList.add('ok')}catch(e){out={error:e.message};item.classList.add('fail')}
+          messages.push({role:'tool',tool_call_id:c.id,content:JSON.stringify(out)});
+        }
+        setStatus('생각 중…','thinking');
+      }
+    }catch(e){typing.remove();addBubble('error',e.message);while(messages.length&&messages[messages.length-1].role!=='user')messages.pop()}
+    finally{persist();busy=false;sendBtn.disabled=false;setStatus('대기 중','');inputEl.focus()}
+  }
+
+  // ---------- 음성 ----------
+  let voice=null;function pickVoice(){try{const vs=speechSynthesis.getVoices();voice=vs.find(v=>v.lang==='ko-KR'&&/Google|Yuna|Natural|Premium/i.test(v.name))||vs.find(v=>v.lang==='ko-KR')||null}catch(e){}}
+  if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=pickVoice;pickVoice()}
+  function speak(text){if(!cfg.tts||!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const clean=text.replace(/```[\s\S]*?```/g,' 코드 생략 ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/[*_#`>]/g,'').replace(/https?:\/\/\S+/g,'링크').slice(0,500);const u=new SpeechSynthesisUtterance(clean);u.lang='ko-KR';u.rate=1.05;u.pitch=.95;if(voice)u.voice=voice;u.onstart=()=>setStatus('말하는 중','speaking');u.onend=u.onerror=()=>{if(!busy)setStatus('대기 중','')};speechSynthesis.speak(u)}catch(e){}}
+  ttsBtn.onclick=()=>{cfg.tts=!cfg.tts;ttsBtn.classList.toggle('on',cfg.tts);if(!cfg.tts)try{speechSynthesis.cancel()}catch(e){}store.set('cfg',cfg)};
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,listening=false;
+  micBtn.onclick=()=>{if(listening){try{rec.stop()}catch(e){}return}if(!SR){addBubble('error','이 브라우저는 음성 인식을 지원하지 않아요 (크롬/엣지에서 열어주세요).');return}
+    try{speechSynthesis.cancel()}catch(e){}rec=new SR();rec.lang='ko-KR';rec.interimResults=true;let fin='';
+    rec.onstart=()=>{listening=true;micBtn.classList.add('on');setStatus('듣는 중…','listening')};
+    rec.onresult=e=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)fin+=t;else it+=t}inputEl.value=fin||it;autosize()};
+    rec.onerror=e=>{if(e.error==='not-allowed')addBubble('error','마이크 권한을 허용해주세요 (주소창 왼쪽 자물쇠 → 마이크).')};
+    rec.onend=()=>{listening=false;micBtn.classList.remove('on');if(!busy)setStatus('대기 중','');if(inputEl.value.trim())send()};
+    rec.start()};
+
+  // ---------- 입력 ----------
+  function autosize(){inputEl.style.height='auto';inputEl.style.height=Math.min(inputEl.scrollHeight,140)+'px'}
+  inputEl.oninput=autosize;inputEl.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}};
+  function send(){const t=inputEl.value.trim();if(!t||busy)return;inputEl.value='';autosize();converse(t)}
+  sendBtn.onclick=send;document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{inputEl.value=c.dataset.q;send()});
+  $('#btnClear').onclick=()=>{messages=[];store.set('history',[]);store.set('uiLog',[]);chatEl.innerHTML='';toolLog.innerHTML='';chatEl.appendChild(welcomeEl)};
+  $('#btnAcct').onclick=async()=>{try{if(puter.auth.isSignedIn()){const u=await puter.auth.getUser();if(await askYesNo(`${u.username} 으로 로그인됨. 로그아웃할까요?`)){puter.auth.signOut();toast('로그아웃했어요')}}else{await puter.auth.signIn();toast('로그인 완료')}}catch(e){toast('로그인 취소됨')}};
+  function askYesNo(q){return new Promise(r=>{const t=document.createElement('div');t.className='toast';t.innerHTML=esc(q)+' <button class="sbtn" style="margin-left:8px">네</button><button class="sbtn" style="margin-left:4px">아니오</button>';const [y,n]=t.querySelectorAll('button');y.onclick=()=>{t.remove();r(true)};n.onclick=()=>{t.remove();r(false)};document.body.appendChild(t)})}
+
+  // ---------- 스튜디오 ----------
+  const h=html=>{const d=document.createElement('div');d.innerHTML=html.trim();return d.firstElementChild};
+  const setResult=(el,t)=>{el.innerHTML=md(t)};
+  async function run(btns,fn,st){if(busy)return;busy=true;sendBtn.disabled=true;btns.forEach(b=>b.disabled=true);setStatus(st||'작업 중…','thinking');try{await fn()}catch(e){addBubble('error',e.message)}finally{busy=false;sendBtn.disabled=false;btns.forEach(b=>b.disabled=false);setStatus('대기 중','')}}
+  const resize=(d,max=1024)=>new Promise(res=>{const i=new Image();i.onload=()=>{const s=Math.min(1,max/Math.max(i.width,i.height));const c=document.createElement('canvas');c.width=Math.round(i.width*s);c.height=Math.round(i.height*s);c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.85))};i.src=d});
+  const fileToData=f=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)});
+  let cam=null,current=null;
+  const modes={
+    camera:{title:'카메라 · 찍어서 독스 만들기',render(){
+      const video=h('<video class="preview" autoplay playsinline muted></video>'),img=h('<img class="preview" hidden>');
+      const bStart=h('<button class="sbtn">카메라 켜기</button>'),bShot=h('<button class="sbtn primary" disabled>찍기</button>'),bFile=h('<button class="sbtn">사진 파일</button>'),file=h('<input type="file" accept="image/*" capture="environment" hidden>');
+      const sel=h('<select class="ssel"><option value="summary">내용 요약 독스</option><option value="notes">강의/필기 정리 노트</option><option value="ocr">글자 그대로 받아쓰기</option><option value="explain">이게 뭔지 설명</option></select>');
+      const bGo=h('<button class="sbtn primary" disabled>AI로 정리 → 독스 저장</button>'),out=h('<div class="sresult"></div>');let shot=null;
+      bStart.onclick=async()=>{try{cam=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280}}});video.srcObject=cam;video.hidden=false;img.hidden=true;bShot.disabled=false}catch(e){addBubble('error','카메라 권한을 허용해주세요 (주소창 자물쇠 → 카메라).')}};
+      bShot.onclick=async()=>{const c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;c.getContext('2d').drawImage(video,0,0);shot=await resize(c.toDataURL('image/jpeg',.92));img.src=shot;img.hidden=false;video.hidden=true;bGo.disabled=false};
+      bFile.onclick=()=>file.click();file.onchange=async()=>{if(!file.files[0])return;shot=await resize(await fileToData(file.files[0]));img.src=shot;img.hidden=false;video.hidden=true;bGo.disabled=false};
+      bGo.onclick=()=>run([bGo,bShot],async()=>{const ask={summary:'이 사진 속 내용(문서/칠판/책/화면)을 읽고 한국어로 정리된 요약 문서를 작성해라. 첫 줄은 "# 제목", 이후 핵심 요약 불릿과 세부사항. 마크다운.',notes:'이 사진은 강의 자료/필기다. 한국어 공부용 정리 노트: 첫 줄 "# 제목", 핵심 개념→정의→예시→기억할 포인트. 마크다운.',ocr:'이 사진의 글자를 보이는 그대로 받아써라. 줄바꿈/목록 유지. 첫 줄 "# 받아쓰기".',explain:'이 사진에 무엇이 있는지 한국어로 설명. 첫 줄 "# 제목".'}[sel.value];out.textContent='…';const t=await askModel({text:ask,imageDataUrl:shot,maxTokens:3000});setResult(out,t);const title=(t.match(/^#\s*(.+)$/m)||[])[1]||'카메라 독스';vaultAdd({kind:'doc',title:title.trim(),body:t,image:shot});addBubble('system',`📄 "${title.trim()}" 독스 저장됨 (보관함)`)},'사진 분석 중');
+      const r=h('<div class="row"></div>');r.append(bStart,bShot,bFile);return[video,img,r,file,sel,bGo,out]},
+      leave(){if(cam){cam.getTracks().forEach(t=>t.stop());cam=null}}},
+    quiz:{title:'문제 사진 · 비슷한 문제 출제',render(){
+      const img=h('<img class="preview" hidden>'),bFile=h('<button class="sbtn primary">문제 이미지/스크린샷 선택</button>'),file=h('<input type="file" accept="image/*" hidden>'),paste=h('<div class="small">스크린샷은 Win+Shift+S로 찍고 이 페이지에서 Ctrl+V 해도 돼요.</div>');
+      const n=h('<select class="ssel"><option value="3">비슷한 문제 3개</option><option value="5">5개</option><option value="1">1개</option></select>'),diff=h('<select class="ssel"><option value="same">같은 난이도</option><option value="harder">더 어렵게</option><option value="easier">더 쉽게</option></select>');
+      const bGo=h('<button class="sbtn primary" disabled>문제 만들기</button>'),bSolve=h('<button class="sbtn" disabled>이 문제 풀이만</button>'),bSave=h('<button class="sbtn" hidden>독스로 저장</button>'),out=h('<div class="sresult"></div>');let shot=null,last='';
+      const setShot=async d=>{shot=await resize(d,1280);img.src=shot;img.hidden=false;bGo.disabled=false;bSolve.disabled=false};
+      bFile.onclick=()=>file.click();file.onchange=async()=>{if(file.files[0])setShot(await fileToData(file.files[0]))};
+      document.onpaste=async e=>{if(current!=='quiz')return;const it=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(it)setShot(await fileToData(it.getAsFile()))};
+      bGo.onclick=()=>run([bGo,bSolve],async()=>{const d={same:'같은 난이도로',harder:'한 단계 더 어렵게',easier:'한 단계 더 쉽게'}[diff.value];out.textContent='…';last=await askModel({text:`이 이미지의 문제를 파악하고, 같은 개념·유형의 새 문제를 ${n.value}개 ${d} 만들어라. 숫자/상황/보기는 반드시 바꿔라.\n형식:\n# 유사 문제\n**원래 문제 유형:** 한 줄\n\n### 문제 1\n…\n---\n## 정답 및 풀이\n### 1\n…`,imageDataUrl:shot,maxTokens:3500});setResult(out,last);bSave.hidden=false},'문제 출제 중');
+      bSolve.onclick=()=>run([bGo,bSolve],async()=>{out.textContent='…';last=await askModel({text:'이 이미지의 문제를 한국어로 단계별로 풀이하고 마지막에 **정답**을 명확히. 첫 줄 "# 풀이".',imageDataUrl:shot,maxTokens:2500});setResult(out,last);bSave.hidden=false},'풀이 중');
+      bSave.onclick=()=>{vaultAdd({kind:'doc',title:(last.match(/^#\s*(.+)$/m)||[])[1]||'유사 문제',body:last,image:shot});toast('저장했어요')};
+      const r2=h('<div class="row"></div>');r2.append(n,diff);const r3=h('<div class="row"></div>');r3.append(bGo,bSolve);return[img,bFile,file,paste,r2,r3,out,bSave]}},
+    dict:{title:'사전',render(){
+      const inp=h('<input class="sin" placeholder="단어나 표현 (한국어/영어/기타)">'),dir=h('<select class="ssel"><option value="auto">자동 (영↔한)</option><option value="en">영영사전</option><option value="ja">일본어</option><option value="zh">중국어</option><option value="es">스페인어</option></select>'),bGo=h('<button class="sbtn primary">찾기</button>'),out=h('<div class="sresult"></div>');
+      async function freeDict(w){if(!/^[a-zA-Z' -]{1,40}$/.test(w))return'';try{const r=await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(w.trim()));if(!r.ok)return'';const e=(await r.json())[0];const ph=e.phonetic||(e.phonetics||[]).map(p=>p.text).filter(Boolean)[0]||'';return`[영영사전 참고] 발음 ${ph}\n`+(e.meanings||[]).slice(0,4).map(m=>m.partOfSpeech+': '+m.definitions.slice(0,2).map(d=>d.definition).join(' | ')).join('\n')}catch(e){return''}}
+      const go=()=>run([bGo],async()=>{const w=inp.value.trim();if(!w)return;out.textContent='…';const ref=dir.value==='auto'||dir.value==='en'?await freeDict(w):'';const tg={auto:'한국어 사용자를 위해(영어 단어면 한국어 뜻, 한국어면 영어 표현)',en:'영어로만(영영사전처럼)',ja:'일본어 대응 표현 중심',zh:'중국어 대응 표현 중심',es:'스페인어 대응 표현 중심'}[dir.value];setResult(out,await askModel({text:`사전처럼 "${w}"를 ${tg} 설명. 형식:\n**${w}** [발음/품사]\n1. 뜻(여러 뜻이면 번호)\n- 예문 2개(번역 포함)\n- 유의어/반의어\n- 뉘앙스나 자주 틀리는 포인트 한 줄${ref?'\n\n'+ref:''}`,maxTokens:900}))},'사전 검색 중');
+      bGo.onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go()};const r=h('<div class="row"></div>');r.append(dir,bGo);return[inp,r,out]}},
+    calc:{title:'계산기',render(){
+      const disp=h('<div class="calc-display">0</div>'),sub=h('<div class="calc-sub"></div>'),grid=h('<div class="calc-grid"></div>'),out=h('<div class="sresult"></div>'),bEx=h('<button class="sbtn">AI 풀이 설명</button>'),word=h('<input class="sin" placeholder="말로 계산: 23500원씩 7명 10% 할인하면?">');let expr='';
+      const refresh=()=>{disp.textContent=expr||'0';try{sub.textContent=expr?'= '+evalExpr(expr).toLocaleString('ko-KR',{maximumFractionDigits:10}):''}catch(e){sub.textContent=''}};
+      for(const k of ['C','(',')','⌫','7','8','9','÷','4','5','6','×','1','2','3','−','0','.','%','+','√','^','=']){const b=h(`<button class="${'+−×÷^√%'.includes(k)?'op':k==='='?'eq':''}">${k}</button>`);b.onclick=()=>{if(k==='C')expr='';else if(k==='⌫')expr=expr.slice(0,-1);else if(k==='='){try{expr=String(evalExpr(expr))}catch(e){sub.textContent='식이 잘못됐어요';return}}else expr+=k;refresh()};grid.appendChild(b)}
+      bEx.onclick=()=>run([bEx],async()=>{const q=word.value.trim()||expr;if(!q)return;out.textContent='…';let hint='';try{hint=' (계산기 결과 '+evalExpr(expr)+')'}catch(e){}setResult(out,await askModel({text:`다음을 계산하고 단계별로 짧게 풀이. 마지막 줄 **답: …**. 한국어.\n${q}${hint}`,maxTokens:800}))},'계산 중');
+      word.onkeydown=e=>{if(e.key==='Enter')bEx.click()};return[disp,sub,grid,word,bEx,out]}},
+    image:{title:'이미지 생성',render(){
+      const inp=h('<textarea class="sta" placeholder="예) 네온 사이버펑크 고양이, 비 오는 서울 골목, 픽셀아트"></textarea>'),style=h('<select class="ssel"><option value="">스타일 자동</option><option value="photorealistic, 8k">실사</option><option value="anime illustration">애니</option><option value="pixel art">픽셀아트</option><option value="watercolor painting">수채화</option><option value="flat vector illustration">플랫 벡터</option><option value="3d render">3D 렌더</option></select>');
+      const bGo=h('<button class="sbtn primary">생성</button>'),bSave=h('<button class="sbtn" hidden>보관함 저장</button>'),box=h('<div></div>');let last='';
+      bGo.onclick=()=>run([bGo],async()=>{const p=inp.value.trim();if(!p)return;box.innerHTML='<div class="small">프롬프트 다듬는 중…</div>';let en=p;try{en=await askModel({text:`다음 묘사를 이미지 생성용 영어 프롬프트 한 줄로. 피사체, 구도, 조명, 색감 포함. 프롬프트만:\n${p}`,maxTokens:150})}catch(e){}
+        box.innerHTML='<div class="small">이미지 생성 중… (10~40초)</div>';const el=await puter.ai.txt2img(en+(style.value?', '+style.value:''));el.className='gen-img';box.innerHTML='';box.appendChild(el);
+        last=el.src;if(!last.startsWith('data:')){try{const c=document.createElement('canvas');await new Promise(r=>{if(el.complete)r();else el.onload=r});c.width=el.naturalWidth;c.height=el.naturalHeight;c.getContext('2d').drawImage(el,0,0);last=c.toDataURL('image/png')}catch(e){}}
+        bSave.hidden=false},'이미지 생성 중');
+      bSave.onclick=()=>{vaultAdd({kind:'image',title:inp.value.trim().slice(0,40)||'이미지',body:last});toast('저장했어요')};return[inp,style,bGo,box,bSave]}},
+    game:{title:'게임 생성',render(){
+      const inp=h('<textarea class="sta" placeholder="예) 우주선이 운석 피하는 게임, 두더지 잡기, 2048, 플래피버드 같은 거"></textarea>'),bGo=h('<button class="sbtn primary">게임 만들기</button>'),bPlay=h('<button class="sbtn" hidden>플레이</button>'),fix=h('<input class="sin" placeholder="수정할 점: 더 빠르게, 점수판 추가, 모바일 터치 지원" hidden>'),bFix=h('<button class="sbtn" hidden>수정 요청</button>'),out=h('<div class="sresult"></div>');let html='',item=null;
+      const SYSG='너는 뛰어난 HTML5 게임 개발자다. 외부 라이브러리 없이 Canvas + Vanilla JS로 단일 HTML 파일 게임을 만든다. 키보드와 터치 둘 다 지원, 점수/게임오버/재시작 포함, 화면 크기에 맞게 리사이즈. 반드시 완전한 <!DOCTYPE html>부터 </html>까지 하나의 코드블록만 출력하고 설명은 쓰지 않는다. 모든 텍스트는 한국어.';
+      const extract=s=>{const m=s.match(/```(?:html)?\s*([\s\S]*?)```/i);const c=m?m[1]:s;const i=c.indexOf('<!DOCTYPE');return i>=0?c.slice(i):c};
+      const make=ask=>run([bGo,bFix],async()=>{out.textContent='게임 코드 작성 중… (30초~1분)';html=extract(await askModel({system:SYSG,text:ask,maxTokens:8000}));if(!/<canvas|<script/i.test(html))throw new Error('게임 코드가 제대로 안 나왔어요. 더 구체적으로 다시 시도해주세요.');const t=(html.match(/<title>(.*?)<\/title>/i)||[])[1]||inp.value.trim().slice(0,30)||'게임';item=vaultAdd({kind:'game',title:t,body:html});out.innerHTML=`<strong>${esc(t)}</strong> 완성! ${(html.length/1024).toFixed(0)}KB · 보관함에 저장됨`;bPlay.hidden=false;bFix.hidden=false;fix.hidden=false;openViewer(item)},'게임 만드는 중');
+      bGo.onclick=()=>{const p=inp.value.trim();if(p)make('다음 게임을 만들어라: '+p)};bFix.onclick=()=>{const f=fix.value.trim();if(f&&html)make(`아래 게임 코드를 다음 요구대로 수정해서 전체 코드를 다시 출력: ${f}\n\n\`\`\`html\n${html.slice(0,20000)}\n\`\`\``)};bPlay.onclick=()=>item&&openViewer(item);
+      const r=h('<div class="row"></div>');r.append(bGo,bPlay);return[inp,r,out,fix,bFix]}},
+    docs:{title:'보관함',render(){const list=h('<div class="vault"></div>');const items=vaultAll();if(!items.length)list.innerHTML='<div class="small">아직 없어요. 카메라 독스, 문제, 게임, 이미지가 여기 모여요.</div>';const K={doc:'독스',game:'게임',image:'이미지'};
+      for(const it of items){const row=h(`<div class="vault-item"><span class="k">${K[it.kind]||it.kind}</span><div class="meta"><div class="t">${esc(it.title)}</div><div class="d">${new Date(it.at).toLocaleString('ko-KR')}</div></div></div>`);const o=h('<button>열기</button>');o.onclick=()=>openViewer(it);const d=h('<button>삭제</button>');d.onclick=()=>{vaultDel(it.id);row.remove()};row.append(o,d);list.appendChild(row)}return[list]}}
+  };
+  function openMode(name){if(current&&modes[current].leave)modes[current].leave();if(current===name){closeMode();return}current=name;modesEl.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===name));sTitle.textContent=modes[name].title;sBody.innerHTML='';modes[name].render().forEach(e=>sBody.appendChild(e));studio.hidden=false;const f=sBody.querySelector('input,textarea');if(f)f.focus()}
+  function closeMode(){if(current&&modes[current].leave)modes[current].leave();current=null;studio.hidden=true;modesEl.querySelectorAll('button').forEach(b=>b.classList.remove('on'))}
+  modesEl.onclick=e=>{const b=e.target.closest('button[data-mode]');if(b)openMode(b.dataset.mode)};$('#studioClose').onclick=closeMode;
+
+  if(typeof puter==='undefined')addBubble('error','AI 엔진(js.puter.com)을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침 해주세요.');
+  inputEl.focus();
+})();
+</script>
+</body>
+</html>
