@@ -78,7 +78,9 @@ const CAP = `(() => {
       const frames = Math.round(sec * FPS);
       for (let i = 0; i < frames; i++) {
         await page.evaluate(([src, t, a]) => { if (src) (0, eval)('(' + src + ')')(t, a); __VT.step(1000 / 30); __TR.tick() }, [each ? each.toString() : null, i / FPS, arg]);
-        await page.screenshot({ path: path.join(tmp, String(n++).padStart(5, '0') + '.jpg'), type: 'jpeg', quality: 90 });
+        // 무거운 장면에서 화면 캡처가 가끔 멈춰요: 넉넉히 기다리고 두 번까지 다시 해요
+        const file = path.join(tmp, String(n++).padStart(5, '0') + '.jpg');
+        for (let k = 0; ; k++) { try { await page.screenshot({ path: file, type: 'jpeg', quality: 90, timeout: 90000 }); break } catch (e) { if (k >= 2) throw e; await page.waitForTimeout(3000) } }
         if (n % 60 === 0) process.stdout.write(`\r${(n / FPS).toFixed(1)}s`);
       }
     },
