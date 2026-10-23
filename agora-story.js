@@ -4,6 +4,7 @@ export function init(G){
 const { THREE, $, M, FX, TAU, player } = G;
 const V3 = THREE.Vector3;
 const R = Math.random, rr = (a, b) => a + (b - a) * R(), clamp = (x, a, b) => Math.max(a, Math.min(b, x)), ease = t => t * t * (3 - 2 * t);
+const pick = a => a[(R() * a.length) | 0];
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const fig = player.fig;
 
@@ -344,22 +345,20 @@ function sfx(k){
 }
 
 
-// ───────────────────────── 스토리 맵: 평화로운 숲 ─────────────────────────
-// 야영지(남쪽, 룬진 도착) → 숲길 → 도토리 공터 → 선돌과 고대 기둥이 둘러선 고목의 성소(북쪽)
+// ───────────────────────── 스테이지 맵 생성기 (스테이지마다 다른 지형) ─────────────────────────
 const SW = new THREE.Group(); SW.visible = false; G.scene.add(SW);
 const SCOL = [], SINT = [];
-const CAMP = new V3(0, 0, 40), SANC = new V3(0, 0, -22), SANC_R = 19, ARRIVE = new V3(0, 0.04, 50.5);
-const PATH = [[0, 40], [0, 31], [7, 20], [-5, 8], [4, -3], [0, -12]];
-const SHAPES = [{ c: [CAMP.x, CAMP.z, 13] }, { c: [SANC.x, SANC.z, SANC_R] }];
-for (let i = 0; i < PATH.length - 1; i++) SHAPES.push({ s: [...PATH[i], ...PATH[i + 1], 3.4] });
-SHAPES.push({ c: [-3, 9, 11.6] });
-function shapeOut(px, pz, sh){
-  if (sh.c){ const [cx, cz, r] = sh.c, dx = px - cx, dz = pz - cz, d = Math.hypot(dx, dz); return d <= r ? [0, px, pz] : [d - r, cx + dx / d * r, cz + dz / d * r]; }
-  const [ax, az, bx, bz, r] = sh.s, ex = bx - ax, ez = bz - az, t = clamp(((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez), 0, 1), sx = ax + ex * t, sz = az + ez * t, dx = px - sx, dz = pz - sz, d = Math.hypot(dx, dz);
+let SHAPES = [{ c: [0, 0, 12] }];
+function shapeOut(px, pz, sh, m = 0){
+  if (sh.c){ const [cx, cz] = sh.c, r = Math.max(0.3, sh.c[2] - m), dx = px - cx, dz = pz - cz, d = Math.hypot(dx, dz); return d <= r ? [0, px, pz] : [d - r, cx + dx / d * r, cz + dz / d * r]; }
+  const [ax, az, bx, bz] = sh.s, r = Math.max(0.3, sh.s[4] - m), ex = bx - ax, ez = bz - az, t = clamp(((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez), 0, 1), sx = ax + ex * t, sz = az + ez * t, dx = px - sx, dz = pz - sz, d = Math.hypot(dx, dz);
   return d <= r ? [0, px, pz] : [d - r, sx + dx / d * r, sz + dz / d * r];
 }
-function outDist(px, pz){ let m = 1e9; for (const sh of SHAPES){ const o = shapeOut(px, pz, sh)[0]; if (o < m) m = o; if (m === 0) break; } return m; }
-function storyBound(p){ let best = null; for (const sh of SHAPES){ const r = shapeOut(p.x, p.z, sh); if (r[0] === 0) return; if (!best || r[0] < best[0]) best = r; } p.x = best[1]; p.z = best[2]; }
+function outDist(px, pz, m = 0){ let best = 1e9; for (const sh of SHAPES){ const o = shapeOut(px, pz, sh, m)[0]; if (o < best) best = o; if (best === 0) break; } return best; }
+function clampShapes(p, m = 0){ let best = null; for (const sh of SHAPES){ const r = shapeOut(p.x, p.z, sh, m); if (r[0] === 0) return p; if (!best || r[0] < best[0]) best = r; } p.x = best[1]; p.z = best[2]; return p; }
+function storyBound(p){ clampShapes(p, 0.35); }
+G.camFn = (w, t) => { if (G.area !== 'story') return; const dx = w.x - t.x, dy = w.y - t.y, dz = w.z - t.z;
+  for (let k = 1; k <= 16; k++){ const f = k / 16; if (outDist(t.x + dx * f, t.z + dz * f) > 2.5){ const g = Math.max(0.3, (k - 1) / 16); w.set(t.x + dx * g, t.y + dy * g + (1 - g) * 1.2, t.z + dz * g); return; } } };
 const ADDM = (map, op = 1) => new THREE.MeshBasicMaterial({ map, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 const polarRing = (r0, r1, seg = 128) => {
   const P = [], U = [], I = [];
@@ -368,182 +367,311 @@ const polarRing = (r0, r1, seg = 128) => {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I); return g;
 };
 const meterUV = g => { const uv = g.attributes.uv, p = g.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i), p.getZ(i)); return g; };
-let altar = null, campLight = null;
-{
-  const B = new G.Builder(), K = new G.Kit(B);
-  const mats = Object.assign({}, M, {
-    moss: G.std({ map: G.T.stone, color: 0x8e9a80, roughness: 0.95, side: THREE.DoubleSide }),
-    flag: G.std({ map: G.T.cobble, color: 0xa29c8e, roughness: 0.9, side: THREE.DoubleSide }),
-    tentA: G.std({ map: G.T.plaster, color: 0xc9b48a, roughness: 0.95, side: THREE.DoubleSide }),
-    tentB: G.std({ map: G.T.plaster, color: 0x8a4a3a, roughness: 0.95, side: THREE.DoubleSide }),
-    rock: G.std({ color: 0x6f6e68, roughness: 0.95, flatShading: true, side: THREE.DoubleSide }),
-  });
-  // 바닥
-  const gg = meterUV(new THREE.PlaneGeometry(560, 560).rotateX(-Math.PI / 2));
-  const ground = new THREE.Mesh(gg, G.std({ map: G.T.grass, color: 0x74885c, roughness: 1 })); ground.receiveShadow = true; SW.add(ground);
-  const dirtT = (() => { const c = G.cnv(256), x = c.getContext('2d'); x.fillStyle = '#6a563f'; x.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 2600; i++){ const v = 70 + R() * 70; x.fillStyle = `rgba(${v + 30 | 0},${v + 10 | 0},${v - 20 | 0},${0.15 + R() * 0.3})`; const s = R() * 4 + 1; x.fillRect(R() * 256, R() * 256, s, s); }
-    for (let i = 0; i < 70; i++){ const v = 110 + R() * 60; x.fillStyle = `rgb(${v | 0},${v - 6 | 0},${v - 16 | 0})`; x.beginPath(); x.ellipse(R() * 256, R() * 256, 2 + R() * 4, 2 + R() * 3, R() * 3, 0, TAU); x.fill(); }
-    return G.tex(c, true, 1 / 3); })();
-  const dirtM = G.std({ map: dirtT, roughness: 1 });
-  // 숲길 (리본)
-  {
-    const curve = new THREE.CatmullRomCurve3([[0, 53], ...PATH, [0, -20]].map(p => new V3(p[0], 0, p[1])));
-    const N = 180, P = [], U = [], I = []; let len = 0, prev = null;
-    for (let i = 0; i <= N; i++){
-      const t = i / N, c = curve.getPointAt(t), tg = curve.getTangentAt(t), nx = tg.z, nz = -tg.x;
-      if (prev) len += c.distanceTo(prev); prev = c;
-      const w = 2.3 + Math.sin(t * 37) * 0.25 + Math.sin(t * 13) * 0.2;
-      P.push(c.x + nx * w, 0.025, c.z + nz * w, c.x - nx * w, 0.025, c.z - nz * w); U.push(-w, len, w, len);
-    }
-    for (let i = 0; i < N; i++){ const a = i * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, dirtM); m.receiveShadow = true; SW.add(m);
+const storyArea = G.addArea('story', { group: SW, col: SCOL, interact: SINT, ground: () => 0.04, bound: p => storyBound(p), mapBase: G.cnv(512), mapR: 42 });
+
+// ── 텍스처 / 재질 ──
+function noiseTex(base, specks, rep = 1 / 3, n = 2400){
+  const c = G.cnv(256), x = c.getContext('2d'); x.fillStyle = base; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < n; i++){ x.globalAlpha = 0.2 + R() * 0.5; x.fillStyle = specks[i % specks.length]; const s = R() * 5 + 1; x.beginPath(); x.ellipse(R() * 256, R() * 256, s, s * rr(0.5, 1), R() * 3, 0, TAU); x.fill(); }
+  x.globalAlpha = 1; return G.tex(c, true, rep);
+}
+const TX = {
+  dirt: noiseTex('#6a563f', ['#8a7050', '#5a4632', '#a08a68']), sand: noiseTex('#c8ac7c', ['#e0c898', '#a88c60', '#d8bc8a']),
+  mud: noiseTex('#4a3a2a', ['#5a4834', '#3a2c20', '#6a5440']), leaves: noiseTex('#a8562a', ['#d8802a', '#8a3a1a', '#e8a840', '#c04020', '#6a4a22'], 1 / 3, 4000),
+  petals: noiseTex('#7a8a5a', ['#ffc0d0', '#ff9ab8', '#fff0f4', '#e8a0c0'], 1 / 3, 3000), moss: noiseTex('#45603a', ['#5a7a44', '#3a5030', '#6a8a50']),
+  heather: noiseTex('#6a5a5a', ['#9a6a9a', '#7a5a7a', '#b08ab0', '#5a6a4a'], 1 / 3, 3200), redrock: noiseTex('#a8643e', ['#c87a4a', '#8a4a2a', '#d89a6a']),
+  darksoil: noiseTex('#33291f', ['#43362a', '#251d16', '#4a3a28']), meadow: noiseTex('#6aa04a', ['#7ab858', '#5a9040', '#8ac868', '#fff27a', '#ffffff'], 1 / 3, 3000),
+};
+const MC = {};
+const smat = (key, o) => MC[key] || (MC[key] = G.std(Object.assign({ roughness: 0.85, side: THREE.DoubleSide }, o)));
+const water = () => MC.water || (MC.water = G.std({ color: 0x3a90b8, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.82, emissive: 0x0a3040, emissiveIntensity: 0.4 }));
+const TREEMAT = G.std({ vertexColors: true, flatShading: true, roughness: 0.85, side: THREE.DoubleSide });
+
+// ── 나무 / 식물 지오메트리 (정점 색) ──
+function colored(parts){
+  const P = [], N = [], C = [], c = new THREE.Color();
+  for (const [g0, hex, m] of parts){
+    const g = (g0.index ? g0.toNonIndexed() : g0); if (m) g.applyMatrix4(m); c.set(hex);
+    const p = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < p.count; i++){ P.push(p.getX(i), p.getY(i), p.getZ(i)); N.push(n.getX(i), n.getY(i), n.getZ(i)); C.push(c.r, c.g, c.b); }
   }
-  // 도토리 공터 (꽃밭)
-  { const gl = new THREE.Mesh(meterUV(new THREE.CircleGeometry(11, 48).rotateX(-Math.PI / 2)), G.std({ map: G.T.grass, color: 0xa8c87a, roughness: 1 })); gl.position.set(-3, 0.028, 9); gl.receiveShadow = true; SW.add(gl);
-    for (let i = 0; i < 160; i++){ const a = R() * TAU, r = Math.sqrt(R()) * 10.5; K.geo(['flower', 'flowerY', 'leaf'][i % 3], new THREE.IcosahedronGeometry(rr(0.06, 0.11), 0), -3 + Math.cos(a) * r, 0.08, 9 + Math.sin(a) * r); }
-    for (const [x, z] of [[-9, 4], [2.5, 3.5], [-8.5, 14.5]]){ K.geo('woodD', new THREE.CylinderGeometry(0.55, 0.65, 0.5, 12), x, 0.25, z); K.geo('crate', new THREE.CircleGeometry(0.55, 12).rotateX(-Math.PI / 2), x, 0.51, z); SCOL.push({ t: 'c', x, z, r: 0.7 }); } }
-  const camp = new THREE.Mesh(meterUV(new THREE.CircleGeometry(9.5, 40).rotateX(-Math.PI / 2)), dirtM); camp.position.set(CAMP.x, 0.03, CAMP.z); camp.receiveShadow = true; SW.add(camp);
-  // 성소 바닥 + 테두리 + 룬 고리
-  const sf = new THREE.Mesh(meterUV(new THREE.CircleGeometry(16, 64).rotateX(-Math.PI / 2)), mats.flag); sf.position.set(SANC.x, 0.045, SANC.z); sf.receiveShadow = true; SW.add(sf);
-  K.geo('moss', G.ringBand(15.9, 16.7, 0, 0.28, 96), SANC.x, 0, SANC.z);
-  const rr1 = new THREE.Mesh(polarRing(13.4, 14.5), ADDM(G.tex(G.runeStrip(2048, 128, 36, '#7dffb0', 0, 7), true, 1, 1), 0.9)); rr1.position.set(SANC.x, 0.06, SANC.z); SW.add(rr1);
-  const rr2 = new THREE.Mesh(polarRing(5.0, 5.6, 64), ADDM(G.tex(G.runeStrip(1024, 128, 16, '#ffcf6a', 0, 3), true, 1, 1), 0.85)); rr2.position.set(SANC.x, 0.065, SANC.z); SW.add(rr2);
-  // 선돌 (룬이 새겨진)
-  const RB = new G.Builder(), runeV = ADDM(G.tex(G.runeColumn(128, 1024, 8, '#7dffb0', 3), true, 1, 1), 0.95);
-  for (let i = 0; i < 14; i++){
-    const a = i / 14 * TAU + 0.11; if (Math.abs(angDiff(a, Math.PI / 2)) < 0.3) continue;
-    const r = 17.7, x = SANC.x + Math.cos(a) * r, z = SANC.z + Math.sin(a) * r, h = rr(3.4, 5.8);
-    K.push(x, 0, z, -a + Math.PI / 2, rr(-0.06, 0.06), rr(-0.06, 0.06));
-    const g = new THREE.CylinderGeometry(0.48, 0.78, h, 4, 1); g.rotateY(Math.PI / 4);
-    K.geo(i % 3 ? 'basalt' : 'moss', g, 0, h / 2, 0);
-    RB.add('r', new THREE.PlaneGeometry(0.34, h * 0.7), K.top().clone().multiply(G.mat(0, h * 0.5, -0.47, 0, Math.PI, 0)));
-    K.pop(); SCOL.push({ t: 'c', x, z, r: 0.95 });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.computeBoundingSphere(); return g;
+}
+const TM = (x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => G.mat(x, y, z, rx, ry, rz, sx, sy, sz);
+const TG = {};
+const treeGeo = type => TG[type] || (TG[type] = (() => {
+  const trunk = (h, r0, r1, col = 0x5a3e28) => [new THREE.CylinderGeometry(r1, r0, h, 7), col, TM(0, h / 2, 0)];
+  const blob = (r, x, y, z, col, det = 1, sy = 1) => [new THREE.IcosahedronGeometry(r, det), col, TM(x, y, z, 1, sy, 1)];
+  switch (type){
+    case 'pine': return colored([trunk(2.2, 0.26, 0.17), ...[[1.9, 3.0, 2.4], [1.5, 2.7, 3.9], [1.05, 2.3, 5.3], [0.6, 1.6, 6.5]].map(([r, h, y]) => [new THREE.ConeGeometry(r, h, 8), 0x2b4a2a, TM(0, y, 0)])]);
+    case 'oak': return colored([trunk(2.6, 0.38, 0.26), blob(1.7, 0, 3.9, 0, 0x3f7a30), blob(1.2, 1.1, 3.4, 0.4, 0x4a8a38), blob(1.2, -1.0, 3.5, -0.5, 0x3a7030), blob(1.1, 0.2, 4.9, -0.2, 0x56963e)]);
+    case 'birch': return colored([trunk(4.2, 0.2, 0.13, 0xeeeae0), [new THREE.BoxGeometry(0.2, 0.06, 0.06), 0x2a2a2a, TM(0, 1.4, 0.15)], [new THREE.BoxGeometry(0.2, 0.06, 0.06), 0x2a2a2a, TM(0.05, 2.5, -0.13)], blob(1.0, 0, 4.4, 0, 0x8ac050), blob(0.8, 0.5, 3.8, 0.2, 0x9ad060), blob(0.75, -0.4, 4.0, -0.3, 0x7ab048)]);
+    case 'tint': return colored([trunk(2.4, 0.32, 0.22, 0x6a4a30), blob(1.6, 0, 3.6, 0, 0xffffff), blob(1.15, 1.0, 3.2, 0.4, 0xf0f0f0), blob(1.1, -1.0, 3.3, -0.4, 0xe8e8e8), blob(1.0, 0.1, 4.6, -0.1, 0xffffff)]);
+    case 'shroomT': return colored([[new THREE.CylinderGeometry(0.35, 0.55, 3.2, 10), 0xf4ead8, TM(0, 1.6, 0)], [new THREE.SphereGeometry(2.0, 16, 10, 0, TAU, 0, Math.PI / 2), 0xffffff, TM(0, 3.0, 0, 1, 0.65, 1)], [new THREE.CircleGeometry(2.0, 16), 0xe8dcc8, TM(0, 3.0, 0, 1, 1, 1, Math.PI / 2)],
+      ...[0, 1, 2, 3, 4, 5].map(i => [new THREE.SphereGeometry(0.26, 8, 6), 0xfff8f0, TM(Math.cos(i * 1.05) * 1.3, 3.0 + 0.8, Math.sin(i * 1.05) * 1.3, 1, 0.5, 1)])]);
+    case 'willow': return colored([trunk(2.8, 0.42, 0.3), blob(1.9, 0, 4.0, 0, 0x6a9a48, 1, 0.8), ...[0, 1, 2, 3, 4, 5, 6, 7].map(i => [new THREE.ConeGeometry(0.5, 2.6, 6), 0x7aaa52, TM(Math.cos(i * 0.785) * 1.6, 2.8, Math.sin(i * 0.785) * 1.6, 1, 1, 1, Math.PI)])]);
+    case 'bush': return colored([blob(0.9, 0, 0.6, 0, 0x3f7a30), blob(0.65, 0.6, 0.45, 0.2, 0x4a8a38), blob(0.6, -0.55, 0.45, -0.1, 0x36702c)]);
+    case 'berry': return colored([blob(0.9, 0, 0.6, 0, 0x2f6a2c), blob(0.6, 0.6, 0.45, 0.2, 0x3a7a32), ...[0, 1, 2, 3, 4, 5, 6].map(i => [new THREE.SphereGeometry(0.1, 6, 4), 0xd02a4a, TM(Math.cos(i) * 0.75, 0.6 + Math.sin(i * 2) * 0.35, Math.sin(i) * 0.75)])]);
+    case 'sunflower': return colored([[new THREE.CylinderGeometry(0.06, 0.08, 2.4, 5), 0x4a8a2a, TM(0, 1.2, 0)], [new THREE.CylinderGeometry(0.32, 0.32, 0.1, 14), 0x5a3a1a, TM(0, 2.45, 0.08, 1, 1, 1, 1.3)], [new THREE.CylinderGeometry(0.62, 0.62, 0.05, 14), 0xffcf20, TM(0, 2.45, 0.04, 1, 1, 1, 1.3)], [new THREE.SphereGeometry(0.3, 6, 4), 0x4a8a2a, TM(0.25, 1.2, 0, 1, 0.2, 0.6, 0, 0, 0.4)]]);
+    case 'reed': return colored([0, 1, 2, 3, 4].flatMap(i => [[new THREE.CylinderGeometry(0.025, 0.035, 1.8, 4), 0x6a8a3a, TM(Math.cos(i * 1.3) * 0.25, 0.9, Math.sin(i * 1.3) * 0.25)], [new THREE.CapsuleGeometry(0.06, 0.25, 2, 5), 0x6a4022, TM(Math.cos(i * 1.3) * 0.25, 1.85, Math.sin(i * 1.3) * 0.25)]]));
+    case 'bare': return colored([trunk(3.4, 0.3, 0.18, 0x4a3a2e), ...[[0.8, 2.4, 0.7], [-0.7, 2.8, -0.9], [0.4, 3.2, -0.6], [-0.3, 2.0, 1.0]].map(([a, y, b]) => [new THREE.CylinderGeometry(0.05, 0.1, 1.5, 5), 0x4a3a2e, TM(a * 0.5, y + 0.4, b * 0.5, 1, 1, 1, b, 0, -a)])]);
+    case 'bramble': return colored([blob(0.9, 0, 0.6, 0, 0x2a3a24), blob(0.7, 0.6, 0.5, 0.3, 0x34402a), ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => [new THREE.ConeGeometry(0.07, 0.5, 4), 0x5a2a3a, TM(Math.cos(i * 0.7) * 0.85, 0.6 + Math.sin(i * 1.7) * 0.4, Math.sin(i * 0.7) * 0.85, 1, 1, 1, Math.sin(i * 0.7) * 1.4, 0, -Math.cos(i * 0.7) * 1.4)])]);
+    case 'boulder': return colored([[new THREE.IcosahedronGeometry(1, 0), 0x8a8880, TM(0, 0.5, 0, 1.3, 0.85, 1.1)], [new THREE.IcosahedronGeometry(0.6, 0), 0x7a7a72, TM(0.9, 0.3, 0.4)]]);
+    case 'redrock': return colored([[new THREE.IcosahedronGeometry(1.4, 0), 0xb06a40, TM(0, 1.6, 0, 1, 1.6, 1)], [new THREE.IcosahedronGeometry(1.1, 0), 0xc87a4a, TM(0.8, 3.3, 0.2, 0.9, 1.0, 0.9)], [new THREE.IcosahedronGeometry(0.9, 0), 0x9a5a36, TM(-0.6, 0.6, 0.6)]]);
   }
-  RB.build({ r: runeV }, SW, false, false);
-  // 무너진 고대 기둥
-  for (let i = 0; i < 8; i++){
-    const a = i / 8 * TAU + 0.35; if (Math.abs(angDiff(a, Math.PI / 2)) < 0.35) continue;
-    const r = 10.6, x = SANC.x + Math.cos(a) * r, z = SANC.z + Math.sin(a) * r;
-    K.push(x, 0, z, -a);
-    K.box('moss', 1.4, 0.3, 1.4, 0, 0.15, 0);
-    if (i % 3 === 1){
-      K.geo('marble', new THREE.CylinderGeometry(0.5, 0.52, 1.0, 16), 0, 0.8, 0);
-      K.geo('marble', new THREE.CylinderGeometry(0.47, 0.5, 4.2, 16), 2.4, 0.5, 0.6, 0, 0.5, Math.PI / 2 + 0.06);
-      SCOL.push({ t: 'c', x, z, r: 0.9 });
-      const w = new V3(2.4, 0, 0.6).applyAxisAngle(new V3(0, 1, 0), -a); SCOL.push({ t: 'b', x: x + w.x, z: z + w.z, hw: 2.1, hd: 0.5, c: Math.cos(-a + 0.5), s: Math.sin(-a + 0.5) });
-    } else {
-      const h = rr(1.8, 5.4);
-      K.geo('marble', new THREE.CylinderGeometry(0.46, 0.52, h, 16), 0, 0.3 + h / 2, 0);
-      K.geo('marble', new THREE.ConeGeometry(0.47, 0.5, 7), 0.05, 0.3 + h + 0.1, 0, rr(-0.3, 0.3), 0, rr(-0.4, 0.4));
-      if (h > 4) K.box('marble', 1.5, 0.35, 1.5, 0, 0.3 + h + 0.2, 0, 0, 0.3, 0.1);
-      SCOL.push({ t: 'c', x, z, r: 0.85 });
-    }
-    for (let j = 0; j < 3; j++) K.geo('rock', new THREE.IcosahedronGeometry(rr(0.15, 0.32), 0), rr(-1.4, 1.4), 0.1, rr(-1.4, 1.4));
-    K.pop();
+})());
+function plant(list, type){
+  if (!list.length) return null;
+  const im = new THREE.InstancedMesh(treeGeo(type), TREEMAT, list.length), c = new THREE.Color();
+  list.forEach((t, i) => { im.setMatrixAt(i, G.mat(t[0], 0, t[1], 0, t[3] ?? R() * TAU, 0, t[2], t[2] * (t[5] || 1), t[2])); c.set(t[4] ?? 0xffffff); im.setColorAt(i, c); });
+  im.castShadow = true; im.receiveShadow = true; stageG.add(im); return im;
+}
+function forest(mix, opt = {}){
+  const dens = opt.dens || 1, out = {}, pts = [];
+  for (const k in mix) out[k] = [];
+  const tot = Object.values(mix).reduce((a, b) => a + b, 0);
+  for (let t = 0; t < 4200 * dens && pts.length < 460 * dens; t++){
+    const x = rr(-62, 62), z = rr(-62, 62), od = outDist(x, z);
+    if (od < (opt.gap ?? 1.6)) continue;
+    if (stageL && Math.hypot(x - stageL.entry[0], z - stageL.entry[1]) < 11) continue;
+    if (od > 8 && R() < Math.min(0.85, (od - 8) / 30)) continue;
+    let q = R() * tot, k; for (k in mix){ q -= mix[k]; if (q <= 0) break; }
+    const s = (opt.scale || 1) * rr(0.75, 1.35);
+    out[k].push([x, z, s, R() * TAU, opt.tint ? opt.tint(k) : undefined]); pts.push([x, z, s]);
   }
-  // 제단
-  K.push(SANC.x, 0, SANC.z);
-  K.geo('moss', new THREE.CylinderGeometry(3.8, 4.0, 0.45, 40), 0, 0.225, 0);
-  K.geo('marble', new THREE.CylinderGeometry(2.7, 2.9, 0.45, 40), 0, 0.675, 0);
-  K.geo('marble', G.latheG([[1.3, 0.9], [1.0, 1.1], [0.7, 1.3], [0.62, 2.0], [0.95, 2.25], [1.0, 2.4], [0, 2.4]], 32, 0.4));
-  K.geo('gold', new THREE.TorusGeometry(1.0, 0.04, 6, 40), 0, 2.4, 0, Math.PI / 2);
-  K.geo('gold', new THREE.TorusGeometry(2.8, 0.04, 6, 64), 0, 0.9, 0, Math.PI / 2);
-  K.pop();
-  SCOL.push({ t: 'c', x: SANC.x, z: SANC.z, r: 4.0 });
-  {
-    const g = new THREE.Group(); g.position.set(SANC.x, 4.3, SANC.z); SW.add(g);
+  for (const k in out) plant(out[k], k);
+  return pts;
+}
+function randIn(margin = 1.5, avoid = []){
+  for (let t = 0; t < 400; t++){
+    const sh = SHAPES[(R() * SHAPES.length) | 0]; let x, z;
+    if (sh.c){ const a = R() * TAU, r = Math.sqrt(R()) * sh.c[2]; x = sh.c[0] + Math.cos(a) * r; z = sh.c[1] + Math.sin(a) * r; }
+    else { const k = R(), a = R() * TAU, r = Math.sqrt(R()) * sh.s[4]; x = sh.s[0] + (sh.s[2] - sh.s[0]) * k + Math.cos(a) * r; z = sh.s[1] + (sh.s[3] - sh.s[1]) * k + Math.sin(a) * r; }
+    if (outDist(x, z, margin) > 0) continue;
+    if (avoid.some(([ax, az, ar]) => Math.hypot(x - ax, z - az) < ar)) continue;
+    if (stageL && Math.hypot(x - stageL.entry[0], z - stageL.entry[1]) < 4) continue;
+    return [x, z];
+  }
+  return null;
+}
+// ── 소품 ──
+let K = null, B = null;
+const col = (x, z, r) => SCOL.push({ t: 'c', x, z, r });
+const P = {
+  tent(x, z, ry, key){ K.push(x, 0, z, ry); K.geo(key, new THREE.ConeGeometry(2.2, 2.8, 6, 1, true), 0, 1.4, 0); K.geo('woodD', new THREE.CylinderGeometry(0.05, 0.05, 3.3, 5), 0, 1.65, 0); K.geo('dark', new THREE.PlaneGeometry(1.0, 1.5), 0, 0.75, 1.55, -0.3, 0, 0); K.pop(); col(x, z, 2.2); },
+  campfire(x, z){
+    for (let i = 0; i < 10; i++){ const a = i / 10 * TAU; K.geo('rock', new THREE.IcosahedronGeometry(0.24, 0), x + Math.cos(a) * 0.78, 0.12, z + Math.sin(a) * 0.78, R(), R(), R()); }
+    for (let i = 0; i < 4; i++){ const a = i / 4 * TAU + 0.4; K.geo('woodD', new THREE.CylinderGeometry(0.08, 0.09, 1.1, 6), x + Math.cos(a) * 0.28, 0.4, z + Math.sin(a) * 0.28, Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55); }
+    K.geo('ember', new THREE.CircleGeometry(0.5, 16).rotateX(-Math.PI / 2), x, 0.07, z); col(x, z, 1.05);
+    G.particles(48, [new V3(x, 0.25, z)], { parent: stageG,
+      vert: `float life = fract(uTime * (0.9 + 0.5 * fract(aSeed * 7.13)) + aSeed); vL = life; vS = aSeed; float an = aSeed * 81.0, rad = (0.32 * (1.0 - life) + 0.04) * fract(aSeed * 3.7);
+        vec3 p = position + vec3(cos(an) * rad + sin(uTime * 3.0 + aSeed * 20.0) * 0.08 * life, life * 1.5, sin(an) * rad); float sz = 0.7 * (1.0 - life * 0.65);`,
+      frag: `float a = smoothstep(0.5, 0.0, d) * (1.0 - vL) * smoothstep(0.0, 0.08, vL); vec3 c = mix(vec3(1.0, 0.85, 0.45), vec3(1.0, 0.28, 0.04), smoothstep(0.05, 0.55, vL)); gl_FragColor = vec4(c * a * 1.6, a);` });
+    const l = new THREE.PointLight(0xff8a3a, 16, 16, 1.6); l.position.set(x, 1.3, z); stageG.add(l); stageAnims.push(() => { l.intensity = 14 + Math.sin(G.time * 13) * 2.5 + Math.sin(G.time * 29) * 1.5; });
+    const g = glowSprite(0xff9a40, 4, 0.8); g.material.map = FX.glowTW; g.position.set(x, 0.9, z); stageG.add(g);
+  },
+  log(x, z, ry, len = 2, r = 0.25){ K.geo('wood', new THREE.CylinderGeometry(r, r * 1.05, len, 10), x, r, z, 0, ry, Math.PI / 2); SCOL.push({ t: 'b', x, z, hw: len / 2, hd: r + 0.05, c: Math.cos(ry), s: Math.sin(ry) }); },
+  stump(x, z, r = 0.5){ K.geo('woodD', new THREE.CylinderGeometry(r, r * 1.15, 0.5, 12), x, 0.25, z); K.geo('sack', new THREE.CircleGeometry(r, 12).rotateX(-Math.PI / 2), x, 0.51, z); col(x, z, r + 0.15); },
+  crate(x, z, s = 0.7){ K.box('crate', s, s, s, x, s / 2, z, 0, R(), 0); col(x, z, s * 0.75); },
+  lantern(x, z, c = 0xffa040){ K.geo('woodD', new THREE.CylinderGeometry(0.06, 0.08, 2.6, 6), x, 1.3, z); K.box('woodD', 0.5, 0.06, 0.06, x + 0.2, 2.55, z); K.box('lamp', 0.22, 0.3, 0.22, x + 0.42, 2.3, z); const g = glowSprite(c, 2.2, 0.7); g.material.map = FX.glowTW; g.position.set(x + 0.42, 2.3, z); stageG.add(g); col(x, z, 0.25); },
+  stoneLantern(x, z, c = 0xffd080){ K.box('stone', 0.7, 0.2, 0.7, x, 0.1, z); K.geo('stone', new THREE.CylinderGeometry(0.14, 0.18, 0.9, 6), x, 0.65, z); K.box('stone', 0.6, 0.45, 0.6, x, 1.32, z); K.geo('stone', new THREE.ConeGeometry(0.55, 0.4, 4), x, 1.75, z, 0, Math.PI / 4, 0); K.box('lamp', 0.3, 0.25, 0.62, x, 1.32, z); const g = glowSprite(c, 1.8, 0.75); g.material.map = FX.glowTW; g.position.set(x, 1.32, z); stageG.add(g); col(x, z, 0.5); },
+  fence(x0, z0, x1, z1){ const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.6)), ry = Math.atan2(x1 - x0, z1 - z0); for (let i = 0; i <= n; i++){ const t = i / n; K.box('wood', 0.12, 1.0, 0.12, x0 + (x1 - x0) * t, 0.5, z0 + (z1 - z0) * t, 0, ry, rr(-0.08, 0.08)); } for (const h of [0.4, 0.8]) K.box('wood', 0.06, 0.1, L, (x0 + x1) / 2, h, (z0 + z1) / 2, 0, ry, 0); },
+  haystack(x, z){ K.geo('hay', new THREE.CylinderGeometry(0.8, 0.9, 1.0, 12), x, 0.5, z); K.geo('hay', new THREE.ConeGeometry(0.85, 0.7, 12), x, 1.35, z); col(x, z, 0.95); },
+  skep(x, z){ K.geo('woodD', new THREE.CylinderGeometry(0.06, 0.06, 1.0, 5), x, 0.5, z); K.box('wood', 0.9, 0.06, 0.9, x, 1.0, z); K.geo('hay', G.latheG([[0, 0], [0.42, 0], [0.45, 0.25], [0.38, 0.55], [0.22, 0.75], [0, 0.82]], 14, 0.4), x, 1.03, z); K.geo('dark', new THREE.CircleGeometry(0.09, 8), x, 1.15, z + 0.43); col(x, z, 0.6); },
+  hiveBox(x, z, ry = 0){ K.push(x, 0, z, ry); for (let i = 0; i < 3; i++) K.box(i % 2 ? 'plaster2' : 'plaster', 0.9, 0.32, 0.7, 0, 0.35 + i * 0.33, 0); K.box('roof2', 1.05, 0.08, 0.85, 0, 1.38, 0); K.box('dark', 0.4, 0.05, 0.02, 0, 0.22, 0.36); K.pop(); col(x, z, 0.65); },
+  pond(x, z, r, lily = true){
+    const w = new THREE.Mesh(new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2), water()); w.position.set(x, 0.05, z); stageG.add(w);
+    for (let i = 0; i < Math.round(r * 5); i++){ const a = i / Math.round(r * 5) * TAU; K.geo('rock', new THREE.IcosahedronGeometry(rr(0.2, 0.4), 0), x + Math.cos(a) * (r + 0.1), 0.08, z + Math.sin(a) * (r + 0.1), R(), R(), R(), 1, 0.6, 1); }
+    if (lily) for (let i = 0; i < Math.round(r * 1.6); i++){ const a = R() * TAU, rd = Math.sqrt(R()) * r * 0.8; K.geo('leaf', new THREE.CircleGeometry(rr(0.25, 0.4), 10, 0.3, TAU - 0.6).rotateX(-Math.PI / 2), x + Math.cos(a) * rd, 0.07, z + Math.sin(a) * rd, 0, R() * TAU, 0); if (R() < 0.5) K.geo('flower', new THREE.IcosahedronGeometry(0.09, 0), x + Math.cos(a) * rd, 0.12, z + Math.sin(a) * rd); }
+    col(x, z, r + 0.2);
+  },
+  river(x0, z0, x1, z1, w){ const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0), g = new THREE.PlaneGeometry(w, L, 1, 20).rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, water()); m.position.set((x0 + x1) / 2, 0.05, (z0 + z1) / 2); m.rotation.y = ry; stageG.add(m);
+    for (let i = 0; i < L / 1.2; i++){ for (const sgn of [-1, 1]){ const t = i / (L / 1.2), px = x0 + (x1 - x0) * t + Math.cos(ry) * sgn * (w / 2 + 0.2), pz = z0 + (z1 - z0) * t - Math.sin(ry) * sgn * (w / 2 + 0.2); if (R() < 0.6) K.geo('rock', new THREE.IcosahedronGeometry(rr(0.18, 0.38), 0), px, 0.08, pz, R(), R(), R(), 1, 0.6, 1); } }
+    const fl = G.particles(80, [new V3((x0 + x1) / 2, 0.08, (z0 + z1) / 2)], { parent: stageG,
+      vert: `float life = fract(uTime * 0.25 + aSeed); vL = life; vec3 p = position + vec3(${(Math.sin(ry)).toFixed(3)} * (life - 0.5) * ${L.toFixed(1)} + ${Math.cos(ry).toFixed(3)} * (fract(aSeed * 7.3) - 0.5) * ${w.toFixed(1)}, 0.0, ${Math.cos(ry).toFixed(3)} * (life - 0.5) * ${L.toFixed(1)} - ${Math.sin(ry).toFixed(3)} * (fract(aSeed * 7.3) - 0.5) * ${w.toFixed(1)}); float sz = 0.18;`,
+      frag: `float a = smoothstep(0.5, 0.0, d) * 0.5 * sin(vL * 3.14); gl_FragColor = vec4(vec3(0.85, 0.95, 1.0) * a, a);` });
+  },
+  bridge(x0, z0, x1, z1, w){ const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0), n = Math.round(L / 0.35); K.push((x0 + x1) / 2, 0, (z0 + z1) / 2, ry);
+    for (let i = 0; i < n; i++){ const t = i / (n - 1) - 0.5; K.box('wood', w, 0.1, 0.3, 0, 0.25 + Math.cos(t * Math.PI) * 0.35, t * L, -Math.sin(t * Math.PI) * 0.35 * 0.6); }
+    for (const s of [-1, 1]){ for (let i = 0; i <= 4; i++){ const t = i / 4 - 0.5; K.box('woodD', 0.1, 0.9, 0.1, s * (w / 2), 0.7 + Math.cos(t * Math.PI) * 0.35, t * L); } K.box('woodD', 0.08, 0.08, L, s * (w / 2), 1.15 + 0.25, 0); }
+    K.pop(); },
+  puddle(x, z, r){ const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20).rotateX(-Math.PI / 2), smat('puddle', { color: 0x3a2e22, roughness: 0.05, metalness: 0.2 })); m.position.set(x, 0.045, z); m.scale.set(1, 1, rr(0.6, 1)); m.rotation.y = R() * 3; stageG.add(m); },
+  giantOak(x, z, s = 1){ const g = colored([[new THREE.CylinderGeometry(1.1, 1.8, 6, 10), 0x5a3e28, TM(0, 3, 0)], [new THREE.IcosahedronGeometry(4.2, 1), 0x3f7a30, TM(0, 8.5, 0, 1, 0.75, 1)], [new THREE.IcosahedronGeometry(3, 1), 0x4a8a38, TM(3, 7.2, 1, 1, 0.8, 1)], [new THREE.IcosahedronGeometry(3, 1), 0x36702c, TM(-3, 7.4, -1, 1, 0.8, 1)], ...[0, 1, 2, 3, 4].map(i => [new THREE.CylinderGeometry(0.2, 0.55, 2.6, 6), 0x5a3e28, TM(Math.cos(i * 1.26) * 1.7, 0.4, Math.sin(i * 1.26) * 1.7, 1, 1, 1, Math.sin(i * 1.26) * 1.1, 0, -Math.cos(i * 1.26) * 1.1)])]);
+    const m = new THREE.Mesh(g, TREEMAT); m.position.set(x, 0, z); m.scale.setScalar(s); m.castShadow = m.receiveShadow = true; stageG.add(m); col(x, z, 2.0 * s); },
+  menhir(x, z, h, a, glow = '#7dffb0'){ K.push(x, 0, z, -a + Math.PI / 2, rr(-0.06, 0.06), rr(-0.06, 0.06)); const g = new THREE.CylinderGeometry(0.48, 0.78, h, 4, 1); g.rotateY(Math.PI / 4); K.geo('basalt', g, 0, h / 2, 0);
+    if (glow){ const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.34, h * 0.7), ADDM(runeTex(glow), 0.95)); pl.applyMatrix4(K.top().clone().multiply(G.mat(0, h * 0.5, -0.47, 0, Math.PI, 0))); stageG.add(pl); }
+    K.pop(); col(x, z, 0.95); },
+  column(x, z, h){ K.box('moss', 1.4, 0.3, 1.4, x, 0.15, z); K.geo('marble', new THREE.CylinderGeometry(0.46, 0.52, h, 16), x, 0.3 + h / 2, z); K.geo('marble', new THREE.ConeGeometry(0.47, 0.5, 7), x + 0.05, 0.3 + h + 0.1, z, rr(-0.3, 0.3), 0, rr(-0.4, 0.4)); col(x, z, 0.85); },
+  fallenColumn(x, z, ry){ K.geo('marble', new THREE.CylinderGeometry(0.47, 0.5, 4.2, 16), x, 0.5, z, 0, ry, Math.PI / 2 + 0.06); SCOL.push({ t: 'b', x, z, hw: 2.1, hd: 0.5, c: Math.cos(ry), s: Math.sin(ry) }); },
+  rock(x, z, s){ K.geo('rock', new THREE.IcosahedronGeometry(s, 0), x, s * 0.45, z, R(), R(), R(), 1, 0.75, 1); col(x, z, s * 0.9); },
+  hedge(x0, z0, x1, z1, h = 1.6){ const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0); K.box('hedge', 1.0, h, L, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, ry, 0); for (let i = 0; i < L / 0.8; i++){ const t = i / (L / 0.8); if (R() < 0.4) K.geo(R() < 0.5 ? 'flower' : 'rose', new THREE.IcosahedronGeometry(0.1, 0), x0 + (x1 - x0) * t + rr(-0.5, 0.5), h * rr(0.3, 1.0), z0 + (z1 - z0) * t + rr(-0.1, 0.1)); } },
+  arch(x, z, ry, w = 3){ K.push(x, 0, z, ry); K.geo('woodD', new THREE.TorusGeometry(w / 2, 0.08, 6, 20, Math.PI), 0, 2.0, 0); for (const s of [-1, 1]) K.geo('woodD', new THREE.CylinderGeometry(0.08, 0.08, 2.0, 6), s * w / 2, 1.0, 0); for (let i = 0; i < 14; i++){ const a = i / 13 * Math.PI; K.geo(i % 3 ? 'flower' : 'rose', new THREE.IcosahedronGeometry(0.16, 0), Math.cos(a) * w / 2, 2.0 + Math.sin(a) * w / 2, rr(-0.1, 0.1)); K.geo('leaf', new THREE.IcosahedronGeometry(0.14, 0), Math.cos(a + 0.1) * w / 2, 2.0 + Math.sin(a + 0.1) * w / 2, 0.1); } K.pop(); },
+  honeycomb(x, z, s = 1){ K.push(x, 0, z, 0); for (let i = 0; i < 7; i++){ const a = i / 6 * TAU, r = i === 6 ? 0 : 1.6; for (let lv = 0; lv < 3 + (i === 6 ? 2 : 0); lv++) K.geo(lv % 2 ? 'honey' : 'honey2', new THREE.CylinderGeometry(0.95, 0.95, 1.6, 6), (Math.cos(a) * r) * s, (0.8 + lv * 1.62) * s, (Math.sin(a) * r) * s, 0, Math.PI / 6, 0, s, s, s); } K.pop(); col(x, z, 2.6 * s); },
+  windmill(x, z){ K.push(x, 0, z, 0); K.geo('plaster', new THREE.CylinderGeometry(1.4, 2.0, 8, 10), 0, 4, 0); K.geo('roof2', new THREE.ConeGeometry(1.8, 2.2, 10), 0, 9.1, 0); K.pop();
+    const hub = new THREE.Group(); hub.position.set(x, 7.6, z + 1.6); stageG.add(hub); for (let i = 0; i < 4; i++){ const b = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.2, 0.08), smat('sail', { color: 0xf4ecd8 })); b.position.y = 2.6; const pv = new THREE.Group(); pv.rotation.z = i * Math.PI / 2; pv.add(b); hub.add(pv); } stageAnims.push(dt => { hub.rotation.z += dt * 0.6; }); },
+  rootArch(x, z, ry, r = 4){ K.push(x, 0, z, ry); K.geo('bark', new THREE.TorusGeometry(r, 0.45, 8, 18, Math.PI), 0, 0, 0, 0, 0, 0, 1, 1.1, 1); for (let i = 0; i < 5; i++){ const a = i / 4 * Math.PI; K.geo('leaf', new THREE.ConeGeometry(0.12, 1.4, 4), Math.cos(a) * r, Math.sin(a) * r * 1.1 - 0.8, 0, Math.PI, 0, 0); } K.pop(); for (const s of [-1, 1]){ const px = x + Math.cos(ry) * s * r, pz = z - Math.sin(ry) * s * r; col(px, pz, 0.6); } },
+  pumpkin(x, z, s = 0.5){ K.geo('pumpkin', new THREE.SphereGeometry(s, 12, 8), x, s * 0.7, z, 0, R() * 3, 0, 1.15, 0.8, 1.15); K.geo('leaf', new THREE.CylinderGeometry(0.05, 0.06, 0.25, 5), x, s * 1.35, z); col(x, z, s); },
+  gate(x, z, ry){ K.push(x, 0, z, ry); for (const s of [-1, 1]) K.geo('lacquer', new THREE.CylinderGeometry(0.18, 0.2, 4, 10), s * 2.2, 2, 0); K.box('lacquer', 5.6, 0.3, 0.4, 0, 3.7, 0); K.box('dark', 6.4, 0.25, 0.5, 0, 4.1, 0, 0, 0, 0); K.box('lacquer', 4.8, 0.2, 0.3, 0, 3.1, 0); K.pop(); for (const s of [-1, 1]) col(x + Math.cos(ry) * s * 2.2, z - Math.sin(ry) * s * 2.2, 0.3); },
+  glowShroom(x, z, c){ const m = new THREE.Group(); m.position.set(x, 0, z); const st = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.35, 6), smat('gstem', { color: 0xe8e0d0 })); st.position.y = 0.17; m.add(st); const cp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 6, 0, TAU, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: c, toneMapped: false })); cp.position.y = 0.33; cp.scale.y = 0.6; m.add(cp); const g = glowSprite(c, 1.1, 0.5); g.position.y = 0.4; m.add(g); stageG.add(m); },
+  picnic(x, z){ const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.8).rotateX(-Math.PI / 2), smat('picnic', { map: checkTex(), roughness: 0.9 })); m.position.set(x, 0.06, z); m.rotation.y = 0.3; stageG.add(m); K.geo('wicker', G.latheG([[0, 0], [0.32, 0.02], [0.36, 0.3], [0, 0.3]], 12, 0.4), x + 0.5, 0.06, z); K.geo('fruitR', new THREE.SphereGeometry(0.1, 8, 6), x - 0.4, 0.15, z + 0.2); K.geo('bread', new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), x - 0.2, 0.12, z - 0.3, 0, 0.5, Math.PI / 2); },
+  altar(x, z){
+    K.push(x, 0, z); K.geo('moss', new THREE.CylinderGeometry(3.8, 4.0, 0.45, 40), 0, 0.225, 0); K.geo('marble', new THREE.CylinderGeometry(2.7, 2.9, 0.45, 40), 0, 0.675, 0);
+    K.geo('marble', G.latheG([[1.3, 0.9], [1.0, 1.1], [0.7, 1.3], [0.62, 2.0], [0.95, 2.25], [1.0, 2.4], [0, 2.4]], 32, 0.4)); K.geo('gold', new THREE.TorusGeometry(1.0, 0.04, 6, 40), 0, 2.4, 0, Math.PI / 2); K.pop(); col(x, z, 4.0);
+    const g = new THREE.Group(); g.position.set(x, 4.3, z); stageG.add(g);
     const cg = new THREE.OctahedronGeometry(1, 0); cg.scale(0.55, 1.3, 0.55);
     const crys = new THREE.Mesh(cg, G.std({ color: 0xb8ffc8, emissive: 0x30e070, emissiveIntensity: 2.4, roughness: 0.08, flatShading: true, transparent: true, opacity: 0.92 })); g.add(crys);
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: FX.glowT, color: 0x8aff9a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 })); halo.scale.set(7, 7, 1); g.add(halo);
-    const rt = G.tex(G.runeStrip(2048, 128, 24, '#9aff7a', 0, 5), true, 1, 1), rings = [];
-    for (const [r, h, tilt, spd] of [[1.9, 0.3, 0.4, 0.6], [2.5, 0.26, -0.6, -0.4]]){
-      const piv = new THREE.Group(); piv.rotation.set(tilt, 0, tilt * 0.5);
-      const bg = G.ringBand(0, r, -h / 2, h / 2, 96, { o: 1 }), uv = bg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / (TAU * r), (uv.getY(i) + h / 2) / h);
-      piv.add(new THREE.Mesh(bg, ADDM(rt, 0.95))); g.add(piv); rings.push({ piv, spd });
-    }
-    const pl = new THREE.PointLight(0x7aff9a, 16, 22, 1.6); g.add(pl);
-    altar = { g, crys, halo, rings, pl };
-  }
-  // ── 야영지 ──
-  const tent = (x, z, ry, mt) => {
-    K.push(x, 0, z, ry);
-    const tg = new THREE.ConeGeometry(2.3, 2.9, 6, 1, true); K.geo(mt, tg, 0, 1.45, 0);
-    K.geo('woodD', new THREE.CylinderGeometry(0.05, 0.05, 3.4, 5), 0, 1.7, 0);
-    K.geo('dark', new THREE.PlaneGeometry(1.0, 1.5), 0, 0.75, 1.62, -0.3, 0, 0);
-    for (let i = 0; i < 6; i++){ const a = i / 6 * TAU; K.geo('woodD', new THREE.CylinderGeometry(0.03, 0.03, 0.4, 4), Math.cos(a) * 2.5, 0.12, Math.sin(a) * 2.5, Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5); }
-    K.pop(); SCOL.push({ t: 'c', x, z, r: 2.35 });
-  };
-  tent(-6.2, 43.5, 0.5, 'tentA'); tent(6.4, 45, -0.6, 'tentB');
-  const FP = new V3(0, 0, 41.2);
-  for (let i = 0; i < 10; i++){ const a = i / 10 * TAU; K.geo('rock', new THREE.IcosahedronGeometry(0.24, 0), FP.x + Math.cos(a) * 0.78, 0.12, FP.z + Math.sin(a) * 0.78, R(), R(), R()); }
-  for (let i = 0; i < 4; i++){ const a = i / 4 * TAU + 0.4; K.geo('woodD', new THREE.CylinderGeometry(0.08, 0.09, 1.1, 6), FP.x + Math.cos(a) * 0.28, 0.4, FP.z + Math.sin(a) * 0.28, Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55); }
-  K.geo('ember', new THREE.CircleGeometry(0.5, 16).rotateX(-Math.PI / 2), FP.x, 0.07, FP.z);
-  SCOL.push({ t: 'c', x: FP.x, z: FP.z, r: 1.05 });
-  for (const [a, rot] of [[0.3, 0], [2.4, 0], [4.3, 0]]){ const x = FP.x + Math.cos(a) * 2.7, z = FP.z + Math.sin(a) * 2.7, ry = -a + Math.PI / 2; K.geo('wood', new THREE.CylinderGeometry(0.24, 0.26, 2.0, 10), x, 0.24, z, 0, ry, Math.PI / 2); SCOL.push({ t: 'b', x, z, hw: 1.0, hd: 0.3, c: Math.cos(ry), s: Math.sin(ry) }); }
-  // 무기 거치대 / 상자 / 깃대 / 등불
-  K.push(4.6, 0, 37.2, -0.5); K.box('woodD', 1.8, 0.1, 0.3, 0, 1.75, 0); K.box('woodD', 1.8, 0.1, 0.3, 0, 0.35, 0.15); for (const s2 of [-1, 1]) K.box('woodD', 0.1, 1.9, 0.1, s2 * 0.85, 0.95, 0.05);
-  for (let i = 0; i < 3; i++){ K.box('steel', 0.08, 1.1, 0.02, -0.5 + i * 0.5, 1.1, 0.1, -0.12); K.box('gold', 0.3, 0.05, 0.06, -0.5 + i * 0.5, 1.68, 0.03, -0.12); } K.pop();
-  SCOL.push({ t: 'c', x: 4.6, z: 37.2, r: 1.0 });
-  for (const [x, z] of [[-6, 35.5], [-5.2, 34.8], [-6.6, 34.6]]){ K.box('crate', 0.7, 0.7, 0.7, x, 0.35, z, 0, R(), 0); } K.box('crate', 0.55, 0.55, 0.55, -5.9, 0.98, 35.1, 0, 0.4, 0); SCOL.push({ t: 'c', x: -5.9, z: 35, r: 1.1 });
-  K.geo('woodD', new THREE.CylinderGeometry(0.07, 0.08, 6, 6), -2.5, 3, 47.5); SCOL.push({ t: 'c', x: -2.5, z: 47.5, r: 0.3 });
-  const lanterns = [[-9, 38], [9, 38], [-8.5, 47], [8.5, 46]];
-  for (const [x, z] of lanterns){ K.geo('woodD', new THREE.CylinderGeometry(0.06, 0.08, 2.6, 6), x, 1.3, z); K.box('woodD', 0.5, 0.06, 0.06, x + 0.2, 2.55, z); K.box('lamp', 0.22, 0.3, 0.22, x + 0.42, 2.3, z); const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: FX.glowTW, color: 0xffa040, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 })); gl.scale.set(2.2, 2.2, 1); gl.position.set(x + 0.42, 2.3, z); SW.add(gl); SCOL.push({ t: 'c', x, z, r: 0.25 }); }
-  // 도착 룬진
-  const ar = new THREE.Mesh(polarRing(1.6, 2.2, 64), ADDM(G.tex(G.runeStrip(1024, 128, 12, '#7ff3ff', 0, 9), true, 1, 1), 0.95)); ar.position.set(ARRIVE.x, 0.05, ARRIVE.z); SW.add(ar);
-  const ar2 = new THREE.Mesh(new THREE.RingGeometry(2.3, 2.42, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9ff6ff, toneMapped: false, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })); ar2.position.set(ARRIVE.x, 0.06, ARRIVE.z); SW.add(ar2);
-  FX.arriveRing = ar;
-  // 모닥불 불꽃 + 반딧불
-  G.particles(48, [new V3(FP.x, 0.25, FP.z)], { parent: SW,
-    vert: `float life = fract(uTime * (0.9 + 0.5 * fract(aSeed * 7.13)) + aSeed); vL = life; vS = aSeed;
-      float an = aSeed * 81.0, rad = (0.32 * (1.0 - life) + 0.04) * fract(aSeed * 3.7);
-      vec3 p = position + vec3(cos(an) * rad + sin(uTime * 3.0 + aSeed * 20.0) * 0.08 * life, life * 1.5, sin(an) * rad);
-      float sz = 0.7 * (1.0 - life * 0.65);`,
-    frag: `float a = smoothstep(0.5, 0.0, d) * (1.0 - vL) * smoothstep(0.0, 0.08, vL); vec3 c = mix(vec3(1.0, 0.85, 0.45), vec3(1.0, 0.28, 0.04), smoothstep(0.05, 0.55, vL)); gl_FragColor = vec4(c * a * 1.6, a);` });
-  const ffb = []; for (let i = 0; i < 160; i++){ const sh = SHAPES[(R() * SHAPES.length) | 0]; const p = sh.c ? new V3(sh.c[0] + rr(-1, 1) * sh.c[2] * 0.8, rr(0.4, 3), sh.c[1] + rr(-1, 1) * sh.c[2] * 0.8) : new V3(sh.s[0] + (sh.s[2] - sh.s[0]) * R() + rr(-4, 4), rr(0.4, 3), sh.s[1] + (sh.s[3] - sh.s[1]) * R() + rr(-4, 4)); ffb.push(p); }
-  G.particles(160, ffb, { parent: SW,
-    vert: `vec3 p = position + vec3(sin(uTime * 0.5 + aSeed * 50.0) * 1.5, sin(uTime * 0.8 + aSeed * 31.0) * 0.6, cos(uTime * 0.4 + aSeed * 70.0) * 1.5); vL = 0.5 + 0.5 * sin(uTime * (1.5 + fract(aSeed * 4.0) * 2.0) + aSeed * 90.0); vS = aSeed; float sz = 0.1;`,
-    frag: `float a = smoothstep(0.5, 0.0, d) * pow(vL, 2.0); gl_FragColor = vec4(vec3(0.75, 1.0, 0.45) * a * 1.6, a);` });
-  campLight = new THREE.PointLight(0xff8a3a, 18, 16, 1.6); campLight.position.set(FP.x, 1.3, FP.z); SW.add(campLight);
-  const fg = new THREE.Sprite(new THREE.SpriteMaterial({ map: FX.glowTW, color: 0xff9a40, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 })); fg.scale.set(4, 4, 1); fg.position.set(FP.x, 0.9, FP.z); SW.add(fg);
-  // 숲 (침엽수) + 바위 + 덤불
-  const pine = (() => { const parts = []; for (const [r, h, y] of [[1.9, 3.0, 2.4], [1.5, 2.7, 3.9], [1.05, 2.3, 5.3], [0.6, 1.6, 6.5]]){ const c = new THREE.ConeGeometry(r, h, 8); c.translate(0, y, 0); parts.push(c); } return G.mergeGeos(parts); })();
-  const trunk = new THREE.CylinderGeometry(0.17, 0.26, 2.2, 6); trunk.translate(0, 1.1, 0);
-  const pos = [];
-  for (let t = 0; t < 9000 && pos.length < 520; t++){
-    const x = rr(-120, 120), z = rr(-120, 140), od = outDist(x, z);
-    if (od < 2.4) continue;
-    if (od > 40 && R() < 0.55) continue;
-    pos.push([x, z, rr(0.8, 1.6) * (od < 8 ? rr(0.9, 1.15) : 1)]);
-  }
-  const pm = new THREE.InstancedMesh(pine, G.std({ color: 0x2b4528, roughness: 0.9, flatShading: true }), pos.length);
-  const tm = new THREE.InstancedMesh(trunk, G.std({ color: 0x4a3626, roughness: 0.95 }), pos.length);
-  pos.forEach((p, i) => { const s = p[2]; pm.setMatrixAt(i, G.mat(p[0], 0, p[1], 0, R() * TAU, 0, s, s * rr(0.9, 1.2), s)); tm.setMatrixAt(i, G.mat(p[0], 0, p[1], 0, 0, 0, s, s, s)); });
-  for (const im of [pm, tm]){ im.castShadow = true; im.receiveShadow = true; SW.add(im); }
-  for (let i = 0; i < 70; i++){
-    let x, z, od; do { x = rr(-60, 60); z = rr(-50, 65); od = outDist(x, z); } while (od < 0.6 || od > 8);
-    if (R() < 0.5) K.geo('rock', new THREE.IcosahedronGeometry(rr(0.3, 1.1), 0), x, 0.1, z, R(), R(), R(), 1, rr(0.5, 0.9), 1);
-    else K.geo('leaf', new THREE.IcosahedronGeometry(rr(0.4, 0.8), 1), x, 0.3, z, 0, R() * 3, 0, 1.3, 0.75, 1.3);
-  }
-  B.build(mats, SW);
+    g.add(glowSprite(0x8aff9a, 7, 0.8)); const pl = new THREE.PointLight(0x7aff9a, 14, 22, 1.6); g.add(pl);
+    stageAnims.push(dt => { crys.rotation.y += dt * 0.6; g.position.y = 4.3 + Math.sin(G.time * 1.1) * 0.2; });
+    const rr1 = new THREE.Mesh(polarRing(5.0, 5.6, 64), ADDM(G.tex(G.runeStrip(1024, 128, 16, '#ffcf6a', 0, 3), true, 1, 1), 0.85)); rr1.position.set(x, 0.065, z); stageG.add(rr1);
+  },
+  waterfall(x, z, ry, w = 6, h = 7){
+    K.push(x, 0, z, ry); for (let i = 0; i < 9; i++) K.geo('rock', new THREE.IcosahedronGeometry(rr(1.6, 2.6), 0), (i - 4) * 1.6 + rr(-0.4, 0.4), rr(1, h), -1.2 + rr(-0.5, 0.5), R(), R(), R()); K.pop();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.45, h), new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false,
+      vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform float uTime; varying vec2 vU; float h(float x){ return fract(sin(x * 91.7) * 43758.5); } void main(){ float u = vU.x * 30.0, id = floor(u); float s = 0.55 + 0.45 * fract(vU.y * 3.0 + uTime * (1.5 + h(id)) + h(id) * 5.0); float edge = smoothstep(0.0, 0.12, vU.x) * smoothstep(1.0, 0.88, vU.x); gl_FragColor = vec4(mix(vec3(0.55, 0.8, 0.95), vec3(1.0), s * 0.6), 0.85 * edge); }` }));
+    m.position.set(x, h / 2, z); m.rotation.y = ry; stageG.add(m); stageAnims.push(dt => { m.material.uniforms.uTime.value += dt; });
+    P.pond(x + Math.sin(ry) * 2.2, z + Math.cos(ry) * 2.2, 2.4, false);
+  },
+};
+let RUNETEX = {};
+const runeTex = c => RUNETEX[c] || (RUNETEX[c] = G.tex(G.runeColumn(128, 1024, 8, c, 3), true, 1, 1));
+let CHECK = null; const checkTex = () => CHECK || (CHECK = (() => { const c = G.cnv(64), x = c.getContext('2d'); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++){ x.fillStyle = (i + j) % 2 ? '#d83a3a' : '#f4ecd8'; x.fillRect(i * 8, j * 8, 8, 8); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; return t; })());
+// 떠다니는 이펙트
+function ambient(kind, n = 160, area = 26){
+  const bases = []; for (let i = 0; i < n; i++) bases.push(new V3(rr(-area, area), rr(0.2, 4), rr(-area, area)));
+  const V = {
+    pollen: [`vec3 p = position + vec3(sin(uTime * 0.4 + aSeed * 50.0) * 1.5, sin(uTime * 0.6 + aSeed * 31.0) * 0.5, cos(uTime * 0.3 + aSeed * 70.0) * 1.5); vL = 0.6 + 0.4 * sin(uTime * 2.0 + aSeed * 40.0); float sz = 0.07;`, `vec3(1.0, 0.92, 0.5)`],
+    spores: [`vec3 p = position + vec3(sin(uTime * 0.3 + aSeed * 50.0) * 2.0, fract(uTime * 0.04 + aSeed) * 5.0 - 2.0, cos(uTime * 0.25 + aSeed * 70.0) * 2.0); vL = 0.5 + 0.5 * sin(uTime * 1.5 + aSeed * 40.0); float sz = 0.12;`, `vec3(0.8, 0.55, 1.0)`],
+    teal: [`vec3 p = position + vec3(sin(uTime * 0.3 + aSeed * 50.0) * 2.0, fract(uTime * 0.04 + aSeed) * 5.0 - 2.0, cos(uTime * 0.25 + aSeed * 70.0) * 2.0); vL = 0.5 + 0.5 * sin(uTime * 1.5 + aSeed * 40.0); float sz = 0.1;`, `vec3(0.45, 1.0, 0.9)`],
+    fireflies: [`vec3 p = position + vec3(sin(uTime * 0.5 + aSeed * 50.0) * 1.5, sin(uTime * 0.8 + aSeed * 31.0) * 0.6, cos(uTime * 0.4 + aSeed * 70.0) * 1.5); vL = pow(0.5 + 0.5 * sin(uTime * (1.5 + fract(aSeed * 4.0) * 2.0) + aSeed * 90.0), 2.0); float sz = 0.12;`, `vec3(0.75, 1.0, 0.45)`],
+    petals: [`float f = fract(uTime * 0.06 + aSeed); vec3 p = vec3(position.x + sin(uTime + aSeed * 30.0) * 1.5 + f * 4.0, 9.0 - f * 9.5, position.z + cos(uTime * 0.7 + aSeed * 20.0) * 1.5); vL = 1.0 - smoothstep(0.85, 1.0, f); float sz = 0.16;`, `vec3(1.0, 0.72, 0.82)`],
+    leaves: [`float f = fract(uTime * 0.05 + aSeed); vec3 p = vec3(position.x + sin(uTime * 1.3 + aSeed * 30.0) * 1.2 + f * 3.0, 9.0 - f * 9.5, position.z + cos(uTime + aSeed * 20.0) * 1.2); vL = 1.0 - smoothstep(0.85, 1.0, f); float sz = 0.2;`, `mix(vec3(1.0, 0.45, 0.1), vec3(1.0, 0.8, 0.2), fract(vS * 7.0))`],
+    rain: [`float f = fract(uTime * 0.9 + aSeed); vec3 p = vec3(position.x, 10.0 - f * 10.5, position.z); vL = 0.6; float sz = 0.09;`, `vec3(0.7, 0.8, 0.95)`],
+    dust: [`vec3 p = position + vec3(uTime * 0.6 + sin(aSeed * 40.0) * 3.0, sin(uTime * 0.5 + aSeed * 31.0) * 0.4, cos(uTime * 0.2 + aSeed * 70.0) * 2.0); p.x = mod(p.x + 30.0, 60.0) - 30.0; vL = 0.4; float sz = 0.12;`, `vec3(0.95, 0.75, 0.55)`],
+    wisps: [`vec3 p = position + vec3(sin(uTime * 0.3 + aSeed * 50.0) * 2.5, 1.0 + sin(uTime * 0.6 + aSeed * 31.0) * 0.8, cos(uTime * 0.25 + aSeed * 70.0) * 2.5); vL = 0.6 + 0.4 * sin(uTime * 2.0 + aSeed * 40.0); float sz = 0.3;`, `vec3(0.7, 0.95, 1.0)`],
+    butter: [`vec3 p = position + vec3(sin(uTime * 0.7 + aSeed * 50.0) * 3.0, 0.5 + abs(sin(uTime * 6.0 + aSeed * 31.0)) * 0.3, cos(uTime * 0.5 + aSeed * 70.0) * 3.0); vL = 1.0; float sz = 0.2;`, `mix(vec3(1.0, 0.6, 0.9), vec3(0.6, 0.85, 1.0), fract(vS * 9.0))`],
+  }[kind];
+  G.particles(n, bases, { parent: stageG, vert: `vS = aSeed; ${V[0]}`, frag: `float a = smoothstep(0.5, 0.0, d) * vL; gl_FragColor = vec4(${V[1]} * a * 1.3, a);`, blend: kind === 'rain' || kind === 'petals' || kind === 'leaves' || kind === 'butter' ? THREE.NormalBlending : undefined });
+}
+// ── 지형 모양 ──
+const LAYOUT = {
+  circle: r => ({ shapes: [{ c: [0, 0, r] }], entry: [0, r - 2], boss: [0, -r * 0.45] }),
+  oval: (a, r) => ({ shapes: [{ s: [-a, 0, a, 0, r] }], entry: [-a - r + 2.5, 0], boss: [a * 0.7, 0] }),
+  lane: (a, r) => ({ shapes: [{ s: [-a, 0, a, 0, r] }], entry: [-a - r + 2, 0], boss: [a, 0] }),
+  path: (pts, r) => { const sh = []; for (let i = 0; i < pts.length - 1; i++) sh.push({ s: [...pts[i], ...pts[i + 1], r] }); return { shapes: sh, entry: pts[0], boss: pts[pts.length - 1] }; },
+  twin: (d, r, vert) => { const A = vert ? [0, d] : [-d, 0], Bp = vert ? [0, -d] : [d, 0]; return { shapes: [{ c: [...A, r] }, { c: [...Bp, r] }, { s: [...A, ...Bp, 3.4] }], entry: vert ? [0, d + r - 2] : [-d - r + 2, 0], boss: Bp }; },
+  islands: (d, r) => ({ shapes: [{ c: [-d, 0, r] }, { c: [d, 0, r] }, { s: [-d + r - 1, -3.5, d - r + 1, -3.5, 1.6] }, { s: [-d + r - 1, 4, d - r + 1, 4, 1.6] }], entry: [-d - r + 2, 0], boss: [d, 0] }),
+  clover: (d, r) => ({ shapes: [{ c: [0, 0, r] }, { c: [d, 0, r] }, { c: [-d, 0, r] }, { c: [0, d, r] }, { c: [0, -d, r] }], entry: [0, d + r - 2], boss: [0, -d] }),
+  cross: (a, w) => ({ shapes: [{ s: [-a, 0, a, 0, w] }, { s: [0, -a, 0, a, w] }, { c: [0, 0, w + 2] }], entry: [0, a + w - 2], boss: [0, -a] }),
+};
+// ── 분위기 ──
+const MOOD = {
+  morning: { k: 0.5, mul: [1.05, 0.97, 0.92], add: [0.02, 0.015, 0], sun: [1, 0.86, 0.72], sunI: 2.8, fog: [0.55, 0.6, 0.66], fogD: 0.009, exp: 0.95, dir: [-0.6, 0.32, 0.7] },
+  noon: { k: 0, fogD: 0.006, dir: [-0.4, 0.75, 0.3], sunI: 3.3 },
+  golden: { k: 0.6, mul: [1.2, 0.92, 0.65], add: [0.04, 0.02, 0], sun: [1, 0.76, 0.48], sunI: 3.0, fog: [0.62, 0.52, 0.42], fogD: 0.008, dir: [-0.8, 0.24, 0.5] },
+  sunset: { k: 0.85, mul: [1.35, 0.72, 0.52], add: [0.06, 0.012, 0], sun: [1, 0.56, 0.32], sunI: 2.6, hemiC: 0xffb890, fog: [0.55, 0.36, 0.3], fogD: 0.009, exp: 0.9, dir: [-0.9, 0.13, 0.3] },
+  dusk: { k: 0.7, mul: [0.62, 0.56, 0.86], add: [0.03, 0.01, 0.06], sun: [0.72, 0.62, 1], sunI: 1.4, hemi: 0.32, hemiC: 0x9a8ad0, fog: [0.2, 0.2, 0.32], fogD: 0.012, exp: 0.86, dir: [-0.7, 0.2, -0.5] },
+  mist: { k: 0.45, mul: [1, 1, 1.04], add: [0.08, 0.08, 0.09], sun: [0.92, 0.92, 0.96], sunI: 1.7, fog: [0.62, 0.66, 0.7], fogD: 0.028, exp: 0.95 },
+  purple: { k: 0.65, mul: [0.86, 0.7, 1.0], add: [0.05, 0.02, 0.08], sun: [0.9, 0.75, 1], sunI: 1.7, hemiC: 0xc8a0ff, fog: [0.36, 0.28, 0.44], fogD: 0.022, exp: 0.9 },
+  night: { k: 1, mul: [0.15, 0.18, 0.36], add: [0.004, 0.01, 0.03], sun: [0.5, 0.62, 1], sunI: 0.75, hemi: 0.28, hemiC: 0x6a8ad0, fog: [0.03, 0.05, 0.09], fogD: 0.02, exp: 0.82, dir: [0.4, 0.5, -0.6], env: 0.35 },
+  overcast: { k: 0.55, mul: [0.8, 0.82, 0.86], add: [0.06, 0.06, 0.065], sun: [0.85, 0.88, 0.92], sunI: 1.5, fog: [0.5, 0.52, 0.55], fogD: 0.014, exp: 0.95 },
+  pink: { k: 0.6, mul: [1.2, 0.85, 1.0], add: [0.05, 0.02, 0.04], sun: [1, 0.78, 0.82], sunI: 2.3, hemiC: 0xffc0d8, fog: [0.62, 0.5, 0.56], fogD: 0.01, dir: [-0.7, 0.28, 0.4] },
+  teal: { k: 0.6, mul: [0.72, 0.95, 1.0], add: [0, 0.04, 0.05], sun: [0.75, 0.95, 1], sunI: 1.6, hemiC: 0x8ad8e0, fog: [0.24, 0.4, 0.42], fogD: 0.016, exp: 0.9 },
+};
+// ── 20개 스테이지 맵 ──
+const GROUND = (tex, color) => G.std({ map: tex, color, roughness: 1 });
+const MAPS = [
+  { name: '야영지 숲', mood: 'morning', L: () => LAYOUT.circle(12), ground: () => GROUND(G.T.grass, 0x74885c), floor: () => GROUND(TX.dirt, 0xffffff),
+    build(L){ forest({ pine: 7, bush: 2, oak: 1 }); P.tent(-6, -3, 0.5, 'tentA'); P.tent(6.2, -4.5, -0.6, 'tentB'); P.campfire(0, -1.5); P.log(-2.7, 0.2, 0.3); P.log(2.7, 0.4, -0.3); P.log(0, -4.3, 1.57);
+      P.crate(-7.5, 3.5); P.crate(-6.8, 4.4, 0.55); P.stump(7.5, 3.5); for (const [x, z] of [[-10, -2], [10, -1], [-8, 7], [8, 7.5]]) P.lantern(x, z); ambient('pollen', 80); } },
+  { name: '꽃 풀밭과 연못', mood: 'noon', L: () => LAYOUT.oval(8, 9), ground: () => GROUND(TX.meadow, 0xffffff), floor: () => GROUND(G.T.grass, 0xb0d890),
+    build(){ forest({ oak: 5, bush: 3, birch: 2 }); P.pond(9, -5.5, 2.6); P.haystack(-9, -5); P.haystack(-11, 4); P.fence(-16, 8.5, -6, 9.5); P.fence(6, 9.5, 15, 8);
+      for (let i = 0; i < 160; i++){ const p = randIn(0.5); if (p) K.geo(['flower', 'flowerY', 'rose'][i % 3], new THREE.IcosahedronGeometry(rr(0.07, 0.12), 0), p[0], 0.08, p[1]); } ambient('butter', 40); ambient('pollen', 60); } },
+  { name: '거대 버섯 숲길', mood: 'teal', L: () => LAYOUT.path([[-17, 7], [-7, -2], [3, 5], [15, -4]], 4.3), ground: () => GROUND(TX.moss, 0xb0c0b0), floor: () => GROUND(TX.moss, 0xd8e8c0),
+    build(){ forest({ shroomT: 6, pine: 2, bush: 2 }, { tint: k => k === 'shroomT' ? pick([0xff6a5a, 0xffa040, 0x9a7aff, 0x5ad0c0, 0xff8ad0]) : undefined });
+      for (let i = 0; i < 40; i++){ const p = randIn(-0.5); if (p && outDist(p[0], p[1], 3) > 0) P.glowShroom(p[0], p[1], pick([0x7affd0, 0x9affff, 0xc08aff])); } ambient('teal', 160); } },
+  { name: '꿀벌 마을 꽃밭', mood: 'golden', L: () => LAYOUT.twin(9, 8), ground: () => GROUND(TX.meadow, 0xfff0c0), floor: () => GROUND(TX.sand, 0xffffff),
+    build(){ forest({ sunflower: 5, oak: 3, bush: 2 }, { gap: 0.8 }); for (const [x, z] of [[-13, -5], [-14, 3], [12, 6], [14, -3], [-6, 6.5], [6, -6.5]]) P.skep(x, z); P.hiveBox(-4, -6, 0.3); P.hiveBox(4.5, 6.5, -0.2);
+      P.fence(-16, -8, -6, -9); P.fence(6, 9, 16, 8); for (let i = 0; i < 120; i++){ const p = randIn(0.6); if (p) K.geo(['flowerY', 'flower'][i % 2], new THREE.IcosahedronGeometry(rr(0.08, 0.13), 0), p[0], 0.08, p[1]); } ambient('pollen', 140); } },
+  { name: '보라 포자 숲', mood: 'purple', L: () => LAYOUT.circle(14), ground: () => GROUND(TX.moss, 0x9a80b0), floor: () => GROUND(TX.moss, 0xc0a0d0),
+    build(){ forest({ shroomT: 8, pine: 2 }, { scale: 1.2, tint: k => k === 'shroomT' ? pick([0xb05ae0, 0x8a4ad0, 0xe07ad8, 0x6a3ab0]) : undefined });
+      for (let i = 0; i < 10; i++){ const a = i / 10 * TAU; plant([[Math.cos(a) * 11, Math.sin(a) * 11, 0.55, R() * 3, pick([0xc06aff, 0xff7ae0])]], 'shroomT'); col(Math.cos(a) * 11, Math.sin(a) * 11, 0.5); }
+      for (let i = 0; i < 30; i++){ const p = randIn(1); if (p) P.glowShroom(p[0], p[1], pick([0xd08aff, 0xff9af0])); } ambient('spores', 260); } },
+  { name: '도토리 언덕의 큰 참나무', mood: 'golden', L: () => LAYOUT.circle(13), ground: () => GROUND(G.T.grass, 0x8aa060), floor: () => GROUND(TX.dirt, 0xd8c8a0),
+    build(){ forest({ oak: 7, bush: 3 }); P.giantOak(0, 0, 1.0); for (const [x, z] of [[-8, 6], [8, -6], [-9, -5]]) P.stump(x, z, 0.6); for (let i = 0; i < 40; i++){ const p = randIn(0.5); if (p) K.geo('acorn', new THREE.SphereGeometry(0.12, 6, 5), p[0], 0.1, p[1], 0, 0, 0, 1, 1.2, 1); } ambient('pollen', 60); } },
+  { name: '진흙탕 숲길', mood: 'overcast', L: () => LAYOUT.lane(14, 6), ground: () => GROUND(G.T.grass, 0x6a7a50), floor: () => GROUND(TX.mud, 0xffffff),
+    build(){ forest({ birch: 5, berry: 3, oak: 2 }); for (let i = 0; i < 9; i++){ const p = randIn(1); if (p) P.puddle(p[0], p[1], rr(0.8, 1.8)); } P.fence(-18, 7.5, -8, 6.8); P.fence(-3, 7.2, 4, 7.6); P.fence(8, -7.4, 17, -6.8); P.log(-4, -4, 0.4, 2.6); P.log(9, 3.5, -0.2, 2.2); ambient('rain', 400, 22); } },
+  { name: '끝없는 꽃바다와 풍차', mood: 'noon', L: () => LAYOUT.oval(7, 12), ground: () => GROUND(TX.meadow, 0xffffff), floor: () => GROUND(TX.meadow, 0xe8ffd8),
+    build(){ forest({ oak: 3, bush: 4, birch: 1 }, { dens: 0.6 }); P.windmill(0, -24);
+      const fl = []; for (let i = 0; i < 900; i++){ const x = rr(-30, 30), z = rr(-30, 30); fl.push([x, z]); } const ims = {}; for (const [x, z] of fl){ const k = pick(['flower', 'flowerY', 'rose', 'flowerW']); (ims[k] = ims[k] || []).push([x, z]); }
+      const fg = new THREE.IcosahedronGeometry(0.12, 0); for (const k in ims){ const im = new THREE.InstancedMesh(fg, MC[k] || M[k] || MATS2[k], ims[k].length); ims[k].forEach(([x, z], i) => im.setMatrixAt(i, G.mat(x, 0.12, z))); stageG.add(im); } ambient('butter', 80, 20); } },
+  { name: '이끼 바위 협곡과 폭포', mood: 'mist', L: () => LAYOUT.cross(14, 4), ground: () => GROUND(TX.moss, 0x9aa890), floor: () => GROUND(G.T.stone, 0xb8c0b0),
+    build(){ forest({ boulder: 5, pine: 5 }, { gap: 0.6, scale: 1.3 }); P.waterfall(0, -22, 0, 6, 8); for (let i = 0; i < 8; i++){ const p = randIn(2, [[0, 0, 4]]); if (p) P.rock(p[0], p[1], rr(0.6, 1.1)); } ambient('teal', 80); } },
+  { name: '여왕벌의 황금 정원', mood: 'golden', L: () => LAYOUT.circle(15), ground: () => GROUND(G.T.grass, 0x8aa858), floor: () => GROUND(G.T.cobble, 0xf0e0b0),
+    build(){ forest({ oak: 4, sunflower: 4, bush: 2 }); for (let i = 0; i < 8; i++){ const a0 = i / 8 * TAU + 0.15, a1 = a0 + 0.55; P.hedge(Math.cos(a0) * 16.2, Math.sin(a0) * 16.2, Math.cos(a1) * 16.2, Math.sin(a1) * 16.2); }
+      P.honeycomb(0, -21, 1.3); for (const a of [0.8, 2.35, 3.9, 5.5]) P.arch(Math.cos(a) * 9, Math.sin(a) * 9, -a + Math.PI / 2, 2.6); for (let i = 0; i < 6; i++){ const a = i / 6 * TAU; plant([[Math.cos(a) * 12.5, Math.sin(a) * 12.5, 0.8]], 'sunflower'); } ambient('pollen', 200); } },
+  { name: '개울가 소풍', mood: 'noon', L: () => LAYOUT.islands(10, 8), ground: () => GROUND(G.T.grass, 0x86a868), floor: () => GROUND(G.T.grass, 0xc8e0a0),
+    build(){ forest({ willow: 4, oak: 3, reed: 3 }); P.river(0, -34, 0, 34, 4.6); P.bridge(-3.2, -3.5, 3.2, -3.5, 2.4); P.bridge(-3.2, 4, 3.2, 4, 2.4); for (let i = 0; i < 18; i++) plant([[rr(-3.5, -2.6) * (R() < 0.5 ? 1 : -1), rr(-14, 14), rr(0.7, 1.1)]], 'reed');
+      P.picnic(-12, 3); for (let i = 0; i < 40; i++){ const p = randIn(0.5); if (p) K.geo('flowerY', new THREE.IcosahedronGeometry(0.08, 0), p[0], 0.08, p[1]); } ambient('butter', 30); } },
+  { name: '자작나무 정령 숲', mood: 'teal', L: () => LAYOUT.clover(8.5, 6.2), ground: () => GROUND(TX.moss, 0xa8c8c0), floor: () => GROUND(TX.moss, 0xd0f0e0),
+    build(){ forest({ birch: 8, bush: 2 }, { gap: 0.8 }); for (const [x, z] of [[4.5, 4.5], [-4.5, 4.5], [4.5, -4.5], [-4.5, -4.5]]) P.stoneLantern(x, z, 0x9affea); ambient('wisps', 40, 14); ambient('teal', 80); } },
+  { name: '가시덤불 미로', mood: 'overcast', L: () => LAYOUT.path([[-16, -8], [-6, 5], [3, -6], [15, 6]], 4.6), ground: () => GROUND(TX.darksoil, 0xffffff), floor: () => GROUND(TX.dirt, 0x9a8a70),
+    build(){ forest({ bramble: 6, bare: 4 }, { gap: 0.4 }); for (let i = 0; i < 6; i++){ const p = randIn(2); if (p) P.rock(p[0], p[1], rr(0.5, 0.8)); } ambient('leaves', 80); } },
+  { name: '노을 진 선돌 들판', mood: 'sunset', L: () => LAYOUT.circle(14), ground: () => GROUND(TX.heather, 0xffffff), floor: () => GROUND(TX.heather, 0xd8c8c8),
+    build(){ forest({ pine: 5, boulder: 3, bush: 2 }); for (let i = 0; i < 8; i++){ const a = i / 8 * TAU + 0.2; P.menhir(Math.cos(a) * 8.5, Math.sin(a) * 8.5, rr(3, 5), a, '#ffb070'); } P.rock(0, 0, 1.2); ambient('dust', 60); } },
+  { name: '붉은 바위 협곡', mood: 'sunset', L: () => LAYOUT.lane(16, 7), ground: () => GROUND(TX.redrock, 0xffffff), floor: () => GROUND(TX.sand, 0xe8b890),
+    build(){ forest({ redrock: 8, bare: 2 }, { gap: 0.3, scale: 1.4 }); for (let i = 0; i < 6; i++){ const p = randIn(2.5, [[-14, 0, 4], [16, 0, 5]]); if (p) P.rock(p[0], p[1], rr(0.5, 0.9)); } ambient('dust', 160, 30); } },
+  { name: '고목의 거대한 뿌리', mood: 'dusk', L: () => LAYOUT.circle(13), ground: () => GROUND(TX.darksoil, 0xffffff), floor: () => GROUND(TX.leaves, 0x8a7a60),
+    build(){ forest({ oak: 5, pine: 3, bare: 2 }, { scale: 1.3, tint: k => k === 'oak' ? 0x2a5a24 : undefined }); for (let i = 0; i < 5; i++){ const a = i / 5 * TAU + 0.4; P.rootArch(Math.cos(a) * 7, Math.sin(a) * 7, -a, 3.2); }
+      for (let i = 0; i < 20; i++){ const p = randIn(0.5); if (p) P.glowShroom(p[0], p[1], 0xaaff7a); } ambient('fireflies', 80); } },
+  { name: '반딧불 연못의 밤', mood: 'night', L: () => LAYOUT.circle(14), ground: () => GROUND(G.T.grass, 0x3a5040), floor: () => GROUND(G.T.grass, 0x5a7058),
+    build(){ forest({ pine: 5, oak: 4, reed: 1 }); P.pond(0, 0, 5); for (let i = 0; i < 12; i++) plant([[Math.cos(i * 0.52) * 5.6, Math.sin(i * 0.52) * 5.6, 0.8]], 'reed'); for (let i = 0; i < 40; i++){ const p = randIn(0.5, [[0, 0, 6]]); if (p) P.glowShroom(p[0], p[1], pick([0x7affd0, 0xaaff7a, 0x9ad0ff])); }
+      for (const a of [0.5, 2.1, 3.7, 5.3]) P.stoneLantern(Math.cos(a) * 12, Math.sin(a) * 12, 0xffd080); ambient('fireflies', 300, 22); } },
+  { name: '단풍 숲의 수확제', mood: 'golden', L: () => LAYOUT.twin(9, 9, true), ground: () => GROUND(TX.leaves, 0xffffff), floor: () => GROUND(TX.leaves, 0xffe0c0),
+    build(){ forest({ tint: 8, bare: 1, bush: 1 }, { tint: k => k === 'tint' ? pick([0xff6a20, 0xe8401a, 0xffb020, 0xd02a1a, 0xffd040]) : undefined }); for (let i = 0; i < 14; i++){ const p = randIn(1.5); if (p) P.pumpkin(p[0], p[1], rr(0.35, 0.6)); } P.haystack(-6, 12); P.haystack(6, -12); ambient('leaves', 220); } },
+  { name: '벚꽃 신사', mood: 'pink', L: () => LAYOUT.circle(14), ground: () => GROUND(TX.petals, 0xffffff), floor: () => GROUND(G.T.cobble, 0xf0d8e0),
+    build(){ forest({ tint: 8, pine: 2 }, { tint: k => k === 'tint' ? pick([0xffb8d0, 0xff9ac0, 0xffe0ec, 0xf8a8c8]) : undefined }); P.gate(0, 12.5, 0); for (const a of [0.5, 1.5, 2.6, 3.7, 4.7, 5.7]) P.stoneLantern(Math.cos(a) * 11.5, Math.sin(a) * 11.5, 0xffc0d0); ambient('petals', 300); } },
+  { name: '천년 고목의 성소', mood: 'golden', L: () => LAYOUT.circle(17), ground: () => GROUND(G.T.grass, 0x74885c), floor: () => GROUND(G.T.cobble, 0xa29c8e),
+    build(){ forest({ pine: 4, oak: 6 }, { scale: 1.4 }); P.altar(0, 0); for (let i = 0; i < 14; i++){ const a = i / 14 * TAU + 0.11; if (Math.abs(angDiff(a, Math.PI / 2)) < 0.3) continue; P.menhir(Math.cos(a) * 18.2, Math.sin(a) * 18.2, rr(3.4, 5.8), a); }
+      for (let i = 0; i < 8; i++){ const a = i / 8 * TAU + 0.35; if (Math.abs(angDiff(a, Math.PI / 2)) < 0.35) continue; if (i % 3 === 1) P.fallenColumn(Math.cos(a) * 11, Math.sin(a) * 11, -a + 0.5); else P.column(Math.cos(a) * 10.6, Math.sin(a) * 10.6, rr(1.8, 5)); }
+      const rr1 = new THREE.Mesh(polarRing(13.4, 14.5), ADDM(G.tex(G.runeStrip(2048, 128, 36, '#7dffb0', 0, 7), true, 1, 1), 0.9)); rr1.position.y = 0.06; stageG.add(rr1); ambient('fireflies', 120); } },
+];
+// 맵 이름 순서 = 스테이지 1 ~ 20 (아래 STAGES 의 map 인덱스로 연결)
+let stageG = null, stageAnims = [], stageL = null;
+function disposeStage(){ if (!stageG) return; SW.remove(stageG); stageG.traverse(o => { if (o.geometry && !Object.values(TG).includes(o.geometry)) o.geometry.dispose(); }); stageG = null; }
+function buildStage(idx){
+  disposeStage(); stageAnims = []; SCOL.length = 0;
+  const def = MAPS[idx];
+  stageG = new THREE.Group(); SW.add(stageG);
+  stageL = def.L(); SHAPES = stageL.shapes;
+  B = new G.Builder(); K = new G.Kit(B);
+  const ground = new THREE.Mesh(meterUV(new THREE.PlaneGeometry(300, 300).rotateX(-Math.PI / 2)), def.ground()); ground.receiveShadow = true; stageG.add(ground);
+  const fm = def.floor(), fl = [];
+  SHAPES.forEach((sh, i) => { const y = 0.02 + i * 0.002;
+    if (sh.c){ const m = new THREE.Mesh(meterUV(new THREE.CircleGeometry(sh.c[2] + 0.6, 48).rotateX(-Math.PI / 2)), fm); m.position.set(sh.c[0], y, sh.c[1]); stageG.add(m); fl.push(m); }
+    else { const [ax, az, bx, bz, r] = sh.s, L0 = Math.hypot(bx - ax, bz - az), ry = Math.atan2(bx - ax, bz - az); const pl = new THREE.Mesh(new THREE.PlaneGeometry((r + 0.6) * 2, L0).rotateX(-Math.PI / 2), fm); pl.position.set((ax + bx) / 2, y, (az + bz) / 2); pl.rotation.y = ry; meterUV(pl.geometry); stageG.add(pl); fl.push(pl);
+      for (const [cx, cz] of [[ax, az], [bx, bz]]){ const m = new THREE.Mesh(meterUV(new THREE.CircleGeometry(r + 0.6, 36).rotateX(-Math.PI / 2)), fm); m.position.set(cx, y + 0.001, cz); stageG.add(m); fl.push(m); } } });
+  for (const m of fl) m.receiveShadow = true;
+  // 경계: 돌 · 덤불
+  for (let i = 0; i < 70; i++){ const x = rr(-40, 40), z = rr(-40, 40), od = outDist(x, z); if (od < 0.3 || od > 1.6) continue; if (R() < 0.5) K.geo('rock', new THREE.IcosahedronGeometry(rr(0.25, 0.6), 0), x, 0.1, z, R(), R(), R(), 1, 0.7, 1); else plant([[x, z, rr(0.5, 0.9)]], 'bush'); }
+  def.build(stageL);
+  B.build(Object.assign({}, M, MATS2), stageG);
+  G.setMood(MOOD[def.mood]);
   // 미니맵
-  const sm = G.cnv(512), x = sm.getContext('2d'), k = 256 / 70, C = 256;
-  x.fillStyle = '#16231a'; x.fillRect(0, 0, 512, 512);
-  x.fillStyle = '#21331f'; for (const p of pos){ if (Math.abs(p[0]) < 75 && Math.abs(p[1]) < 75){ x.beginPath(); x.arc(C + p[0] * k, C + p[1] * k, 3.2 * p[2], 0, TAU); x.fill(); } }
-  x.strokeStyle = '#6a563f'; x.lineCap = 'round'; x.lineJoin = 'round'; x.lineWidth = 4.6 * k; x.beginPath(); [[0, 52], ...PATH, [0, -20]].forEach((p, i) => i ? x.lineTo(C + p[0] * k, C + p[1] * k) : x.moveTo(C + p[0] * k, C + p[1] * k)); x.stroke();
-  x.fillStyle = '#6a563f'; x.beginPath(); x.arc(C + CAMP.x * k, C + CAMP.z * k, 9.5 * k, 0, TAU); x.fill();
-  x.fillStyle = '#7a9a5a'; x.beginPath(); x.arc(C - 3 * k, C + 9 * k, 11 * k, 0, TAU); x.fill();
-  x.fillStyle = '#8f8a7e'; x.beginPath(); x.arc(C + SANC.x * k, C + SANC.z * k, 16.6 * k, 0, TAU); x.fill();
-  x.strokeStyle = '#3fe6ff'; x.lineWidth = 2; x.beginPath(); x.arc(C + SANC.x * k, C + SANC.z * k, 14 * k, 0, TAU); x.stroke();
-  x.fillStyle = '#7ff3ff'; x.beginPath(); x.arc(C + SANC.x * k, C + SANC.z * k, 4 * k, 0, TAU); x.fill();
-  x.fillStyle = '#c99a5a'; for (const [tx, tz] of [[-6.2, 43.5], [6.4, 45]]){ x.beginPath(); x.arc(C + tx * k, C + tz * k, 2.3 * k, 0, TAU); x.fill(); }
-  x.fillStyle = '#ff9a40'; x.beginPath(); x.arc(C + FP.x * k, C + FP.z * k, 3, 0, TAU); x.fill();
-  x.strokeStyle = '#9ff6ff'; x.lineWidth = 2; x.beginPath(); x.arc(C + ARRIVE.x * k, C + ARRIVE.z * k, 2.3 * k, 0, TAU); x.stroke();
-  G.addArea('story', { group: SW, col: SCOL, interact: SINT, ground: () => 0.04, bound: p => (curBound || storyBound)(p), mapBase: sm, mapR: 70 });
+  const c = storyArea.mapBase, x = c.getContext('2d'), k = 256 / storyArea.mapR, C0 = 256;
+  x.fillStyle = '#1a2a18'; x.fillRect(0, 0, 512, 512); x.fillStyle = '#7a6a50';
+  for (const sh of SHAPES){ x.beginPath(); if (sh.c) x.arc(C0 + sh.c[0] * k, C0 + sh.c[1] * k, sh.c[2] * k, 0, TAU); else { x.lineCap = 'round'; x.lineWidth = sh.s[4] * 2 * k; x.strokeStyle = '#7a6a50'; x.moveTo(C0 + sh.s[0] * k, C0 + sh.s[1] * k); x.lineTo(C0 + sh.s[2] * k, C0 + sh.s[3] * k); x.stroke(); continue; } x.fill(); }
+  x.fillStyle = '#3a3a34'; for (const o of SCOL) if (o.t === 'c'){ x.beginPath(); x.arc(C0 + o.x * k, C0 + o.z * k, Math.max(2, o.r * k), 0, TAU); x.fill(); }
   G.resize();
 }
-
+const MATS2 = {
+  moss: G.std({ map: G.T.stone, color: 0x8e9a80, roughness: 0.95, side: THREE.DoubleSide }),
+  tentA: G.std({ map: G.T.plaster, color: 0xc9b48a, roughness: 0.95, side: THREE.DoubleSide }), tentB: G.std({ map: G.T.plaster, color: 0x8a4a3a, roughness: 0.95, side: THREE.DoubleSide }),
+  rock: G.std({ color: 0x7a7870, roughness: 0.95, flatShading: true, side: THREE.DoubleSide }), hedge: G.std({ color: 0x2f6a2a, roughness: 0.95, flatShading: true }),
+  rose: G.std({ color: 0xd02a4a, roughness: 0.6 }), flowerW: G.std({ color: 0xffffff, roughness: 0.6 }), honey: G.std({ color: 0xf0b030, roughness: 0.35, emissive: 0x6a3a00, emissiveIntensity: 0.3 }), honey2: G.std({ color: 0xd89020, roughness: 0.4 }),
+  bark: G.std({ map: G.T.wood, color: 0x6a4a30, roughness: 0.95, side: THREE.DoubleSide }), pumpkin: G.std({ color: 0xe8781a, roughness: 0.6 }), acorn: G.std({ color: 0x9a6a2e, roughness: 0.6 }),
+  lacquer: G.std({ color: 0xc8301e, roughness: 0.4 }),
+};
 
 // ───────────────────────── 파티클 (CPU) ─────────────────────────
 const PN = 700, pPos = new Float32Array(PN * 3), pCol = new Float32Array(PN * 3), pSz = new Float32Array(PN), pAl = new Float32Array(PN), PL = [];
@@ -854,6 +982,118 @@ function mkTreant(){
   for (let i = 0; i < 6; i++){ const a = i / 6 * TAU + 0.3, r = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 1.6, 6), bark); r.position.set(Math.cos(a) * 1.25, 0.35, Math.sin(a) * 1.25); r.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1); body.add(r); }
   return { g, body, mats: [bark, leaf, leaf2], arms, canopy, kind: 'treant' };
 }
+function mkSquirrel(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mb = sm(0xc8783a), mw = sm(0xf4e0c8);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), mb); bd.scale.set(0.85, 1, 0.9); bd.position.y = 0.38; body.add(bd);
+  const bl = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), mw); bl.position.set(0, 0.34, 0.14); bl.scale.set(0.9, 1.1, 0.6); body.add(bl);
+  const hd = new THREE.Group(); hd.position.set(0, 0.78, 0.06); body.add(hd);
+  hd.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), mb));
+  for (const s of [-1, 1]){ const e = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 6), mb); e.position.set(s * 0.13, 0.24, -0.02); hd.add(e); const ch = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), mw); ch.position.set(s * 0.1, -0.06, 0.16); hd.add(ch); }
+  face(hd, 0.04, 0.21, 0.85, 0.11);
+  const tail = new THREE.Group(); tail.position.set(0, 0.3, -0.25); body.add(tail);
+  for (let i = 0; i < 4; i++){ const t = new THREE.Mesh(new THREE.SphereGeometry(0.17 + i * 0.03, 10, 8), mb); t.position.set(0, 0.15 + i * 0.2, -0.12 - Math.sin(i * 0.8) * 0.12); tail.add(t); }
+  const nut = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), sm(0x8a5a2a)); nut.position.set(0, 0.45, 0.3); body.add(nut);
+  return { g, body, mats: [mb, mw], tail, kind: 'squirrel' };
+}
+function mkFrog(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mg = sm(0x5ac04a, { roughness: 0.35 }), mw = sm(0xe8f0a0);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 12), mg); bd.scale.set(1.1, 0.7, 1); bd.position.y = 0.34; body.add(bd);
+  const bl = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 8), mw); bl.scale.set(1.1, 0.55, 0.8); bl.position.set(0, 0.26, 0.16); body.add(bl);
+  for (const s of [-1, 1]){
+    const eb = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), mg); eb.position.set(s * 0.22, 0.62, 0.18); body.add(eb);
+    const ew = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), WHITE_M); ew.position.set(s * 0.22, 0.65, 0.27); body.add(ew);
+    const ep = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), EYE_M); ep.position.set(s * 0.22, 0.65, 0.36); body.add(ep);
+    const lg = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), mg); lg.scale.set(0.7, 0.5, 1.4); lg.position.set(s * 0.42, 0.15, -0.15); body.add(lg);
+  }
+  const mo = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.015, 6, 14, Math.PI), EYE_M); mo.position.set(0, 0.38, 0.43); mo.rotation.z = Math.PI; body.add(mo);
+  const tongue = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.5), sm(0xff7a9a)); tongue.position.set(0, 0.36, 0.4); tongue.scale.set(1, 1, 0.01); body.add(tongue);
+  return { g, body, mats: [mg, mw], tongue, kind: 'frog' };
+}
+function mkLadybug(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mr = sm(0xe02a2a, { roughness: 0.3 }), mk = sm(0x1a1a1a);
+  const sh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 10, 0, TAU, 0, Math.PI / 2), mr); sh.scale.set(1, 0.8, 1.15); sh.position.y = 0.12; body.add(sh);
+  const ln = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.7), mk); ln.position.set(0, 0.39, 0); body.add(ln);
+  for (let i = 0; i < 6; i++){ const a = i / 6 * TAU + 0.4, d = new THREE.Mesh(new THREE.CircleGeometry(0.06, 10), mk); d.position.set(Math.cos(a) * 0.2, 0.33, Math.sin(a) * 0.24); d.lookAt(d.position.x * 3, 2, d.position.z * 3); body.add(d); }
+  const hd = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), mk); hd.position.set(0, 0.17, 0.36); body.add(hd);
+  face(body, 0.22, 0.48, 0.55, 0.12, false);
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++){ const l = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.18, 4), mk); l.position.set(s * 0.32, 0.06, -0.15 + i * 0.15); l.rotation.z = s * 1.0; body.add(l); }
+  return { g, body, mats: [mr], kind: 'ladybug' };
+}
+function mkSnail(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const ms = sm(0xe8c8a0, { roughness: 0.3 }), mh = sm(0xb06a3a), mh2 = sm(0xe8a050);
+  const ft = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.8, 6, 12).rotateX(Math.PI / 2), ms); ft.scale.set(1.1, 0.7, 1); ft.position.set(0, 0.16, 0.05); body.add(ft);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), ms); head.position.set(0, 0.36, 0.52); body.add(head);
+  for (const s of [-1, 1]){ const st = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.32, 5), ms); st.position.set(s * 0.09, 0.62, 0.55); st.rotation.z = -s * 0.25; body.add(st); const e = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), WHITE_M); e.position.set(s * 0.13, 0.79, 0.56); body.add(e); const p = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), EYE_M); p.position.set(s * 0.13, 0.8, 0.61); body.add(p); }
+  const shell = new THREE.Group(); shell.position.set(0, 0.62, -0.15); body.add(shell);
+  for (let i = 0; i < 5; i++){ const t = new THREE.Mesh(new THREE.TorusGeometry(0.42 - i * 0.08, 0.1 - i * 0.012, 8, 20), i % 2 ? mh2 : mh); t.rotation.y = Math.PI / 2; t.position.x = (i - 2) * 0.04; shell.add(t); }
+  shell.add(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), mh));
+  return { g, body, mats: [ms, mh, mh2], shell, kind: 'snail' };
+}
+function mkFlower(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mst = sm(0x4a9a3a), mp = sm(0xff7ab0, { roughness: 0.5 }), mc = sm(0xffd84a);
+  const st = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.9, 6), mst); st.position.y = 0.45; body.add(st);
+  for (const s of [-1, 1]){ const lf = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), mst); lf.scale.set(1, 0.15, 0.5); lf.position.set(s * 0.22, 0.35, 0); lf.rotation.z = s * 0.4; body.add(lf); }
+  const head = new THREE.Group(); head.position.set(0, 1.05, 0); body.add(head);
+  for (let i = 0; i < 8; i++){ const a = i / 8 * TAU, p = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 6), mp); p.scale.set(0.55, 0.18, 1); p.position.set(Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0); p.rotation.set(Math.PI / 2, 0, a + Math.PI / 2); p.rotation.order = 'ZXY'; head.add(p); }
+  const ctr = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), mc); ctr.scale.z = 0.5; head.add(ctr);
+  face(head, 0.02, 0.1, 0.8, 0.09);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.22, 0.3, 10), sm(0x8a5a3a)); pot.position.y = 0.15; body.add(pot);
+  return { g, body, mats: [mp, mc], head, kind: 'flower' };
+}
+function mkRaccoon(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mg = sm(0x8a8a90), md = sm(0x2a2a30), mw = sm(0xf0f0f0);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 10), mg); bd.scale.set(0.9, 1, 1); bd.position.y = 0.48; body.add(bd);
+  const hd = new THREE.Group(); hd.position.set(0, 0.95, 0.05); body.add(hd);
+  hd.add(new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), mg));
+  const mask = new THREE.Mesh(new THREE.SphereGeometry(0.275, 14, 6, 0, TAU, Math.PI * 0.38, Math.PI * 0.18), md); mask.rotation.x = 0.15; hd.add(mask);
+  const sn = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mw); sn.position.set(0, -0.09, 0.22); hd.add(sn);
+  const ns = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), EYE_M); ns.position.set(0, -0.06, 0.32); hd.add(ns);
+  for (const s of [-1, 1]){ const e = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.16, 5), mg); e.position.set(s * 0.17, 0.24, 0); hd.add(e); const ey = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), WHITE_M); ey.position.set(s * 0.1, 0.03, 0.235); hd.add(ey); const p = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), EYE_M); p.position.set(s * 0.1, 0.03, 0.27); hd.add(p); }
+  const tail = new THREE.Group(); tail.position.set(0, 0.35, -0.3); body.add(tail);
+  for (let i = 0; i < 5; i++){ const t = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), i % 2 ? md : mg); t.position.set(0, i * 0.08, -i * 0.14); tail.add(t); }
+  const arms = [];
+  for (const s of [-1, 1]){ const pv = new THREE.Group(); pv.position.set(s * 0.3, 0.62, 0.05); const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.2, 4, 6), md); a.position.y = -0.14; pv.add(a); body.add(pv); arms.push(pv); }
+  return { g, body, mats: [mg], arms, tail, kind: 'raccoon' };
+}
+function mkMole(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mb = sm(0x6a4a3a), mp = sm(0xffa0b0), mc = sm(0xf0e0d0);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), mb); bd.scale.set(1, 0.95, 1.05); bd.position.y = 0.42; body.add(bd);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), mp); nose.position.set(0, 0.45, 0.43); body.add(nose);
+  for (const s of [-1, 1]){ const e = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), EYE_M); e.position.set(s * 0.12, 0.6, 0.36); body.add(e);
+    const cl = new THREE.Group(); cl.position.set(s * 0.36, 0.32, 0.25); body.add(cl); for (let i = 0; i < 3; i++){ const c = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 4), mc); c.position.set((i - 1) * 0.06, -0.05, 0.08); c.rotation.x = 1.2; cl.add(c); } const pw = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), mp); pw.scale.set(1, 0.6, 1); cl.add(pw); }
+  const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 10), sm(0xffc030)); hat.position.y = 0.86; body.add(hat); const hl = glowSprite(0xfff0a0, 0.4, 0.8); hl.position.set(0, 0.88, 0.2); body.add(hl);
+  return { g, body, mats: [mb, mp], kind: 'mole' };
+}
+function mkOwl(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const mb = sm(0x8a6a4a), mw = sm(0xf0e4d0), my = sm(0xffd040);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), mb); bd.scale.set(1, 1.1, 0.9); body.add(bd);
+  const bl = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), mw); bl.position.set(0, -0.05, 0.16); bl.scale.set(1, 1.1, 0.6); body.add(bl);
+  for (const s of [-1, 1]){ const ring = new THREE.Mesh(new THREE.CircleGeometry(0.13, 14), mw); ring.position.set(s * 0.14, 0.15, 0.36); body.add(ring); const ey = new THREE.Mesh(new THREE.CircleGeometry(0.08, 12), my); ey.position.set(s * 0.14, 0.15, 0.365); body.add(ey); const p = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), EYE_M); p.position.set(s * 0.14, 0.15, 0.37); body.add(p);
+    const tf = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 4), mb); tf.position.set(s * 0.2, 0.46, 0.05); tf.rotation.z = -s * 0.3; body.add(tf); }
+  const bk = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.1, 4).rotateX(Math.PI / 2 + 0.5), sm(0xe8a030)); bk.position.set(0, 0.05, 0.4); body.add(bk);
+  const wings = [];
+  for (const s of [-1, 1]){ const pv = new THREE.Group(); pv.position.set(s * 0.33, 0.1, 0); const w = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 6), mb); w.scale.set(0.9, 0.18, 0.55); w.position.x = s * 0.25; pv.add(w); body.add(pv); wings.push(pv); }
+  return { g, body, mats: [mb, mw], wings, kind: 'owl' };
+}
+function mkHedgehog(){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const ms = sm(0x6a5040, { flatShading: true }), mf = sm(0xe8c8a0);
+  const core = new THREE.Group(); core.position.y = 0.4; body.add(core);
+  const bd = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 10), ms); core.add(bd);
+  for (let i = 0; i < 26; i++){ const u = R() * TAU, v = rr(-0.2, 1.2), dir = new V3(Math.cos(u) * Math.cos(v), Math.sin(v), Math.sin(u) * Math.cos(v) - 0.25).normalize(); if (dir.z > 0.6 && dir.y < 0.4) continue; const c = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.32, 4), ms); c.position.copy(dir.clone().multiplyScalar(0.4)); c.quaternion.setFromUnitVectors(new V3(0, 1, 0), dir); core.add(c); }
+  const fc = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), mf); fc.position.set(0, -0.06, 0.28); fc.scale.set(1, 0.9, 1.1); core.add(fc);
+  const ns = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 4), EYE_M); ns.position.set(0, -0.06, 0.5); core.add(ns);
+  face(core, 0.02, 0.4, 0.6, 0.1);
+  return { g, body, mats: [ms, mf], core, kind: 'hedgehog' };
+}
 const MON = {
   slime: { name: '말랑 슬라임', icon: '🟢', mk: () => mkSlime(), hp: 30, dmg: 6, spd: 2.8, rad: 0.5, style: 'hop', range: 2.4, wind: 0.45, exp: 6, top: 1.0 },
   shroom: { name: '버섯돌이', icon: '🍄', mk: () => mkShroom(), hp: 46, dmg: 8, spd: 2.3, rad: 0.5, style: 'lunge', range: 1.7, wind: 0.5, exp: 8, top: 1.1 },
@@ -861,6 +1101,15 @@ const MON = {
   boar: { name: '꿀꿀 멧돼지', icon: '🐗', mk: () => mkBoar(), hp: 70, dmg: 11, spd: 2.6, rad: 0.7, style: 'charge', range: 8, wind: 0.8, exp: 12, top: 1.4 },
   sprout: { name: '도토리 묘목', icon: '🌱', mk: () => mkSprout(), hp: 36, dmg: 7, spd: 2.0, rad: 0.45, style: 'ranged', range: 9, wind: 0.6, exp: 9, top: 1.2 },
   golem: { name: '이끼 골렘', icon: '🪨', mk: () => mkGolem(), hp: 150, dmg: 15, spd: 1.5, rad: 0.85, style: 'slam', range: 2.3, wind: 0.9, exp: 20, top: 2.0 },
+  squirrel: { name: '날쌘 다람쥐', icon: '🐿️', mk: () => mkSquirrel(), hp: 28, dmg: 6, spd: 3.6, rad: 0.4, style: 'shooter', range: 9, wind: 0.45, exp: 8, top: 1.3 },
+  frog: { name: '폴짝 개구리', icon: '🐸', mk: () => mkFrog(), hp: 40, dmg: 8, spd: 3.0, rad: 0.5, style: 'hop', tongue: true, range: 4, wind: 0.5, exp: 9, top: 1.0 },
+  ladybug: { name: '꼬마 무당벌레', icon: '🐞', mk: () => mkLadybug(), hp: 20, dmg: 5, spd: 3.2, rad: 0.4, style: 'charge', clen: 6, cw: 0.9, cspd: 10, range: 6, wind: 0.55, exp: 5, top: 0.8 },
+  snail: { name: '단단 달팽이', icon: '🐌', mk: () => mkSnail(), hp: 120, dmg: 10, spd: 1.0, rad: 0.6, style: 'lunge', range: 1.9, wind: 0.75, exp: 14, top: 1.3 },
+  flower: { name: '꽃잎 정령', icon: '🌸', mk: () => mkFlower(), hp: 44, dmg: 7, spd: 0, rad: 0.5, style: 'turret', range: 13, wind: 0.8, exp: 10, top: 1.6 },
+  raccoon: { name: '장난꾸러기 너구리', icon: '🦝', mk: () => mkRaccoon(), hp: 55, dmg: 8, spd: 3.4, rad: 0.5, style: 'lunge', combo: 2, range: 1.9, wind: 0.35, exp: 11, top: 1.4 },
+  mole: { name: '광부 두더지', icon: '⛏️', mk: () => mkMole(), hp: 50, dmg: 10, spd: 4.5, rad: 0.5, style: 'burrow', range: 1.4, wind: 0.8, exp: 11, top: 1.1 },
+  owl: { name: '밤눈 부엉이', icon: '🦉', mk: () => mkOwl(), hp: 40, dmg: 9, spd: 3.5, rad: 0.5, style: 'dive', fly: 3, range: 10, wind: 0.8, exp: 11, top: 3.6 },
+  hedgehog: { name: '데굴 고슴도치', icon: '🦔', mk: () => mkHedgehog(), hp: 60, dmg: 10, spd: 2.4, rad: 0.55, style: 'charge', roll: true, clen: 8, cw: 1.2, cspd: 12, range: 7, wind: 0.7, exp: 11, top: 1.0 },
 };
 const BOSS = {
   kingSlime: { name: '말랑대왕', title: '왕슬라임', icon: '👑', scale: 2.8, hp: 200, dmg: 9, spd: 1.8, rad: 1.3, exp: 60, top: 3.0,
@@ -897,14 +1146,14 @@ function spawnMon(key, x, z){
   ENEMIES.push(e); return e;
 }
 function hitEnemy(e, dmg, dx, dz, kb, crit){
-  if (e.state === 'dying' || e.state === 'spawn' || e.state === 'intro') return false;
+  if (e.state === 'dying' || e.state === 'spawn' || e.state === 'intro' || e.under) return false;
   e.hp -= dmg; e.flash = 1;
   const tp = e.pos.clone(); tp.y = e.boss ? e.cfg.top : e.cfg.top + 0.3;
   dmgNum(tp, Math.round(dmg) + (crit ? '!' : ''), crit ? 'crit' : '');
   burst(new V3(e.pos.x, (e.boss ? e.cfg.top * 0.45 : 0.6) + (e.boss ? 0 : e.fly), e.pos.z), crit ? 0xffe08a : 0xffffff, crit ? 14 : 8, 4, 0.16, 0.4, -6, 1);
   const k = e.boss ? 0.05 : e.key === 'golem' ? 0.3 : 1;
   e.vel.x += dx * kb * k; e.vel.z += dz * kb * k;
-  if (!e.boss && e.key !== 'golem' && !['charge', 'dash', 'leap'].includes(e.state)){ e.state = 'stagger'; e.st = 0; e.hop = null; }
+  if (!e.boss && e.key !== 'golem' && e.key !== 'snail' && !['charge', 'dash', 'leap', 'dive'].includes(e.state)){ e.state = 'stagger'; e.st = 0; e.hop = null; rmTele(e); }
   if (e.hp <= 0) killEnemy(e);
   return true;
 }
@@ -942,8 +1191,9 @@ function throwArc(from, to, T, dmg, r, big){
   const mesh = mkAcorn(); if (big) mesh.scale.setScalar(1.8); mesh.position.copy(from); SW.add(mesh);
   const o = { kind: 'arc', mesh, from: from.clone(), to: to.clone(), t: 0, T, dmg, r }; o.tele = telegraph(to.x, to.z, r); PROJ.push(o);
 }
+function mkPetal(){ const g = new THREE.Group(); const p = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), sm(0xff8ac0, { emissive: 0xff4a90, emissiveIntensity: 0.6 })); p.scale.set(1, 0.3, 0.6); g.add(p); g.add(glowSprite(0xff9ad0, 0.7, 0.7)); return g; }
 function shootLine(x, y, z, ang, speed, dmg, life, kind){
-  const mesh = kind === 'acorn' ? mkAcorn() : mkSting(); if (kind === 'acorn') mesh.scale.setScalar(1.6);
+  const mesh = kind === 'acorn' || kind === 'nut' ? mkAcorn() : kind === 'petal' ? mkPetal() : mkSting(); if (kind === 'acorn') mesh.scale.setScalar(1.6);
   mesh.position.set(x, y, z); mesh.rotation.y = ang; SW.add(mesh);
   PROJ.push({ kind: 'line', mesh, vx: Math.sin(ang) * speed, vz: Math.cos(ang) * speed, t: 0, life, dmg });
 }
@@ -1000,6 +1250,28 @@ function animMon(e, dt, moving){
     b.rotation.z = moving ? Math.sin(t * 4) * 0.08 : 0;
     const up = e.state === 'wind' ? Math.min(1, e.st / e.cfg.wind) : 0;
     for (const [i, a] of m.arms.entries()) a.rotation.x = -2.4 * up + (moving ? Math.sin(t * 4 + i * Math.PI) * 0.3 : 0);
+  } else if (m.kind === 'squirrel'){
+    b.position.y = moving ? Math.abs(Math.sin(t * 12)) * 0.15 : 0; m.tail.rotation.x = Math.sin(t * 3) * 0.2 - (e.state === 'wind' ? 0.4 : 0);
+  } else if (m.kind === 'frog'){
+    sy = 1 + Math.sin(t * 3) * 0.04; if (e.state === 'wind'){ sy = 0.8; sx = sz = 1.12; } if (e.hop || e.state === 'leap'){ sy = 1.2; sx = sz = 0.9; }
+    e.tongueT = Math.max(0, (e.tongueT || 0) - dt); m.tongue.scale.z = e.tongueT > 0 ? Math.sin(e.tongueT / 0.35 * Math.PI) * 4.2 : 0.01;
+  } else if (m.kind === 'ladybug'){
+    b.position.y = moving ? Math.abs(Math.sin(t * 18)) * 0.04 : 0; b.rotation.x = e.state === 'wind' ? -0.25 : 0;
+  } else if (m.kind === 'snail'){
+    sz = 1 + (moving ? Math.sin(t * 3) * 0.08 : 0); m.shell.rotation.z = Math.sin(t * 1.5) * 0.08; b.rotation.x = e.state === 'wind' ? -0.2 : e.state === 'lunge' ? 0.25 : 0;
+  } else if (m.kind === 'flower'){
+    m.head.rotation.z = Math.sin(t * 1.5) * 0.2; if (e.state === 'wind'){ const k = Math.min(1, e.st / e.cfg.wind); m.head.scale.setScalar(1 + k * 0.3); } else m.head.scale.setScalar(1);
+  } else if (m.kind === 'raccoon'){
+    m.tail.rotation.y = Math.sin(t * 6) * 0.4; b.position.y = moving ? Math.abs(Math.sin(t * 12)) * 0.06 : 0;
+    const sw = e.state === 'lunge' ? -2.2 : e.state === 'wind' ? -0.5 : Math.sin(t * 12) * (moving ? 0.5 : 0.1); m.arms[0].rotation.x = sw; m.arms[1].rotation.x = e.state === 'lunge' ? -1.6 : -sw;
+  } else if (m.kind === 'mole'){
+    const target = e.under && e.state !== 'surface' ? -0.75 : 0; b.position.y += (target - b.position.y) * Math.min(1, dt * 10); b.rotation.z = moving && !e.under ? Math.sin(t * 10) * 0.1 : 0;
+  } else if (m.kind === 'owl'){
+    for (const [i, w] of m.wings.entries()) w.rotation.z = (i ? -1 : 1) * Math.sin(t * (e.state === 'dive' ? 8 : 14)) * 0.6;
+    b.rotation.x = e.state === 'dive' ? 0.6 : e.state === 'wind' ? -0.35 : 0;
+  } else if (m.kind === 'hedgehog'){
+    const rolling = e.state === 'charge'; m.core.rotation.x = rolling ? m.core.rotation.x + dt * 18 : m.core.rotation.x * Math.max(0, 1 - dt * 8);
+    b.position.y = moving && !rolling ? Math.abs(Math.sin(t * 10)) * 0.05 : 0; if (e.state === 'wind'){ const k = Math.min(1, e.st / e.cfg.wind); sx = sz = 1 - k * 0.15; sy = 1 - k * 0.15; }
   } else if (m.kind === 'treant'){
     m.canopy.rotation.z = Math.sin(t * 0.8) * 0.05; b.rotation.z = Math.sin(t * 0.7) * 0.03;
     let ar = Math.sin(t * 1.2) * 0.1;
@@ -1016,7 +1288,20 @@ function updateMon(e, dt, d, dx, dz, face){
   const c = e.cfg; let moving = false;
   if (e.state === 'chase'){
     e.atkCd -= dt;
-    if (c.style === 'ranged'){
+    if (c.style === 'turret'){
+      turn(e, face, dt * 3);
+      if (e.atkCd <= 0 && d < c.range && !dead){ e.state = 'wind'; e.st = 0; }
+    } else if (c.style === 'burrow'){
+      e.under = true; turn(e, face, dt * 8);
+      if (d > 0.6){ e.pos.x += dx / d * c.spd * dt; e.pos.z += dz / d * c.spd * dt; moving = true; }
+      if (R() < dt * 14) burst(new V3(e.pos.x, 0.1, e.pos.z), 0x8a6a40, 2, 1.5, 0.22, 0.5, -6, 1.5);
+      if (d < 1.4 && e.atkCd <= 0 && !dead){ e.state = 'wind'; e.st = 0; e.tx = player.pos.x; e.tz = player.pos.z; e.tele = telegraph(e.tx, e.tz, 1.4); }
+    } else if (c.style === 'dive'){
+      turn(e, face, dt * 4);
+      const want = d < 5 ? -1 : d > 8 ? 1 : 0;
+      if (want){ e.pos.x += dx / d * c.spd * want * dt; e.pos.z += dz / d * c.spd * want * dt; moving = true; }
+      if (e.atkCd <= 0 && d < c.range && !dead){ e.state = 'wind'; e.st = 0; e.dir = face; e.tele = teleRect(e.pos.x, e.pos.z, 1.2, 11, face); }
+    } else if (c.style === 'ranged' || c.style === 'shooter'){
       turn(e, face, dt * 6);
       const want = d < 5 ? -1 : d > 7.5 ? 1 : 0;
       if (want){ e.pos.x += dx / d * c.spd * want * dt; e.pos.z += dz / d * c.spd * want * dt; moving = true; }
@@ -1024,20 +1309,26 @@ function updateMon(e, dt, d, dx, dz, face){
     } else if (c.style === 'hop'){
       if (e.hop){ e.hop.t += dt; const k = Math.min(1, e.hop.t / e.hop.T); e.pos.x = e.hop.fx + (e.hop.tx - e.hop.fx) * k; e.pos.z = e.hop.fz + (e.hop.tz - e.hop.fz) * k; e.pos.y = Math.sin(k * Math.PI) * 0.6; if (k >= 1){ e.hop = null; e.pos.y = 0; e.hopT = rr(0.25, 0.6); } }
       else { e.hopT -= dt; turn(e, face, dt * 8);
-        if (d < c.range && e.atkCd <= 0 && !dead){ e.state = 'wind'; e.st = 0; }
+        if (d < c.range && e.atkCd <= 0 && !dead){ e.state = 'wind'; e.st = 0; if (c.tongue){ e.dir = face; e.tele = teleRect(e.pos.x, e.pos.z, 0.8, 4.2, face); } }
         else if (e.hopT <= 0 && d > 1.2){ const s = Math.min(d - 1.0, 1.7); e.hop = { t: 0, T: 0.42, fx: e.pos.x, fz: e.pos.z, tx: e.pos.x + dx / d * s, tz: e.pos.z + dz / d * s }; } }
     } else {
       turn(e, face, dt * 6);
       if (d > c.range * 0.8){ const sp = c.spd; e.pos.x += dx / d * sp * dt; e.pos.z += dz / d * sp * dt; moving = true; }
-      if (d < c.range && e.atkCd <= 0 && !dead){ e.state = 'wind'; e.st = 0; if (c.style === 'charge'){ e.dir = face; e.tele = teleRect(e.pos.x, e.pos.z, 1.4, 9, face); } }
+      if (d < c.range && e.atkCd <= 0 && !dead){ e.state = 'wind'; e.st = 0; e.cn = e.cn || 0; if (c.style === 'charge'){ e.dir = face; e.tele = teleRect(e.pos.x, e.pos.z, c.cw || 1.4, c.clen || 9, face); } }
     }
   } else if (e.state === 'wind'){
     const k = Math.min(1, e.st / c.wind);
-    if (c.style === 'charge'){ if (k < 0.65){ turn(e, face, dt * 4); e.dir = e.g.rotation.y; } e.tele.position.set(e.pos.x, 0.09, e.pos.z); e.tele.rotation.y = e.dir; teleUpd(e.tele, k, dt); }
+    if (c.style === 'charge' || c.style === 'dive' || c.tongue){ if (k < 0.65){ turn(e, face, dt * 4); e.dir = e.g.rotation.y; } if (e.tele){ e.tele.position.set(e.pos.x, 0.09, e.pos.z); e.tele.rotation.y = e.dir; teleUpd(e.tele, k, dt); } }
+    else if (c.style === 'burrow'){ teleUpd(e.tele, k, dt); e.pos.x += (e.tx - e.pos.x) * Math.min(1, dt * 6); e.pos.z += (e.tz - e.pos.z) * Math.min(1, dt * 6); if (R() < dt * 20) burst(new V3(e.tx + rr(-0.8, 0.8), 0.1, e.tz + rr(-0.8, 0.8)), 0x8a6a40, 2, 2, 0.2, 0.5, -6, 2); }
     else turn(e, face, dt * 3);
     if (e.st >= c.wind){
       e.st = 0; e.hitDone = false;
-      if (c.style === 'hop'){ e.state = 'leap'; const s = Math.min(d, 3); e.L = { fx: e.pos.x, fz: e.pos.z, tx: e.pos.x + dx / (d || 1) * s, tz: e.pos.z + dz / (d || 1) * s }; }
+      if (c.tongue){ e.state = 'recover'; rmTele(e); e.tongueT = 0.35; sfx('throw'); const lx = player.pos.x - e.pos.x, lz = player.pos.z - e.pos.z, along = lx * Math.sin(e.dir) + lz * Math.cos(e.dir), side = Math.abs(lx * Math.cos(e.dir) - lz * Math.sin(e.dir)); if (along > 0 && along < 4.4 && side < 0.75) hurtPlayer(e.dmg, e.pos, 4); }
+      else if (c.style === 'burrow'){ e.state = 'surface'; rmTele(e); e.under = false; e.pos.x = e.tx; e.pos.z = e.tz; sfx('boing'); burst(new V3(e.tx, 0.3, e.tz), 0x8a6a40, 20, 4, 0.3, 0.7, -8, 3); G.shake = Math.max(G.shake, 0.35); if (Math.hypot(player.pos.x - e.tx, player.pos.z - e.tz) < 1.5) hurtPlayer(e.dmg, e.pos, 6); }
+      else if (c.style === 'dive'){ e.state = 'dive'; rmTele(e); sfx('buzz'); }
+      else if (c.style === 'turret'){ e.state = 'recover'; sfx('throw'); for (let i = 0; i < 5; i++){ const a = e.g.rotation.y + (i - 2) * 0.3; shootLine(e.pos.x, 1.05, e.pos.z, a, 7.5, e.dmg, 2.4, 'petal'); } }
+      else if (c.style === 'shooter'){ e.state = 'recover'; sfx('throw'); shootLine(e.pos.x, 0.8, e.pos.z, face, 13, e.dmg, 1.4, 'nut'); }
+      else if (c.style === 'hop'){ e.state = 'leap'; const s = Math.min(d, 3); e.L = { fx: e.pos.x, fz: e.pos.z, tx: e.pos.x + dx / (d || 1) * s, tz: e.pos.z + dz / (d || 1) * s }; }
       else if (c.style === 'lunge'){ e.state = 'lunge'; e.dir = e.g.rotation.y; }
       else if (c.style === 'dash'){ e.state = 'dash'; e.dir = e.g.rotation.y; sfx('buzz'); }
       else if (c.style === 'charge'){ e.state = 'charge'; rmTele(e); sfx('stomp'); }
@@ -1047,12 +1338,14 @@ function updateMon(e, dt, d, dx, dz, face){
   } else if (e.state === 'leap'){
     const k = Math.min(1, e.st / 0.5); e.pos.x = e.L.fx + (e.L.tx - e.L.fx) * k; e.pos.z = e.L.fz + (e.L.tz - e.L.fz) * k; e.pos.y = Math.sin(k * Math.PI) * 1.3;
     if (k >= 1){ e.pos.y = 0; e.state = 'recover'; e.st = 0; burst(new V3(e.pos.x, 0.2, e.pos.z), 0x8aff7a, 10, 2.5, 0.2, 0.5, -6, 1); if (Math.hypot(player.pos.x - e.pos.x, player.pos.z - e.pos.z) < 1.35) hurtPlayer(e.dmg, e.pos, 5); }
-  } else if (e.state === 'lunge' || e.state === 'dash' || e.state === 'charge'){
-    const sp = e.state === 'lunge' ? 7 : e.state === 'dash' ? 13 : 12, T = e.state === 'lunge' ? 0.28 : e.state === 'dash' ? 0.42 : 0.8;
+  } else if (e.state === 'surface'){
+    if (e.st > 1.7){ e.state = 'chase'; e.atkCd = rr(0.8, 1.6); }
+  } else if (e.state === 'lunge' || e.state === 'dash' || e.state === 'charge' || e.state === 'dive'){
+    const sp = e.state === 'lunge' ? (c.spd < 1.5 ? 5 : 7) : e.state === 'dash' ? 13 : e.state === 'dive' ? 14 : (c.cspd || 12), T = e.state === 'lunge' ? 0.28 : e.state === 'dash' ? 0.42 : e.state === 'dive' ? 0.75 : (c.clen || 9.6) / (c.cspd || 12);
     e.pos.x += Math.sin(e.dir) * sp * dt; e.pos.z += Math.cos(e.dir) * sp * dt; moving = true; contact(e);
-    if (e.st >= T){ e.state = 'recover'; e.st = 0; }
+    if (e.st >= T){ if (e.state === 'lunge' && c.combo && (e.cn = (e.cn || 0) + 1) < c.combo){ e.state = 'wind'; e.st = c.wind * 0.5; e.hitDone = false; } else { e.cn = 0; e.state = 'recover'; e.st = 0; } }
   } else if (e.state === 'recover'){
-    if (e.st > (c.style === 'charge' ? 0.9 : 0.6)){ e.state = 'chase'; e.atkCd = rr(0.9, 2.0); }
+    if (e.st > (c.style === 'charge' ? 0.9 : c.style === 'turret' ? 1.2 : 0.6)){ e.state = 'chase'; e.atkCd = rr(0.9, 2.0) * (c.style === 'turret' ? 1.4 : 1); }
   } else if (e.state === 'stagger'){
     if (e.st > 0.3){ e.state = 'chase'; e.atkCd = Math.max(e.atkCd, 0.4); rmTele(e); }
   }
@@ -1066,7 +1359,7 @@ function startAtk(e){
   const pick = opts.find(a => a[0] === 'summon') || opts[(R() * opts.length) | 0];
   e.lastAtk = pick; e.atk = { type: pick[0], a: pick, t: 0, phase: 0, n: 0 };
 }
-function arenaClamp(p, m = 1){ if (!battle) return p; const ar = battle.ar, dx = p.x - ar.c.x, dz = p.z - ar.c.z, d = Math.hypot(dx, dz), R0 = ar.r - m; if (d > R0){ p.x = ar.c.x + dx / d * R0; p.z = ar.c.z + dz / d * R0; } return p; }
+function arenaClamp(p, m = 1){ return clampShapes(p, m); }
 function updateBoss(e, dt, d, dx, dz, face){
   const c = e.cfg; let moving = false;
   const A = e.atk;
@@ -1166,19 +1459,19 @@ function updateEnemies(dt){
     e.pos.x += e.vel.x * dt; e.pos.z += e.vel.z * dt; e.vel.multiplyScalar(Math.exp(-7 * dt));
     if (e.state !== 'spawn'){ G.collide(e.pos, e.cfg.rad * 0.9); arenaClamp(e.pos, e.cfg.rad * 0.6); }
     const hov = e.fly ? e.fly + Math.sin(G.time * 2 + e.ph) * 0.12 : 0;
-    if (e.fly) e.pos.y = hov + (e.boss && e.atk && e.atk.type === 'charge' && e.atk.phase === 1 ? -1.2 : 0);
+    if (e.fly) e.pos.y = hov + (e.boss && e.atk && e.atk.type === 'charge' && e.atk.phase === 1 ? -1.2 : 0) - (e.state === 'dive' ? Math.sin(Math.min(1, e.st / 0.75) * Math.PI) * 2.3 : 0);
   }
   for (let i = 0; i < alive.length; i++){
     const a = alive[i];
     for (let j = i + 1; j < alive.length; j++){ const b = alive[j], dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz), m = a.cfg.rad + b.cfg.rad; if (d < m && d > 1e-4){ const k = (m - d) / 2 / d; if (!a.boss){ a.pos.x -= dx * k; a.pos.z -= dz * k; } if (!b.boss){ b.pos.x += dx * k; b.pos.z += dz * k; } } }
-    if (a.fly && !a.boss) continue;
+    if ((a.fly && !a.boss) || a.under) continue;
     const dx = player.pos.x - a.pos.x, dz = player.pos.z - a.pos.z, d = Math.hypot(dx, dz), m = a.cfg.rad + 0.36;
     if (d < m && d > 1e-4 && !roll){ player.pos.x = a.pos.x + dx / d * m; player.pos.z = a.pos.z + dz / d * m; }
   }
   G.mapEnemies = alive.map(e => ({ x: e.pos.x, z: e.pos.z, big: e.boss }));
   for (const e of alive){
     if (e.boss){ bossEl.querySelector('i').style.width = (e.hp / e.max * 100) + '%'; bossEl.querySelector('s').style.width = (e.hp / e.max * 100) + '%'; continue; }
-    if (e.hp >= e.max){ e.bar.style.display = 'none'; continue; }
+    if (e.hp >= e.max || e.under){ e.bar.style.display = 'none'; continue; }
     const hp = e.pos.clone(); hp.y = e.cfg.top + 0.15 + (e.fly ? e.pos.y - e.fly : 0);
     const s = toScreen(hp); if (!s.vis){ e.bar.style.display = 'none'; continue; }
     e.bar.style.display = 'block'; e.bar.style.left = s.x + 'px'; e.bar.style.top = s.y + 'px'; e.bar.firstChild.style.width = (e.hp / e.max * 100) + '%';
@@ -1380,32 +1673,27 @@ const DIFF = {
   m: { n: '미디엄', hp: 1.9, bhp: 1.8, dmg: 1.55, rew: 1.8, rec: 1.55 },
   h: { n: '하드', hp: 3.2, bhp: 3.0, dmg: 2.2, rew: 3, rec: 2.3 },
 };
-const ARENAS = {
-  A: { c: new V3(0, 0, 40), r: 11.3, entry: new V3(0.5, 0.04, 46.6), name: '숲 입구 야영지' },
-  B: { c: new V3(-3, 0, 9), r: 10.8, entry: new V3(1.5, 0.04, 17.6), name: '도토리 공터' },
-  C: { c: new V3(0, 0, -22), r: 16, entry: new V3(0, 0.04, -8.2), name: '고목의 성소' },
-};
 const STAGES = [
-  { name: '숲의 입구', ar: 'A', desc: '엘드라에게 검을 받고 말랑한 슬라임들로 몸을 풀자. 끝에는 커다란 왕슬라임이 기다린다.', waves: [[['slime', 3]]], boss: 'kingSlime', tut: true },
-  { name: '말랑말랑 풀밭', ar: 'A', desc: '풀밭 여기저기서 슬라임이 통통 튀어 오른다.', waves: [[['slime', 4]], [['slime', 6]]] },
-  { name: '버섯 오솔길', ar: 'A', desc: '비 온 뒤 쑥쑥 자란 버섯돌이들이 길을 막는다.', waves: [[['slime', 3], ['shroom', 2]], [['shroom', 4]]] },
-  { name: '꿀벌 소동', ar: 'A', desc: '야영지 꿀단지를 노리는 꿀벌들! 직선으로 돌진하니 옆으로 피하자.', waves: [[['bee', 3]], [['bee', 3], ['slime', 3]]] },
-  { name: '포자 가득한 공터', ar: 'A', desc: '버섯 대장 「포자왕」이 자기 왕국을 선포했다.', waves: [[['shroom', 5]]], boss: 'chief' },
-  { name: '도토리 언덕', ar: 'B', desc: '묘목 정령들이 도토리를 던진다. 떨어지는 곳의 붉은 원을 피하자.', waves: [[['sprout', 3], ['slime', 3]], [['shroom', 3], ['sprout', 2]]] },
-  { name: '멧돼지 발자국', ar: 'B', desc: '꿀꿀 멧돼지는 붉은 길을 따라 똑바로 돌진한다.', waves: [[['boar', 2], ['slime', 3]], [['boar', 3]]] },
-  { name: '윙윙 꽃밭', ar: 'B', desc: '꽃가루를 잔뜩 묻힌 꿀벌 떼가 몰려온다.', waves: [[['bee', 5]], [['bee', 3], ['sprout', 3]]] },
-  { name: '이끼 바위길', ar: 'B', desc: '느릿느릿, 하지만 묵직한 이끼 골렘이 깨어났다.', waves: [[['golem', 1], ['shroom', 4]], [['golem', 2], ['slime', 4]]] },
-  { name: '여왕벌의 정원', ar: 'B', desc: '꿀단지 여왕이 정원을 지키고 있다. 날아다니며 침을 쏜다!', waves: [[['bee', 6]]], boss: 'queen' },
-  { name: '개울가 소풍', ar: 'B', desc: '시원한 개울가에도 장난꾸러기들이 가득.', waves: [[['slime', 5], ['boar', 2]], [['sprout', 4], ['bee', 3]]] },
-  { name: '작은 정령들', ar: 'B', desc: '숲의 정령들이 한꺼번에 시험을 걸어온다.', waves: [[['sprout', 5]], [['sprout', 3], ['golem', 1], ['shroom', 3]]] },
-  { name: '들쭉날쭉 숲길', ar: 'B', desc: '돌진, 돌진, 또 돌진! 정신 바짝 차리자.', waves: [[['boar', 4]], [['bee', 4], ['boar', 2]], [['golem', 2]]] },
-  { name: '선돌의 그늘', ar: 'C', desc: '오래된 선돌 사이로 숲의 주민들이 모여든다.', waves: [[['shroom', 5], ['sprout', 3]], [['golem', 2], ['bee', 4]]] },
-  { name: '엄니왕의 돌진', ar: 'C', desc: '숲에서 가장 힘센 멧돼지, 「쿵쾅 엄니왕」. 세 번 연속 돌진을 조심!', waves: [[['boar', 5]]], boss: 'tusk' },
-  { name: '고목의 뿌리', ar: 'C', desc: '땅속 뿌리가 꿈틀댄다. 성소 깊은 곳이 가까워졌다.', waves: [[['sprout', 6]], [['golem', 2], ['boar', 2], ['slime', 4]]] },
-  { name: '반딧불 성소', ar: 'C', desc: '반딧불이 춤추는 성소. 하지만 방심은 금물.', waves: [[['bee', 6], ['shroom', 3]], [['golem', 3]]] },
-  { name: '숲의 시련', ar: 'C', desc: '숲이 마지막 시험을 준비했다. 세 번의 습격을 버텨라.', waves: [[['slime', 6], ['boar', 2]], [['sprout', 4], ['bee', 4]], [['golem', 2], ['shroom', 4]]] },
-  { name: '고요한 숲의 전야', ar: 'C', desc: '고목이 깨어나기 직전, 숲 전체가 술렁인다.', waves: [[['boar', 4], ['bee', 4]], [['golem', 3], ['sprout', 3]], [['shroom', 6], ['boar', 3]]] },
-  { name: '천년 고목', ar: 'C', desc: '성소의 주인, 천년 고목 「그루터기 할배」가 깨어났다. 뿌리와 도토리 폭격을 피하며 맞서라!', waves: [[['sprout', 4], ['golem', 1]]], boss: 'treant' },
+  { name: '숲의 입구', desc: '엘드라에게 검을 받고 말랑한 슬라임들로 몸을 풀자. 끝에는 커다란 왕슬라임이 기다린다.', waves: [[['slime', 3]]], boss: 'kingSlime', tut: true },
+  { name: '말랑말랑 풀밭', desc: '연못가 꽃밭에 슬라임과 무당벌레가 몰려왔다. 무당벌레는 붉은 길로 돌진!', waves: [[['slime', 4]], [['slime', 3], ['ladybug', 3]]] },
+  { name: '버섯 오솔길', desc: '거대 버섯 숲길. 껍질이 단단한 달팽이는 휘청이지 않으니 조심.', waves: [[['shroom', 3], ['slime', 2]], [['shroom', 3], ['snail', 1]]] },
+  { name: '꿀벌 소동', desc: '꿀벌 마을 꽃밭. 꽃잎 정령은 움직이지 않지만 꽃잎을 부채꼴로 흩뿌린다.', waves: [[['bee', 3]], [['bee', 3], ['flower', 2]]] },
+  { name: '포자 가득한 공터', desc: '버섯 대장 「포자왕」이 자기 왕국을 선포했다.', waves: [[['shroom', 4], ['snail', 1]]], boss: 'chief' },
+  { name: '도토리 언덕', desc: '도토리 언덕의 큰 참나무. 다람쥐는 멀리서 도토리를 똑바로 쏜다.', waves: [[['sprout', 3], ['squirrel', 2]], [['squirrel', 3], ['slime', 3]]] },
+  { name: '멧돼지 발자국', desc: '진흙탕 숲길. 고슴도치는 몸을 말아 데굴데굴 굴러온다.', waves: [[['boar', 2], ['ladybug', 3]], [['boar', 2], ['hedgehog', 2]]] },
+  { name: '윙윙 꽃밭', desc: '끝없는 꽃바다와 풍차. 꽃가루를 잔뜩 묻힌 녀석들이 몰려온다.', waves: [[['bee', 4], ['flower', 2]], [['ladybug', 4], ['bee', 3]]] },
+  { name: '이끼 바위길', desc: '이끼 바위 협곡. 땅이 들썩이면 두더지가 튀어나온다!', waves: [[['golem', 1], ['mole', 2]], [['golem', 1], ['snail', 2], ['mole', 1]]] },
+  { name: '여왕벌의 정원', desc: '꿀단지 여왕이 황금 정원을 지키고 있다. 날아다니며 침을 쏜다!', waves: [[['bee', 5], ['flower', 2]]], boss: 'queen' },
+  { name: '개울가 소풍', desc: '개울가 소풍 자리에 개구리가 혀를 쭉 내민다.', waves: [[['frog', 4]], [['frog', 3], ['raccoon', 2]]] },
+  { name: '작은 정령들', desc: '자작나무 정령 숲. 부엉이는 하늘에서 직선으로 내리꽂힌다.', waves: [[['sprout', 4], ['owl', 1]], [['owl', 2], ['flower', 3], ['squirrel', 2]]] },
+  { name: '들쭉날쭉 숲길', desc: '가시덤불 미로. 돌진, 돌진, 또 돌진!', waves: [[['hedgehog', 3], ['raccoon', 2]], [['boar', 2], ['mole', 2]], [['golem', 2], ['ladybug', 3]]] },
+  { name: '선돌의 그늘', desc: '노을 진 선돌 들판에 숲의 주민들이 모여든다.', waves: [[['snail', 2], ['shroom', 4]], [['owl', 2], ['golem', 1], ['squirrel', 3]]] },
+  { name: '엄니왕의 돌진', desc: '붉은 바위 협곡의 지배자 「쿵쾅 엄니왕」. 세 번 연속 돌진을 조심!', waves: [[['boar', 3], ['hedgehog', 2]]], boss: 'tusk' },
+  { name: '고목의 뿌리', desc: '거대한 뿌리 사이로 땅속 친구들이 꿈틀댄다.', waves: [[['mole', 3], ['sprout', 3]], [['golem', 2], ['raccoon', 3], ['frog', 2]]] },
+  { name: '반딧불 성소', desc: '반딧불 연못의 밤. 어둠 속 부엉이를 조심하자.', waves: [[['owl', 3], ['bee', 3]], [['flower', 4], ['snail', 2], ['ladybug', 4]]] },
+  { name: '숲의 시련', desc: '단풍 숲의 수확제. 숲이 세 번의 습격을 준비했다.', waves: [[['slime', 5], ['frog', 3]], [['raccoon', 3], ['squirrel', 3], ['owl', 2]], [['golem', 2], ['hedgehog', 3]]] },
+  { name: '고요한 숲의 전야', desc: '벚꽃 신사. 고목이 깨어나기 직전, 숲 전체가 술렁인다.', waves: [[['boar', 3], ['mole', 3], ['owl', 2]], [['golem', 3], ['flower', 3]], [['raccoon', 4], ['hedgehog', 3], ['frog', 2]]] },
+  { name: '천년 고목', desc: '천년 고목의 성소. 「그루터기 할배」가 깨어났다. 뿌리와 도토리 폭격을 피하며 맞서라!', waves: [[['sprout', 4], ['golem', 1], ['flower', 2]]], boss: 'treant' },
 ];
 const fmt = n => Math.round(n).toLocaleString();
 const recPower = (n, d) => Math.round((330 + (n - 1) * 55) * DIFF[d].rec / 10) * 10;
@@ -1416,26 +1704,45 @@ const chapterPct = d => { let s = 0; for (let n = 1; n <= 20; n++) s += stars(n,
 const rewardOf = (n, d) => { const b = STAGES[n - 1].boss ? 2 : 1, r = DIFF[d].rew; return { exp: Math.round((30 + n * 12) * b * r), gold: Math.round((80 + n * 25) * b * r) }; };
 const parTime = st => 35 + st.waves.length * 25 + (st.boss ? 70 : 0);
 
-let battle = null, curBound = null;
-function arenaBound(ar){ return p => { const dx = p.x - ar.c.x, dz = p.z - ar.c.z, d = Math.hypot(dx, dz), R0 = ar.r - 0.4; if (d > R0){ p.x = ar.c.x + dx / d * R0; p.z = ar.c.z + dz / d * R0; } }; }
-function spawnPoint(ar){
-  const pa = Math.atan2(player.pos.z - ar.c.z, player.pos.x - ar.c.x);
-  for (let k = 0; k < 20; k++){ const a = R() * TAU; if (Math.abs(angDiff(a, pa)) < 1.1 && k < 15) continue; const r = ar.r - rr(1.2, 2.5); const p = new V3(ar.c.x + Math.cos(a) * r, 0, ar.c.z + Math.sin(a) * r); G.collide(p, 0.6); return p; }
-  return ar.c.clone();
+let battle = null;
+function spawnPoint(){
+  let best = null, bd = -1;
+  for (let k = 0; k < 40; k++){ const sh = pick(SHAPES); let x, z;
+    if (sh.c){ const a = R() * TAU, r = Math.sqrt(R()) * (sh.c[2] - 1.5); x = sh.c[0] + Math.cos(a) * r; z = sh.c[1] + Math.sin(a) * r; }
+    else { const t = R(), [ax, az, bx, bz, w] = sh.s; x = ax + (bx - ax) * t + rr(-1, 1) * (w - 1.2); z = az + (bz - az) * t + rr(-1, 1) * (w - 1.2); }
+    if (outDist(x, z, 1.2) > 0) continue;
+    const p = new V3(x, 0, z); G.collide(p, 0.6); const d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d > 6 && d < 22) return p; if (d > bd){ bd = d; best = p; } }
+  return best || new V3(stageL.boss[0], 0, stageL.boss[1]);
+}
+// 귀환 룬진 · 엘드라 (스테이지마다 재배치)
+const retRing = new THREE.Group(); SW.add(retRing);
+{ const ar = new THREE.Mesh(polarRing(1.6, 2.2, 64), ADDM(G.tex(G.runeStrip(1024, 128, 12, '#7ff3ff', 0, 9), true, 1, 1), 0.95)); ar.position.y = 0.06; retRing.add(ar); retRing.userData.ring = ar;
+  const ar2 = new THREE.Mesh(new THREE.RingGeometry(2.3, 2.42, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9ff6ff, toneMapped: false, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })); ar2.position.y = 0.07; retRing.add(ar2); }
+const RET_IT = { x: 0, z: 0, r: 2.4, title: '귀환의 룬진 · 광장으로', action: () => askReturn() };
+const KEEP_IT = { x: 0, z: 0, r: 2.6, title: '룬 지기 엘드라', action: async () => { if (battle && !battle.ended) return; await say([['k', '숲의 친구들이 또 장난을 칠지도 모르겠구나. 월드맵에서 가고 싶은 곳을 골라 보거라.']]); openMap('road'); } };
+function placeStage(n){
+  buildStage(n - 1);
+  const [ex, ez] = stageL.entry, [bx, bz] = stageL.boss, a = Math.atan2(bx - ex, bz - ez);
+  retRing.position.set(ex, 0, ez); RET_IT.x = ex; RET_IT.z = ez;
+  SINT.length = 0; SINT.push(RET_IT);
+  keeper.root.visible = n === 1;
+  if (n === 1){ const kx = ex + Math.cos(a) * 3.6 + Math.sin(a) * 2.2, kz = ez - Math.sin(a) * 3.6 + Math.cos(a) * 2.2; const kp = clampShapes(new V3(kx, 0.04, kz), 1); keeper.root.position.set(kp.x, 0.04, kp.z); keeperCol.x = kp.x; keeperCol.z = kp.z; SCOL.push(keeperCol); KEEP_IT.x = kp.x; KEEP_IT.z = kp.z; SINT.push(KEEP_IT); }
+  return a;
 }
 async function startStage(n, d){
   if (tpBusy) return;
   closeMap(); resEl.classList.remove('on');
-  const st = STAGES[n - 1], ar = ARENAS[st.ar];
-  await teleport(`1-${n} ${st.name}`, `${DIFF[d].n} · STAGE 1-${n}`, () => {
+  const st = STAGES[n - 1];
+  await teleport(`1-${n} ${st.name}`, `${DIFF[d].n} · ${MAPS[n - 1].name}`, () => {
     enterForest(); cleanupBattle();
-    player.pos.copy(ar.entry); player.vy = 0;
-    const fx = ar.c.x - ar.entry.x, fz = ar.c.z - ar.entry.z; player.fig.root.rotation.y = Math.atan2(fx, fz); G.setCam(Math.atan2(-fx, -fz), 0.32, 8);
+    const a = placeStage(n);
+    player.pos.set(stageL.entry[0], 0.04, stageL.entry[1]); player.vy = 0;
+    player.fig.root.rotation.y = a; G.setCam(a + Math.PI, 0.32, 8);
     const dd = D(); hp = dd.maxHp; mp = dd.maxMp; refreshHud();
     const sm = 1 + (n - 1) * 0.11;
-    battle = { n, d, st, ar, wi: -1, t: 0, q: [], kills: 0, ended: false, boss: null, waitNext: false,
+    battle = { n, d, st, wi: -1, t: 0, q: [], kills: 0, ended: false, boss: null, waitNext: false,
       mul: { hp: sm * DIFF[d].hp, bhp: DIFF[d].bhp, dmg: (1 + (n - 1) * 0.07) * DIFF[d].dmg, exp: (1 + (n - 1) * 0.08) * DIFF[d].rew } };
-    curBound = arenaBound(ar);
     setObj(`1-${n} ${st.name}`, `${DIFF[d].n} · 준비`, null);
     bReturn.textContent = '⟲ 포기';
   });
@@ -1469,9 +1776,9 @@ function nextWave(){
   } else if (st.boss && !battle.boss) bossIntro();
 }
 async function bossIntro(){
-  const c = BOSS[battle.st.boss], ar = battle.ar;
-  let dx = ar.c.x - player.pos.x, dz = ar.c.z - player.pos.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-  const off = battle.st.ar === 'C' ? 8.5 : ar.r * 0.45, p = new V3(ar.c.x + dx * off, 0, ar.c.z + dz * off);
+  const c = BOSS[battle.st.boss];
+  const p = clampShapes(new V3(stageL.boss[0], 0, stageL.boss[1]), c.rad + 0.5);
+  let dx = p.x - player.pos.x, dz = p.z - player.pos.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
   battle.waitNext = true;
   const e = spawnMon(battle.st.boss, p.x, p.z); e.state = 'intro'; battle.boss = e;
   e.g.rotation.y = Math.atan2(player.pos.x - p.x, player.pos.z - p.z);
@@ -1490,7 +1797,7 @@ async function bossIntro(){
 function updateBattle(dt, alive){
   if (!battle || battle.ended) return;
   battle.t += dt;
-  for (const q of battle.q){ if (!q.done && battle.t >= q.t){ q.done = true; const p = spawnPoint(battle.ar); spawnMon(q.type, p.x, p.z); } }
+  for (const q of battle.q){ if (!q.done && battle.t >= q.t){ q.done = true; const p = spawnPoint(); spawnMon(q.type, p.x, p.z); } }
   const pend = battle.q.filter(q => !q.done).length, left = pend + alive.length;
   const st = battle.st;
   objEl.querySelector('.p').textContent = battle.boss ? `보스전 · ${DIFF[battle.d].n}` : `${DIFF[battle.d].n} · 웨이브 ${Math.max(1, battle.wi + 1)} / ${st.waves.length} · 남은 몬스터 ${left}`;
@@ -1511,7 +1818,7 @@ function win(){
   if (first && n === 5 && d === 'e' && !S.rune){ S.rune = true; extra += ' · <em>룬 마법 습득!</em>'; }
   save(); gainExp(rw.exp);
   sfx('level'); burst(new V3(player.pos.x, 0.5, player.pos.z), 0xffe08a, 60, 4, 0.3, 1.4, 3, 4);
-  bossEl.classList.remove('on'); curBound = null; bReturn.textContent = '⟲ 광장으로';
+  bossEl.classList.remove('on'); bReturn.textContent = '⟲ 광장으로';
   setObj(`1-${n} ${st.name}`, '스테이지 클리어!', null);
   const chapterClear = first && n === 20 && d === 'e';
   later(1.6, () => showResult(true, { star, hpPct, fast, rw, gold, first, extra, chapterClear }));
@@ -1557,7 +1864,7 @@ function cleanupBattle(){
   for (const r of ROOTS){ rmTele(r); if (r.sp) SW.remove(r.sp); } ROOTS.length = 0;
   for (const o of XPO){ SW.remove(o.s); gainExp(o.val); } XPO.length = 0;
   TIMERS.length = 0; G.camOverride = null; atk = roll = cast = null; knock.set(0, 0, 0);
-  battle = null; curBound = null; bossEl.classList.remove('on'); G.mapEnemies = []; hint('', 0);
+  battle = null; bossEl.classList.remove('on'); G.mapEnemies = []; hint('', 0);
 }
 
 // ───────────────────────── 월드맵 / 스테이지 로드맵 UI ─────────────────────────
@@ -1687,7 +1994,7 @@ function openStage(n, d){
   const mons = []; for (const w of st.waves) for (const [k] of w) if (!mons.includes(k)) mons.push(k);
   const rp = recPower(n, d), mp2 = power(), rw = rewardOf(n, d), first = !stars(n, d);
   spop.innerHTML = `<div class="hd"><span class="no">1-${n}</span><span class="nm">${st.name}</span>${st.boss ? '<span class="bt">BOSS</span>' : ''}<button class="x">✕</button></div>
-    <div class="ds">${st.desc}</div>
+    <div class="ds">${st.desc}<br><small style="opacity:.75">🌄 지형: ${MAPS[n - 1].name}</small></div>
     <div class="df">${['e', 'm', 'h'].map(k => `<button class="${k}${k === d ? ' on' : ''}" data-d="${k}" ${unlocked(n, k) ? '' : 'disabled'}>${DIFF[k].n}<small>${unlocked(n, k) ? [0, 1, 2].map(i => i < stars(n, k) ? '★' : '☆').join('') : '🔒 이지 클리어 필요'}</small></button>`).join('')}</div>
     <div class="pw"><div>권장 전투력<br><b>${fmt(rp)}</b></div><div class="me" style="text-align:right">내 전투력<br><b class="${mp2 >= rp ? 'ok' : 'low'}">${fmt(mp2)}</b></div></div>
     <div class="sec">출현 몬스터</div><div class="mons">${mons.map(k => `<span>${MON[k].icon} ${MON[k].name}</span>`).join('')}${st.boss ? `<span class="bs">${BOSS[st.boss].icon} ${BOSS[st.boss].title} 「${BOSS[st.boss].name}」</span>` : ''}</div>
@@ -1713,7 +2020,7 @@ async function teleport(name, sub, fn){
 }
 function enterForest(){
   if (G.area !== 'story'){ G.setArea('story'); }
-  inStory = true; G.scene.fog.density = 0.006; G.setNight(0);
+  inStory = true;
   if (S.sword) giveSword(); if (sword) sword.visible = true;
   document.body.classList.toggle('combat', !!S.sword);
 }
@@ -1722,7 +2029,7 @@ function leaveForest(){
     revive(); cleanupBattle(); closeMap(); resEl.classList.remove('on');
     G.setArea('plaza'); inStory = false;
     player.pos.set(0, 0.04, 9); player.vy = 0; player.fig.root.rotation.y = 0; G.setCam(Math.PI, 0.3);
-    G.scene.fog.density = 0.0034; G.setNight(0);
+    G.setMood(null); G.setNight(0);
     if (sword) sword.visible = false; document.body.classList.remove('combat');
     $('keys').innerHTML = '<b>W</b><b>A</b><b>S</b><b>D</b> 이동 &nbsp; <b>Shift</b> 달리기 &nbsp; <b>Space</b> 점프 &nbsp; <b>M</b> 월드맵 &nbsp; <b>C</b> 스탯 &nbsp; <b>E</b> 상호작용';
     G.mapEnemies = []; G.mapMarkers = []; clearObj(); bReturn.textContent = '⟲ 광장으로';
@@ -1736,8 +2043,6 @@ async function askReturn(){
   if (r === 0) leaveForest();
 }
 NAMES.sys = '귀환의 룬진';
-SINT.push({ x: ARRIVE.x, z: ARRIVE.z, r: 2.4, title: '귀환의 룬진 · 광장으로', action: () => askReturn() });
-SINT.push({ x: 4.5, z: 51.5, r: 2.6, title: '룬 지기 엘드라', action: async () => { if (battle && !battle.ended) return; await say([['k', '숲의 친구들이 또 장난을 칠지도 모르겠구나. 월드맵에서 가고 싶은 곳을 골라 보거라.']]); openMap('road'); } });
 $('mStory').innerHTML = '<span>🗺</span>월드맵';
 $('mStory').onclick = () => openMap('world');
 $('mMini').onclick = () => G.toast('미니 게임', '곧 열립니다');
@@ -1775,11 +2080,10 @@ G.hooks.push((dt, rdt) => {
     if (battle && !battle.ended && dead) lose();
     // 엘드라 / 제단 / 모닥불
     const kp = keeper.root.position, kd = Math.hypot(player.pos.x - kp.x, player.pos.z - kp.z);
-    if (!dialogOpen && kd < 9){ const a = Math.atan2(player.pos.x - kp.x, player.pos.z - kp.z); keeper.root.rotation.y += angDiff(a, keeper.root.rotation.y) * Math.min(1, dt * 2); }
+    if (keeper.root.visible && !dialogOpen && kd < 9){ const a = Math.atan2(player.pos.x - kp.x, player.pos.z - kp.z); keeper.root.rotation.y += angDiff(a, keeper.root.rotation.y) * Math.min(1, dt * 2); }
     const kpz = Object.assign({}, KEEPER_POSE); kpz.hy += Math.sin(G.time * 1.6) * 0.006; keeper.set(kpz); keeper.blend(dt, 4);
-    const A = altar; A.crys.rotation.y += dt * 0.6; A.g.position.y = 4.3 + Math.sin(G.time * 1.1) * 0.2; for (const r of A.rings) r.piv.rotation.y += dt * r.spd;
-    campLight.intensity = 16 + Math.sin(G.time * 13) * 2.5 + Math.sin(G.time * 29) * 1.5;
-    FX.arriveRing.rotation.y += dt * 0.3;
+    for (const f of stageAnims) f(dt);
+    const inB = battle && !battle.ended; RET_IT.r = inB ? 0 : 2.4; retRing.userData.ring.rotation.y += dt * 0.3; retRing.userData.ring.material.opacity = inB ? 0.25 : 0.95;
   } else {
     G.poseMod = null; G.poseK = 0; G.speedMul = D().spd; G.moveMul = 1; G.faceLock = false; G.noJump = false;
   }

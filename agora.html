@@ -138,7 +138,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2500);
 
 // 해 — 늦은 오후의 금빛
-const NIGHTU = { value: 0 };
+const NIGHTU = { value: 0 }, TINTM = new THREE.Vector3(0.2, 0.12, 0.36), TINTA = new THREE.Vector3(0.02, 0.003, 0.045);
 const SUN = new THREE.Vector3(-0.78, 0.42, 0.46).normalize();
 const HAZE = new THREE.Color().setRGB(0.44, 0.54, 0.70);   // 선형 공간
 scene.fog = new THREE.FogExp2(HAZE.clone(), 0.0034);
@@ -561,11 +561,11 @@ const GLSL_COMMON = `
   }
 `;
 const skyMat = new THREE.ShaderMaterial({
-  uniforms: { uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uSun: { value: SUN }, uTime: { value: 0 }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) }, uExposure: { value: 0.92 }, uCamPos: { value: new THREE.Vector3() }, uNight: NIGHTU, uSteps: { value: IS_TOUCH ? 12 : 18 } },
+  uniforms: { uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uSun: { value: SUN }, uTime: { value: 0 }, uHaze: { value: new THREE.Vector3(HAZE.r, HAZE.g, HAZE.b) }, uExposure: { value: 0.92 }, uCamPos: { value: new THREE.Vector3() }, uNight: NIGHTU, uTintMul: { value: TINTM }, uTintAdd: { value: TINTA }, uSteps: { value: IS_TOUCH ? 12 : 18 } },
   vertexShader: `varying vec2 vNdc; void main(){ vNdc = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
   fragmentShader: `
     precision highp float;
-    uniform mat4 uInvProj, uCamWorld; uniform vec3 uSun, uHaze, uCamPos; uniform float uTime, uExposure, uNight; uniform int uSteps;
+    uniform mat4 uInvProj, uCamWorld; uniform vec3 uSun, uHaze, uCamPos; uniform float uTime, uExposure, uNight; uniform vec3 uTintMul, uTintAdd; uniform int uSteps;
     varying vec2 vNdc;
     ${GLSL_COMMON}
     float hash13(vec3 p3){ p3 = fract(p3*0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
@@ -627,8 +627,7 @@ const skyMat = new THREE.ShaderMaterial({
         cc = mix(uHaze * 1.05, cc, fade);
         col = mix(col, cc, alpha);
       }
-      col = mix(col, col * vec3(0.2, 0.12, 0.36) + vec3(0.02, 0.003, 0.045), uNight);
-      col += vec3(0.32, 0.06, 0.5) * pow(max(rd.y, 0.0), 2.0) * uNight * 0.35;
+      col = mix(col, col * uTintMul + uTintAdd, uNight);
       col = acesTM(col, uExposure);
       gl_FragColor = vec4(toSRGB(col), 1.0);
     }`,
@@ -2121,6 +2120,7 @@ function updateCamera(dt){
   const tgt = tmpV.set(player.pos.x, player.pos.y + 1.45, player.pos.z);
   const cp = Math.cos(camPitch), sx = Math.sin(camYaw) * cp, sz = Math.cos(camYaw) * cp, sy = Math.sin(camPitch);
   const want = new THREE.Vector3(tgt.x + sx * camDist, tgt.y + sy * camDist, tgt.z + sz * camDist);
+  if (G.camFn) G.camFn(want, tgt);
   want.y = Math.max(want.y, groundY(want.x, want.z) + 0.3);
   if (startBlend > 0){ startBlend = Math.max(0, startBlend - dt * 0.55); const e = startBlend * startBlend * (3 - 2 * startBlend); camPos.lerpVectors(want, introCam, e); camLook.lerpVectors(tgt, introLook, e); }
   else { camPos.copy(want); camLook.copy(tgt); }
@@ -2196,7 +2196,21 @@ function frame(){
 // 낮 → 밤 (공허의 침공)
 const NIGHT_FOG = new THREE.Color().setRGB(0.05, 0.025, 0.09), SUN_DAY = sun.color.clone(), SUN_NIGHT = new THREE.Color(0.55, 0.38, 1.0);
 let envMats = null;
+const SUN0 = SUN.clone();
+// 스테이지 분위기 (시간대 · 하늘 색 · 안개 · 해 방향)
+function setMood(m){
+  m = Object.assign({ k: 0, mul: [1, 1, 1], add: [0, 0, 0], sun: [SUN_DAY.r, SUN_DAY.g, SUN_DAY.b], sunI: 3.1, hemi: 0.35, hemiC: 0xbcd2ff, fog: [HAZE.r, HAZE.g, HAZE.b], fogD: 0.0034, exp: 0.92, dir: null, env: 1 }, m || {});
+  NIGHTU.value = m.k; TINTM.set(...m.mul); TINTA.set(...m.add);
+  sun.color.setRGB(...m.sun); sun.intensity = m.sunI; hemi.intensity = m.hemi; hemi.color.setHex(m.hemiC);
+  scene.fog.color.setRGB(...m.fog); scene.fog.density = m.fogD;
+  renderer.toneMappingExposure = m.exp; skyMat.uniforms.uExposure.value = m.exp;
+  if (m.dir) SUN.set(...m.dir).normalize(); else SUN.copy(SUN0);
+  sun.position.copy(SUN).multiplyScalar(120);
+  if (!envMats){ envMats = new Set(); scene.traverse(o => { const mt = o.material; if (mt && mt.isMeshStandardMaterial) envMats.add(mt); }); }
+  for (const mt of envMats) mt.envMapIntensity = m.env;
+}
 function setNight(k){
+  TINTM.set(0.2, 0.12, 0.36); TINTA.set(0.02, 0.003, 0.045); SUN.copy(SUN0); sun.position.copy(SUN).multiplyScalar(120); hemi.color.setHex(0xbcd2ff);
   NIGHTU.value = k;
   sun.intensity = 3.1 * (1 - 0.8 * k); sun.color.copy(SUN_DAY).lerp(SUN_NIGHT, k);
   hemi.intensity = 0.35 * (1 - 0.3 * k); hemi.color.setHex(0xbcd2ff).lerp(new THREE.Color(0x7a4ad0), k);
@@ -2217,7 +2231,7 @@ setArea('plaza');
 const G = {
   addArea, setArea, get area(){ return AREA.name; }, setCam: (y, p, d) => { camYaw = y; camPitch = p; if (d){ camDistT = camDist = d; } startBlend = 0; },
   Builder, Kit, boxG, latheG, ringBand, mergeGeos, tex, cnv, runeStrip, runeColumn, drawRune, glowC, particles, T, rr, R,
-  THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight,
+  THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight, setMood,
   hooks: [], lock: false, faceLock: false, noJump: false, speedMul: 1, moveMul: 1, poseMod: null, poseK: 0, camOverride: null, shake: 0, hitStop: 0,
   onKey: null, onClick: null, mapMarkers: [], mapEnemies: [],
   get time(){ return time; }, get camYaw(){ return camYaw; }, get playing(){ return playing; },
