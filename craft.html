@@ -1555,6 +1555,7 @@ item(FISHING_ROD,'낚싯대',spr(832,P=>{ln4(P,2,14,13,3,'#6a4a28');ln4(P,13,3,1
 item(BOAT,'참나무 보트',spr(833,P=>{for(let y=8;y<12;y++)for(let x=1+(y-8);x<15-(y-8);x++)P.set(x,y,y===8?'#c29d62':'#9c7b48')}),{stack:1});
 item(TIPPED_ARROW,'물약 묻은 화살',spr(834,P=>{ln4(P,3,12,12,3,'#8a6a40');P.set(12,3,'#a050d0');P.set(11,3,'#c070f0');P.set(12,4,'#c070f0');P.set(3,12,'#e8e8e8');P.set(2,11,'#e8e8e8')}));
 item(ENCH_BOOK,'마법이 부여된 책',spr(835,P=>{for(let y=3;y<14;y++)for(let x=3;x<13;x++)P.set(x,y,x===3?'#5a1818':y===3?'#e8c060':'#8a2a2a');P.set(8,8,'#fce060')}),{stack:1});
+const SHULKER_SHELL=651;item(SHULKER_SHELL,'셜커 껍데기',spr(851,P=>{for(let y=3;y<14;y++)for(let x=2;x<14;x++){const dx=x-7.5,dy=y-8.5;if(dx*dx/34+dy*dy/30>1)continue;P.set(x,y,y<8?((x+y)%4?'#9d6aa6':'#7d4f86'):(x%3?'#8e5f97':'#6e4478'))}}));
 item(BANNER,'현수막',spr(836,P=>{for(let y=1;y<12;y++)for(let x=4;x<12;x++)P.set(x,y,'#e9ecec');for(let y=1;y<15;y++)P.set(8,y,'#8a6a40')}),{stack:16});
 item(ECHO_SHARD,'메아리 조각',gem(837,['#2ab0c0','#0a5060','#04303a']));
 // 사슬 갑옷
@@ -3070,7 +3071,7 @@ function packSpawn(t,x,y,z,ok,room){const n=Math.min(packN(t),room),pp=player.po
     if(Math.hypot(px+.5-pp.x,pz+.5-pp.z,y-pp.y)<24||!spawnSpot(px,y,pz)||!ok(px,y,pz))continue;spawnMob(t,px+.5,y,pz+.5);c++}return c}
 const slimeChunk=(x,z)=>hash2(x>>4,z>>4,SEED+987)<.1;
 let aniT=0;
-function spawnTick(dt){villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);creakTick(dt);aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;extraSpawns3();const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
+function spawnTick(dt){endTick(dt);villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);creakTick(dt);aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;extraSpawns3();const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
   if(DIM!=='over'){dimSpawn(hos);return}
   // 청크가 처음 만들어질 때 동물 무리 (마크: 청크당 10%)
   for(let k=pendingAnimals.length-1;k>=0;k--){const [cx,cz]=pendingAnimals[k];const ch=chunks.get(ck(cx,cz));if(!ch){pendingAnimals.splice(k,1);continue}if(!ch.sky)continue;pendingAnimals.splice(k,1);if(ani>=40)continue;
@@ -3307,21 +3308,17 @@ function islandTop(x,z){const d=Math.hypot(x,z);if(d<100){const R=78+fbm2(x/40,z
   if(d<180)return null;const n=fbm2(x/60,z/60,SEED+1301,3);if(n<.22)return null;const k=(n-.22)/.4;return{top:END_Y-6+Math.round(k*8+fbm2(x/20,z/20,SEED+1303,2)*2),bot:END_Y-6-Math.round(k*22)}}
 function genEnd(cx,cz){const b=new Uint16Array(16*16*H),ox=cx*16,oz=cz*16,bio=new Uint8Array(256),gt=new Float32Array(768);if(!PILLARS)PILLARS=pillarList();let maxY=END_Y+4;
   for(let z=0;z<16;z++)for(let x=0;x<16;x++){const wx=ox+x,wz=oz+z,t=islandTop(wx,wz);gt.set([.5,.5,.5],(x|z<<4)*3);if(!t)continue;for(let y=Math.max(1,t.bot);y<=t.top;y++)b[bi(x,y,z)]=END_STONE;if(t.top>maxY)maxY=t.top}
+  {const a=smallEndIsland(b,cx,cz,ox,oz);if(a>maxY)maxY=a}
   for(const p of PILLARS){if(p.x+p.r<ox||p.x-p.r>ox+15||p.z+p.r<oz||p.z-p.r>oz+15)continue;for(let z=0;z<16;z++)for(let x=0;x<16;x++){const dx=ox+x-p.x,dz=oz+z-p.z;if(dx*dx+dz*dz>p.r*p.r+.5)continue;for(let y=END_Y-12;y<=p.h;y++)b[bi(x,y,z)]=OBSIDIAN;if(dx===0&&dz===0)b[bi(x,p.h,z)]=BEDROCK}if(p.h>maxY)maxY=p.h}
   // 출구 차원문 받침 (가운데)
   if(ox<=3&&ox+15>=-3&&oz<=3&&oz+15>=-3){for(let dz=-3;dz<=3;dz++)for(let dx=-3;dx<=3;dx++){const lx=dx-ox,lz=dz-oz;if(lx<0||lz<0||lx>15||lz>15)continue;const d=Math.hypot(dx,dz);if(d>3.5)continue;
     for(let y=END_Y-2;y<=END_Y+1;y++)b[bi(lx,y,lz)]=AIR;b[bi(lx,END_Y-2,lz)]=BEDROCK;if(d>2.4)b[bi(lx,END_Y-1,lz)]=BEDROCK;if(dx===0&&dz===0)for(let y=END_Y-1;y<=END_Y+2;y++)b[bi(lx,y,lz)]=BEDROCK}}
-  // 바깥 섬: 후렴초 · 엔드 도시
-  for(let z=0;z<16;z++)for(let x=0;x<16;x++){const wx=ox+x,wz=oz+z;if(Math.hypot(wx,wz)<180)continue;let top=-1;for(let y=END_Y+6;y>4;y--)if(b[bi(x,y,z)]===END_STONE){top=y;break}if(top<0)continue;
-    if(hash2(wx,wz,SEED+1311)<.012){const hh=2+Math.floor(hash2(wx,wz,SEED+1313)*5);for(let i=1;i<=hh;i++)b[bi(x,top+i,z)]=CHORUS_PLANT;b[bi(x,top+hh+1,z)]=CHORUS_FLOWER;
-      if(hh>2){const d=hash2(wx,wz,SEED+1317)<.5?1:-1;if(x+d>=0&&x+d<16){b[bi(x+d,top+hh-1,z)]=CHORUS_PLANT;b[bi(x+d,top+hh,z)]=CHORUS_FLOWER}}}}
-  const rx=Math.floor(ox/96),rz=Math.floor(oz/96);for(let a=-1;a<=1;a++)for(let c=-1;c<=1;c++){const cxr=rx+a,czr=rz+c;if(hash2(cxr,czr,SEED+1401)>.35)continue;const tx=cxr*96+48,tz=czr*96+48;if(Math.hypot(tx,tz)<220)continue;const t=islandTop(tx,tz);if(!t)continue;stampCity(b,ox,oz,tx,t.top+1,tz)}
+  // 바깥 섬: 가지 뻗는 후렴초 (줄기는 청크 안쪽에만) · 엔드 도시
+  {const [g,p]=chunkGP(b);for(let z=4;z<12;z++)for(let x=4;x<12;x++){const wx=ox+x,wz=oz+z;if(Math.hypot(wx,wz)<180||hash2(wx,wz,SEED+1311)>.02)continue;let top=-1;for(let y=END_Y+8;y>4;y--)if(b[bi(x,y,z)]===END_STONE){top=y;break}if(top<0||b[bi(x,top+1,z)]!==AIR)continue;
+    chorusTree(g,p,x,top+1,z,mulberry((Math.imul(wx,9137)^Math.imul(wz,7331)^Math.imul(SEED,197))|0));if(top+24>maxY)maxY=top+24}}
+  const rx=Math.floor(ox/96),rz=Math.floor(oz/96);for(let a=-1;a<=1;a++)for(let c=-1;c<=1;c++){const cxr=rx+a,czr=rz+c;if(hash2(cxr,czr,SEED+1401)>.35)continue;const tx=cxr*96+48,tz=czr*96+48;if(Math.hypot(tx,tz)<220)continue;const t=islandTop(tx,tz);if(!t)continue;const my=stampCity(b,ox,oz,tx,t.top+1,tz);if(my>maxY)maxY=my}
+  {const g=endGateways(b,ox,oz);if(g>maxY)maxY=g}
   return finishChunk(cx,cz,b,Math.min(H-2,maxY+20),bio,gt)}
-function stampCity(b,ox,oz,tx,ty,tz){const set=(x,y,z,id)=>{const lx=x-ox,lz=z-oz;if(lx<0||lz<0||lx>15||lz>15||y<1||y>=H-1)return;b[bi(lx,y,lz)]=id};
-  const top=Math.min(H-4,ty+22);for(let y=ty;y<=top;y++)for(let dz=-3;dz<=3;dz++)for(let dx=-3;dx<=3;dx++){const wall=Math.abs(dx)===3||Math.abs(dz)===3;
-    set(tx+dx,y,tz+dz,(y-ty)%6===0?PURPUR:wall?((Math.abs(dx)===3&&Math.abs(dz)===3)?PURPUR_PILLAR:((y-ty)%6===3&&(dx===0||dz===0))?AIR:PURPUR):(y-ty)%6===1&&dx===2&&dz===2?END_ROD:AIR)}
-  for(let y=ty+1;y<top;y++){const k=(y-ty)%8;const pos=[[1,1],[1,-1],[-1,-1],[-1,1]][Math.floor(k/2)%4];set(tx+pos[0]*2,y,tz+pos[1]*2,SLAB_PURPUR)}
-  set(tx,top+1,tz,CHEST);for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)set(tx+dx,top,tz+dz,PURPUR);set(tx,top,tz,PURPUR)}
 
 // ── 요새 (엔드 차원문 방)
 function strongholds(){const r=mulberry(SEED*13+5|0),a0=r()*Math.PI*2,L=[];for(let i=0;i<3;i++){const a=a0+i*Math.PI*2/3,d=300+r()*220;L.push({x:Math.round(Math.cos(a)*d),z:Math.round(Math.sin(a)*d),y:GEN>=4?mcY(-24):12})}return L}
@@ -3586,7 +3583,7 @@ function buildDragon(g,P){const mat=c=>part;P.legs=[];P.body=part(3,2.2,7,0,null
 let dragon=null;const crystals=[];
 function clearCrystals(){for(const c of crystals){scene.remove(c.m);if(c.beam)scene.remove(c.beam)}crystals.length=0;dragon=null}
 const crystalMat=new THREE.MeshBasicMaterial({color:0xff70e0,transparent:true,opacity:.85}),crystalCore=new THREE.MeshBasicMaterial({color:0xffffff});
-function spawnEndEntities(){clearCrystals();if(dimState.dragonDead)return;if(!PILLARS)PILLARS=pillarList();
+function spawnEndEntities(){clearCrystals();if(dimState.dragonDead){if(!dimState.gw)setTimeout(()=>{if(DIM==='end'&&!dimState.gw)spawnGateway()},2500);return}if(!PILLARS)PILLARS=pillarList();
   PILLARS.forEach((p,i)=>{if(dimState.crystals&(1<<i))return;const g=new THREE.Group();const o=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2),crystalMat);const c=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5),crystalCore);g.add(o);g.add(c);g.position.set(p.x+.5,p.h+2,p.z+.5);scene.add(g);crystals.push({i,m:g,pos:g.position.clone()})});
   dragon=spawnMob('dragon',0,END_Y+30,40);dragon.ai={phase:'circle',t:12,ang:0};$('bossBar').classList.remove('hide')}
 function crystalTick(dt){const o=camera.position;for(let k=crystals.length-1;k>=0;k--){const c=crystals[k];c.m.rotation.x+=dt*1.3;c.m.rotation.y+=dt*1.7;c.m.position.y=c.pos.y+Math.sin(performance.now()/500+k)*.3;
@@ -3606,7 +3603,7 @@ const breath=[];function breathTick(dt){for(let i=breath.length-1;i>=0;i--){cons
   if(Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<1.6&&Math.abs(player.pos.y-b.y)<2&&Math.random()<dt*3)hurtPlayer(2,null,'dragon');if(b.t<=0)breath.splice(i,1)}}
 function dragonDied(m){dimState.dragonDead=true;$('bossBar').classList.add('hide');toast('엔더 드래곤을 물리쳤어요!');sfx('boom');for(let k=0;k<40;k++)smoke(m.pos.x+(Math.random()-.5)*8,m.pos.y+Math.random()*6,m.pos.z+(Math.random()-.5)*8);
   dropXP(m.pos.x,m.pos.y,m.pos.z,120);for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){const d=Math.hypot(dx,dz);if(d<=2.4&&!(dx===0&&dz===0))setBlock(dx,END_Y-1,dz,END_PORTAL)}
-  if(!dimState.egg){dimState.egg=true;setBlock(0,END_Y+3,0,DRAGON_EGG)}for(const c of crystals){scene.remove(c.m);if(c.beam)scene.remove(c.beam)}crystals.length=0;dragon=null;save()}
+  if(!dimState.egg){dimState.egg=true;setBlock(0,END_Y+3,0,DRAGON_EGG)}for(const c of crystals){scene.remove(c.m);if(c.beam)scene.remove(c.beam)}crystals.length=0;dragon=null;spawnGateway();save()}
 
 // ── 네더 · 엔드 스폰
 function dimSpawn(hos){pendingAnimals.length=0;const pp=player.pos;
@@ -4901,7 +4898,7 @@ function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,
 function applyPlayer(d){if(!d)return false;(d.inv||[]).forEach((s,i)=>inv[i]=s);(d.arm||[]).forEach((s,i)=>armor[i]=s);player.xp=d.xp||0;sel=d.sel||0;const q=d.pl;if(!q)return false;player.pos.set(q.pos[0],q.pos[1],q.pos[2]);player.yaw=q.yaw;player.pitch=q.pitch;player.hp=q.hp;player.food=q.food;player.sat=q.sat;player.spawn=q.spawn;player.fly=!!q.fly;
   if(q.dead&&q.spawn){player.hp=20;player.food=20;player.pos.set(q.spawn.x,q.spawn.y,q.spawn.z)}return true}
 addEventListener('pagehide',()=>{save();if(MPS)mpLeave()});document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
-function resetWorld(){DIM='over';HEARTS.clear();HEART_MOB.clear();STRUCTS.clear();STRUCT_MOBS.clear();ARROW_TRAPS.clear();for(const b of boats)scene.remove(b.m);boats.length=0;player.boat=null;SHOLDS=null;SPAWNERS.clear();DTEMP.clear();BURIED.clear();TRAPS.clear();player.ride=null;player.lastRest=undefined;VPLANS.clear();ACITY.clear();VCHEST.clear();VSPAWNED.clear();VSTATE={};shriekWarn=0;darkT=0;for(const k in tilesByDim)tilesByDim[k].clear();dimState={dragonDead:false,crystals:0,egg:false};clearCrystals();$('bossBar').classList.add('hide');for(const ch of chunks.values()){if(ch.mesh){scene.remove(ch.mesh);ch.mesh.geometry.dispose()}if(ch.wmesh){scene.remove(ch.wmesh);ch.wmesh.geometry.dispose()}}chunks.clear();edits={};tiles.clear();saplings=[];crops=[];decayQ=[];pendingAnimals.length=0;
+function resetWorld(){DIM='over';GW_EXIT.clear();GW_RING.clear();levT=0;HEARTS.clear();HEART_MOB.clear();STRUCTS.clear();STRUCT_MOBS.clear();ARROW_TRAPS.clear();for(const b of boats)scene.remove(b.m);boats.length=0;player.boat=null;SHOLDS=null;SPAWNERS.clear();DTEMP.clear();BURIED.clear();TRAPS.clear();player.ride=null;player.lastRest=undefined;VPLANS.clear();ACITY.clear();VCHEST.clear();VSPAWNED.clear();VSTATE={};shriekWarn=0;darkT=0;for(const k in tilesByDim)tilesByDim[k].clear();dimState={dragonDead:false,crystals:0,egg:false};clearCrystals();$('bossBar').classList.add('hide');for(const ch of chunks.values()){if(ch.mesh){scene.remove(ch.mesh);ch.mesh.geometry.dispose()}if(ch.wmesh){scene.remove(ch.wmesh);ch.wmesh.geometry.dispose()}}chunks.clear();edits={};tiles.clear();saplings=[];crops=[];decayQ=[];pendingAnimals.length=0;
   for(const m of mobs)scene.remove(m.g);mobs.length=0;for(const e of ents){scene.remove(e.m)}ents.length=0;for(const p of projs)scene.remove(p.m);projs.length=0;SCH.length=0;SKEYS.clear();rsQ.clear();cmpOut.clear();for(const t of tnts)scene.remove(t.m);tnts.length=0;for(const p of parts)scene.remove(p.m);parts.length=0;
   inv.fill(null);armor.fill(null);player.xp=0;cursor=null;sel=0;craft2.fill(null);craft3.fill(null);closeScreen();Object.assign(player,{hp:20,food:20,sat:5,exh:0,air:15,dead:false,fallStart:null,spawn:null,fly:false,pitch:0,yaw:0});player.vel.set(0,0,0);
   started=false;worldTime=DAYLEN*.04;$('hud').classList.add('hide');$('touch').classList.add('hide');$('dead').classList.add('hide');viewMode=0;heldId=-1}
@@ -5407,6 +5404,132 @@ Object.assign(LOOT2,{
   fortress:a=>{a(DIAMOND,1,3,.15);a(IRON,1,5,.45);a(GOLD,1,3,.4);a(toolId(4,3),1,1,.2);a(ARMOR_ID(1,1),1,1,.2);a(FLINT_STEEL,1,1,.3);a(NWART_ITEM,3,7,.4);a(SADDLE,1,1,.25);a(HORSE_ARMOR,1,1,.15);a(OBSIDIAN,2,4,.3)}});
 LOCATORS.bastion_remnant={n:'Bastion Remnant',dim:'nether',alias:/^(bastion|보루)/,find(x,z){const s=nearestOf(BASTION,x,z);return s?{x:s.x,y:s.y+1,z:s.z}:null}};LOC_WORDS.push('bastion_remnant');
 
+/* ═════════════ 엔드 더하기: 엔드 도시 (집 · 나선 계단 탑 · 넓은 방 · 다리) · 엔드 배 (겉날개) · 셜커 · 엔드 관문 · 가지 뻗는 후렴초 · 작은 엔드 섬 ═════════════ */
+// 후렴초 (마크 ChorusFlowerBlock.generatePlant 를 따라): 줄기가 1~4칸 오르고 옆으로 가지를 뻗어요 · 가지 끝은 후렴화
+const CH_D=[[1,0],[-1,0],[0,1],[0,-1]];
+function chorusTree(get,put,x,y,z,r){const R=4,empty=(a,b2,c)=>get(a,b2,c)===AIR,nb=(a,b2,c,ex)=>CH_D.every(([dx,dz],i)=>i===ex||empty(a+dx,b2,c+dz));
+  put(x,y,z,CHORUS_PLANT);
+  const grow=(bx,by,bz,it)=>{let n=1+Math.floor(r()*4);if(it===0)n++;
+    for(let j=1;j<=n;j++){if(!nb(bx,by+j,bz,-1))return;put(bx,by+j,bz,CHORUS_PLANT)}
+    let br=false;if(it<4){let k=Math.floor(r()*4);if(it===0)k++;
+      for(let l=0;l<k;l++){const di=Math.floor(r()*4),nx=bx+CH_D[di][0],nz=bz+CH_D[di][1],ny=by+n;
+        if(Math.abs(nx-x)<R&&Math.abs(nz-z)<R&&empty(nx,ny,nz)&&empty(nx,ny-1,nz)&&nb(nx,ny,nz,di^1)){br=true;put(nx,ny,nz,CHORUS_PLANT);grow(nx,ny,nz,it+1)}}}
+    if(!br)put(bx,by+n,bz,CHORUS_FLOWER)};
+  grow(x,y,z,0)}
+const chunkGP=b=>[(a,y,c)=>a<0||c<0||a>15||c>15||y<0||y>=H?-1:b[bi(a,y,c)],(a,y,c,id)=>{if(a>=0&&c>=0&&a<16&&c<16&&y>0&&y<H-1)b[bi(a,y,c)]=id}];
+// 작은 엔드 섬 (small_end_islands): 가운데 섬과 바깥 섬 사이 허공에 떠 있는 작은 섬
+function smallEndIsland(b,cx,cz,ox,oz){if(Math.hypot(ox+8,oz+8)<110)return -1;const r=mulberry((Math.imul(cx,48271)^Math.imul(cz,69621)^Math.imul(SEED,1013))|0);if(r()>.08)return -1;
+  const x0=4+Math.floor(r()*8),z0=4+Math.floor(r()*8);if(islandTop(ox+x0,oz+z0))return -1;const R=2+Math.floor(r()*3),yc=END_Y-16+Math.floor(r()*28);
+  for(let y=yc;y>=yc-R-1;y--){const rr=R*(1-(yc-y)/(R+2))+.35;for(let dz=-R;dz<=R;dz++)for(let dx=-R;dx<=R;dx++){if(dx*dx+dz*dz>rr*rr)continue;const x=x0+dx,z=z0+dz;if(x>=0&&z>=0&&x<16&&z<16)b[bi(x,y,z)]=END_STONE}}
+  if(r()<.45){const [g,p]=chunkGP(b);chorusTree(g,p,x0,yc+1,z0,r)}
+  return yc+22}
+
+// ── 엔드 관문: 드래곤을 물리칠 때마다 하나씩 (최대 20) 가운데 섬 가장자리에 · 들어가면 먼 바깥 섬으로, 거기 생긴 관문으로 돌아와요
+const GW_A=i=>(i*7%20)/20*Math.PI*2+.157,GW_EXIT=new Map(),GW_RING=new Map();
+function gwRing(i){if(GW_RING.has(i))return GW_RING.get(i);const a=GW_A(i);let g=null;for(let r=74;r>=40&&!g;r-=2){const x=Math.round(Math.cos(a)*r),z=Math.round(Math.sin(a)*r),t=islandTop(x,z);if(t)g={x,y:t.top+2,z}}
+  if(!g)g={x:Math.round(Math.cos(a)*40),y:END_Y+2,z:Math.round(Math.sin(a)*40)};GW_RING.set(i,g);return g}
+function gwExit(i){if(GW_EXIT.has(i))return GW_EXIT.get(i);const a=GW_A(i);let e=null;
+  for(let d=320;d<1000&&!e;d+=5){const x=Math.round(Math.cos(a)*d),z=Math.round(Math.sin(a)*d),t=islandTop(x,z);if(!t||t.top<END_Y-5)continue;let ok=true;
+    for(const [dx,dz] of [[-3,0],[3,0],[0,-3],[0,3],[3,3],[-3,-3]]){const u=islandTop(x+dx,z+dz);if(!u||Math.abs(u.top-t.top)>2){ok=false;break}}if(ok)e={x,y:t.top+2,z}}
+  if(!e)e={x:Math.round(Math.cos(a)*420),y:END_Y,z:Math.round(Math.sin(a)*420),pad:true};GW_EXIT.set(i,e);return e}
+// 관문 모양 (마크 EndGatewayFeature): 관문 블록 위아래로 + 모양 기반암, 그 위아래 한 칸씩
+function gwStamp(g,fn){const {x,y,z}=g;if(g.pad)for(let dz=-4;dz<=4;dz++)for(let dx=-4;dx<=4;dx++){const d=dx*dx+dz*dz;if(d<=17)fn(x+dx,y-2,z+dz,END_STONE);if(d<=5)fn(x+dx,y-3,z+dz,END_STONE)}
+  fn(x,y,z,END_GATEWAY);for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]){fn(x+dx,y-1,z+dz,BEDROCK);fn(x+dx,y+1,z+dz,BEDROCK)}fn(x,y-2,z,BEDROCK);fn(x,y+2,z,BEDROCK);
+  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]])fn(x+dx,y,z+dz,AIR)}
+function endGateways(b,ox,oz){const B_=brush(b,ox,oz),n=dimState.gw|0;let my=-1;for(let i=0;i<n;i++)for(const g of [gwRing(i),gwExit(i)]){if(g.x<ox-5||g.x>ox+20||g.z<oz-5||g.z>oz+20)continue;gwStamp(g,(x,y,z,id)=>B_.set(x,y,z,id));my=Math.max(my,g.y+3)}return my}
+let gwBeams=[];
+function spawnGateway(){const i=dimState.gw|0;if(i>=20)return;dimState.gw=i+1;for(const g of [gwRing(i),gwExit(i)])gwStamp(g,(x,y,z,id)=>setBlock(x,y,z,id));
+  const g=gwRing(i),m=new THREE.Mesh(new THREE.BoxGeometry(.7,60,.7),new THREE.MeshBasicMaterial({color:0xe0c8ff,transparent:true,opacity:.55,depthWrite:false}));m.position.set(g.x+.5,g.y+30,g.z+.5);scene.add(m);gwBeams.push({m,t:4});
+  sfx('portal');toast('엔드 관문이 열렸어요! 섬 가장자리의 관문으로 바깥 섬에 갈 수 있어요')}
+// 관문 옆 땅 (관문에서 3칸 떨어진 곳)
+function gwLand(g,inward){const a=Math.atan2(g.z,g.x),L=[];for(let k=0;k<8;k++){const t=a+(inward?Math.PI:0)+k*Math.PI/4;L.push([Math.round(g.x+Math.cos(t)*3),Math.round(g.z+Math.sin(t)*3)])}
+  for(const [x,z] of L){const t=islandTop(x,z);if(t&&Math.abs(t.top-(g.y-2))<=3)return[x,t.top+1,z]}return[g.x+3,g.y-1,g.z]}
+let gwCD=0,gwStay=false;
+function gwTouch(){const p=player.pos,n=dimState.gw|0;for(let i=0;i<n;i++)for(let k=0;k<2;k++){const g=k?gwExit(i):gwRing(i);if(Math.abs(p.x-g.x-.5)<1.6&&Math.abs(p.z-g.z-.5)<1.6&&p.y>=g.y-2&&p.y<=g.y+1.2&&getB(g.x,g.y,g.z)===END_GATEWAY)return{i,k}}return null}
+
+// ── 셜커: 블록에 붙어 껍데기를 열고 따라오는 탄을 쏴요 · 맞으면 둥실 떠올라요 (공중 부양)
+const T_SHLK_B=ctex(8,8,g=>{g.fillStyle='#8e5f97';g.fillRect(0,0,8,8);g.fillStyle='#6e4478';g.fillRect(0,0,8,1);g.fillRect(0,7,8,1);g.fillStyle='#a274ab';g.fillRect(1,2,6,1)}),
+  T_SHLK_T=ctex(8,8,g=>{g.fillStyle='#9d6aa6';g.fillRect(0,0,8,8);g.fillStyle='#7d4f86';g.fillRect(0,7,8,1);g.fillRect(3,0,2,8);g.fillStyle='#b588bd';g.fillRect(1,1,1,1);g.fillRect(6,2,1,1)}),
+  T_SHLK_F=ctex(8,8,g=>{g.fillStyle='#e8dca8';g.fillRect(0,0,8,8);g.fillStyle='#d2c48a';g.fillRect(0,6,8,2);g.fillStyle='#2a1e30';g.fillRect(1,3,2,2);g.fillRect(5,3,2,2)});
+Object.assign(MOBDEF,{shulker:{n:'셜커',hp:30,hw:.5,h:1,sp:0,hostile:1,persist:1,fireproof:1,xp:5,drops:r=>[[SHULKER_SHELL,r<.5?1:0]],custom:shulkerAI,build(g,P){
+  P.base=part(1,.5,1,0x8e5f97,null,T_SHLK_B);P.base.position.y=.25;g.add(P.base);P.lid=new THREE.Group();P.lid.position.y=.5;const top=part(1.02,.52,1.02,0x9d6aa6,null,T_SHLK_T);top.position.y=.26;P.lid.add(top);g.add(P.lid);
+  P.head=part(.44,.44,.44,0xe8dca8,T_SHLK_F);P.head.position.y=.5;g.add(P.head);P.legs=[]}}});
+const SBUL=[],sbulMat=new THREE.MeshBasicMaterial({color:0xf6eec8});let levT=0;
+function shulkerAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,dy=pp.y+1-(m.pos.y+.5),d=Math.hypot(dx,dy,dz),see=d<17&&!player.dead&&!creative();
+  m.peek=m.peek||0;m.ai.t-=dt;if(m.ai.t<=0){m.ai.t=2+Math.random()*4;m.ai.open=Math.random()<.3}
+  m.peek+=((see?1:m.ai.open?.35:0)-m.peek)*Math.min(1,dt*4);
+  if(see&&m.peek>.7&&m.atk<=0&&los(new V3(m.pos.x,m.pos.y+.8,m.pos.z),new V3(pp.x,pp.y+1.2,pp.z))){m.atk=2.2+Math.random()*3;shulkerShoot(m)}
+  if(see)m.yaw=Math.atan2(dx,dz);m.P.lid.position.y=.5+m.peek*.42;m.P.head.visible=m.peek>.08}
+function shulkerShoot(m){const g=new THREE.Mesh(new THREE.BoxGeometry(.32,.32,.32),sbulMat);g.position.set(m.pos.x,m.pos.y+.8,m.pos.z);scene.add(g);SBUL.push({m:g,vel:new V3(0,2,0),life:9});sfx('bow')}
+function clearSbul(){for(const b of SBUL)scene.remove(b.m);SBUL.length=0}
+function sbulTick(dt){const tg=new V3(player.pos.x,player.pos.y+1,player.pos.z);
+  for(let i=SBUL.length-1;i>=0;i--){const b=SBUL[i],p=b.m.position;b.life-=dt;const d=tg.clone().sub(p),L=d.length();d.multiplyScalar(4.5/(L||1));b.vel.lerp(d,Math.min(1,dt*1.8));p.addScaledVector(b.vel,dt);b.m.rotation.x+=dt*6;b.m.rotation.y+=dt*5;
+    let hit=false;if(L<.9&&!player.dead){hit=true;hurtPlayer(4,p,'shulker');if(!creative())levT=Math.max(levT,3.5)}
+    if(hit||b.life<=0||SOLID[getB(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))]){for(let k=0;k<4;k++)smoke(p.x,p.y,p.z);scene.remove(b.m);SBUL.splice(i,1)}}
+  if(levT>0){levT-=dt;if(!player.fly&&!player.dead){player.vel.y=Math.max(player.vel.y,2.2);player.fallStart=null}}}
+// 매 프레임: 셜커 탄 · 공중 부양 · 관문 빛줄기 · 관문 들어가기
+function endTick(dt){for(let k=gwBeams.length-1;k>=0;k--){const o=gwBeams[k];o.t-=dt;o.m.material.opacity=Math.max(0,.55*Math.min(1,o.t));if(o.t<=0){scene.remove(o.m);gwBeams.splice(k,1)}}
+  if(DIM!=='end'){if(SBUL.length)clearSbul();levT=0;return}sbulTick(dt);
+  if(gwCD>0)gwCD-=dt;if(player.dead||dimBusy)return;const t=gwTouch();if(!t){gwStay=false;return}if(gwStay||gwCD>0)return;gwStay=true;gwCD=2;
+  const [x,y,z]=t.k?gwLand(gwRing(t.i),true):gwLand(gwExit(t.i),false);for(let k=0;k<10;k++)smoke(player.pos.x+(Math.random()-.5),player.pos.y+Math.random()*2,player.pos.z+(Math.random()-.5));
+  sfx('portal');tpTo(x+.5,y,z+.5);toast(t.k?'가운데 섬으로 돌아왔어요':'엔드 관문을 지나 바깥 섬에 왔어요')}
+
+// ── 엔드 도시: 집 (2층) · 땅에서 꼭대기까지 나선 계단 탑 · 꼭대기 넓은 방 (상자 · 셜커) · 다리 → 엔드 배 (겉날개) 또는 작은 탑
+function stampCity(b,ox,oz,tx,ty,tz){if(tx+64<ox||tx-64>ox+15||tz+64<oz||tz-64>oz+15)return -1;
+  const B_=brush(b,ox,oz),S=B_.set,r=mulberry((Math.imul(tx,7919)^Math.imul(tz,104729)^Math.imul(SEED,31337))|0),GL=SGLASS(2),key='ec'+tx+','+tz;
+  const room=(cx,cz,y0,R,h)=>{for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++){const ax=Math.abs(dx),az=Math.abs(dz),edge=ax===R||az===R,x=cx+dx,z=cz+dz;S(x,y0,z,edge?PURPUR:END_BRICKS);
+      for(let y=y0+1;y<y0+h;y++){if(!edge){S(x,y,z,AIR);continue}if(ax===R&&az===R){S(x,y,z,PURPUR_PILLAR);continue}const m=ax===R?az:ax;S(x,y,z,(y===y0+2||y===y0+3)&&m%3===1&&m<R-1?GL:PURPUR)}
+      S(x,y0+h,z,PURPUR)}
+    for(const [a,c] of [[1,1],[1,-1],[-1,1],[-1,-1]])S(cx+a*(R-1),y0+h-1,cz+c*(R-1),END_ROD)};
+  const TH=16+Math.floor(r()*12),TT=ty+10+TH;
+  // 1) 바닥 다지기 + 집 (15×15, 2층) · 남쪽 문 · 2층 사다리
+  for(let dx=-7;dx<=7;dx++)for(let dz=-7;dz<=7;dz++)B_.pillar(tx+dx,ty-1,tz+dz,PURPUR,16);
+  room(tx,tz,ty,7,5);room(tx,tz,ty+5,7,5);
+  for(let y=ty+1;y<=ty+3;y++)for(let dx=-1;dx<=1;dx++)S(tx+dx,y,tz+7,AIR);
+  for(let y=ty+1;y<=ty+5;y++)S(tx+6,y,tz+4,LADDER,0);
+  // 2) 탑 (7×7): 땅부터 꼭대기까지 · 안쪽은 반 칸씩 오르는 나선 계단
+  for(let y=ty+1;y<TT;y++)for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++){const ax=Math.abs(dx),az=Math.abs(dz);
+    if(ax<3&&az<3){S(tx+dx,y,tz+dz,AIR);continue}if(ax===3&&az===3){S(tx+dx,y,tz+dz,PURPUR_PILLAR);continue}S(tx+dx,y,tz+dz,y>ty+10&&(y-ty)%6===3&&(ax===0||az===0)?GL:PURPUR)}
+  for(let y=ty+1;y<=ty+3;y++)S(tx,y,tz+3,AIR);for(let y=ty+6;y<=ty+8;y++)S(tx,y,tz-3,AIR);
+  const ring=[];for(let k=-2;k<2;k++)ring.push([k,-2]);for(let k=-2;k<2;k++)ring.push([2,k]);for(let k=2;k>-2;k--)ring.push([k,2]);for(let k=2;k>-2;k--)ring.push([-2,k]);
+  for(let i=0;;i++){const h=ty+1+(i>>1);if(h>=TT)break;const [a,c]=ring[i%16];S(tx+a,h,tz+c,i&1?PURPUR:SLAB_PURPUR)}
+  // 3) 꼭대기 넓은 방 (13×13): 바닥 가운데는 계단이 올라오는 구멍 · 상자 2 · 셜커 · 뾰족 지붕
+  room(tx,tz,TT,6,6);for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)S(tx+dx,TT,tz+dz,AIR);
+  B_.chest(tx-5,TT+1,tz-5,'end_city');B_.chest(tx+5,TT+1,tz+5,'end_city');
+  smobAt(key+'a','shulker',tx+5.5,TT+1,tz-4.5,1,'end');smobAt(key+'b','shulker',tx-4.5,TT+1,tz+5.5,1,'end');smobAt(key+'h','shulker',tx-5.5,ty+6,tz+.5,1,'end');
+  for(const [a,c] of [[6,6],[6,-6],[-6,6],[-6,-6]])for(let y=TT+7;y<=TT+8;y++)S(tx+a,y,tz+c,END_ROD);
+  for(let k=0;k<4;k++){const q=3-k;for(let dx=-q;dx<=q;dx++)for(let dz=-q;dz<=q;dz++)if(Math.max(Math.abs(dx),Math.abs(dz))===q)S(tx+dx,TT+7+k,tz+dz,k===3?PURPUR_PILLAR:PURPUR)}S(tx,TT+11,tz,END_ROD);
+  // 4) 다리 (5칸 폭, 난간 · 엔드 막대기 기둥)
+  const [bx,bz]=CH_D[Math.floor(r()*4)],BL=12+Math.floor(r()*8),px=-bz,pz=bx,E=7+BL;
+  for(let y=TT+1;y<=TT+3;y++)for(let w=-1;w<=1;w++)S(tx+bx*6+px*w,y,tz+bz*6+pz*w,AIR);
+  for(let s=7;s<E;s++)for(let w=-2;w<=2;w++){const x=tx+bx*s+px*w,z=tz+bz*s+pz*w;S(x,TT,z,Math.abs(w)===2?END_BRICKS:PURPUR);if(Math.abs(w)===2){const post=(s-7)%4===0;S(x,TT+1,z,post?PURPUR_PILLAR:SLAB_PURPUR);if(post)S(x,TT+2,z,END_ROD)}}
+  if(r()<.6){
+    // 5a) 엔드 배: 길이 23 · 다리 끝에 옆구리를 대고 떠 있어요 · 아래 짐칸에 겉날개 상자
+    const L=23,HW=[1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,2,1,1,0],yd=TT,cx=tx+bx*(E+3),cz=tz+bz*(E+3),P=(u,v)=>[cx+px*(u-11)+bx*v,cz+pz*(u-11)+bz*v];
+    for(let u=0;u<L;u++){const hw=HW[u];for(let v=-hw;v<=hw;v++){const [x,z]=P(u,v);S(x,yd,z,PURPUR);
+        for(let dd=1;dd<=3;dd++){const w=hw-(dd>=2?1:0)-(dd>=3?1:0);if(Math.abs(v)>w)continue;S(x,yd-dd,z,Math.abs(v)===w||dd===3||u<=1||u>=L-3?PURPUR:AIR)}
+        if(Math.abs(v)===hw&&!(v===-hw&&u>=10&&u<=12))S(x,yd+1,z,SLAB_PURPUR)}}
+    // 선실 (뒤쪽) · 양조기
+    for(let u=1;u<=5;u++)for(let v=-2;v<=2;v++){const [x,z]=P(u,v),edge=u===1||u===5||Math.abs(v)===2;for(let y=yd+1;y<=yd+3;y++)S(x,y,z,edge?(y===yd+2&&u===3?GL:PURPUR):AIR);S(x,yd+4,z,PURPUR)}
+    for(let y=yd+1;y<=yd+2;y++){const [x,z]=P(5,0);S(x,y,z,AIR)}{const [x,z]=P(2,0);S(x,yd+1,z,BREWING)}
+    // 돛대 두 개 · 자홍색 돛 · 뱃머리 엔드 막대기
+    for(const mu of [9,15]){const [x,z]=P(mu,0);for(let y=yd+1;y<=yd+10;y++)S(x,y,z,PURPUR_PILLAR);S(x,yd+11,z,END_ROD);for(let v=-2;v<=2;v++){if(!v)continue;const [sx,sz]=P(mu,v);for(let y=yd+4;y<=yd+8;y++)S(sx,y,sz,WOOL_C(2))}}
+    {const [x,z]=P(L-1,0);S(x,yd+2,z,END_ROD)}
+    // 짐칸으로: 갑판 구멍 + 두 칸 계단
+    for(const u of [13,14]){const [x,z]=P(u,0);S(x,yd,z,AIR)}{const [x,z]=P(14,0);S(x,yd-2,z,PURPUR);S(x,yd-1,z,PURPUR)}{const [x,z]=P(15,0);S(x,yd-2,z,PURPUR)}
+    {const [x,z]=P(8,1);B_.chest(x,yd-2,z,'end_ship')}{const [x,z]=P(17,-1);B_.chest(x,yd-2,z,'end_city')}
+    for(const lu of [5,11,18])for(const v of [-2,2]){const [x,z]=P(lu,v);S(x,yd-1,z,END_ROD)}
+    {const [x,z]=P(6,0);smobAt(key+'s','shulker',x+.5,yd-2,z+.5,1,'end')}{const [x,z]=P(12,2);smobAt(key+'d','shulker',x+.5,yd+1,z+.5,1,'end')}
+  }else{
+    // 5b) 작은 탑: 다리 끝에 떠 있는 방 · 상자 · 셜커
+    const ex=tx+bx*(E+3),ez=tz+bz*(E+3);room(ex,ez,TT,3,5);for(let y=TT+1;y<=TT+3;y++)for(let w=-1;w<=1;w++)S(ex-bx*3+px*w,y,ez-bz*3+pz*w,AIR);
+    B_.chest(ex+px*2,TT+1,ez+pz*2,'end_city');smobAt(key+'t','shulker',ex+.5,TT+1,ez+.5,1,'end');for(let y=TT-8;y<TT;y++)S(ex,y,ez,PURPUR_PILLAR);S(ex,TT-9,ez,END_ROD)}
+  return TT+12}
+function endBiomeKey(x,z){const d=Math.hypot(x,z);if(d<100)return'the_end';if(d<180)return'small_end_islands';const n=fbm2(x/60,z/60,SEED+1301,3);return n<.22?'small_end_islands':n>.44?'end_highlands':n>.31?'end_midlands':'end_barrens'}
+Object.assign(LOOT2,{
+  end_city:a=>{a(DIAMOND,2,7,.35);a(IRON,4,8,.6);a(GOLD,2,7,.5);a(EMERALD,2,6,.3);a(toolId(3,0),1,1,.15);a(toolId(3,3),1,1,.15);a(ARMOR_ID(3,1),1,1,.12);a(ARMOR_ID(2,0),1,1,.15);a(SADDLE,1,1,.2);a(HORSE_ARMOR,1,1,.15);a(ENDER_PEARL,1,3,.3);a(BEET_SEEDS,1,10,.2)},
+  end_ship:a=>{a(ELYTRA,1,1);a(DIAMOND,1,4,.4);a(IRON,2,6,.5);a(GOLD,2,6,.4);a(toolId(3,3),1,1,.2);a(ENDER_PEARL,1,3,.3);a(EMERALD,1,3,.3)}});
+
 const STRUCT_DEFS=[MINE,JTEMP,WHUT,IGLOO,OUTPOST,SHIP,RUINS,RPORTAL];
 // 땅 위 구조물 자리에는 나무가 자라지 않아요
 const SURF_BOX={jungle_pyramid:[-4,16,-4,19],swamp_hut:[-3,10,-3,13],igloo:[-7,7,-7,9],pillager_outpost:[-11,19,-4,12],ruined_portal:[-8,12,-8,12]},SURF_DEFS=[JTEMP,WHUT,IGLOO,OUTPOST,RPORTAL];
@@ -5607,7 +5730,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   statT+=dt;if(statT>.25&&started){statT=0;updateStats();
     if(showDebug){const l=lightAt(p.pos.x,p.pos.y+1,p.pos.z),bm=biomeOf(Math.floor(p.pos.x),Math.floor(p.pos.z),terrainH(Math.floor(p.pos.x),Math.floor(p.pos.z)));
       const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),face=Math.abs(fx)>Math.abs(fz)?(fx>0?'east (Towards positive X)':'west (Towards negative X)'):(fz>0?'south (Towards positive Z)':'north (Towards negative Z)');
-      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=cbF===1?'dripstone_caves':cbF===2?'lush_caves':cbF===3&&p.pos.y<DS_Y?'deep_dark':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
+      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=DIM==='nether'?['nether_wastes','soul_sand_valley','crimson_forest','warped_forest','basalt_deltas'][nBiome(bx,bz)]:DIM==='end'?endBiomeKey(bx,bz):cbF===1?'dripstone_caves':cbF===2?'lush_caves':cbF===3&&p.pos.y<DS_Y?'deep_dark':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
       const L=[`Blockcraft 1.20 (craft.html/vanilla)`,`${fps} fps T: inf vsync fancy fancy-clouds B: 2`,`C: ${chunks.size} loaded  D: ${RD}  E: ${mobs.length}  I: ${ents.length}  P: ${parts.length}`,'',
         `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-YO).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-YO} ${bz} [${bx&15} ${(by-YO)&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-YO)>>4} ${bz>>4}`,
         `Facing: ${face} (${my.toFixed(1)} / ${(-p.pitch/DEG).toFixed(1)})`,`Client Light: ${Math.max(l[0],l[1])} (${l[0]} sky, ${l[1]} block)`,`Biome: minecraft:${bk}`,`Day ${Math.floor(worldTime/DAYLEN)}  Time ${Math.floor((worldTime%DAYLEN)/DAYLEN*24000)}`,`Seed: ${SEED}`+(MPS?`  Server: ${MPS.sid} (${MPS.count})`:'')];
