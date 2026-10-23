@@ -20,6 +20,7 @@ let nextId = 1;
 class Room {
   constructor(code, priv, trackIdx, lb) {
     this.code = code; this.priv = priv; this.lb = lb;
+    this.bots = !priv;            // 방을 만들면 기본은 봇 없이 우리끼리 (방장이 켤 수 있어요)
     this.track = trackIdx % TRACKS.length; this.T = TRACKS[this.track];
     this.players = new Map();
     this.state = 'lobby'; this.timer = priv ? 90 : LOBBY_T; this.tick = 0;
@@ -62,12 +63,13 @@ class Room {
     this.sendRoom();
   }
 
+  setBots(v) { if (this.state === 'lobby') { this.bots = !!v; this.sendRoom(); } }
   setTrack(i) { if (this.state === 'lobby') { this.track = mod(i | 0, TRACKS.length); this.T = TRACKS[this.track]; this.sendRoom(); } }
 
   startCountdown() {
     // 봇 채우기
     const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5);
-    while (this.players.size < FILL_CARS) { const b = this.mkPlayer(names.pop() || 'BOT', true); this.players.set(b.id, b); }
+    while (this.bots && this.players.size < FILL_CARS) { const b = this.mkPlayer(names.pop() || 'BOT', true); this.players.set(b.id, b); }
     const list = [...this.players.values()].sort(() => Math.random() - 0.5);
     list.sort((a, b) => (a.bot - b.bot));          // 사람은 뒤쪽 출발 대신 섞어서
     list.forEach((p, i) => {
@@ -479,7 +481,7 @@ class Room {
   }
   sendRoom() {
     const players = [...this.players.values()].map(p => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kart: p.kart, spect: p.spect }));
-    this.broadcast({ t: 'room', code: this.priv ? this.code : '', priv: this.priv, track: this.track, st: this.state, tm: r2(this.timer), host: this.hostId, players, laps: C.LAPS, lb: this.lb.get(this.T.id) });
+    this.broadcast({ t: 'room', code: this.priv ? this.code : '', priv: this.priv, track: this.track, st: this.state, tm: r2(this.timer), host: this.hostId, players, bots: this.bots ? 1 : 0, laps: C.LAPS, lb: this.lb.get(this.T.id) });
   }
   broadcast(m) { const s = JSON.stringify(m); for (const p of this.players.values()) if (p.conn) p.conn.sendRaw(s); }
 

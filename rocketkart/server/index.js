@@ -100,6 +100,7 @@ wss.on('connection', (ws, req) => {
     if (!room || !me) return;
     if (m.t === 'start' && room.priv && room.hostId === me.id && room.state === 'lobby') room.startCountdown();
     else if (m.t === 'track' && room.priv && room.hostId === me.id) room.setTrack(m.v);
+    else if (m.t === 'bots' && room.priv && room.hostId === me.id) room.setBots(m.v);
     else if (m.t === 'leave') { room.remove(me.id); room = null; me = null; }
     else if (m.t === 'ping') conn.sendRaw(JSON.stringify({ t: 'pong', c: m.c, k: room.tick }));
   });

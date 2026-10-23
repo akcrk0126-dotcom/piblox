@@ -1176,13 +1176,15 @@ function hostLocal(r, name) {
     if (m.t === 'i') r.pushInputs(me, m.l);
     else if (m.t === 'start' && r.state === 'lobby') r.startCountdown();
     else if (m.t === 'track') r.setTrack(m.v);
+    else if (m.t === 'bots') r.setBots(m.v);
     else if (m.t === 'ping') conn.sendRaw(JSON.stringify({ t: 'pong', c: m.c, k: r.tick }));
   };
   L.close = () => { L.readyState = 3; clearInterval(L.timer); if (L.onClose) L.onClose(); };
   return L;
 }
 function localWS(join) {
-  const L = hostLocal(new window.RKGame.Room('', true, join.track | 0, localLb), join.name);
+  const r = new window.RKGame.Room('', true, join.track | 0, localLb); r.bots = true;   // 혼자 달리기는 봇과 함께
+  const L = hostLocal(r, join.name);
   L.room.startCountdown();
   return L;
 }
@@ -1709,6 +1711,8 @@ function renderLobby() {
   $('lCodeHelp').textContent = !room.code && room.priv ? '혼자 달리기 · 봇 5대와 함께 달려요' : room.priv ? '친구에게 이 코드를 알려 주세요' : '빠른 시작 · 사람이 모자라면 봇이 함께 달려요';
   $('lPlayers').innerHTML = room.players.map(p => `<li><span class="dot" style="color:${hex(p.color)};background:currentColor"></span>${esc(p.name)}${p.id === room.host && room.priv ? ' 👑' : ''}${p.id === myId ? ' (나)' : ''}</li>`).join('');
   const host = room.priv && room.host === myId;
+  $('bBots').textContent = room.bots ? '🤖 봇 채우기: 켜짐' : '👥 우리끼리만 (봇 없음)';
+  if (room.priv && room.code) $('lCodeHelp').textContent = '친구에게 이 코드를 알려 주세요 · ' + (room.bots ? '빈자리는 봇이 채워요' : '봇 없이 들어온 사람끼리만 달려요');
   $('hostBox').style.display = host ? 'block' : 'none';
   if (host) $('lTrackSel').value = room.track;
 }
@@ -1753,6 +1757,7 @@ $('bCreate').onclick = () => joinWith({ mode: 'create', track: +$('trackSel').va
 $('bJoin').onclick = () => { const c = $('code').value.trim().toUpperCase(); if (c.length < (online ? 5 : 3)) return showErr(online ? '방 코드 5글자를 넣어 주세요' : '방 코드를 3글자 이상 넣어 주세요'); joinWith({ mode: 'code', code: c }); };
 $('bStart').onclick = () => send({ t: 'start' });
 $('lTrackSel').onchange = () => send({ t: 'track', v: +$('lTrackSel').value });
+$('bBots').onclick = () => send({ t: 'bots', v: room && room.bots ? 0 : 1 });
 $('bLeave').onclick = $('bLeave2').onclick = () => { send({ t: 'leave' }); toMenu(); };
 $('bQual').textContent = quality === 'high' ? '높음' : '낮음';
 $('bQual').onclick = () => { quality = quality === 'high' ? 'low' : 'high'; store.set('q', quality); location.reload(); };
