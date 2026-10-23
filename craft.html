@@ -1391,6 +1391,12 @@ const VEG={3:['oak',.0012,.28,0.008],4:['oakbirch',.035,.14,0.005],5:['birch',.0
   25:['bamboojungle',.09,.3,.004],26:['jungle',.008,.3,.004],27:['savanna',.006,.22,0],28:['oak',.012,.06,0],29:['cactus',.002,0,0],30:['mangrove',.045,.08,0],31:['tallbirch',.05,.12,0.005],32:['megaspruce',.04,.12,0],33:['spruce',.035,.04,0],34:['spruce',.02,.02,0],36:['oak',.001,.3,0.03],
   2:['',0,0,0],0:['',0,0,0],40:['oak',.0008,.12,.006],41:['spruce',.0008,.02,0],42:['spruce',.003,.03,0],43:['spruce',.03,.08,0],44:['savanna',.004,.1,0],45:['',0,0,0],46:['',0,0,0],47:['',0,0,0],48:['',0,0,0],49:['megaspruce',.04,.12,0],35:['',0,0,0],37:['',0,0,0],38:['',0,0,0],39:['',0,0,0],1:['',0,0,0],12:['',0,0,0],21:['',0,0,0],22:['',0,0,0],24:['',0,0,0]};
 const FLOWERS_ALL=[DANDELION,POPPY,CORNFLOWER,ALLIUM,TULIP,OXEYE,AZURE_BLUET,PINK_TULIP,ORANGE_TULIP,WHITE_TULIP,LILY_VALLEY];
+// 마크 Mth.getSeed 그대로 (풀 · 꽃이 칸 가운데서 조금씩 비껴 자라요: 꽃 XZ ±0.25, 풀 · 고사리는 아래로도 0~0.2)
+function mcSeed(x,y,z){let i=BigInt(Math.imul(x,3129871))^(BigInt(z)*116129781n)^BigInt(y);i=BigInt.asIntN(64,i);i=BigInt.asIntN(64,i*i*42317861n+i*11n);return i>>16n}
+const _poC=new Map();
+function plantOffset(x,z,xyz){const k=x*73856093^z*19349663;let s=_poC.get(k);if(s===undefined){s=mcSeed(x,0,z);if(_poC.size>200000)_poC.clear();_poC.set(k,s)}
+  const ox=clamp((Number(s&15n)/15-.5)*.5,-.25,.25),oz=clamp((Number((s>>8n)&15n)/15-.5)*.5,-.25,.25),oy=xyz?(Number((s>>4n)&15n)/15-1)*.2:0;return[ox,oy,oz]}
+const PLANT_OFF={};FLOWERS_ALL.forEach(i=>PLANT_OFF[i]=1);PLANT_OFF[TALLGRASS]=2;if(typeof FERN!=='undefined')PLANT_OFF[FERN]=2;
 const TC_BANDS=[TERRACOTTA,ORANGE_TC,TERRACOTTA,YELLOW_TC,TERRACOTTA,TERRACOTTA,RED_TC,WHITE_TC,TERRACOTTA,BROWN_TC,ORANGE_TC,LGRAY_TC,TERRACOTTA,RED_TC];
 const mcY=mc=>GEN>=4?Math.round(mc+64):Math.round((mc+64)*34/127);   // 마크 높이(-64~320) → 이 세계 높이
 let DS_Y=mcY(0),LAVA_Y=3;
@@ -1485,7 +1491,7 @@ function genChunk(cx,cz){
   for(let z=0;z<16;z++)for(let x=0;x<16;x++){const c=x|z<<4,h=hm[c];if(h>=H-1)continue;const g=b[bi(x,h,z)];if(b[bi(x,h+1,z)]!==AIR)continue;const v=VEG[bio[c]]||['',0,0,0],q=hash2(ox+x,oz+z,SEED+5);
     const bc2=bio[c],taiga=bc2===BIO.TAIGA||bc2===BIO.OLD_TAIGA||bc2===BIO.SNOWY_TAIGA||bc2===BIO.GROVE;
     if(g===PODZOL&&q<.12)b[bi(x,h+1,z)]=q<.006&&taiga?SWEET_BERRY:FERN;
-    else if(g===GRASS||g===SNOWY_GRASS){if(q<v[2])b[bi(x,h+1,z)]=taiga&&q<v[2]*.55?FERN:(bc2===BIO.JUNGLE||bc2===BIO.SPARSE_JUNGLE||bc2===BIO.BAMBOO_JUNGLE)&&q<v[2]*.3?FERN:TALLGRASS;else if(taiga&&q<v[2]+.006)b[bi(x,h+1,z)]=SWEET_BERRY;else if(q<v[2]+v[3]){const fl=bc2===BIO.FLOWER_FOREST||bc2===BIO.MEADOW||bc2===BIO.CHERRY?FLOWERS_ALL:bc2===BIO.SUNFLOWER_PLAINS?[SUNFLOWER,SUNFLOWER,SUNFLOWER,DANDELION,POPPY,AZURE_BLUET,OXEYE]:bc2===BIO.SWAMP?[BLUE_ORCHID]:bc2===BIO.FOREST||bc2===BIO.BIRCH||bc2===BIO.OLD_BIRCH?[DANDELION,POPPY,LILY_VALLEY]:[DANDELION,POPPY,AZURE_BLUET,OXEYE];b[bi(x,h+1,z)]=fl[Math.floor(hash2(ox+x,oz+z,SEED+6)*fl.length)]}
+    else if(g===GRASS||g===SNOWY_GRASS){const pd=noise2((ox+x)/5.5,(oz+z)/5.5,SEED+313)*.5+.5,gq=v[2]*(.2+1.6*pd*pd);if(q<gq)b[bi(x,h+1,z)]=taiga&&q<v[2]*.55?FERN:(bc2===BIO.JUNGLE||bc2===BIO.SPARSE_JUNGLE||bc2===BIO.BAMBOO_JUNGLE)&&q<v[2]*.3?FERN:TALLGRASS;else if(taiga&&q<gq+.006)b[bi(x,h+1,z)]=SWEET_BERRY;else if(q>=v[2]&&q<v[2]+v[3]){const fl=bc2===BIO.FLOWER_FOREST||bc2===BIO.MEADOW||bc2===BIO.CHERRY?FLOWERS_ALL:bc2===BIO.SUNFLOWER_PLAINS?[SUNFLOWER,SUNFLOWER,SUNFLOWER,DANDELION,POPPY,AZURE_BLUET,OXEYE]:bc2===BIO.SWAMP?[BLUE_ORCHID]:bc2===BIO.FOREST||bc2===BIO.BIRCH||bc2===BIO.OLD_BIRCH?[DANDELION,POPPY,LILY_VALLEY]:[DANDELION,POPPY,AZURE_BLUET,OXEYE];b[bi(x,h+1,z)]=fl[Math.floor(hash2(ox+x,oz+z,SEED+6)*fl.length)]}
       else if((bio[c]===BIO.DARK_FOREST||bio[c]===BIO.SWAMP)&&q<v[2]+v[3]+.01)b[bi(x,h+1,z)]=hash2(ox+x,oz+z,SEED+9)<.5?RED_MUSHROOM:BROWN_MUSHROOM}
     else if(g===MYCELIUM&&q<.03)b[bi(x,h+1,z)]=q<.015?RED_MUSHROOM:BROWN_MUSHROOM;
     else if((g===SAND||g===RED_SAND)&&(bio[c]===BIO.DESERT||bio[c]===BIO.BADLANDS)&&q<.012)b[bi(x,h+1,z)]=DEAD_BUSH;
@@ -1614,8 +1620,8 @@ function buildChunk(ch){
   const MM=ch.m;const gt=ch.gt;const tintOf=(b,x,z)=>{if(!b.tint)return ONE;if(Array.isArray(b.tint))return b.tint;const c=(x|z<<4)*3,g=[gt[c],gt[c+1],gt[c+2]];return b.tint==='fol'?[g[0]*.8,g[1]*.92,g[2]*.7]:g};
   const cyMax=Math.min(H-1,ch.maxY);
   for(let y=0;y<=cyMax;y++)for(let z=0;z<16;z++)for(let x=0;x<16;x++){const i=(y+1)*WW+(z+PD)*W+x+PD,id=R[i];if(!id)continue;const b=B[id];
-    if(b.cross){const l=[SL[i]/15,BLL[i]/15,1],uv=tileUV(b.tex[0]),ls=[l,l,l,l],tc=tintOf(b,x,z);const a=.15,c=.85;
-      const q1=[[x+a,y,z+a],[x+c,y,z+c],[x+c,y+1,z+c],[x+a,y+1,z+a]],q2=[[x+a,y,z+c],[x+c,y,z+a],[x+c,y+1,z+a],[x+a,y+1,z+c]];
+    if(b.cross){const l=[SL[i]/15,BLL[i]/15,1],uv=tileUV(b.tex[0]),ls=[l,l,l,l],tc=tintOf(b,x,z);const a=.05,c=.95,ot=PLANT_OFF[id];let ox=0,oy=0,oz=0;if(ot){const o=plantOffset(x,z,ot===2);ox=o[0];oy=o[1];oz=o[2]}
+      const q1=[[x+a+ox,y+oy,z+a+oz],[x+c+ox,y+oy,z+c+oz],[x+c+ox,y+1+oy,z+c+oz],[x+a+ox,y+1+oy,z+a+oz]],q2=[[x+a+ox,y+oy,z+c+oz],[x+c+ox,y+oy,z+a+oz],[x+c+ox,y+1+oy,z+a+oz],[x+a+ox,y+1+oy,z+c+oz]];
       quad(M,q1,uv,ls,0,tc);quad(M,[q1[1],q1[0],q1[3],q1[2]],uv,ls,0,tc);quad(M,q2,uv,ls,0,tc);quad(M,[q2[1],q2[0],q2[3],q2[2]],uv,ls,0,tc);continue}
     if(b.torch){const l=[SL[i]/15,BLL[i]/15,1],ls=[l,l,l,l],t=tileUV(b.tex[0]),tw=(t[2]-t[0]),u0=t[0]+tw*7/16,u1=t[0]+tw*9/16,v0=t[1],v1=t[1]+(t[3]-t[1])*10/16;
       const a=x+7/16,c=x+9/16,d=z+7/16,e=z+9/16,h=y+10/16;
@@ -1726,7 +1732,47 @@ const stars=new THREE.Points(starG,new THREE.PointsMaterial({color:0xffffff,size
 sunM.renderOrder=moonM.renderOrder=stars.renderOrder=-1;
 const cloudTex=(()=>{const c=cv(64,64),g=c.getContext('2d');for(let y=0;y<64;y++)for(let x=0;x<64;x++){const n=fbm2(x/7,y/7,4242,3);if(n>.12){g.fillStyle='#fff';g.fillRect(x,y,1,1)}}const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);return t})();
 const clouds=new THREE.Mesh(new THREE.PlaneGeometry(1536,1536),new THREE.MeshBasicMaterial({map:cloudTex,transparent:true,opacity:.78,fog:false,depthWrite:false,side:THREE.DoubleSide}));
-clouds.rotation.x=-Math.PI/2;clouds.renderOrder=1;scene.add(clouds);
+clouds.rotation.x=-Math.PI/2;clouds.renderOrder=1;clouds.visible=false;
+// ── 마크 입체 구름 (Fancy): 12×12칸 덩어리 · 두께 4 · 높이 192 · 서쪽으로 0.6칸/초 · 윗면 1.0 / 아랫면 0.7 / 옆면 0.9·0.8 ──
+const CLOUD_N=256,cloudMap=(()=>{const m=new Uint8Array(CLOUD_N*CLOUD_N);for(let y=0;y<CLOUD_N;y++)for(let x=0;x<CLOUD_N;x++){
+  const n=fbm2(x/9,y/9,4242,3)*.75+fbm2(x/3.3,y/3.3,977,2)*.25;m[y*CLOUD_N+x]=n>.16?1:0}return m})();
+const cloudAt=(i,j)=>cloudMap[(((j%CLOUD_N)+CLOUD_N)%CLOUD_N)*CLOUD_N+(((i%CLOUD_N)+CLOUD_N)%CLOUD_N)];
+const CLOUD_R=32,CELL=12,CLOUD_H=4;
+const cloudU={col:{value:new THREE.Color(1,1,1)},fogC:{value:new THREE.Color()},fogN:{value:150},fogF:{value:240},camXZ:{value:new THREE.Vector2()}};
+const CLOUD_VS=`attribute float shade;varying float vS;varying float vD;uniform vec2 camXZ;void main(){vS=shade;vec4 wp=modelMatrix*vec4(position,1.);vD=length(wp.xz-camXZ);gl_Position=projectionMatrix*viewMatrix*wp;}`;
+const CLOUD_FS=`uniform vec3 col,fogC;uniform float fogN,fogF;varying float vS;varying float vD;void main(){vec3 c=col*vS;float f=smoothstep(fogN,fogF,vD);gl_FragColor=vec4(mix(c,fogC,f),.8*(1.-f*.85));}`;
+const cloudDepthMat=new THREE.ShaderMaterial({uniforms:cloudU,vertexShader:CLOUD_VS,fragmentShader:CLOUD_FS,colorWrite:false,depthWrite:true,side:THREE.DoubleSide});
+const cloudColMat=new THREE.ShaderMaterial({uniforms:cloudU,vertexShader:CLOUD_VS,fragmentShader:CLOUD_FS,transparent:true,depthWrite:false,depthFunc:THREE.LessEqualDepth,side:THREE.DoubleSide});
+const cloudGeo=new THREE.BufferGeometry();const cloudA=new THREE.Mesh(cloudGeo,cloudDepthMat),cloudB=new THREE.Mesh(cloudGeo,cloudColMat);
+cloudA.renderOrder=4;cloudB.renderOrder=5;cloudA.frustumCulled=cloudB.frustumCulled=false;scene.add(cloudA);scene.add(cloudB);
+let cloudKey='';
+function buildClouds(ci,cj){const P=[],S=[],I=[];const q=(a,b,c,d,s)=>{const n=P.length/3;P.push(...a,...b,...c,...d);S.push(s,s,s,s);I.push(n,n+1,n+2,n,n+2,n+3)};
+  for(let dj=-CLOUD_R;dj<CLOUD_R;dj++)for(let di=-CLOUD_R;di<CLOUD_R;di++){if(di*di+dj*dj>CLOUD_R*CLOUD_R)continue;const i=ci+di,j=cj+dj;if(!cloudAt(i,j))continue;
+    const x0=di*CELL,x1=x0+CELL,z0=dj*CELL,z1=z0+CELL,y0=0,y1=CLOUD_H;
+    q([x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],1);q([x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],.7);
+    if(!cloudAt(i-1,j))q([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],.9);if(!cloudAt(i+1,j))q([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],.9);
+    if(!cloudAt(i,j-1))q([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],.8);if(!cloudAt(i,j+1))q([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],.8)}
+  cloudGeo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));cloudGeo.setAttribute('shade',new THREE.Float32BufferAttribute(S,1));cloudGeo.setIndex(I);cloudGeo.computeBoundingSphere()}
+let cloudTicks=0;
+function updateClouds(dt,fogC,dl){const on=DIM==='over'&&cloudsOn;cloudA.visible=cloudB.visible=on;if(!on)return;cloudTicks+=dt*20;
+  const cy=GEN>=4?192+YO:128,wx=camera.position.x+cloudTicks*.03,ci=Math.floor(wx/CELL),cj=Math.floor(camera.position.z/CELL),k=ci+','+cj;
+  if(k!==cloudKey){cloudKey=k;buildClouds(ci,cj)}
+  const ox=ci*CELL-cloudTicks*.03,oz=cj*CELL;cloudA.position.set(ox,cy,oz);cloudB.position.copy(cloudA.position);
+  // 구름 색: 낮엔 하양, 밤엔 어둡게 (getCloudColor)
+  cloudU.col.value.setRGB(dl*.9+.1,dl*.9+.1,dl*.85+.15);cloudU.fogC.value.copy(fogC);cloudU.camXZ.value.set(camera.position.x,camera.position.z);cloudU.fogF.value=CLOUD_R*CELL*.98;cloudU.fogN.value=CLOUD_R*CELL*.3}
+let cloudsOn=true;try{cloudsOn=localStorage.getItem('bc_opt_clouds')!=='0'}catch(e){}
+// ── 해 뜰 때 · 질 때 노을 (getSunriseColor 부채꼴: 해가 있는 수평선 쪽에 넓게) ──
+const sunriseGeo=new THREE.BufferGeometry(),sunriseMesh=new THREE.Mesh(sunriseGeo,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,depthWrite:false,fog:false,side:THREE.DoubleSide}));
+sunriseMesh.renderOrder=-2;scene.add(sunriseMesh);
+{const idx=[];for(let j=1;j<=16;j++)idx.push(0,j,j+1);sunriseGeo.setIndex(idx);sunriseGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(18*3),3));sunriseGeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(18*4),4))}
+// f1 = 해 높이 (마크 cos(timeOfDay·2π)) · -0.4 ~ 0.4 일 때만
+function sunriseColor(f1){if(f1<-.4||f1>.4)return null;const f3=f1/.4*.5+.5;let f4=1-(1-Math.sin(f3*Math.PI))*.99;f4*=f4;return[f3*.3+.7,f3*f3*.7+.2,.2,f4]}
+function updateSunrise(f1,hx){const c=sunriseColor(f1);sunriseMesh.visible=!!c&&DIM==='over'&&!underWater;if(!sunriseMesh.visible)return null;
+  const P=sunriseGeo.attributes.position.array,C=sunriseGeo.attributes.color.array,D=4;
+  P[0]=hx*100*D;P[1]=0;P[2]=0;C[0]=c[0];C[1]=c[1];C[2]=c[2];C[3]=c[3];
+  for(let j=0;j<=16;j++){const a=j*Math.PI*2/16,s=Math.sin(a),co=Math.cos(a),k=(j+1);P[k*3]=hx*120*co*D;P[k*3+1]=40*c[3]*co*D;P[k*3+2]=120*s*D;C[k*4]=c[0];C[k*4+1]=c[1];C[k*4+2]=c[2];C[k*4+3]=0}
+  sunriseGeo.attributes.position.needsUpdate=sunriseGeo.attributes.color.needsUpdate=true;sunriseGeo.computeBoundingSphere();sunriseMesh.position.copy(camera.position);return c}
+
 const DAYLEN=1200;let worldTime=DAYLEN*.04,daylight=1;
 const C_DAY=new THREE.Color(0x78a7ff),C_NIGHT=new THREE.Color(0x05070f),C_SET=new THREE.Color(0xf08a4b),C_FOGD=new THREE.Color(0xc0d8ff),C_SKYT=new THREE.Color(0x78a7ff),tmpC=new THREE.Color(),fogCol=new THREE.Color();
 const BIO_TEMP=[.5,0,.8,.8,.7,.6,.25,0,2,2,.95,1,-.3,.8,.7,2,.9,.7,0,.5,.2,.5,.5,.5,.2,.95,.95,2,2,2,.8,.6,.25,-.5,-.2,-.7,.8,.5,.5,.05,.5,0,.2,.2,2,-.7,.5,.5,.5,.3];
@@ -1740,7 +1786,9 @@ function updateSky(dt){skyDome.position.copy(camera.position);skyDome.visible=DI
   const a=(worldTime/DAYLEN)*Math.PI*2,s=Math.sin(a);const dl=sm(clamp((s+.18)/.5,0,1));daylight=.2+.8*dl;
   sky.position.copy(camera.position);sky.rotation.z=a-Math.PI/2;
   tmpC.copy(C_NIGHT).lerp(C_SKYT,dl);const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
-  fogCol.copy(C_NIGHT).lerp(C_FOGD,dl).lerp(C_SET,set*.45);
+  // 마크 안개색: 바이옴 안개색 × 밝기 → 하늘색 쪽으로 22% (시야 거리 비율) → 해 쪽을 보면 노을색
+  fogCol.copy(C_NIGHT).lerp(C_FOGD,dl).lerp(tmpC,.22);
+  {const hx=Math.cos(a)>0?1:-1,sr=updateSunrise(s,hx);if(sr){const look=new V3(0,0,-1).applyQuaternion(camera.quaternion);let f8=look.x*hx;if(f8>0){f8*=sr[3];fogCol.r=fogCol.r*(1-f8)+sr[0]*f8;fogCol.g=fogCol.g*(1-f8)+sr[1]*f8;fogCol.b=fogCol.b*(1-f8)+sr[2]*f8}}}
   if(underWater){fogCol.setRGB(.08,.16,.5);tmpC.copy(fogCol)}
   if(darkT>0){fogCol.setRGB(0,0,0);tmpC.setRGB(0,0,0)}
   renderer.setClearColor(tmpC);
@@ -1749,8 +1797,7 @@ function updateSky(dt){skyDome.position.copy(camera.position);skyDome.visible=DI
   let far=underWater?14:RD*16-4;if(darkT>0)far=Math.min(far,12+5*Math.sin(performance.now()/500));const near=underWater?1:darkT>0?2:far-Math.max(12,far*.16);   // 마크 1.18: 시야 끝 몇 칸만 안개
   for(const m of [worldMat,waterMat]){m.uniforms.day.value=daylight;m.uniforms.fogC.value.copy(fogCol);m.uniforms.fogN.value=near;m.uniforms.fogF.value=far}
   scene.fog.color.copy(fogCol);scene.fog.near=near;scene.fog.far=far;
-  clouds.position.set(camera.position.x,GEN>=4?H+4:112,camera.position.z);cloudDrift+=dt*1.2;
-  cloudTex.offset.set((camera.position.x+cloudDrift)/768,-camera.position.z/768);clouds.material.color.setScalar(.1+.9*dl);clouds.material.opacity=.45+.35*dl;
+  updateClouds(dt,fogCol,dl);
 }
 let cloudDrift=0,underWater=false;
 
@@ -2717,7 +2764,7 @@ const frameMeta=(s,x,z)=>{const dx=x-s.x,dz=z-s.z;const face=Math.abs(dx)===2?(d
 function nearestStronghold(x,z){if(!SHOLDS)SHOLDS=GEN>=4?strongholds4():strongholds();let best=null,bd=1e18;for(const s of SHOLDS){const d=(s.x-x)**2+(s.z-z)**2;if(d<bd){bd=d;best=s}}return best}
 
 // ── 하늘 · 빛
-function dimVisual(){const o=DIM==='over';sky.visible=o;clouds.visible=o;stars.visible=o||DIM==='end';
+function dimVisual(){const o=DIM==='over';sky.visible=o;clouds.visible=false;if(!o){cloudA.visible=cloudB.visible=sunriseMesh.visible=false}stars.visible=o||DIM==='end';
   for(const m of [worldMat,waterMat])m.uniforms.amb.value=FULLBRIGHT?1:DIM==='nether'?.36:DIM==='end'?.18:.035;
   $('dimTint').style.background=DIM==='nether'?'rgba(120,20,0,.08)':DIM==='end'?'rgba(40,10,60,.12)':'transparent'}
 function dimSky(dt){if(DIM==='over')return false;
@@ -4537,7 +4584,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
 let vigB=0;
 requestAnimationFrame(frame);
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
-window.__BC={setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
+window.__BC={TEX,tileList,setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
 </body>
 </html>
