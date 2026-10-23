@@ -1724,7 +1724,7 @@ function biomeMC3(x,z,h){const n=mnoise3(x,z),ti=BLT(n.T),hi=BLH(n.Hu),ci=BLC(n.
   const nc=BTAB.bounds.C.length-1,ne=BTAB.bounds.E.length-1,nw=BTAB.bounds.W.length-1,nh=BTAB.bounds.H.length-1;
   let b=BIDS[BTAB.table.charCodeAt((((ti*nh+hi)*nc+ci)*ne+ei)*nw+wi)-65];
   // 1.19 맹그로브 늪: 따뜻한 늪 / 1.20 벚나무 숲: 시원한 초원의 변형(기묘함 > 0)
-  if(b===13&&ti>=3)b=BIO.MANGROVE;if(b===23&&n.W>0&&((ti===1&&hi===0)||(ti===2&&hi<=1)))b=BIO.CHERRY;
+  if(b===13&&ti>=3)b=BIO.MANGROVE;if(b===BIO.DARK_FOREST&&n.W>.3)b=BIO.PALE_GARDEN;if(b===23&&n.W>0&&((ti===1&&hi===0)||(ti===2&&hi<=1)))b=BIO.CHERRY;
   return b}
 const C_COLD=[.5,.71,.59],C_DRY=[.75,.72,.33],C_WET=[.28,.8,.2],C_MID=[.57,.74,.35];
 const BIO_TINT={30:[.38,.55,.24],25:[.33,.74,.18],26:[.38,.72,.22],28:[.56,.52,.3],29:[.58,.5,.3],27:[.68,.66,.3],32:[.46,.6,.32],13:[.42,.5,.26],14:[.4,.62,.24],15:[.58,.5,.3],16:[.42,.72,.3],19:[.5,.76,.42],23:[.5,.77,.45]};
@@ -1841,6 +1841,7 @@ function genChunk(cx,cz){
     else if(g===MYCELIUM&&q<.03)b[bi(x,h+1,z)]=q<.015?RED_MUSHROOM:BROWN_MUSHROOM;
     else if((g===SAND||g===RED_SAND)&&(bio[c]===BIO.DESERT||bio[c]===BIO.BADLANDS)&&q<.012)b[bi(x,h+1,z)]=DEAD_BUSH;
     if(bio[c]===BIO.WARM_OCEAN&&h<SEA-2&&q<.25)b[bi(x,h+1,z)]=[CORAL_TUBE,CORAL_BRAIN,CORAL_FIRE][Math.floor(q*12)%3]}
+  bioFeatures(b,ox,oz,hm,bio,cx,cz);
   maxY=stampVillages(b,ox,oz,maxY,hm);
   return finishChunk(cx,cz,b,maxY,bio,gt)}
 const DV0=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
@@ -1849,6 +1850,7 @@ function finishChunk(cx,cz,b,maxY,bio,gt){
   const ch={cx,cz,b,m,maxY:Math.min(H-1,maxY+1),mesh:null,wmesh:null,dirty:true,sky:null,bl:null,bio,gt,fresh:!e};if(!e&&Math.random()<.1&&typeof pendingAnimals!=='undefined')pendingAnimals.push([cx,cz]);
   chunks.set(ck(cx,cz),ch);return ch}
 function placeTree(kind,x,y,z,rnd,set){
+  if(kind==='paleoak'){paleOakTree(x,y,z,rnd,set);return}
   if(kind==='bamboojungle')kind=rnd<.3?'jungle':'bamboo';
   if(kind==='bamboo'){const n=6+Math.floor(rnd*9);for(let i=1;i<=n;i++)set(x,y+i,z,BAMBOO);return}
   if(kind==='tallbirch'){const th=8+Math.floor(rnd*5);for(let ly=y+th-3;ly<=y+th+1;ly++){const top=ly>=y+th;for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){const r2=top?1:2;if(Math.abs(dx)>r2||Math.abs(dz)>r2)continue;if(Math.abs(dx)===r2&&Math.abs(dz)===r2&&hash3(x+dx,ly,z+dz,SEED+3)<.5)continue;set(x+dx,ly,z+dz,BIRCH_LEAVES)}}for(let i=1;i<=th;i++)set(x,y+i,z,BIRCH_LOG);return}
@@ -2046,8 +2048,9 @@ function buildChunk(ch){
         const av=p1&&p2?0:3-p1-p2-pc;ao.push(av);let ss=SL[a],bb=BLL[a],n=1;
         if(!p1){ss+=SL[s1];bb+=BLL[s1];n++}if(!p2){ss+=SL[s2];bb+=BLL[s2];n++}if(!pc&&!(p1&&p2)){ss+=SL[cc];bb+=BLL[cc];n++}
         lts.push([ss/n/15,bb/n/15,F.s*AOK[av]])}
-      const t=f===front?TEX[b.face||b.mface]:b.tex[f];
-      quad(b.trans?WM:M,F.c.map(c=>[x+c[0],y+c[1],z+c[2]]),tileUV(t),lts,ao[0]+ao[2]<ao[1]+ao[3],tc)}}
+      let t=f===front?TEX[b.face||b.mface]:b.tex[f],vs=F.c.map(c=>[x+c[0],y+c[1],z+c[2]]),L4=lts,A4=ao;
+      if(b.log&&(MV&3)){const axis=MV&3,fa=F.k===0?1:F.k===2?2:0;if(fa===axis)t=b.tex[2];else{t=b.tex[0];if(!(axis===2&&fa===0)){vs=[vs[1],vs[2],vs[3],vs[0]];L4=[lts[1],lts[2],lts[3],lts[0]];A4=[ao[1],ao[2],ao[3],ao[0]]}}}
+      quad(b.trans?WM:M,vs,tileUV(t),L4,A4[0]+A4[2]<A4[1]+A4[3],tc)}}
   setMesh(ch,'mesh',M,worldMat);setMesh(ch,'wmesh',WM,waterMat);ch.dirty=false}
 function setMesh(ch,k,M,mat){if(ch[k]){scene.remove(ch[k]);ch[k].geometry.dispose();ch[k]=null}if(!M.I.length)return;
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(M.P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(M.U,2));g.setAttribute('lt',new THREE.Float32BufferAttribute(M.L,3));g.setAttribute('tc',new THREE.Float32BufferAttribute(M.T,3));g.setIndex(M.I);g.computeBoundingSphere();
@@ -2126,6 +2129,63 @@ function updateSunrise(f1,hx){const c=sunriseColor(f1);sunriseMesh.visible=!!c&&
 const DAYLEN=1200;let worldTime=DAYLEN*.04,daylight=1;
 const C_DAY=new THREE.Color(0x78a7ff),C_NIGHT=new THREE.Color(0x05070f),C_SET=new THREE.Color(0xf08a4b),C_FOGD=new THREE.Color(0xc0d8ff),C_SKYT=new THREE.Color(0x78a7ff),tmpC=new THREE.Color(),fogCol=new THREE.Color();
 const BIO_TEMP=[.5,0,.8,.8,.7,.6,.25,0,2,2,.95,1,-.3,.8,.7,2,.9,.7,0,.5,.2,.5,.5,.5,.2,.95,.95,2,2,2,.8,.6,.25,-.5,-.2,-.7,.8,.5,.5,.05,.5,0,.2,.2,2,-.7,.5,.5,.5,.3];
+// ── 새 바이옴: 창백한 정원 (1.21.4, 짙은 숲 자리 중 기묘함이 높은 곳) · 동굴 바이옴 이름 (F3 · /locate 용)
+BIO.PALE_GARDEN=50;BIO.LUSH_CAVES=51;BIO.DRIPSTONE_CAVES=52;BIO.DEEP_DARK=53;
+BIO_N.push('Pale Garden','Lush Caves','Dripstone Caves','Deep Dark');BIO_KO.push('창백한 정원','무성한 동굴','점적석 동굴','딥 다크');
+Object.assign(BNAME2ID,{pale_garden:50,lush_caves:51,dripstone_caves:52,deep_dark:53});
+BIO_TEMP[50]=.7;BIO_TEMP[51]=.5;BIO_TEMP[52]=.8;BIO_TEMP[53]=.8;BIO_TINT[50]=[.47,.51,.45];VEG[50]=['paleoak',.08,.1,0];
+const PALE_SKY=new THREE.Color(.72,.72,.72),PALE_FOG=new THREE.Color(.51,.47,.44);let paleK=0;
+const HEARTS=new Set(),HEART_MOB=new Map();
+// 창백한 참나무: 짙은 참나무처럼 2×2 줄기 · 넓은 잎 · 가장자리 아래로 매달린 이끼 · 가끔 줄기 속 삐걱이 심장
+function paleOakTree(x,y,z,rnd,set){const th=7+Math.floor(rnd*4),heart=hash2(x,z,SEED+1777)<.22;
+  for(let ly=y+th-3;ly<=y+th+1;ly++){const r2=ly>=y+th+1?2:ly===y+th-3?2:3;for(let dz=-r2;dz<=r2+1;dz++)for(let dx=-r2;dx<=r2+1;dx++){if((dx===-r2||dx===r2+1)&&(dz===-r2||dz===r2+1))continue;set(x+dx,ly,z+dz,PALE_OAK_LEAVES)}}
+  for(const [ax,az] of [[0,0],[1,0],[0,1],[1,1]]){set(x+ax,y,z+az,DIRT);for(let i=1;i<=th;i++)set(x+ax,y+i,z+az,heart&&ax===0&&az===0&&i===3?CREAKING_HEART:PALE_OAK_LOG)}
+  if(heart)HEARTS.add(tkey(x,y+3,z));
+  for(let k=0;k<10;k++){const a=k/10*Math.PI*2,dx=Math.round(Math.cos(a)*3.3)+(Math.cos(a)>0?1:0),dz=Math.round(Math.sin(a)*3.3)+(Math.sin(a)>0?1:0),L=1+Math.floor(hash3(x+dx,y,z+dz,SEED+1779)*4);
+    for(let i=0;i<L;i++)set(x+dx,y+th-4-i,z+dz,PALE_HANGING_MOSS)}}
+// 바이옴 장식: 사탕수수 · 호박/수박 · 이끼 낀 바위 · 쓰러진 통나무 · 빙산 · 창백한 이끼
+function bioFeatures(b,ox,oz,hm,bio,cx,cz){const r=mulberry((Math.imul(cx,6151)^Math.imul(cz,99991)^Math.imul(SEED,31))|0),meta=b.__meta||(b.__meta=new Map());
+  const at=(x,y,z)=>b[bi(x,y,z)],put=(x,y,z,id,m)=>{if(x<0||z<0||x>15||z>15||y<1||y>=H-1)return;const i=bi(x,y,z);b[i]=id;if(m)meta.set(i,m)};
+  // 사탕수수: 물 바로 옆 풀 · 모래 · 흙 위에 1~4칸 (추운 곳 제외)
+  for(let k=0;k<12;k++){const x=1+Math.floor(r()*14),z=1+Math.floor(r()*14),c=x|z<<4,h=hm[c],bm=bio[c];if(h<SEA-1||h>SEA+2||(BIO_TEMP[bm]??.8)<.15)continue;const g=at(x,h,z);if(g!==GRASS&&g!==SAND&&g!==DIRT&&g!==RED_SAND&&g!==PODZOL)continue;if(at(x,h+1,z)!==AIR)continue;
+    if(![[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz])=>at(x+dx,h,z+dz)===WATER))continue;const L=1+Math.floor(r()*4);for(let i=1;i<=L;i++){if(at(x,h+i,z)!==AIR)break;put(x,h+i,z,SUGAR_CANE)}}
+  // 호박 (온대) · 수박 (정글) 무더기
+  if(r()<1/22){const x0=3+Math.floor(r()*10),z0=3+Math.floor(r()*10),bm=bio[x0|z0<<4],jungle=bm===BIO.JUNGLE||bm===BIO.SPARSE_JUNGLE||bm===BIO.BAMBOO_JUNGLE,tp=BIO_TEMP[bm]??.8;
+    if(jungle||(tp>=.2&&tp<=1)){const id=jungle?MELON:PUMPKIN;for(let k=0;k<7;k++){const x=x0+Math.floor(r()*5)-2,z=z0+Math.floor(r()*5)-2,h=hm[x|z<<4];if(at(x,h,z)===GRASS&&at(x,h+1,z)===AIR)put(x,h+1,z,id)}}}
+  const bm0=bio[136];
+  // 이끼 낀 바위 (오래된 가문비 · 소나무 타이가)
+  if((bm0===BIO.OLD_TAIGA||bm0===BIO.OLD_PINE_TAIGA)&&r()<.45){for(let n=0;n<1+Math.floor(r()*2);n++){const x0=3+Math.floor(r()*10),z0=3+Math.floor(r()*10),h=hm[x0|z0<<4],R=1+r()*1.1;
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=-1;dy<=2;dy++)if(Math.hypot(dx,dy*1.2,dz)<=R+r()*.5)put(x0+dx,h+dy,z0+dz,MOSSY_COBBLE)}}
+  // 쓰러진 통나무 (1.21.5): 숲 · 자작나무 숲 · 타이가 · 정글 · 늪 · 짙은 숲 가장자리
+  const FL={[BIO.FOREST]:LOG,[BIO.BIRCH]:BIRCH_LOG,[BIO.OLD_BIRCH]:BIRCH_LOG,[BIO.TAIGA]:SPRUCE_LOG,[BIO.OLD_TAIGA]:SPRUCE_LOG,[BIO.SNOWY_TAIGA]:SPRUCE_LOG,[BIO.JUNGLE]:JUNGLE_LOG,[BIO.SPARSE_JUNGLE]:JUNGLE_LOG,[BIO.SWAMP]:LOG,[BIO.FLOWER_FOREST]:LOG};
+  if(FL[bm0]&&r()<.14){const ax=r()<.5,L=4+Math.floor(r()*3),x0=ax?2+Math.floor(r()*(12-L)):3+Math.floor(r()*10),z0=ax?3+Math.floor(r()*10):2+Math.floor(r()*(12-L));let ok=true,h0=hm[x0|z0<<4];
+    for(let i=0;i<L&&ok;i++){const x=ax?x0+i:x0,z=ax?z0:z0+i,h=hm[x|z<<4];if(Math.abs(h-h0)>1||at(x,h+1,z)!==AIR||(at(x,h,z)!==GRASS&&at(x,h,z)!==PODZOL&&at(x,h,z)!==SNOWY_GRASS))ok=false}
+    if(ok){for(let i=0;i<L;i++){const x=ax?x0+i:x0,z=ax?z0:z0+i;put(x,h0+1,z,FL[bm0],ax?1:2);const q=r();if(at(x,h0+2,z)===AIR){if(q<.3)put(x,h0+2,z,MOSS_CARPET);else if(q<.42)put(x,h0+2,z,r()<.5?RED_MUSHROOM:BROWN_MUSHROOM)}}
+      // 끝에 그루터기
+      const sx=ax?x0-2:x0,sz=ax?z0:z0-2;if(sx>=0&&sz>=0&&at(sx,hm[sx|sz<<4]+1,sz)===AIR)put(sx,hm[sx|sz<<4]+1,sz,FL[bm0])}}
+  // 빙산 (얼어붙은 바다 · 깊은 얼어붙은 바다)
+  if((bm0===BIO.FROZEN_OCEAN||bm0===BIO.DEEP_FROZEN_OCEAN)&&r()<.06){const x0=8,z0=8,Hh=6+Math.floor(r()*12),R=3+r()*3;for(let dx=-7;dx<=7;dx++)for(let dz=-7;dz<=7;dz++){const d=Math.hypot(dx,dz)/R;if(d>1)continue;const top=SEA+Math.floor(Hh*(1-d*d)),bot=SEA-Math.floor(Hh*.6*(1-d));
+    for(let y=bot;y<=top;y++)put(x0+dx,y,z0+dz,y>=top-1&&y>SEA+2?SNOW:(r()<.08?BLUE_ICE:PACKED_ICE))}}
+  // 창백한 정원 바닥: 창백한 이끼 · 이끼 카펫
+  for(let z=0;z<16;z++)for(let x=0;x<16;x++){const c=x|z<<4;if(bio[c]!==BIO.PALE_GARDEN)continue;const h=hm[c];if(at(x,h,z)!==GRASS)continue;const v=noise2((ox+x)/6,(oz+z)/6,SEED+1781);if(v>.15){put(x,h,z,PALE_MOSS);if(at(x,h+1,z)===AIR&&v>.35)put(x,h+1,z,PALE_MOSS_CARPET)}else if(at(x,h+1,z)===TALLGRASS&&v<-.3)put(x,h+1,z,AIR)}}
+// 삐걱이: 밤에 심장 둘레에서 나와요 · 플레이어가 쳐다보면 얼어붙어요 · 때려도 다치지 않고 심장을 부숴야 사라져요
+function creakAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos;
+  if(daylight>.6||(m.heart&&getB(m.heart[0],m.heart[1],m.heart[2])!==CREAKING_HEART)){poofFx(m.pos.x,m.pos.y,m.pos.z,.9,2.7);scene.remove(m.g);mobs.splice(mobs.indexOf(m),1);if(m.heart)HEART_MOB.delete(tkey(m.heart[0],m.heart[1],m.heart[2]));if(m.heart&&getB(m.heart[0],m.heart[1],m.heart[2])!==CREAKING_HEART)sfx('break','wood');return}
+  const dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,d=Math.hypot(dx,dz)||1;
+  const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),eye=new V3(m.pos.x,m.pos.y+2.2,m.pos.z),to=eye.clone().sub(camera.position),tl=to.length();to.normalize();
+  const seen=!player.dead&&cd.dot(to)>.62&&tl<48&&los(camera.position,eye);
+  m.vel.y=Math.max(m.vel.y-32*dt,-50);
+  if(seen||creative()||player.dead){m.vel.x=0;m.vel.z=0;m.frozen=true}
+  else{m.frozen=false;const sp=d>1.6?m.D.sp:0;m.vel.x=dx/d*sp;m.vel.z=dz/d*sp;m.yaw=Math.atan2(dx,dz);if(d<2.4&&Math.abs(pp.y-m.pos.y)<2.2&&m.atk<=0){m.atk=1.5;hurtPlayer(3,m.pos,'creaking')}}
+  moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,m.hw,m.h);if(m.onGround){m.vel.y=0;if((m.hitX||m.hitZ)&&!m.frozen)m.vel.y=8.6}
+  if(!m.frozen){m.walk+=dt*5;const sw=Math.sin(m.walk)*.6;m.P.legs.forEach((l,j)=>l.rotation.x=j?sw:-sw);m.P.arms.forEach((a,j)=>a.rotation.x=(j?-sw:sw)*.5)}
+  if(!m.snd2||(m.snd2-=dt)<=0){m.snd2=4+Math.random()*6;if(d<20&&!m.frozen)sfx('place','wood',.5)}}
+let creakT=0;
+function creakTick(dt){creakT-=dt;if(creakT>0||DIM!=='over'||!HEARTS.size)return;creakT=2;if(daylight>.45)return;const pp=player.pos;
+  for(const k of HEARTS){const [hx,hy,hz]=k.split(',').map(Number);if(Math.abs(hx-pp.x)>40||Math.abs(hz-pp.z)>40)continue;if(!chunks.has(ck(hx>>4,hz>>4))||getB(hx,hy,hz)!==CREAKING_HEART)continue;const cur=HEART_MOB.get(k);if(cur&&mobs.includes(cur))continue;
+    for(let a=0;a<8;a++){const x=hx+Math.floor((Math.random()*2-1)*12),z=hz+Math.floor((Math.random()*2-1)*12);let y=-1;for(let yy=hy+10;yy>hy-12;yy--){const g=getB(x,yy,z);if(g&&SOLID[g]&&!(B[g]&&B[g].cut)&&getB(x,yy+1,z)===AIR&&getB(x,yy+2,z)===AIR&&getB(x,yy+3,z)===AIR){y=yy+1;break}}
+      if(y<0||Math.hypot(x-pp.x,z-pp.z)<8)continue;const m=spawnMob('creaking',x+.5,y,z+.5);if(m){m.heart=[hx,hy,hz];m.keep=1;HEART_MOB.set(k,m)}break}}}
+const _fogP=new THREE.Color();
 function skyOfTemp(t,out){const k=clamp(t/3,-1,1),h=(.62222-k*.05)*6,sat=.5+k*.1,i=Math.floor(h),f=h-i,p=1-sat,q=1-sat*f,u=1-sat*(1-f);const c=[[1,u,p],[q,1,p],[p,1,u],[p,q,1],[u,p,1],[1,p,q]][i%6];return out.setRGB(c[0],c[1],c[2])}
 const skyDome=new THREE.Mesh(new THREE.SphereGeometry(500,24,12),new THREE.ShaderMaterial({uniforms:{top:{value:new THREE.Color()},hor:{value:new THREE.Color()}},
   vertexShader:`varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
@@ -2134,13 +2194,13 @@ skyDome.renderOrder=-3;scene.add(skyDome);const _skyT=new THREE.Color();
 // 회색으로 바래기: 밝기 × mul 쪽으로 amt × k 만큼
 function grayTo(c,amt,mul,k){if(amt<=0)return;const g=(c.r*.3+c.g*.59+c.b*.11)*mul,f=1-amt*k;c.setRGB(c.r*f+g*(1-f),c.g*f+g*(1-f),c.b*f+g*(1-f))}
 function updateSky(dt){skyDome.position.copy(camera.position);skyDome.visible=DIM==='over'&&!underWater;if(dimSky(dt))return;
-  {const ch=chunks.get(ck(Math.floor(player.pos.x)>>4,Math.floor(player.pos.z)>>4));if(ch&&ch.bio){skyOfTemp(BIO_TEMP[ch.bio[(Math.floor(player.pos.x)&15)|((Math.floor(player.pos.z)&15)<<4)]]??.8,_skyT);C_SKYT.lerp(_skyT,Math.min(1,dt*.6))}}
+  {const ch=chunks.get(ck(Math.floor(player.pos.x)>>4,Math.floor(player.pos.z)>>4));if(ch&&ch.bio){const bmP=ch.bio[(Math.floor(player.pos.x)&15)|((Math.floor(player.pos.z)&15)<<4)];skyOfTemp(BIO_TEMP[bmP]??.8,_skyT);paleK+=((bmP===BIO.PALE_GARDEN?1:0)-paleK)*Math.min(1,dt*.6);if(paleK>.01)_skyT.lerp(PALE_SKY,paleK);C_SKYT.lerp(_skyT,Math.min(1,dt*.6))}}
   const a=(worldTime/DAYLEN)*Math.PI*2,s=Math.sin(a),rl=rainL(),tl=thunL();const dl=sm(clamp((s+.18)/.5,0,1));daylight=skyFlash>0?1:.2+.8*dl*(1-rl*5/16)*(1-tl*5/16);
   sky.position.copy(camera.position);sky.rotation.z=a-Math.PI/2;
   tmpC.copy(C_NIGHT).lerp(C_SKYT,dl);grayTo(tmpC,rl,.6,.75);grayTo(tmpC,tl,.2,.75);if(skyFlash>0){const f=Math.min(1,skyFlash-PT)*.45;tmpC.setRGB(tmpC.r*(1-f)+.8*f,tmpC.g*(1-f)+.8*f,tmpC.b*(1-f)+f)}
   const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
   // 마크 안개색: 바이옴 안개색 × 밝기 → 하늘색 쪽으로 22% (시야 거리 비율) → 해 쪽을 보면 노을색
-  fogCol.copy(C_NIGHT).lerp(C_FOGD,dl).lerp(tmpC,.22);
+  fogCol.copy(C_NIGHT).lerp(paleK>.01?_fogP.copy(C_FOGD).lerp(PALE_FOG,paleK):C_FOGD,dl).lerp(tmpC,.22);
   {const hx=Math.cos(a)>0?1:-1,sr=updateSunrise(s,hx);if(sr){const look=new V3(0,0,-1).applyQuaternion(camera.quaternion);let f8=look.x*hx;if(f8>0){f8*=sr[3];fogCol.r=fogCol.r*(1-f8)+sr[0]*f8;fogCol.g=fogCol.g*(1-f8)+sr[1]*f8;fogCol.b=fogCol.b*(1-f8)+sr[2]*f8}}}
   if(rl>0){fogCol.r*=1-rl*.5;fogCol.g*=1-rl*.5;fogCol.b*=1-rl*.4}if(tl>0)fogCol.multiplyScalar(1-tl*.5);
   sunM.material.opacity=moonM.material.opacity=1-rl;
@@ -2624,7 +2684,7 @@ let camKick=0,eyeS=1.62;
 function die(why){const p=player;p.dead=true;mouseL=mouseR=false;for(let i=0;i<36;i++)if(inv[i]&&inv[i].e&&inv[i].e.vanish)inv[i]=null;for(let i=0;i<4;i++)if(armor[i]&&armor[i].e&&armor[i].e.vanish)armor[i]=null;
   for(let i=0;i<36;i++)if(inv[i]){spawnItem(inv[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));inv[i]=null}for(let i=0;i<4;i++)if(armor[i]){spawnItem(armor[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));armor[i]=null}p.xp=Math.floor((p.xp||0)*.3);
   if(cursor){spawnItem(cursor,p.pos.x,p.pos.y+1,p.pos.z);cursor=null}closeScreen();
-  $('deadMsg').textContent=({fall:'높은 곳에서 떨어졌습니다',drown:'익사했습니다',starve:'굶어 죽었습니다',zombie:'좀비에게 당했습니다',void:'세상 밖으로 떨어졌습니다',skeleton:'스켈레톤의 화살에 맞았습니다',creeper:'크리퍼가 폭발했습니다',spider:'거미에게 당했습니다',cactus:'선인장에 찔려 죽었습니다',fire:'불에 타 죽었습니다',dragon:'엔더 드래곤에게 당했습니다',zpiglin:'좀비 피글린에게 당했습니다',wskel:'위더 스켈레톤에게 당했습니다',magma:'마그마 큐브에게 당했습니다',enderman:'엔더맨에게 당했습니다',lava:'용암에 빠졌습니다'})[why]||'죽었습니다!';if(why==='pvp'){$('deadMsg').textContent=(player.pvpBy||'플레이어')+'에게 당했습니다';if(MPS)mpChat('☠ '+(player.pvpBy||'플레이어')+' 님에게 쓰러졌어요')}
+  $('deadMsg').textContent=({fall:'높은 곳에서 떨어졌습니다',drown:'익사했습니다',starve:'굶어 죽었습니다',zombie:'좀비에게 당했습니다',void:'세상 밖으로 떨어졌습니다',skeleton:'스켈레톤의 화살에 맞았습니다',creeper:'크리퍼가 폭발했습니다',spider:'거미에게 당했습니다',cactus:'선인장에 찔려 죽었습니다',fire:'불에 타 죽었습니다',creaking:'삐걱이에게 당했습니다',dragon:'엔더 드래곤에게 당했습니다',zpiglin:'좀비 피글린에게 당했습니다',wskel:'위더 스켈레톤에게 당했습니다',magma:'마그마 큐브에게 당했습니다',enderman:'엔더맨에게 당했습니다',lava:'용암에 빠졌습니다'})[why]||'죽었습니다!';if(why==='pvp'){$('deadMsg').textContent=(player.pvpBy||'플레이어')+'에게 당했습니다';if(MPS)mpChat('☠ '+(player.pvpBy||'플레이어')+' 님에게 쓰러졌어요')}
   $('deadScore').innerHTML='점수: <b>'+(player.xp||0)+'</b>';$('dead').classList.remove('hide');['respawn','deadTitle'].forEach(k=>{$(k).disabled=true;setTimeout(()=>$(k).disabled=false,1000)});if(document.pointerLockElement)document.exitPointerLock();renderHotbar();save()}
 function respawn(){const p=player,s=p.spawn;p.lastRest=worldTime;p.hurtTime=0;p.deathTime=0;p.fallDist=0;p.prev.copy(p.pos);if(DIM!=='over'&&s){$('dead').classList.add('hide');p.dead=false;p.hp=20;p.food=20;p.sat=5;p.air=15;switchDim('over',s.x,s.y,s.z,()=>{updateStats()});return}p.pos.set(s.x,s.y,s.z);p.vel.set(0,0,0);p.hp=20;p.food=20;p.sat=5;p.exh=0;p.air=15;p.dead=false;p.fallStart=null;$('dead').classList.add('hide');updateStats();lockPointer()}
 
@@ -2913,7 +2973,7 @@ const MOBDEF={
 function makeMob(type){const g=new THREE.Group(),P={};MOBDEF[type].build(g,P);return{g,P}}
 function spawnMob(type,x,y,z,baby){const D=MOBDEF[type],{g,P}=makeMob(type);if(baby)g.scale.setScalar(.5);scene.add(g);
   const m={type,D,pos:new V3(x,y,z),vel:new V3(),yaw:Math.random()*6.28,hp:D.hp,hw:D.hw*(baby?.5:1),h:D.h*(baby?.5:1),g,P,onGround:false,hitX:false,hitZ:false,ai:{t:0,mv:false,dir:0},panic:0,hurtT:0,dead:false,deadT:0,atk:0,walk:0,burnT:0,fuse:0,snd:3+Math.random()*8,baby:baby?240:0,love:0,breedCD:0,angry:0};mobs.push(m);return m}
-function hurtMob(m,d,src){if(m.dead||m.hurtT>0)return;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type);
+function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx('break','wood')}return}if(m.dead||m.hurtT>0)return;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type);
   if(src){const dx=m.pos.x-src.x,dz=m.pos.z-src.z,l=Math.hypot(dx,dz)||1,kb=player.sprint?9:6;m.vel.x=dx/l*kb;m.vel.z=dz/l*kb;m.vel.y=5.5}
   if(!m.D.hostile)m.panic=4;else m.angry=30;
   if(m.D.split&&m.hp<=0)for(let k=0;k<2+Math.floor(Math.random()*2);k++)spawnMob(m.D.split,m.pos.x+(Math.random()-.5),m.pos.y+.3,m.pos.z+(Math.random()-.5));
@@ -3010,7 +3070,7 @@ function packSpawn(t,x,y,z,ok,room){const n=Math.min(packN(t),room),pp=player.po
     if(Math.hypot(px+.5-pp.x,pz+.5-pp.z,y-pp.y)<24||!spawnSpot(px,y,pz)||!ok(px,y,pz))continue;spawnMob(t,px+.5,y,pz+.5);c++}return c}
 const slimeChunk=(x,z)=>hash2(x>>4,z>>4,SEED+987)<.1;
 let aniT=0;
-function spawnTick(dt){villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;extraSpawns3();const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
+function spawnTick(dt){villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);creakTick(dt);aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;extraSpawns3();const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
   if(DIM!=='over'){dimSpawn(hos);return}
   // 청크가 처음 만들어질 때 동물 무리 (마크: 청크당 10%)
   for(let k=pendingAnimals.length-1;k>=0;k--){const [cx,cz]=pendingAnimals[k];const ch=chunks.get(ck(cx,cz));if(!ch){pendingAnimals.splice(k,1);continue}if(!ch.sky)continue;pendingAnimals.splice(k,1);if(ani>=40)continue;
@@ -3164,7 +3224,7 @@ function rsUse(use,t){const {x,y,z}=t,m=getM(x,y,z);doSwing();
   return false}
 function horizFacing(){const a=((player.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);const dx=-Math.sin(a),dz=-Math.cos(a);return Math.abs(dx)>Math.abs(dz)?(dx>0?0:1):(dz>0?4:5)}
 function lookFacing(){if(player.pitch>.8)return 2;if(player.pitch<-.8)return 3;return horizFacing()}
-function placeMeta(id,t){const pb=B[id];if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
+function placeMeta(id,t){const pb=B[id];if(pb&&pb.log&&!pb.shape)return t.face<2?1:t.face>3?2:0;if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
   if(id===OAK_TRAPDOOR||id===IRON_TRAPDOOR){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return HDIRS.indexOf(OPPD[horizFacing()])|(top?4:0)}
   if(id===OAK_GATE||id===SPRUCE_GATE)return HDIRS.indexOf(horizFacing());if(pb&&pb.mface||id===END_FRAME)return HDIRS.indexOf(faceToward(t.x,t.z));if(id===LADDER)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(id===REPEATER||id===COMPARATOR)return HDIRS.indexOf(horizFacing());if(id===PISTON||id===STICKY_PISTON)return OPPD[lookFacing()];if(id===OBSERVER)return lookFacing();return 0}
 function bucketUse(st){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);
@@ -3886,6 +3946,10 @@ function wardenBuild(g,P){const D=mottle(['#0a2a34','#0c3440','#08222a','#0e3a46
   const hd=part(1.0,.9,.8,0,fT,D);hd.position.y=.45;P.head.add(hd);
   P.tend=[-1,1].map(sx=>{const t=part(.08,.5,.5,0x29dfeb);t.position.set(sx*.56,.8,0);P.head.add(t);return t});
   P.arms=[-.78,.78].map(x=>{const a=piv(part(.36,1.5,.4,0,null,D),x,1.95,0,-.75);g.add(a);return a})}
+Object.assign(MOBDEF,{creaking:{n:'삐걱이',hp:1,hw:.45,h:2.7,sp:3.4,hostile:1,invuln:1,xp:0,drops:()=>[],snd:'zombie',custom:creakAI,build(g,P){const C=0x4a4440,D2=0x2e2a27;
+  P.legs=[-.18,.18].map(x=>{const l=piv(part(.22,1.15,.22,C),x,1.15,0,-.575);g.add(l);return l});P.body=part(.6,1,.32,D2);P.body.position.y=1.65;g.add(P.body);
+  P.head=part(.5,.6,.45,C,faceTex('#3a3430','#ff8a1e',g2=>{g2.fillStyle='#ffc06a';g2.fillRect(1,2,1,1);g2.fillRect(6,2,1,1);g2.fillStyle='#241f1c';g2.fillRect(2,5,4,1)}));P.head.position.y=2.45;g.add(P.head);
+  P.arms=[-.42,.42].map(x=>{const a=piv(part(.2,1.3,.2,C),x,2.1,0,-.6);g.add(a);return a})}}});
 Object.assign(MOBDEF,{
   villager:{n:'주민',hp:20,hw:.3,h:1.95,sp:1.6,villager:1,persist:1,drops:()=>[],snd:'villager',build(g,P){buildVillager(g,P,'none','#6a4a2a')},brain:villagerBrain},
   iron_golem:{n:'철 골렘',armsDown:1,hp:100,hw:.7,h:2.7,sp:1.5,persist:1,golem:1,drops:r=>[[IRON,3+Math.floor(r*3)],[POPPY,Math.floor(r*3)]],snd:'golem',build:golemBuild,brain:golemBrain},
@@ -4126,7 +4190,7 @@ function caveDecoMC(b,ox,oz,hm){const cb=new Uint8Array(256);for(let z=0;z<16;z+
       if(cbx===3&&y<DS_Y-1){if(fl){if(q<.72)b[bi0]=SCULK;if(q>.988)b[i]=SCULK_SENSOR;else if(q>.982)b[i]=SHRIEKER;else if(q>.979)b[bi0]=CATALYST;else if(q>.72&&q<.86)b[i]=SCULK_VEIN}if(ce&&q<.35)b[ai]=SCULK}
       else if(cbx===1){if(fl){if(q<.75)b[bi0]=DRIPSTONE_BLOCK;if(q>.9){const L=1+Math.floor(hash3(ox+x,y,oz+z,SEED+1631)*3);for(let k=0;k<L&&y+k<H-1&&b[bi(x,y+k,z)]===AIR;k++)b[bi(x,y+k,z)]=POINTED_DRIPSTONE}}
         if(ce){if(q<.7)b[ai]=DRIPSTONE_BLOCK;if(q<.14){const L=1+Math.floor(hash3(ox+x,y,oz+z,SEED+1637)*4);for(let k=0;k<L&&y-k>1&&b[bi(x,y-k,z)]===AIR;k++)b[bi(x,y-k,z)]=POINTED_DRIPSTONE}}}
-      else if(cbx===2){if(fl){b[bi0]=q<.08?CLAY:MOSS_BLOCK;if(q>.96&&y>2)b[bi0]=WATER;else if(q>.86)b[i]=MOSS_CARPET;else if(q>.81)b[i]=AZALEA;else if(q>.74)b[i]=TALLGRASS}if(ce&&q<.4)b[ai]=MOSS_BLOCK}
+      else if(cbx===2){if(fl){b[bi0]=q<.08?CLAY:MOSS_BLOCK;if(q>.96&&y>2)b[bi0]=WATER;else if(q>.86)b[i]=MOSS_CARPET;else if(q>.81)b[i]=AZALEA;else if(q>.74)b[i]=TALLGRASS}if(ce){if(q<.4)b[ai]=MOSS_BLOCK;else if(q<.47&&b[ai]!==AIR)b[ai]=ROOTED_DIRT;const q2=hash3(ox+x,y+7,oz+z,SEED+1641);if(b[i]===AIR){if(q2<.1){const L=1+Math.floor(hash3(ox+x,y,oz+z,SEED+1647)*5);for(let k=0;k<L&&y-k>1&&b[bi(x,y-k,z)]===AIR;k++)b[bi(x,y-k,z)]=hash3(ox+x,y-k,oz+z,SEED+1643)<.35?CAVE_VINES_LIT:CAVE_VINES}else if(q2<.115)b[i]=SPORE_BLOSSOM;else if(q2<.15)b[i]=HANGING_ROOTS}}}
       else if(y<DS_Y+4&&fl&&q<.02)b[bi0]=TUFF}}}
 // 고대 도시: 24청크 간격, 딥 다크 아래에만
 const ACSP=24*16,ACITY=new Map();
@@ -4832,7 +4896,7 @@ function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,
 function applyPlayer(d){if(!d)return false;(d.inv||[]).forEach((s,i)=>inv[i]=s);(d.arm||[]).forEach((s,i)=>armor[i]=s);player.xp=d.xp||0;sel=d.sel||0;const q=d.pl;if(!q)return false;player.pos.set(q.pos[0],q.pos[1],q.pos[2]);player.yaw=q.yaw;player.pitch=q.pitch;player.hp=q.hp;player.food=q.food;player.sat=q.sat;player.spawn=q.spawn;player.fly=!!q.fly;
   if(q.dead&&q.spawn){player.hp=20;player.food=20;player.pos.set(q.spawn.x,q.spawn.y,q.spawn.z)}return true}
 addEventListener('pagehide',()=>{save();if(MPS)mpLeave()});document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
-function resetWorld(){DIM='over';STRUCTS.clear();STRUCT_MOBS.clear();ARROW_TRAPS.clear();for(const b of boats)scene.remove(b.m);boats.length=0;player.boat=null;SHOLDS=null;SPAWNERS.clear();DTEMP.clear();BURIED.clear();TRAPS.clear();player.ride=null;player.lastRest=undefined;VPLANS.clear();ACITY.clear();VCHEST.clear();VSPAWNED.clear();VSTATE={};shriekWarn=0;darkT=0;for(const k in tilesByDim)tilesByDim[k].clear();dimState={dragonDead:false,crystals:0,egg:false};clearCrystals();$('bossBar').classList.add('hide');for(const ch of chunks.values()){if(ch.mesh){scene.remove(ch.mesh);ch.mesh.geometry.dispose()}if(ch.wmesh){scene.remove(ch.wmesh);ch.wmesh.geometry.dispose()}}chunks.clear();edits={};tiles.clear();saplings=[];crops=[];decayQ=[];pendingAnimals.length=0;
+function resetWorld(){DIM='over';HEARTS.clear();HEART_MOB.clear();STRUCTS.clear();STRUCT_MOBS.clear();ARROW_TRAPS.clear();for(const b of boats)scene.remove(b.m);boats.length=0;player.boat=null;SHOLDS=null;SPAWNERS.clear();DTEMP.clear();BURIED.clear();TRAPS.clear();player.ride=null;player.lastRest=undefined;VPLANS.clear();ACITY.clear();VCHEST.clear();VSPAWNED.clear();VSTATE={};shriekWarn=0;darkT=0;for(const k in tilesByDim)tilesByDim[k].clear();dimState={dragonDead:false,crystals:0,egg:false};clearCrystals();$('bossBar').classList.add('hide');for(const ch of chunks.values()){if(ch.mesh){scene.remove(ch.mesh);ch.mesh.geometry.dispose()}if(ch.wmesh){scene.remove(ch.wmesh);ch.wmesh.geometry.dispose()}}chunks.clear();edits={};tiles.clear();saplings=[];crops=[];decayQ=[];pendingAnimals.length=0;
   for(const m of mobs)scene.remove(m.g);mobs.length=0;for(const e of ents){scene.remove(e.m)}ents.length=0;for(const p of projs)scene.remove(p.m);projs.length=0;SCH.length=0;SKEYS.clear();rsQ.clear();cmpOut.clear();for(const t of tnts)scene.remove(t.m);tnts.length=0;for(const p of parts)scene.remove(p.m);parts.length=0;
   inv.fill(null);armor.fill(null);player.xp=0;cursor=null;sel=0;craft2.fill(null);craft3.fill(null);closeScreen();Object.assign(player,{hp:20,food:20,sat:5,exh:0,air:15,dead:false,fallStart:null,spawn:null,fly:false,pitch:0,yaw:0});player.vel.set(0,0,0);
   started=false;worldTime=DAYLEN*.04;$('hud').classList.add('hide');$('touch').classList.add('hide');$('dead').classList.add('hide');viewMode=0;heldId=-1}
@@ -4965,7 +5029,7 @@ function stepBiomeSearch(){const S=bioSearch;if(!S)return;const t0=performance.n
   while(performance.now()-t0<6){
     if(S.k>=S.n){S.r+=S.step;S.k=0;S.n=Math.max(1,Math.round(S.r*2*Math.PI/S.step));if(S.r>S.max){chatLine(S.max+'칸 안에서 '+S.label+'을(를) 못 찾았어요','#f88');bioSearch=null;return}}
     const a=S.k/S.n*6.283,x=Math.round(S.px+Math.cos(a)*S.r),z=Math.round(S.pz+Math.sin(a)*S.r);S.k++;
-    const bm=GEN>=3?biomeMC3(x,z,0):biomeOf(x,z,terrainH(x,z));
+    let bm=GEN>=3?biomeMC3(x,z,0):biomeOf(x,z,terrainH(x,z));if(GEN>=2&&S.ids.some(v=>v>50)){const cb=[0,52,51,53][caveBio(x,z)];if(S.ids.includes(cb))bm=cb}
     if(S.ids.includes(bm)){const y=terrainH(x,z)+1,d=Math.round(Math.hypot(x-S.px,z-S.pz));
       chatLine(`가장 가까운 ${BIO_N[bm]}: ${x}, ${y-YO}, ${z}  (${d}칸, ${dirName(x-S.px,z-S.pz)}쪽) — /tp ${x} ${y-YO} ${z}`,'#55ffff');setWaypoint({x,y,z,n:BIO_N[bm],dim:DIM});bioSearch=null;return}}}
 // 순간이동: 도착한 곳 청크가 준비될 때까지 잠깐 멈춰 있다가, 블록 안이면 위로 올려 줘요
@@ -5417,7 +5481,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   statT+=dt;if(statT>.25&&started){statT=0;updateStats();
     if(showDebug){const l=lightAt(p.pos.x,p.pos.y+1,p.pos.z),bm=biomeOf(Math.floor(p.pos.x),Math.floor(p.pos.z),terrainH(Math.floor(p.pos.x),Math.floor(p.pos.z)));
       const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),face=Math.abs(fx)>Math.abs(fz)?(fx>0?'east (Towards positive X)':'west (Towards negative X)'):(fz>0?'south (Towards positive Z)':'north (Towards negative Z)');
-      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),bk=Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
+      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=cbF===1?'dripstone_caves':cbF===2?'lush_caves':cbF===3&&p.pos.y<DS_Y?'deep_dark':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
       const L=[`Blockcraft 1.20 (craft.html/vanilla)`,`${fps} fps T: inf vsync fancy fancy-clouds B: 2`,`C: ${chunks.size} loaded  D: ${RD}  E: ${mobs.length}  I: ${ents.length}  P: ${parts.length}`,'',
         `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-YO).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-YO} ${bz} [${bx&15} ${(by-YO)&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-YO)>>4} ${bz>>4}`,
         `Facing: ${face} (${my.toFixed(1)} / ${(-p.pitch/DEG).toFixed(1)})`,`Client Light: ${Math.max(l[0],l[1])} (${l[0]} sky, ${l[1]} block)`,`Biome: minecraft:${bk}`,`Day ${Math.floor(worldTime/DAYLEN)}  Time ${Math.floor((worldTime%DAYLEN)/DAYLEN*24000)}`,`Seed: ${SEED}`+(MPS?`  Server: ${MPS.sid} (${MPS.count})`:'')];
