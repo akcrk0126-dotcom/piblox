@@ -1952,6 +1952,99 @@ function sfx(kind,mat,vol){const a=ac();if(!a||muted)return;vol=vol==null?1:vol;
   else if(kind==='ender'){osc('sawtooth',80,40,.9,.15);nz(.6,300,1,'lowpass',.3)}
   else if(kind==='dragon'){osc('sawtooth',70,40,1.6,.25);nz(1.4,500,.6,'lowpass',.6)}}
 
+/* ═════════════ 소리 다듬기: 마크처럼 재질마다 다른 발소리 · 부수는 소리 (짧은 소음 알갱이 여러 개) ═════════════ */
+// 흙 · 자갈은 자갈 소리, 눈은 눈 소리 (마크 SoundType)
+for(const k of ['DIRT','COARSE_DIRT','GRAVEL','FARMLAND','DIRT_PATH','ROOTED_DIRT','CLAY','PODZOL'])try{const id=eval(k);if(B[id])B[id].snd='gravel'}catch(e){}
+for(const k of ['SNOW','SNOW_LAYER','POWDER_SNOW'])try{const id=eval(k);if(B[id])B[id].snd='snow'}catch(e){}
+const GMAT={
+  grass:{f:[2400,5600],q:.8,t:'bandpass',g:7,len:.17,v:.9},
+  stone:{f:[1600,3400],q:1.6,t:'bandpass',g:3,len:.085,click:1,thump:170,v:1},
+  wood:{f:[480,950],q:4.5,t:'bandpass',g:2,len:.12,knock:1,v:1.1},
+  gravel:{f:[700,1900],q:.9,t:'bandpass',g:9,len:.18,v:1},
+  sand:{f:[2200,4600],q:.55,t:'bandpass',g:11,len:.2,soft:1,v:.8},
+  snow:{f:[1300,2900],q:.7,t:'bandpass',g:8,len:.18,soft:1,v:.8},
+  wool:{f:[350,900],q:.7,t:'lowpass',g:4,len:.13,soft:1,v:.9},
+  glass:{f:[2500,3800],q:2.2,t:'bandpass',g:3,len:.09,click:1,v:.9},
+  metal:{f:[1800,3000],q:6,t:'bandpass',g:3,len:.1,click:1,ring:1,v:.9}};
+// 마크 SoundType: 발소리 0.15 · 부수기 1.0 (음높이 0.8) · 놓기 1.0 (0.8) · 캐는 중 (볼륨+1)/8 (0.5)
+function matSound(kind,mat,vol){const a=ac();if(!a||muted)return;const M=GMAT[mat]||GMAT.stone,t0=a.currentTime;
+  const out=a.createGain();out.connect(a.destination);
+  const cfg=kind==='step'?{n:Math.max(2,Math.round(M.g*.55)),len:M.len*.7,v:.34,p:1}:kind==='dig'?{n:Math.max(2,Math.round(M.g*.5)),len:M.len*.7,v:.32,p:.6}:kind==='place'?{n:M.g,len:M.len,v:.62,p:.85}:{n:Math.round(M.g*1.4)+1,len:M.len*1.6,v:.85,p:.8};
+  out.gain.value=cfg.v*(vol==null?1:vol)*M.v;
+  for(let i=0;i<cfg.n;i++){const s=a.createBufferSource();s.buffer=NOISE;s.playbackRate.value=(.8+Math.random()*.5)*cfg.p;const fl=a.createBiquadFilter();fl.type=M.t;
+    fl.frequency.value=(M.f[0]+Math.random()*(M.f[1]-M.f[0]))*cfg.p;fl.Q.value=M.q;const g=a.createGain(),st=t0+(i===0?0:Math.pow(Math.random(),1.4)*cfg.len),d=(M.soft?.05:.022)+Math.random()*.035;
+    g.gain.setValueAtTime(0,st);g.gain.linearRampToValueAtTime((i===0?1:.45+Math.random()*.5),st+(M.soft?.012:.002));g.gain.exponentialRampToValueAtTime(.001,st+d);
+    s.connect(fl);fl.connect(g);g.connect(out);s.start(st,Math.random()*.8,d+.02)}
+  if(M.click){const s=a.createBufferSource();s.buffer=NOISE;const fl=a.createBiquadFilter();fl.type='highpass';fl.frequency.value=3500;const g=a.createGain();g.gain.setValueAtTime(.5,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.012);s.connect(fl);fl.connect(g);g.connect(out);s.start(t0,Math.random(),.03)}
+  if(M.thump&&kind!=='step'){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(M.thump*cfg.p*1.3,t0);o.frequency.exponentialRampToValueAtTime(M.thump*cfg.p*.7,t0+.06);g.gain.setValueAtTime(.35,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.07);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.09)}
+  if(M.knock){const o=a.createOscillator(),g=a.createGain();o.type='triangle';const f=(320+Math.random()*120)*cfg.p;o.frequency.setValueAtTime(f,t0);o.frequency.exponentialRampToValueAtTime(f*.82,t0+.08);g.gain.setValueAtTime(.32,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.09);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.11)}
+  if(M.ring&&kind!=='step'){for(const [f,v] of [[1250,.12],[2210,.07],[3470,.04]]){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=f*cfg.p*(1+Math.random()*.03);g.gain.setValueAtTime(v,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.35);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.4)}}
+  if(mat==='glass'&&kind==='break'){for(let i=0;i<5;i++){const o=a.createOscillator(),g=a.createGain(),st=t0+Math.random()*.12;o.type='sine';o.frequency.value=2200+Math.random()*2600;g.gain.setValueAtTime(.12,st);g.gain.exponentialRampToValueAtTime(.001,st+.18);o.connect(g);g.connect(out);o.start(st);o.stop(st+.2)}}}
+// 몸 소리 (엔티티 · 사람)
+function bodySound(kind,vol){const a=ac();if(!a||muted)return;const t0=a.currentTime,out=a.createGain();out.gain.value=vol==null?1:vol;out.connect(a.destination);
+  const nz=(st,dur,f,q,type,v)=>{const s=a.createBufferSource();s.buffer=NOISE;const fl=a.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const g=a.createGain();g.gain.setValueAtTime(0,t0+st);g.gain.linearRampToValueAtTime(v,t0+st+.004);g.gain.exponentialRampToValueAtTime(.001,t0+st+dur);s.connect(fl);fl.connect(g);g.connect(out);s.start(t0+st,Math.random(),dur+.05);return fl};
+  if(kind==='hurt'){// "윽": 성대 소리(톱니) + 모음 필터 두 개
+    const o=a.createOscillator();o.type='sawtooth';const p=.9+Math.random()*.2;o.frequency.setValueAtTime(190*p,t0);o.frequency.exponentialRampToValueAtTime(120*p,t0+.16);
+    const g=a.createGain();g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.32,t0+.012);g.gain.exponentialRampToValueAtTime(.001,t0+.2);
+    for(const [f,q,v] of [[650,6,1],[1100,8,.6],[2500,10,.25]]){const fl=a.createBiquadFilter();fl.type='bandpass';fl.frequency.value=f*p;fl.Q.value=q;const gg=a.createGain();gg.gain.value=v;o.connect(fl);fl.connect(gg);gg.connect(g)}
+    g.connect(out);o.start(t0);o.stop(t0+.22);nz(0,.05,1800,1,'bandpass',.15)}
+  else if(kind==='sweep'){const fl=nz(0,.26,2600,1.4,'bandpass',.5);fl.frequency.setValueAtTime(3200,t0);fl.frequency.exponentialRampToValueAtTime(500,t0+.24)}
+  else if(kind==='crit'){nz(0,.08,3200,2,'bandpass',.6);nz(.01,.12,900,1.5,'bandpass',.5);const o=a.createOscillator(),g=a.createGain();o.type='square';o.frequency.setValueAtTime(240,t0);o.frequency.exponentialRampToValueAtTime(120,t0+.08);g.gain.setValueAtTime(.12,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.1);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.12)}
+  else if(kind==='weak'){nz(0,.07,1100,1.2,'bandpass',.35)}
+  else if(kind==='strong'){nz(0,.09,700,1,'lowpass',.6);nz(0,.05,2600,1.5,'bandpass',.3)}
+  else if(kind==='levelup'){[0,4,7,12].forEach((st,i)=>{const o=a.createOscillator(),g=a.createGain(),tt=t0+i*.07;o.type='triangle';o.frequency.value=523.25*Math.pow(2,st/12);g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(.16,tt+.01);g.gain.exponentialRampToValueAtTime(.001,tt+.5);o.connect(g);g.connect(out);o.start(tt);o.stop(tt+.55)})}
+  else if(kind==='xp'){const o=a.createOscillator(),g=a.createGain(),f=(Math.random()-Math.random())*.35+1;o.type='sine';o.frequency.setValueAtTime(1046*f,t0);o.frequency.setValueAtTime(1568*f,t0+.05);g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.13,t0+.008);g.gain.exponentialRampToValueAtTime(.001,t0+.22);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.25)}
+  else if(kind==='pop'){const o=a.createOscillator(),g=a.createGain(),f=((Math.random()-Math.random())*.7+1)*2;o.type='sine';o.frequency.setValueAtTime(300*f,t0);o.frequency.exponentialRampToValueAtTime(700*f,t0+.05);g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.2,t0+.004);g.gain.exponentialRampToValueAtTime(.001,t0+.07);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.09)}
+  else if(kind==='click'){nz(0,.018,2600,1,'highpass',.45);const o=a.createOscillator(),g=a.createGain();o.type='square';o.frequency.value=1500;g.gain.setValueAtTime(.06,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.02);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.03)}}
+{const sfx0=sfx;sfx=function(kind,mat,vol){if(kind==='step'||kind==='dig'||kind==='break'||kind==='place'){matSound(kind,mat||'stone',vol);if((kind==='place'||kind==='break')&&typeof vibrate==='function'&&typeof player!=='undefined')vibrate(player.pos.x,player.pos.y,player.pos.z,1.5);return}
+  if(kind==='hurt'||kind==='sweep'||kind==='crit'||kind==='weak'||kind==='strong'||kind==='levelup'||kind==='xp'||kind==='pop'||kind==='click'){bodySound(kind,vol);return}return sfx0(kind,mat,vol)}}
+
+/* ═════════════ 배경음악: 직접 지은 잔잔한 피아노 (매번 새로 만들어져요) ═════════════
+   마크처럼: 타이틀 화면에서 조금 뒤에 한 곡, 게임 중에는 10~20분마다 한 곡 */
+let MUS=null,musT=null,musNext=0,musPlaying=false;
+function musInit(){const a=ac();if(!a)return null;if(MUS)return MUS;const bus=a.createGain();bus.gain.value=1;const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.value=5200;const rv=a.createConvolver();
+  const n=a.sampleRate*3.4|0,ir=a.createBuffer(2,n,a.sampleRate);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3)*(i<a.sampleRate*.01?i/(a.sampleRate*.01):1)}
+  rv.buffer=ir;const wet=a.createGain();wet.gain.value=.42;const dry=a.createGain();dry.gain.value=.8;
+  bus.connect(lp);lp.connect(dry);dry.connect(a.destination);lp.connect(rv);rv.connect(wet);wet.connect(a.destination);MUS={a,bus,cur:null};return MUS}
+function pianoNote(t,midi,vel,dur,dest){const a=MUS.a,f=440*Math.pow(2,(midi-69)/12),out=a.createGain();out.gain.value=vel;out.connect(dest);
+  const dec=Math.max(.7,3.8-(midi-40)*.05),H=[[1,1],[2,.38],[3,.16],[4,.08],[5,.045],[6,.02]];
+  for(const [h,amp] of H){const fh=f*h*(1+(h*h-1)*.00035);if(fh>8000)break;const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=fh;o.detune.value=(Math.random()-.5)*3;
+    const hd=dec/(1+(h-1)*.6),end=t+Math.min(dur,hd*3);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(amp,t+.005);g.gain.setTargetAtTime(amp*.4,t+.005,hd*.12);g.gain.setTargetAtTime(0,t+.005+hd*.3,hd*.45);
+    g.gain.setTargetAtTime(0,end,.18);o.connect(g);g.connect(out);o.start(t);o.stop(end+1.2)}
+  const s=a.createBufferSource();s.buffer=NOISE;const fl=a.createBiquadFilter();fl.type='bandpass';fl.frequency.value=Math.min(6000,f*3);fl.Q.value=1;const g=a.createGain();g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.0005,t+.03);s.connect(fl);fl.connect(g);g.connect(out);s.start(t,Math.random(),.05)}
+// 곡 만들기: 조 · 빠르기 · 화음 진행 · 짧은 동기를 되풀이하며 조금씩 바꾼 멜로디 · 펼친 화음 반주
+function composePiece(seed){const r=mulberry(seed|0),pick=A=>A[Math.floor(r()*A.length)];
+  const minor=r()<.35,sc=minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11],root=48+pick([0,2,3,5,7,8,9,10]),bpm=58+Math.floor(r()*16),beat=60/bpm;
+  const progs=minor?[[0,5,2,6],[0,3,5,4],[5,6,0,0],[0,6,5,6]]:[[0,5,3,4],[0,4,5,3],[3,0,4,5],[0,2,3,3],[5,3,0,4]];
+  const prog=pick(progs),deg=(d,o)=>{const k=((d%7)+7)%7,oc=Math.floor(d/7);return root+sc[k]+12*(oc+(o||0))};
+  const N=[];// [beat, midi, vel, durBeats]
+  const motif=()=>{const m=[];let b=0,d=pick([2,4,4,7,9]);while(b<8){const len=pick([1,1,2,2,2,3,4]);if(r()<.28){b+=len;continue}d+=pick([-2,-1,-1,0,1,1,2,3,-3]);d=clamp(d,0,11);m.push([b,d,len]);b+=len}return m};
+  const A=motif(),Bm=motif(),Cm=motif().filter((_,k)=>k%2===0);const form=pick([['A','A','B','A','C','B','A','A'],['A','B','A','B','C','C','A','B'],['A','A','B','B','A','C','A','A']]);
+  const bars=form.length*4;let bar=0;
+  for(const sec of form){const mo=sec==='A'?A:sec==='B'?Bm:Cm;for(let rep=0;rep<2;rep++){for(let k=0;k<2;k++){const cb=bar+k,ch=prog[(cb)%4];
+        // 왼손: 펼친 화음 (근음 · 5음 · 3음+옥타브)
+        const pat=pick([[0,4,2,7],[0,4,7,4],[0,2,4,7],[0,4,9,4]]);pat.forEach((iv,j)=>{if(r()<.1)return;N.push([cb*4+j+(r()-.5)*.03,deg(ch+iv,-1),.22+r()*.08,2.5])});
+        if(r()<.5)N.push([cb*4,deg(ch,-1)-12<33?deg(ch,-1):deg(ch,-1)-12,.18,4])}
+      for(const [b,d,len] of mo){const at=bar*4+b;if(at>=(bar+2)*4)continue;const ch=prog[Math.floor(at/4)%4];let dd=d+(rep&&r()<.3?pick([-1,1,2]):0);
+        // 센 박에서는 화음 음으로 살짝 맞춰요
+        if(b%2===0){const tones=[ch,ch+2,ch+4,ch+7,ch+9,ch+11];let best=dd,bd=9;for(const t of tones)if(Math.abs(t-dd)<bd){bd=Math.abs(t-dd);best=t}if(r()<.7)dd=best}
+        N.push([at+(r()-.5)*.04,deg(dd,1),.3+r()*.15,len*1.6]);if(r()<.12)N.push([at+(r()-.5)*.04,deg(dd-7,1),.14,len*1.5])}
+      bar+=2}}
+  N.push([bars*4,deg(prog[0],-1),.2,8]);N.push([bars*4,deg(prog[0]+4,0),.18,8]);N.push([bars*4+.5,deg(prog[0]+7,1),.22,8]);
+  N.sort((a,b)=>a[0]-b[0]);return{N,beat,len:(bars*4+8)*beat}}
+function musStop(fade){clearInterval(musT);musT=null;musPlaying=false;if(!MUS||!MUS.cur)return;const a=MUS.a,t=a.currentTime,g=MUS.cur;g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(0,t+(fade||1.5));setTimeout(()=>{try{g.disconnect()}catch(e){}},(fade||1.5)*1000+3000);MUS.cur=null}
+function musPlay(){if(!musicOn||muted)return;const M=musInit();if(!M||M.a.state!=='running')return;const P=composePiece(Math.random()*1e9);const a=M.a,t0=a.currentTime+.3;let i=0;musPlaying=true;
+  const pg=a.createGain();pg.connect(M.bus);pg.gain.setValueAtTime(0,a.currentTime);pg.gain.linearRampToValueAtTime(.26,t0+2);M.cur=pg;
+  clearInterval(musT);musT=setInterval(()=>{const now=a.currentTime;while(i<P.N.length&&t0+P.N[i][0]*P.beat<now+2.5){const n=P.N[i++];pianoNote(t0+n[0]*P.beat,n[1],n[2],n[3]*P.beat,pg)}
+    if(i>=P.N.length&&now>t0+P.len){clearInterval(musT);musT=null;musPlaying=false;if(M.cur===pg)M.cur=null;musSchedule(musMode==='menu')}},400)}
+// 다음 곡 시간 (마크: 타이틀은 1~30초, 게임 중은 10~20분)
+function musSchedule(menu){musNext=performance.now()+(menu?(1+Math.random()*29):(600+Math.random()*600))*1000}
+let musMode='';
+function musicTick(){const mode=started?'game':menuOpen==='title'||phase==='boot'?'menu':'';if(mode!==musMode){if(musPlaying)musStop(2);musMode=mode;if(mode)musSchedule(mode==='menu');if(mode==='game')musNext=performance.now()+(30+Math.random()*60)*1000}
+  if(!musicOn||muted){if(musPlaying)musStop(1);return}if(mode&&!musPlaying&&performance.now()>musNext)musPlay()}
+function musicToggle(){if(!musicOn&&musPlaying)musStop(1);else if(musicOn)musNext=performance.now()+2000}
+setInterval(musicTick,1000);
+
 /* ═════════════ 플레이어 ═════════════ */
 const V3=THREE.Vector3;
 const player={pos:new V3(.5,70,.5),vel:new V3(),yaw:0,pitch:0,onGround:false,hp:20,food:20,sat:5,exh:0,air:15,fallStart:null,sneak:false,sprint:false,inWater:false,hurtT:0,regenT:0,starveT:0,drownT:0,dead:false,spawn:null,hitX:false,hitZ:false,stepD:0,bob:0};
@@ -4668,7 +4761,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
 let vigB=0;
 requestAnimationFrame(frame);
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
-window.__BC={TEX,tileList,setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
+window.__BC={TEX,tileList,sfx:(...a)=>sfx(...a),composePiece,musPlay,musStop,get musPlaying(){return musPlaying},setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
 </body>
 </html>
