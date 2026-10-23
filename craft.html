@@ -101,6 +101,16 @@ canvas#gl{display:block;width:100%;height:100%}
 .touch #closeInv{display:block}
 
 /* 메뉴 */
+#news{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+#news.hide{display:none}
+#news .nbox{width:min(760px,100%);max-height:100%;overflow:auto;background:#1e1e1e;border:2px solid #000;box-shadow:inset 2px 2px 0 #555,inset -2px -2px 0 #111;padding:12px}
+#news .nhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:18px;color:#ffe14d;text-shadow:2px 2px 0 #3f3f00}
+#news .nhead button{font:inherit;font-size:18px;background:#6f6f6f;color:#fff;border:2px solid #000;width:36px;height:32px;cursor:pointer}
+#news video{width:100%;aspect-ratio:16/9;background:#000;display:block;border:2px solid #000}
+#news h3{font-size:16px;margin:12px 0 4px;color:#fff;font-weight:normal;text-shadow:2px 2px 0 #3f3f3f}
+#news h3 small{color:#aaa;font-size:12px;margin-left:8px}
+#news ul{margin:4px 0 4px 20px;font-size:13px;line-height:1.7;color:#ddd}
+#news .older{border-top:1px solid #444;margin-top:12px;padding-top:4px}
 #menu{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.5)}
 #menu.title{background:linear-gradient(rgba(0,0,0,.15),rgba(0,0,0,.45))}
 #menu h1{font-size:clamp(34px,8vw,64px);letter-spacing:2px;color:#e0e0e0;text-shadow:4px 4px 0 #3a3a3a,0 0 1px #000;margin-bottom:6px;font-weight:bold}
@@ -220,6 +230,7 @@ body.creative #stats,body.creative #air{visibility:hidden}
 <div id="cursor" class="hide"></div>
 <div id="tip" class="hide"></div>
 <div id="menu" class="title hide"></div>
+<div id="news" class="hide"><div class="nbox"><div class="nhead"><b>🎬 새 소식</b><button id="newsX" aria-label="닫기">✕</button></div><div id="newsBody"></div></div></div>
 <div id="dead" class="hide"><h2>죽었습니다!</h2><button class="mbtn" id="respawn">리스폰</button><a class="mbtn" href="hub.html">허브로 나가기</a></div>
 <div id="loading"><div id="loadTxt">블록크래프트</div><div id="loadSub">불러오는 중</div><div class="bar"><i id="loadBar"></i></div></div>
 <div id="sleepFade"></div>
@@ -3736,7 +3747,7 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
   const help=isTouch?'왼쪽 조이스틱 이동 · 화면 드래그로 시점<br>꾹 누르기: 부수기 · 짧게 탭: 놓기/사용':'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl 달리기 · E 인벤토리 · T 채팅 · F5 시점<br>왼쪽 클릭 부수기/공격 · 오른쪽 클릭 놓기/사용/먹이주기 · Q 버리기 · 1~9 / 휠 핫바';
   let h='';
   if(type==='title')h=`<h1>블록<b>크래프트</b></h1><div class="sub">${SPLASH[Math.floor(Math.random()*SPLASH.length)]}</div>
-    <button class="mbtn" data-m="single">싱글플레이</button><button class="mbtn" data-m="multi">멀티플레이</button>
+    <button class="mbtn" data-m="single">싱글플레이</button><button class="mbtn" data-m="multi">멀티플레이</button><button class="mbtn" data-m="news">🎬 새 소식 · 업데이트 영상${newsUnseen()?' <span style="color:#ff5555">●</span>':''}</button>
     <div class="mrow"><button class="mbtn" data-m="opts">설정</button><a class="mbtn" href="hub.html">허브로</a></div><div class="help">${help}</div>`;
   else if(type==='single'){const L=worldsList().sort((a,b)=>b.last-a.last);if(!selWorld&&L[0])selWorld=L[0].id;
     h=`<h2>월드 선택</h2><div class="mlist">${L.length?L.map(w=>`<div class="mitem${w.id===selWorld?' on':''}" data-w="${w.id}"><b>${esc(w.name)}</b><small>${new Date(w.last).toLocaleString('ko-KR')}</small><small>${MODE_N[w.mode]} 모드 · ${TYPE_N[w.type||'default']}</small></div>`).join(''):'<div class="mempty">아직 만든 월드가 없어요</div>'}</div>
@@ -3771,7 +3782,7 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
   if($('mSens'))bindSlider('mSens','마우스 감도',10,200,v=>v+'%',v=>{sens=v/100;setOpt('sens',v)});
   if($('mFov'))bindSlider('mFov','시야각',50,100,v=>v,v=>{FOV=v;setOpt('fov',v)})}
 function setOpt(k,v){try{localStorage.setItem('bc_opt_'+k,v)}catch(e){}}
-function menuAct(a){if(a==='fb'){FULLBRIGHT=!FULLBRIGHT;setOpt('fb',FULLBRIGHT?1:0);dimVisual();showMenu(menuOpen);return}const keep=()=>{if($('nwName'))newW.name=$('nwName').value;if($('nwSeed'))newW.seed=$('nwSeed').value};
+function menuAct(a){if(a==='news'){openNews();return}if(a==='fb'){FULLBRIGHT=!FULLBRIGHT;setOpt('fb',FULLBRIGHT?1:0);dimVisual();showMenu(menuOpen);return}const keep=()=>{if($('nwName'))newW.name=$('nwName').value;if($('nwSeed'))newW.seed=$('nwSeed').value};
   if(a==='title'){newW=null;showMenu('title')}
   else if(a==='single'||a==='multi'||a==='opts'){keep();if(a!=='single'||!menuOpen||menuOpen==='title')newW=null;showMenu(a)}
   else if(a==='create'){newW=null;showMenu('create')}
@@ -4131,6 +4142,22 @@ function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);c
 addEventListener('resize',resize);resize();
 let last=performance.now(),statT=0,saveT=0,slowT=0,fps=0,fpsN=0,fpsT=0;
 const eul=new THREE.Euler(0,0,0,'YXZ');
+// 새 소식: 업데이트마다 트레일러 영상 + 바뀐 점 (새 업데이트는 맨 앞에 추가해요)
+const UPDATES=[
+  {v:'2026-10-23',title:'보트 · 친구와 PvP · 활 · 명령어 가이드',video:'trailers/blockcraft-2026-10-23.mp4',notes:[
+    '보트: 물에 놓고 오른쪽 클릭으로 타요. W/S 앞뒤, A/D 방향, Shift 내리기',
+    '멀티에서 친구를 칼로 때리고 활로 맞힐 수 있어요 (화염 · 밀어내기 마법부여도 적용)',
+    '명령어를 치는 동안 사용법 · 후보가 실시간으로 떠요 (↑↓ 고르기, Tab 넣기)',
+    '바이옴 · 구조물 이름이 마인크래프트 영어 이름으로 바뀌었어요 (한글로 검색해도 돼요)',
+    '/tp 로 바다에 가면 물 위에 도착해요']}
+];
+function newsUnseen(){try{return localStorage.getItem('bc_news')!==UPDATES[0].v}catch(e){return false}}
+function openNews(){const u=UPDATES[0],esc2=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+  $('newsBody').innerHTML=`<video controls autoplay muted playsinline loop poster="${u.video.replace(/\.mp4$/,'.jpg')}"><source src="${u.video}" type="video/mp4"><source src="${u.video.replace(/\.mp4$/,'.webm')}" type="video/webm"></video><h3>${esc2(u.title)}<small>${u.v}</small></h3><ul>${u.notes.map(n=>`<li>${esc2(n)}</li>`).join('')}</ul>`+
+    (UPDATES.length>1?`<div class="older">${UPDATES.slice(1).map(o=>`<h3>${esc2(o.title)}<small>${o.v}${o.video?` · <a href="${o.video}" target="_blank" style="color:#7ecbff">영상</a>`:''}</small></h3><ul>${o.notes.map(n=>`<li>${esc2(n)}</li>`).join('')}</ul>`).join('')}</div>`:'');
+  $('news').classList.remove('hide');try{localStorage.setItem('bc_news',u.v)}catch(e){}if(menuOpen==='title')showMenu('title')}
+function closeNews(){const v=$('news').querySelector('video');if(v)v.pause();$('news').classList.add('hide')}
+$('newsX').onclick=closeNews;$('news').addEventListener('click',e=>{if(e.target.id==='news')closeNews()});
 bootPanorama();
 function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)===0)updateWaypoint();let dt=Math.min(.05,(now-last)/1000);last=now;fpsN++;fpsT+=dt;if(fpsT>=1){fps=fpsN;fpsN=0;fpsT=0}
   if(!loadDone){chunkTick(40);const pcx=Math.floor(player.pos.x/16),pcz=Math.floor(player.pos.z/16);let tot=0,ok=0,gen=0;
@@ -4162,7 +4189,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   saveT+=dt;if(saveT>30){saveT=0;save()}}
 requestAnimationFrame(frame);
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
-window.__BC={setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
+window.__BC={setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
 </body>
 </html>
