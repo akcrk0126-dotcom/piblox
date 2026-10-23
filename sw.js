@@ -21,6 +21,8 @@ self.addEventListener('activate', e=>{
 self.addEventListener('fetch', e=>{
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // 동영상(트레일러)은 부분 요청(Range)으로 받아서 저장하지 않고 그대로 보내요
+  if (req.headers.has('range') || /\.(mp4|webm)$/.test(url.pathname)) return;
   // 직접 올려둔 three.js (lib/) 는 버전이 파일 이름에 박혀 있어 절대 안 바뀜 → 저장본 먼저 (빠르고 오프라인에서도 됨)
   if (url.origin === location.origin && url.pathname.indexOf('/lib/') >= 0){
     e.respondWith(caches.match(req).then(r=>r || fetch(req).then(res=>{ if (res.ok){ const cp = res.clone(); caches.open(VERSION).then(c=>c.put(req, cp)); } return res; })));
