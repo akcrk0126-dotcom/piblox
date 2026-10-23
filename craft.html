@@ -20,10 +20,11 @@ canvas#gl{display:block;width:100%;height:100%}
 /* HUD */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
 #hudc{position:absolute;left:0;top:0;width:100%;height:100%;image-rendering:pixelated}
-#stats,#armorRow,#air,#xpBar,#itemName,#toast,#sel{display:none!important}
+#stats,#armorRow,#air,#xpBar,#itemName,#sel{display:none!important}
+#toast{z-index:41;position:fixed;font-family:Galmuri9,monospace;font-size:calc(9px * var(--s))}
 #hotbar .hs>*{visibility:hidden}
 #vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 52%,rgba(0,0,0,.34) 100%)}
-#cross{position:absolute;left:50%;top:50%;width:calc(15px * var(--s));height:calc(15px * var(--s));transform:translate(-50%,-50%);mix-blend-mode:difference;z-index:2}
+#cross{position:fixed;left:50%;top:50%;pointer-events:none;width:calc(15px * var(--s));height:calc(15px * var(--s));transform:translate(-50%,-50%);mix-blend-mode:difference;z-index:2}
 #cross:before,#cross:after{content:'';position:absolute;background:#fff}
 #cross:before{left:calc(7px * var(--s));top:calc(3px * var(--s));width:calc(1px * var(--s));height:calc(9px * var(--s))}
 #cross:after{left:calc(3px * var(--s));top:calc(7px * var(--s));width:calc(9px * var(--s));height:calc(1px * var(--s))}
@@ -46,7 +47,7 @@ canvas#gl{display:block;width:100%;height:100%}
 #sel{position:absolute;top:calc(-1px * var(--s));width:calc(24px * var(--s));height:calc(24px * var(--s));border:calc(2px * var(--s)) solid #fff;outline:calc(1px * var(--s)) solid #000;box-shadow:inset 0 0 0 calc(1px * var(--s)) #000;pointer-events:none;transition:left .05s}
 #itemName{position:absolute;left:50%;bottom:calc(70px * var(--s));transform:translateX(-50%);font-size:calc(8px * var(--s));text-shadow:calc(1px * var(--s)) calc(1px * var(--s)) 0 #3f3f3f;opacity:0;transition:opacity .4s;white-space:nowrap}
 #hurt{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 40%,rgba(255,0,0,.55));opacity:0;transition:opacity .25s;z-index:4}
-#water{position:fixed;inset:0;pointer-events:none;background:rgba(30,60,200,.38);z-index:3}
+#water{position:fixed;inset:0;pointer-events:none;background:rgba(10,20,120,.12);z-index:3}
 #debug{position:absolute;left:calc(2px * var(--s));top:calc(2px * var(--s));font-family:Galmuri9,monospace;font-size:calc(9px * var(--s));line-height:calc(9px * var(--s));color:#e0e0e0;white-space:pre}
 #debug div{background:rgba(80,80,80,.56);display:table;padding:0 calc(1px * var(--s));margin-bottom:0}#debug div.gap{background:none;height:calc(9px * var(--s))}
 #toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:calc(9px * var(--s));text-shadow:2px 2px 0 #3f3f3f;opacity:0;transition:opacity .4s;text-align:center;white-space:nowrap}
@@ -258,10 +259,10 @@ body.creative #stats,body.creative #air{visibility:hidden}
 <div id="portalFx" style="position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:radial-gradient(circle,rgba(160,60,255,.3),rgba(90,0,200,.85));transition:opacity .2s"></div>
 <div id="bossBar" class="hide" style="position:fixed;left:50%;top:10px;transform:translateX(-50%);width:min(420px,70vw);text-align:center;color:#fff;font-size:14px;text-shadow:1px 1px 0 #000;z-index:5;pointer-events:none">엔더 드래곤<div style="height:8px;background:#3a0a3a;border:1px solid #000;margin-top:3px"><i id="bossFill" style="display:block;height:100%;width:100%;background:linear-gradient(#ff70ff,#b020c0)"></i></div></div>
 <div id="hurt"></div>
+<div id="cross" style="visibility:hidden"></div>
 <div id="hud" class="hide">
   <div id="vig"></div>
   <div id="darkOv"></div>
-  <div id="cross"></div>
   <div id="debug" class="hide"></div>
   <div id="toast"></div>
   <div id="itemName"></div>
@@ -1828,25 +1829,144 @@ const skyDome=new THREE.Mesh(new THREE.SphereGeometry(500,24,12),new THREE.Shade
   vertexShader:`varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`uniform vec3 top,hor;varying vec3 vP;void main(){float y=vP.y;vec3 c=y>0.?mix(hor,top,smoothstep(0.,.42,y)):mix(hor,hor*.55,smoothstep(0.,.3,-y));gl_FragColor=vec4(c,1.);}`,side:THREE.BackSide,depthWrite:false,fog:false}));
 skyDome.renderOrder=-3;scene.add(skyDome);const _skyT=new THREE.Color();
+// 회색으로 바래기: 밝기 × mul 쪽으로 amt × k 만큼
+function grayTo(c,amt,mul,k){if(amt<=0)return;const g=(c.r*.3+c.g*.59+c.b*.11)*mul,f=1-amt*k;c.setRGB(c.r*f+g*(1-f),c.g*f+g*(1-f),c.b*f+g*(1-f))}
 function updateSky(dt){skyDome.position.copy(camera.position);skyDome.visible=DIM==='over'&&!underWater;if(dimSky(dt))return;
   {const ch=chunks.get(ck(Math.floor(player.pos.x)>>4,Math.floor(player.pos.z)>>4));if(ch&&ch.bio){skyOfTemp(BIO_TEMP[ch.bio[(Math.floor(player.pos.x)&15)|((Math.floor(player.pos.z)&15)<<4)]]??.8,_skyT);C_SKYT.lerp(_skyT,Math.min(1,dt*.6))}}
-  const a=(worldTime/DAYLEN)*Math.PI*2,s=Math.sin(a);const dl=sm(clamp((s+.18)/.5,0,1));daylight=.2+.8*dl;
+  const a=(worldTime/DAYLEN)*Math.PI*2,s=Math.sin(a),rl=rainL(),tl=thunL();const dl=sm(clamp((s+.18)/.5,0,1));daylight=skyFlash>0?1:.2+.8*dl*(1-rl*5/16)*(1-tl*5/16);
   sky.position.copy(camera.position);sky.rotation.z=a-Math.PI/2;
-  tmpC.copy(C_NIGHT).lerp(C_SKYT,dl);const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
+  tmpC.copy(C_NIGHT).lerp(C_SKYT,dl);grayTo(tmpC,rl,.6,.75);grayTo(tmpC,tl,.2,.75);if(skyFlash>0){const f=Math.min(1,skyFlash-PT)*.45;tmpC.setRGB(tmpC.r*(1-f)+.8*f,tmpC.g*(1-f)+.8*f,tmpC.b*(1-f)+f)}
+  const set=Math.max(0,1-Math.abs(s)/.28)*(Math.cos(a)>0?1:.8);
   // 마크 안개색: 바이옴 안개색 × 밝기 → 하늘색 쪽으로 22% (시야 거리 비율) → 해 쪽을 보면 노을색
   fogCol.copy(C_NIGHT).lerp(C_FOGD,dl).lerp(tmpC,.22);
   {const hx=Math.cos(a)>0?1:-1,sr=updateSunrise(s,hx);if(sr){const look=new V3(0,0,-1).applyQuaternion(camera.quaternion);let f8=look.x*hx;if(f8>0){f8*=sr[3];fogCol.r=fogCol.r*(1-f8)+sr[0]*f8;fogCol.g=fogCol.g*(1-f8)+sr[1]*f8;fogCol.b=fogCol.b*(1-f8)+sr[2]*f8}}}
-  if(underWater){fogCol.setRGB(.08,.16,.5);tmpC.copy(fogCol)}
+  if(rl>0){fogCol.r*=1-rl*.5;fogCol.g*=1-rl*.5;fogCol.b*=1-rl*.4}if(tl>0)fogCol.multiplyScalar(1-tl*.5);
+  sunM.material.opacity=moonM.material.opacity=1-rl;
+  if(underWater){const wv=waterVision(),k=.25+.75*daylight;fogCol.setRGB((.0196*(1-wv)+.098*wv)*k,(.0196*(1-wv)+.098*wv)*k,(.2*(1-wv)+1*wv)*k*.62);tmpC.copy(fogCol)}
   if(darkT>0){fogCol.setRGB(0,0,0);tmpC.setRGB(0,0,0)}
   renderer.setClearColor(tmpC);
   skyDome.material.uniforms.top.value.copy(tmpC);skyDome.material.uniforms.hor.value.copy(fogCol);
-  stars.material.opacity=clamp(1-dl*1.6,0,1)*.9;
-  let far=underWater?14:RD*16-4;if(darkT>0)far=Math.min(far,12+5*Math.sin(performance.now()/500));const near=underWater?1:darkT>0?2:far-Math.max(12,far*.16);   // 마크 1.18: 시야 끝 몇 칸만 안개
+  stars.material.opacity=clamp(1-dl*1.6,0,1)*.9*(1-rl);
+  let far=underWater?Math.min(RD*16,96*Math.max(.25,waterVision())):RD*16-4;if(darkT>0)far=Math.min(far,12+5*Math.sin(performance.now()/500));const near=underWater?0:darkT>0?2:far-Math.max(12,far*.16);   // 마크 1.18: 시야 끝 몇 칸만 안개
   for(const m of [worldMat,waterMat]){m.uniforms.day.value=daylight;m.uniforms.fogC.value.copy(fogCol);m.uniforms.fogN.value=near;m.uniforms.fogF.value=far}
   scene.fog.color.copy(fogCol);scene.fog.near=near;scene.fog.far=far;
-  updateClouds(dt,fogCol,dl);
+  updateClouds(dt,fogCol,dl);{const c=cloudU.col.value;grayTo(c,rl,.6,.95);grayTo(c,tl,.2,.95)}
 }
 let cloudDrift=0,underWater=false;
+/* ═════════════ 날씨: 비 · 눈 · 뇌우 (마크 rainLevel · renderSnowAndRain · tickRain · 번개) ═════════════
+   시드와 시간으로 정해져서 멀티에서도 모두 같은 날씨예요. /weather clear · rain · thunder 로 바꿀 수 있어요 */
+let rainLvl=0,rainO=0,thunLvl=0,thunO=0,weatherOv=null,skyFlash=0,wTicks=0;
+const NO_PRECIP=new Set([BIO.DESERT,BIO.SAVANNA,BIO.SAVANNA_PLATEAU,BIO.BADLANDS,BIO.WOODED_BADLANDS,BIO.ERODED_BADLANDS,BIO.WINDSWEPT_SAVANNA].filter(v=>v!=null));
+function weatherTarget(){if(DIM!=='over')return[0,0];if(weatherOv&&worldTime<weatherOv.until){const k=weatherOv.kind;return[k==='clear'?0:1,k==='thunder'?1:0]}
+  const slot=Math.floor(worldTime/(DAYLEN*.5)),r=hash2(slot,7,SEED+911)<.2?1:0,t=r&&hash2(slot,9,SEED+913)<.3?1:0;return[r,t]}
+const rainL=pt=>lerp(rainO,rainLvl,pt==null?PT:pt),thunL=pt=>lerp(thunO,thunLvl,pt==null?PT:pt);
+// 열의 바이옴 · 온도 (청크에 저장된 바이옴을 먼저 봐요)
+function colTemp(x,z){const ch=chunks.get(ck(x>>4,z>>4)),b=ch&&ch.bio?ch.bio[(x&15)|((z&15)<<4)]:biomeOf(x,z,terrainH(x,z));return[b,BIO_TEMP[b]??.8]}
+// 높은 곳은 더 추워요 (Biome.getHeightAdjustedTemperature: Y 80 위로 40칸마다 0.05)
+const coldAt=(tp,y)=>tp-Math.max(0,y-YO-80)*.05/40<.15;
+// 비가 닿는 맨 위 높이 (열마다 잠깐 기억)
+const precipC=new Map();
+function precipTop(x,z){const k=x*73856093^z*19349663;let v=precipC.get(k);if(v!==undefined)return v;const cy=Math.floor(camera.position.y);let y=Math.min(H-1,cy+24);
+  for(;y>Math.max(1,cy-24);y--){const id=getB(x,y,z);if(id&&B[id]&&(B[id].solid||B[id].liquid||isLeaf(id)))break}v=y+1;precipC.set(k,v);return v}
+// 빗줄기 · 눈송이 그림 (rain.png · snow.png 처럼 한 칸 너비 = 64픽셀 · 세로 4칸 = 256픽셀 · 왼쪽 비 · 오른쪽 눈)
+const PRECIP_TEX=(()=>{const c=cv(128,256),g=c.getContext('2d'),r=mulberry(4321);
+  for(let band=0;band<4;band++)for(let i=0;i<6;i++){const x=band*16+Math.floor(r()*16),y=Math.floor(r()*256),l=14+Math.floor(r()*16),cr=190+r()*30|0,cg=208+r()*25|0;for(let k=0;k<l;k++){g.fillStyle=`rgba(${cr},${cg},255,${.12+.5*(k/l)})`;g.fillRect(x,(y+k)%256,1,1)}}
+  for(let i=0;i<80;i++){const x=64+Math.floor(r()*62),y=Math.floor(r()*254),s=r()<.25?2:1;g.fillStyle=`rgba(255,255,255,${.75+r()*.25})`;g.fillRect(x,y,s,s);if(s===1&&r()<.4){g.fillStyle='rgba(255,255,255,.45)';g.fillRect(x+1,y,1,1);g.fillRect(x,y+1,1,1)}}
+  const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.wrapT=THREE.RepeatWrapping;return t})();
+const PR=10,PMAX=(2*PR+1)*(2*PR+1),prGeo=new THREE.BufferGeometry();
+prGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(PMAX*12),3).setUsage(THREE.DynamicDrawUsage));prGeo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(PMAX*8),2).setUsage(THREE.DynamicDrawUsage));
+prGeo.setAttribute('cl',new THREE.BufferAttribute(new Float32Array(PMAX*8),2).setUsage(THREE.DynamicDrawUsage));{const idx=new Uint32Array(PMAX*6);for(let i=0;i<PMAX;i++){const v=i*4;idx.set([v,v+1,v+2,v,v+2,v+3],i*6)}prGeo.setIndex(new THREE.BufferAttribute(idx,1))}
+const prMat=new THREE.ShaderMaterial({uniforms:{map:{value:PRECIP_TEX}},transparent:true,depthWrite:false,side:THREE.DoubleSide,
+  vertexShader:`attribute vec2 cl;varying vec2 vUv;varying vec2 vC;void main(){vUv=uv;vC=cl;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`uniform sampler2D map;varying vec2 vUv;varying vec2 vC;void main(){vec4 t=texture2D(map,vUv);if(t.a<.02)discard;gl_FragColor=vec4(t.rgb*vC.x,t.a*vC.y);}`});
+const prMesh=new THREE.Mesh(prGeo,prMat);prMesh.frustumCulled=false;prMesh.renderOrder=6;scene.add(prMesh);
+// 카메라 둘레 10칸 열마다 세로 판 하나 (가운데를 향해 돌려 세워요)
+function renderPrecip(pt){const rl=rainL(pt);prMesh.visible=rl>0&&DIM==='over'&&started;if(!prMesh.visible)return;
+  const P=prGeo.attributes.position.array,U=prGeo.attributes.uv.array,C=prGeo.attributes.cl.array,cx=Math.floor(camera.position.x),cz=Math.floor(camera.position.z),cy=camera.position.y;let n=0;
+  const tk=wTicks+pt;
+  for(let dz=-PR;dz<=PR;dz++)for(let dx=-PR;dx<=PR;dx++){const d2=dx*dx+dz*dz;if(d2>PR*PR)continue;const x=cx+dx,z=cz+dz,[bm,tp]=colTemp(x,z);if(NO_PRECIP.has(bm))continue;
+    const top=precipTop(x,z),y0=Math.max(cy-PR,top),y1=Math.max(cy+PR,top);if(y0>=y1)continue;
+    const fx=x+.5-camera.position.x,fz=z+.5-camera.position.z,fl=Math.hypot(fx,fz)||1,sx=-fz/fl*.5,sz=fx/fl*.5,o=n*12;
+    P[o]=x+.5-sx;P[o+1]=y0;P[o+2]=z+.5-sz;P[o+3]=x+.5+sx;P[o+4]=y0;P[o+5]=z+.5+sz;P[o+6]=x+.5+sx;P[o+7]=y1;P[o+8]=z+.5+sz;P[o+9]=x+.5-sx;P[o+10]=y1;P[o+11]=z+.5-sz;
+    const h=(x*x*3121+x*45238971+z*z*418711+z*13761)>>>0,snow=coldAt(tp,top),d=Math.sqrt(d2)/PR,u0=snow?.5:0,u1=snow?1:.5;let off,al,k;
+    // 비: 32틱마다 3~4바퀴 빠르게 · 눈: 512틱에 한 바퀴 천천히 + 흔들림 · 바깥쪽일수록 옅게
+    if(snow){off=-(((wTicks&511)+pt)/512)+(h%97)/97;al=((1-d*d)*.3+.5)*rl;k=Math.max(.15,(lightK(x+.5,Math.max(cy,top)+.5,z+.5)*3+1)/4)}
+    else{off=-(((wTicks+h)&31)+pt)/32*(3+(h%13)/13);al=((1-d*d)*.5+.5)*rl;k=Math.max(.15,lightK(x+.5,Math.max(cy,top)+.5,z+.5))}
+    const q=n*8;U[q]=u0;U[q+1]=y0*.25+off;U[q+2]=u1;U[q+3]=y0*.25+off;U[q+4]=u1;U[q+5]=y1*.25+off;U[q+6]=u0;U[q+7]=y1*.25+off;
+    for(let j=0;j<4;j++){C[q+j*2]=k;C[q+j*2+1]=al}n++}
+  prGeo.setDrawRange(0,n*6);prGeo.attributes.position.needsUpdate=prGeo.attributes.uv.needsUpdate=prGeo.attributes.cl.needsUpdate=true}
+// 번개 (LightningBoltRenderer: 16칸짜리 8마디 · 겹 4장 · 가지 2개 · 더하기 섞기)
+const boltMat=new THREE.MeshBasicMaterial({color:new THREE.Color(.45,.45,.5),transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false}),bolts=[];
+function boltGeo(seed){const R=mulberry(seed),ni=n=>Math.floor(R()*n),fs=[],gs=[];let h=0,j=0;for(let k=7;k>=0;k--){fs[k]=h;gs[k]=j;h+=ni(11)-5;j+=ni(11)-5}
+  const P=[];
+  for(let l=0;l<4;l++){const R2=mulberry(seed),n2=n=>Math.floor(R2()*n);
+    for(let m=0;m<3;m++){const n=m>0?7-m:7,o0=m>0?n-2:0;let p=fs[n]-h,q=gs[n]-j;
+      for(let r=n;r>=o0;r--){const s=p,t=q;if(m===0){p+=n2(11)-5;q+=n2(11)-5}else{p+=n2(31)-15;q+=n2(31)-15}
+        let w1=.1+l*.2,w0=.1+l*.2;if(m===0){w1*=r*.1+1;w0*=(r-1)*.1+1}
+        const quad=(a,b,c,d)=>{const v=[p+(a?w0:-w0),r*16,q+(b?w0:-w0),s+(a?w1:-w1),(r+1)*16,t+(b?w1:-w1),s+(c?w1:-w1),(r+1)*16,t+(d?w1:-w1),p+(c?w0:-w0),r*16,q+(d?w0:-w0)];P.push(v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[0],v[1],v[2],v[6],v[7],v[8],v[9],v[10],v[11])};
+        quad(0,0,1,0);quad(1,0,1,1);quad(1,1,0,1);quad(0,1,0,0)}}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));return g}
+// LightningBolt.tick: 2틱 번쩍 → 몇 번 더 깜빡여요 (번쩍일 때마다 모양이 바뀌어요)
+function lightning(x,z){const top=precipTop(x,z)||terrainH(x,z)+1,m=new THREE.Mesh(boltGeo(Math.random()*2**31|0),boltMat);m.position.set(x+.5,top,z+.5);m.frustumCulled=false;m.renderOrder=7;scene.add(m);
+  bolts.push({m,life:2,flashes:1+Math.floor(Math.random()*3)});thunderSound(Math.hypot(x+.5-player.pos.x,z+.5-player.pos.z))}
+function boltTick(){for(let i=bolts.length-1;i>=0;i--){const b=bolts[i];b.life--;
+    if(b.life<0){if(b.flashes===0){scene.remove(b.m);b.m.geometry.dispose();bolts.splice(i,1);continue}if(b.life<-Math.floor(Math.random()*10)){b.flashes--;b.life=1;b.m.geometry.dispose();b.m.geometry=boltGeo(Math.random()*2**31|0)}}
+    if(b.life>=0)skyFlash=2}}
+// 천둥 (어디서 쳐도 크게 들려요) · 가까우면 쾅 소리도
+function thunderSound(d){const a=ac();if(!a||muted||a.state!=='running')return;const t=a.currentTime,out=a.createGain();out.gain.value=.9;out.connect(a.destination);
+  const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;s.playbackRate.value=.8+Math.random()*.2;
+  const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(1100,t);lp.frequency.exponentialRampToValueAtTime(160,t+1.2);lp.frequency.exponentialRampToValueAtTime(90,t+6);
+  const lp2=a.createBiquadFilter();lp2.type='lowpass';lp2.frequency.value=500;const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(1,t+.03);g.gain.exponentialRampToValueAtTime(.35,t+.5);
+  let tt=t+.5;for(let i=0;i<4;i++){const pk=tt+.25+Math.random()*.7;g.gain.linearRampToValueAtTime(.45+Math.random()*.45,pk);tt=pk+.35+Math.random()*.6;g.gain.exponentialRampToValueAtTime(.12+Math.random()*.1,tt)}
+  g.gain.exponentialRampToValueAtTime(.001,tt+2.6);s.connect(lp);lp.connect(lp2);lp2.connect(g);g.connect(out);s.start(t);s.stop(tt+2.7);
+  if(d<32){const s2=a.createBufferSource();s2.buffer=NOISE;const hp=a.createBiquadFilter();hp.type='highpass';hp.frequency.value=700;const g2=a.createGain();g2.gain.setValueAtTime((1-d/32)*1.3,t);g2.gain.exponentialRampToValueAtTime(.001,t+.45);
+    s2.connect(hp);hp.connect(g2);g2.connect(out);s2.start(t);s2.stop(t+.5)}}
+// 빗소리 (지붕 아래면 먹먹하게)
+let rainNode=null;
+function rainSound(){const a=AC;if(!a||a.state!=='running')return;if(!rainNode){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=3000;const hp=a.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;const g=a.createGain();g.gain.value=0;s.connect(hp);hp.connect(fl);fl.connect(g);g.connect(a.destination);s.start();rainNode={g,fl}}
+  const p=player,l=lightAt(p.pos.x,p.pos.y+p.eye,p.pos.z),out=l[0]>=14,[bm,tp]=colTemp(Math.floor(p.pos.x),Math.floor(p.pos.z)),rl=muted||DIM!=='over'||!started||NO_PRECIP.has(bm)||coldAt(tp,p.pos.y)?0:rainLvl;
+  const t=a.currentTime;rainNode.g.gain.setTargetAtTime(rl*(out?.16:.07),t,.4);rainNode.fl.frequency.setTargetAtTime(out?3000:700,t,.4)}
+// 매 틱: 비 세기는 0.01씩 바뀌어요 · 뇌우면 번개 · 땅에 튀는 빗방울 (tickRain)
+function weatherTick(){wTicks++;rainO=rainLvl;thunO=thunLvl;const [tr,tt]=weatherTarget();rainLvl=clamp(rainLvl+(tr>rainLvl?.01:tr<rainLvl?-.01:0),0,1);thunLvl=clamp(thunLvl+(tt>thunLvl?.01:tt<thunLvl?-.01:0),0,1);
+  if(skyFlash>0)skyFlash--;boltTick();
+  if(wTicks%20===0)precipC.clear();
+  if(DIM==='over'&&started&&thunLvl>.9&&rainLvl>.2&&Math.random()<1/300){const a=Math.random()*Math.PI*2,r=8+Math.random()*80,x=Math.floor(player.pos.x+Math.cos(a)*r),z=Math.floor(player.pos.z+Math.sin(a)*r);if(!NO_PRECIP.has(colTemp(x,z)[0]))lightning(x,z)}
+  if(rainLvl>0&&DIM==='over'&&started){const n=Math.floor(rainLvl*rainLvl*40);for(let i=0;i<n;i++){const x=Math.floor(player.pos.x+(Math.random()*2-1)*10),z=Math.floor(player.pos.z+(Math.random()*2-1)*10),[bm,tp]=colTemp(x,z);if(NO_PRECIP.has(bm))continue;const y=precipTop(x,z);if(Math.abs(y-player.pos.y)>12||coldAt(tp,y))continue;
+      if(getB(x,y-1,z)===LAVA){if(Math.random()<.3)spriteP({x:x+Math.random(),y:y+.1,z:z+Math.random(),xd:0,yd:.02,zd:0,grav:-.1,fric:.96,col:.4,s:.12,life:20,frames:8,row:0,phys:false});continue}
+      spriteP({x:x+Math.random(),y:y+.02,z:z+Math.random(),xd:(Math.random()*2-1)*.012,yd:Math.random()*.2+.1,zd:(Math.random()*2-1)*.012,grav:1.5,fric:.98,col:1,rgb:SPLASH_C,s:.1*(Math.random()*.5+.5)*2,life:Math.floor(8/(Math.random()*.8+.2)),row:3,fr:1+Math.floor(Math.random()*4),drop:true,phys:true})}}
+  if(wTicks%10===0)rainSound()}
+const SPLASH_C=[.62,.74,1];
+// 비 맞는 자리 (Level.isRainingAt: 비가 0.2 넘게 · 하늘이 보이고 · 비가 오는 바이옴 · 눈이 아닐 때)
+function isWet(x,y,z){if(rainLvl<=.2||DIM!=='over'||lightAt(x,y,z)[0]<15)return false;const [bm,tp]=colTemp(Math.floor(x),Math.floor(z));return !NO_PRECIP.has(bm)&&!coldAt(tp,y)}
+/* ═════════════ 불: 혀 모양 불꽃 애니메이션 (fire_0 · fire_1) · 몸에 붙은 불 (renderFlame) · 화면 불 (renderFire) ═════════════ */
+// 세로로 이어지는 값 노이즈를 1프레임에 1픽셀씩 위로 흘려요 → 32장이 끊김 없이 돌아요 (1초에 20장, 마크 fire_0 · fire_1 처럼 두 가지)
+const FIRE_FR=32,FIRE_TEX=(()=>{const c=cv(32,16*FIRE_FR),g=c.getContext('2d'),img=g.createImageData(32,16*FIRE_FR),sm=t=>t*t*(3-2*t);
+  const tileNoise=(seed,cw,ch)=>{const r=mulberry(seed),gw=Math.round(16/cw),gh=Math.round(32/ch),G=[];cw=16/gw;ch=32/gh;for(let i=0;i<gw*gh;i++)G.push(r());const at=(i,j)=>G[((i%gw+gw)%gw)+((j%gh+gh)%gh)*gw];
+    return(x,y)=>{const fx=x/cw,fy=y/ch,x0=Math.floor(fx),y0=Math.floor(fy),tx=sm(fx-x0),ty=sm(fy-y0);return(at(x0,y0)*(1-tx)+at(x0+1,y0)*tx)*(1-ty)+(at(x0,y0+1)*(1-tx)+at(x0+1,y0+1)*tx)*ty}};
+  const PAL=[[176,46,10],[230,104,20],[248,168,40],[255,214,80],[255,244,180]],T=[.4,.48,.6,.74,.88];
+  [23,41].forEach((seed,col)=>{const n1=tileNoise(seed,3,5),n2=tileNoise(seed+7,2,3),n3=tileNoise(seed+13,5,8);
+    for(let f=0;f<FIRE_FR;f++)for(let y=0;y<16;y++)for(let x=0;x<16;x++){const yb=15-y,sy=yb-f,n=n1(x,sy)*.55+n2(x,sy)*.25+n3(x,sy)*.2,I=(n*1.3+(1-Math.pow(yb/15,1.4))*.6)*(1-Math.pow(Math.abs(x-7.5)/8,4)*.6)-.45;
+      if(I<T[0])continue;let k=0;while(k<4&&I>=T[k+1])k++;const o=((f*16+y)*32+col*16+x)*4;img.data[o]=PAL[k][0];img.data[o+1]=PAL[k][1];img.data[o+2]=PAL[k][2];img.data[o+3]=255}});
+  g.putImageData(img,0,0);const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.repeat.set(1,1/FIRE_FR);t.offset.set(0,1-1/FIRE_FR);return t})();
+let fireFrame=0;
+function fireTick(){fireFrame=(fireFrame+1)%FIRE_FR;FIRE_TEX.offset.y=1-(fireFrame+1)/FIRE_FR}
+// 몸에 붙은 불: 몸 너비×1.4 크기 판을 0.45 씩 올리며 겹쳐요 (위로 갈수록 0.9배) · 카메라 쪽으로 돌려요
+const FLAME_G={},flameMat=new THREE.MeshBasicMaterial({map:FIRE_TEX,alphaTest:.5,side:THREE.DoubleSide});
+function flameGeo(w,h){const key=w.toFixed(2)+'_'+h.toFixed(2);if(FLAME_G[key])return FLAME_G[key];const f=w*1.4,P=[],U=[],I=[];let g=.5,i=h/f,j=0,k=0,l=0;const z0=.3-Math.floor(i)*.02;
+  while(i>0){let u0=l%2===0?0:.5,u1=u0+.5;if((l>>1)%2===0){const q=u0;u0=u1;u1=q}const z=(z0-k)*f,b=P.length/3;
+    P.push(g*f,-j*f,z,-g*f,-j*f,z,-g*f,(1.4-j)*f,z,g*f,(1.4-j)*f,z);U.push(u1,0,u0,0,u0,1,u1,1);I.push(b,b+1,b+2,b,b+2,b+3);i-=.45;j-=.45;g*=.9;k+=.03;l++}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));geo.setIndex(I);return FLAME_G[key]=geo}
+const meFlame=new THREE.Mesh(flameGeo(.6,1.8),flameMat);meFlame.visible=false;meFlame.frustumCulled=false;scene.add(meFlame);
+const _fr=new THREE.Vector3();
+function updateFlames(){_fr.set(1,0,0).applyQuaternion(camera.quaternion);const yaw=Math.atan2(-_fr.z,_fr.x);   // 카메라가 보는 방향 (3인칭 앞에서도 불꽃이 카메라를 봐요)
+  for(const m of mobs){const on=!m.dead&&m.fireT>0;if(on&&!m.flame){m.flame=new THREE.Mesh(flameGeo(m.hw*2,m.h),flameMat);m.flame.frustumCulled=false;m.g.add(m.flame)}
+    if(m.flame){m.flame.visible=on;if(on){const s=m.g.scale.x||1;m.flame.scale.setScalar(1/s);m.flame.rotation.y=yaw-m.g.rotation.y;m.flame.position.set(0,m.yOff?-m.yOff/s:0,0)}}}
+  const p=player;meFlame.visible=viewMode>0&&started&&!p.dead&&p.burn>0;if(meFlame.visible){meFlame.position.set(lerp(p.prev.x,p.pos.x,PT),lerp(p.prev.y,p.pos.y,PT),lerp(p.prev.z,p.pos.z,PT));meFlame.rotation.y=yaw}}
+// 화면 불: 화면 아래 양쪽에 큰 불꽃 두 장 (손 카메라 공간 · 10° 비틀기 · 불투명도 0.9)
+const fireOv=(()=>{const g=new THREE.Group(),mat=new THREE.MeshBasicMaterial({map:FIRE_TEX,transparent:true,opacity:.9,depthTest:false,depthWrite:false,alphaTest:.5});
+  for(let r=0;r<2;r++){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute([-.5,-.5,-.5,.5,-.5,-.5,.5,.5,-.5,-.5,.5,-.5],3));geo.setAttribute('uv',new THREE.Float32BufferAttribute([1,0,.5,0,.5,1,1,1],2));geo.setIndex([0,1,2,0,2,3]);
+    const q=new THREE.Group();q.position.set(-(r*2-1)*.24,-.3,0);q.rotation.y=(r*2-1)*Math.PI/18;const m=new THREE.Mesh(geo,mat);m.renderOrder=50;m.frustumCulled=false;q.add(m);g.add(q)}return g})();
+
 
 /* ═════════════ 청크 관리 ═════════════ */
 const SPIRAL=[];for(let dz=-13;dz<=13;dz++)for(let dx=-13;dx<=13;dx++)SPIRAL.push([dx,dz,dx*dx+dz*dz]);SPIRAL.sort((a,b)=>a[2]-b[2]);
@@ -2068,14 +2188,26 @@ const atkScale=pt=>clamp((player.atkTicker+(pt||0))/(20/atkSpeed(inv[sel])),0,1)
 // 휘두르기: 마크 LivingEntity.swing (반쯤 휘두른 뒤면 다시 처음부터)
 function doSwing(){const p=player;if(!p.swinging||p.swingTime>=3||p.swingTime<0){p.swingTime=-1;p.swinging=true}}
 // 손 상태 (틱마다): 휘두르기 진행 · 공격 쿨타임 · 바꿔 들기 높이 (ItemInHandRenderer.tick)
-function handTick(){const p=player;hudTickF();
+function handTick(){const p=player;hudTickF();if(underWater)waterVisT++;else waterVisT=0;caveTick();
   if(p.swinging){p.swingTime++;if(p.swingTime>=6){p.swingTime=0;p.swinging=false}}else p.swingTime=0;p.attackAnim=p.swingTime/6;
   p.atkTicker++;if(p.missTime>0)p.missTime--;
   const st=inv[sel],id=st?st.id:0;if(id!==p.lastHeldId){if(p.lastHeldId!==-1&&id!==p.lastHeldId)p.atkTicker=0;p.lastHeldId=id}   // 다른 물건을 들면 쿨타임이 처음부터
   p.oHandH=p.handH;const same=p.handItem===st||(p.handItem&&st&&p.handItem.id===st.id&&p.handSlot===sel);
   const f=atkScale(1);p.handH+=clamp((same?f*f*f:0)-p.handH,-.4,.4);if(p.handH<.1){p.handItem=st;p.handSlot=sel}
   if(eating||drawT>0)p.useTicks++;else p.useTicks=0}
-function itemUsed(){player.handH=0}   // 블록을 놓으면 손이 쑥 내려갔다 올라와요
+function itemUsed(){player.handH=0}
+// 마크 LocalPlayer.getWaterVision: 물속에 있으면 5초 동안 0.6까지, 30초면 끝까지
+let waterVisT=0;function waterVision(){if(!underWater)return 0;if(waterVisT>=600)return 1;const f2=clamp(waterVisT/100,0,1),f3=waterVisT<100?0:clamp((waterVisT-100)/500,0,1);return f2*.6+f3*.39+.01}
+// 동굴 분위기 (마크 AmbientSoundHandler: 어둡고 하늘이 안 보이는 곳에 오래 있으면 으스스한 소리)
+let caveMood=0;
+function caveTick(){if(DIM!=='over'||muted)return;const p=player,x=Math.floor(p.pos.x+(Math.random()*17-8)),y=Math.floor(p.pos.y+1+(Math.random()*17-8)),z=Math.floor(p.pos.z+(Math.random()*17-8));if(getB(x,y,z)!==AIR)return;const l=lightAt(x,y,z);
+  if(l[0]>0)caveMood-=l[0]/15*.001;else caveMood-=(l[1]-1)/6000;caveMood=clamp(caveMood,0,1);if(caveMood>=1){caveMood=0;caveSound(x-p.pos.x,z-p.pos.z)}}
+function caveSound(dx,dz){const a=ac();if(!a||a.state!=='running')return;const M=musInit();if(!M)return;const t=a.currentTime,out=a.createGain();out.gain.value=.5;const pan=a.createStereoPanner?a.createStereoPanner():null;
+  if(pan){pan.pan.value=clamp(dx/8,-1,1)*.7;out.connect(pan);pan.connect(M.bus)}else out.connect(M.bus);const k=Math.floor(Math.random()*4);
+  if(k===0){for(const [f0,f1,d] of [[220,165,0],[233,174,.08]]){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f0,t+d);o.frequency.exponentialRampToValueAtTime(f1,t+d+2.6);g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.16,t+d+.6);g.gain.exponentialRampToValueAtTime(.001,t+d+3);o.connect(g);g.connect(out);o.start(t+d);o.stop(t+d+3.1)}}
+  else if(k===1){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=160;const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.9,t+1.2);g.gain.exponentialRampToValueAtTime(.001,t+3.5);s.connect(fl);fl.connect(g);g.connect(out);s.start(t);s.stop(t+3.6)}
+  else if(k===2){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='bandpass';fl.Q.value=6;fl.frequency.setValueAtTime(500,t);fl.frequency.exponentialRampToValueAtTime(1400,t+1.5);fl.frequency.exponentialRampToValueAtTime(400,t+3);const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.35,t+1);g.gain.exponentialRampToValueAtTime(.001,t+3.2);s.connect(fl);fl.connect(g);g.connect(out);s.start(t);s.stop(t+3.3)}
+  else{for(let i=0;i<4;i++){const o=a.createOscillator(),g=a.createGain(),st=t+i*(.35+Math.random()*.4);o.type='triangle';o.frequency.value=900+Math.random()*700;g.gain.setValueAtTime(.12,st);g.gain.exponentialRampToValueAtTime(.001,st+.12);o.connect(g);g.connect(out);o.start(st);o.stop(st+.15)}}}   // 블록을 놓으면 손이 쑥 내려갔다 올라와요
 function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDist;p.oBob=p.bob;p.eyeO=p.eye;p.xBobO=p.xBob;p.yBobO=p.yBob;p.fovModO=p.fovMod;p.oAttackAnim=p.attackAnim;
   handTick();if(p.hurtTime>0)p.hurtTime--;
   p.xBob+=(p.pitch-p.xBob)*.5;p.yBob+=(p.yaw-p.yBob)*.5;
@@ -2090,7 +2222,8 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   const fx=Math.floor(p.pos.x),fz=Math.floor(p.pos.z);
   const feet=getB(fx,Math.floor(p.pos.y+.1),fz),mid=getB(fx,Math.floor(p.pos.y+.9),fz);
   p.inWater=feet===WATER||mid===WATER;p.inLava=feet===LAVA||mid===LAVA;
-  if(p.inLava){p.lavaT=(p.lavaT||0)+dt;if(p.lavaT>=.5){p.lavaT=0;hurtPlayer(4,null,'lava')}p.burn=4}else if(p.burn>0){p.burn-=dt;p.burnT=(p.burnT||0)+dt;if(p.burnT>=1){p.burnT=0;hurtPlayer(1,null,'lava')}}
+  if(p.burn>0&&!p.inLava&&(p.inWater||isWet(p.pos.x,p.pos.y+1.6,p.pos.z)))p.burn=0;
+  if(p.inLava){p.lavaT=(p.lavaT||0)+dt;if(p.lavaT>=.5){p.lavaT=0;hurtPlayer(4,null,'lava')}p.burn=15}else if(p.burn>0){p.burn-=dt;p.burnT=(p.burnT||0)+dt;if(p.burnT>=1){p.burnT=0;hurtPlayer(1,null,'fire')}}
   const head=getB(fx,Math.floor(p.pos.y+p.eye),fz);underWater=head===WATER;
   {const ub=getB(fx,Math.floor(p.pos.y-.05),fz);if((ub===MAGMA||feet===CAMPFIRE)&&!p.sneak&&p.onGround){p.hotT=(p.hotT||0)+dt;if(p.hotT>=.5){p.hotT=0;hurtPlayer(1,null,'fire')}}}
   // 달리기 (마크: 앞 입력 0.8 이상 · 배고픔 6 초과 · 먹거나 활 당기는 중 아님 · 벽에 정면으로 막히면 멈춤)
@@ -2317,8 +2450,11 @@ const FXA=(()=>{const c=cv(128,64),g=c.getContext('2d');
   {const s=[[7,2],[7,3],[7,4],[7,5],[7,6],[7,8],[7,9],[7,10],[7,11],[7,12],[2,7],[3,7],[4,7],[5,7],[6,7],[8,7],[9,7],[10,7],[11,7],[12,7],[7,7],[5,5],[9,9],[9,5],[5,9]];g.fillStyle='#fff';for(const [x,y] of s)g.fillRect(x,16+y,1,1)}
   for(let f=0;f<8;f++){for(let a=0;a<40;a++){const t=-1.3+a/39*2.6,rr=6.5-f*.25,x=7.5+Math.cos(t)*rr,y=10-Math.sin(t)*rr*.6;if(Math.abs(t)<1.3-f*.12){g.fillStyle=a%3?'#fff':'#cfcfcf';g.fillRect(f*16+Math.round(x),32+Math.round(y),1,1);g.fillRect(f*16+Math.round(x),32+Math.round(y)+1,1,1)}}}
   const H=['.xx.xx.','xRRxRRx','xRRRRRx','.xRRRx.','..xRx..','...x...'];H.forEach((r,y)=>[...r].forEach((ch,x)=>{if(ch!=='.'){g.fillStyle=ch==='x'?'#5a0000':'#ff2020';g.fillRect(4+x,48+5+y,1,1)}}));
+  [['........','........','........','........','...b....','..bwb...','...b....','........'],['........','........','........','..b.....','.bwb.b..','..b..b..','........','........'],
+   ['........','........','........','.b....b.','..b..b..','...bb...','........','........'],['........','........','b......b','.b....b.','........','..b..b..','........','........']]
+   .forEach((f,k)=>f.forEach((r,y)=>[...r].forEach((ch,x)=>{if(ch!=='.'){g.fillStyle=ch==='w'?'#ffffff':'#b8ccf0';g.fillRect(16*(k+1)+x*2,48+y*2,2,2)}})));
   const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;return t})();
-const SP=[],SPMAX=800,spGeo=mkPGeo(SPMAX);
+const SP=[],SPMAX=1600,spGeo=mkPGeo(SPMAX);
 const spMesh=new THREE.Mesh(spGeo,new THREE.MeshBasicMaterial({map:FXA,vertexColors:true,alphaTest:.1,side:THREE.DoubleSide,depthWrite:false,transparent:true}));spMesh.frustumCulled=false;spMesh.renderOrder=3;scene.add(spMesh);
 const pSolid=(x,y,z)=>{const id=getB(Math.floor(x),Math.floor(y),Math.floor(z));return SOLID[id]&&BH[id]===1};
 function pMove(p){// 블록에 부딪히면 그 축은 멈춰요 (Particle.move 간단판)
@@ -2349,7 +2485,7 @@ critFx=m=>{for(let t=0;t<3;t++)for(let i=0;i<16;i++){const d0=Math.random()*2-1,
 sweepFx=m=>{const p=player,fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),f=Math.random()*.6+.4;spriteP({x:p.pos.x+fx,y:p.pos.y+.9,z:p.pos.z+fz,xd:0,yd:0,zd:0,grav:0,fric:1,col:f,s:.5,life:4,frames:8,row:2,bright:true,phys:false})};
 function heartFx(x,y,z){spriteP({x,y,z,xd:(Math.random()-.5)*.02,yd:.05,zd:(Math.random()-.5)*.02,grav:0,fric:.86,col:1,s:.1,life:16,row:3,bright:true,phys:false})}
 function fxTick(){for(const A of [TP,SP])for(let i=A.length-1;i>=0;i--){const p=A[i];p.xo=p.x;p.yo=p.y;p.zo=p.z;if(p.age++>=p.life){A.splice(i,1);continue}
-    p.yd-=.04*p.grav;if(p.phys===false){p.x+=p.xd;p.y+=p.yd;p.z+=p.zd}else pMove(p);p.xd*=p.fric;p.yd*=p.fric;p.zd*=p.fric;if(p.onGround){p.xd*=.7;p.zd*=.7}}}
+    p.yd-=.04*p.grav;if(p.phys===false){p.x+=p.xd;p.y+=p.yd;p.z+=p.zd}else pMove(p);p.xd*=p.fric;p.yd*=p.fric;p.zd*=p.fric;if(p.onGround){if(p.drop&&Math.random()<.5){A.splice(i,1);continue}p.xd*=.7;p.zd*=.7}}}
 const _pr=new V3(),_pu=new V3();
 function fxRender(pt){_pr.set(1,0,0).applyQuaternion(camera.quaternion);_pu.set(0,1,0).applyQuaternion(camera.quaternion);
   const fill=(A,geo,uvf,colf)=>{const P=geo.attributes.position.array,U=geo.attributes.uv.array,C=geo.attributes.color.array;let n=0;
@@ -2361,8 +2497,8 @@ function fxRender(pt){_pr.set(1,0,0).applyQuaternion(camera.quaternion);_pu.set(
   const _c=[0,0,0];
   fill(TP,tpGeo,(p,U,o)=>{const uv=tileUV(p.tile),du=uv[2]-uv[0],dv=uv[3]-uv[1],u0=uv[0]+du*p.uo/4,u1=uv[0]+du*(p.uo+1)/4,v1=uv[3]-dv*p.vo/4,v0=uv[3]-dv*(p.vo+1)/4;U[o]=u0;U[o+1]=v0;U[o+2]=u1;U[o+3]=v0;U[o+4]=u1;U[o+5]=v1;U[o+6]=u0;U[o+7]=v1},
     (p,x,y,z)=>{const k=lightK(x,y,z);_c[0]=p.r*k;_c[1]=p.g*k;_c[2]=p.b*k;return _c});
-  fill(SP,spGeo,(p,U,o)=>{const f=p.frames>1?Math.min(p.frames-1,Math.floor(p.age*p.frames/(p.life+1))):0,u0=f*16/128+.001,u1=(f*16+16)/128-.001,v1=1-p.row*16/64-.001,v0=1-(p.row*16+16)/64+.001;U[o]=u0;U[o+1]=v0;U[o+2]=u1;U[o+3]=v0;U[o+4]=u1;U[o+5]=v1;U[o+6]=u0;U[o+7]=v1},
-    (p,x,y,z)=>{const k=p.bright?1:lightK(x,y,z);_c[0]=_c[1]=_c[2]=p.col*k;return _c})}
+  fill(SP,spGeo,(p,U,o)=>{const f=p.fr!=null?p.fr:p.frames>1?Math.min(p.frames-1,Math.floor(p.age*p.frames/(p.life+1))):0,u0=f*16/128+.001,u1=(f*16+16)/128-.001,v1=1-p.row*16/64-.001,v0=1-(p.row*16+16)/64+.001;U[o]=u0;U[o+1]=v0;U[o+2]=u1;U[o+3]=v0;U[o+4]=u1;U[o+5]=v1;U[o+6]=u0;U[o+7]=v1},
+    (p,x,y,z)=>{const k=p.bright?1:lightK(x,y,z);if(p.rgb){_c[0]=p.rgb[0]*k;_c[1]=p.rgb[1]*k;_c[2]=p.rgb[2]*k}else _c[0]=_c[1]=_c[2]=p.col*k;return _c})}
 // 달릴 때 발밑 흙먼지 · 높은 데서 떨어지면 착지 먼지 (마크 spawnSprintParticle · checkFallDamage)
 function sprintDust(p){const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(!id||!B[id]||B[id].liquid)return;terrainP(p.pos.x+(Math.random()-.5)*.6,p.pos.y+.1,p.pos.z+(Math.random()-.5)*.6,-p.vel.x*TICK*4,1.5,-p.vel.z*TICK*4,id)}
 function landDust(p,fd){const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(!id||!B[id]||B[id].liquid)return;const n=Math.floor(150*Math.min(.2+fd/15,2.5)/6);for(let i=0;i<n;i++)terrainP(p.pos.x+(Math.random()-.5)*.6,p.pos.y+.05,p.pos.z+(Math.random()-.5)*.6,(Math.random()-.5),.3,(Math.random()-.5),id,.6)}
@@ -2487,7 +2623,7 @@ function tamedAI(m,dt,dx,dz,dist){let foe=null,fd=12;for(const o of mobs)if(o!==
   if(foe){m.ai.dir=Math.atan2(foe.pos.x-m.pos.x,foe.pos.z-m.pos.z);m.ai.sp=m.D.sp*1.3;if(fd<1.6&&m.atk<=0){m.atk=1;hurtMob(foe,4,m.pos)}return true}
   if(dist>18){m.pos.set(player.pos.x+(Math.random()-.5)*2,player.pos.y,player.pos.z+(Math.random()-.5)*2);return false}if(dist>4){m.ai.dir=Math.atan2(dx,dz);m.ai.sp=m.D.sp;return true}return false}
 function enderTP(m){for(let k=0;k<16;k++){const x=Math.floor(m.pos.x+(Math.random()-.5)*24),z=Math.floor(m.pos.z+(Math.random()-.5)*24);for(let y=Math.floor(m.pos.y)+8;y>Math.floor(m.pos.y)-8;y--){if(SOLID[getB(x,y-1,z)]&&!SOLID[getB(x,y,z)]&&!SOLID[getB(x,y+1,z)]&&!SOLID[getB(x,y+2,z)]&&getB(x,y,z)!==WATER&&getB(x,y,z)!==LAVA){for(let i=0;i<6;i++)smoke(m.pos.x,m.pos.y+1.5,m.pos.z);m.pos.set(x+.5,y,z+.5);sfx('portal',null,.4);return}}}}
-function tintMob(m,k){const red=m.hurtT>0||m.dead,burn=m.burnT>0&&Math.sin(performance.now()/60)>0,flash=m.fuse>0&&Math.sin(m.fuse*m.fuse*30)>0;
+function tintMob(m,k){const red=m.hurtT>0||m.dead,burn=false,flash=m.fuse>0&&Math.sin(m.fuse*m.fuse*30)>0;
   m.g.traverse(o=>{if(o.isMesh&&o.userData.base)o.material.forEach((mt,i)=>{mt.color.copy(o.userData.base[i]).multiplyScalar(k);if(red){mt.color.r=mt.color.r*.7+.3*k;mt.color.g*=.7;mt.color.b*=.7}if(burn){mt.color.r=Math.min(1,mt.color.r+.4);mt.color.g=Math.min(1,mt.color.g+.15)}if(flash)mt.color.setRGB(1,1,1)})})}
 function los(a,b){const d=new V3().subVectors(b,a),l=d.length();d.normalize();const h=raycast(a,d,l);return !h||h.t>=l-.3}
 const projs=[];
@@ -2512,7 +2648,7 @@ function smoke(x,y,z){const m=new THREE.Mesh(new THREE.PlaneGeometry(.5,.5),smok
 function updateMobs(dt){const pp=player.pos,eye=new V3(pp.x,pp.y+eyeH(),pp.z),night=daylight<.45;
   for(let i=mobs.length-1;i>=0;i--){const m=mobs[i],D=m.D;
     if(m.dead){m.deadT+=dt;m.g.rotation.z=Math.min(1,Math.sqrt(Math.max(0,(m.deadT*20-1)/20*1.6)))*Math.PI/2;tintMob(m,lightK(m.pos.x,m.pos.y+.5,m.pos.z));if(m.deadT>=1){poofFx(m.pos.x,m.pos.y,m.pos.z,m.hw*2,m.h);scene.remove(m.g);mobs.splice(i,1)}continue}
-    if(m.fireT>0){m.fireT-=dt;m.fireK=(m.fireK||0)+dt;if(Math.random()<.5)smoke(m.pos.x+(Math.random()-.5)*m.hw,m.pos.y+Math.random()*m.h,m.pos.z+(Math.random()-.5)*m.hw);if(m.fireK>=1){m.fireK=0;m.hurtT=0;hurtMob(m,1,null);if(m.dead)continue}}
+    if(m.fireT>0){m.fireT-=dt;m.fireK=(m.fireK||0)+dt;if(isWet(m.pos.x,m.pos.y+m.h*.5,m.pos.z))m.fireT=0;if(m.fireK>=1){m.fireK=0;m.hurtT=0;hurtMob(m,1,null);if(m.dead)continue}}
     if(D.custom){D.custom(m,dt);continue}
     if(D.ender&&m.angry<=0&&!player.dead&&!creative()&&m.pos.distanceTo(pp)<24){const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),hv=new V3(m.pos.x,m.pos.y+2.5,m.pos.z).sub(camera.position);const hl=hv.length();if(hv.normalize().dot(cd)>1-.025/Math.max(1,hl/8)&&los(camera.position,new V3(m.pos.x,m.pos.y+2.5,m.pos.z))){m.angry=30;sfx('ender')}}
     const dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,dist=Math.hypot(dx,dz),dy=pp.y-m.pos.y;
@@ -2544,7 +2680,7 @@ function updateMobs(dt){const pp=player.pos,eye=new V3(pp.x,pp.y+eyeH(),pp.z),ni
     const fy=m.vel.y;moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,m.hw,m.h);
     if(m.onGround&&fy<-17)hurtMob(m,Math.floor((fy*fy/64)-3),null);
     if(dist<m.hw+PW&&Math.abs(dy)<m.h){const l=dist||1;m.pos.x-=dx/l*dt*2;m.pos.z-=dz/l*dt*2}
-    if(D.burn){const l=lightAt(m.pos.x,m.pos.y+1.7,m.pos.z);if(daylight>.65&&l[0]>=15&&!inW){m.burnT+=dt;if(m.burnT>=1){m.burnT=.01;m.hurtT=0;hurtMob(m,1,null)}}else m.burnT=0}
+    if(D.burn){const l=lightAt(m.pos.x,m.pos.y+1.7,m.pos.z);if(daylight>.65&&l[0]>=15&&!inW&&!isWet(m.pos.x,m.pos.y+1.7,m.pos.z))m.fireT=Math.max(m.fireT||0,8)}if(inW)m.fireT=0;
     m.snd-=dt;if(m.snd<=0){m.snd=6+Math.random()*10;if(dist<16)sfx(D.snd||'animal_'+m.type,null,Math.max(.1,1-dist/16))}
     const hs=Math.hypot(m.vel.x,m.vel.z);m.walk+=hs*dt*(m.type==='chicken'?6:3.2);const sw=Math.sin(m.walk)*Math.min(1,hs/1.5)*.8;
     if(m.type==='spider')m.P.legs.forEach((l,j)=>{l.rotation.x=Math.sin(m.walk+j*1.3)*.35*Math.min(1,hs)});
@@ -2565,7 +2701,7 @@ const ANIMALS_BY={42:['sheep','cow'],43:['sheep','wolf'],44:['cow','sheep'],49:[
 // 마크 스폰 규칙: 몬스터는 블록빛 0 + 하늘빛 ≤ 0~7 무작위, 무리 단위, 플레이어에게서 24칸 이상
 const PACK={rabbit:[2,3],goat:[1,3],polar_bear:[1,2],panda:[1,2],fox:[2,4],frog:[2,5],parrot:[1,2],enderman:[1,4],witch:[1,1],pillager:[1,1],slime:[1,4],bee:[1,3]};
 const packN=t=>{const p=PACK[t]||[4,4];return p[0]+Math.floor(Math.random()*(p[1]-p[0]+1))};
-function darkOK(x,y,z){const l=lightAt(x,y,z);if(l[1]>0||l[0]>Math.floor(Math.random()*32))return false;const dk=Math.round((1-clamp((daylight-.2)/.8,0,1))*11);return Math.max(0,l[0]-dk)<=Math.floor(Math.random()*8)}
+function darkOK(x,y,z){const l=lightAt(x,y,z);if(l[1]>0||l[0]>Math.floor(Math.random()*32))return false;const dk=thunLvl>.9&&rainLvl>.2?10:Math.round((1-clamp((daylight-.2)/.8,0,1))*11);return Math.max(0,l[0]-dk)<=Math.floor(Math.random()*8)}
 function spawnSpot(x,y,z){const f=getB(x,y-1,z),a=getB(x,y,z);return y>1&&y<H-2&&SOLID[f]&&!isLeaf(f)&&f!==BEDROCK&&f!==GLASS&&!SOLID[a]&&!SOLID[getB(x,y+1,z)]&&a!==WATER&&a!==LAVA}
 function packSpawn(t,x,y,z,ok,room){const n=Math.min(packN(t),room),pp=player.pos;let c=0,px=x,pz=z;
   for(let k=0;k<n*4&&c<n;k++){if(k){px+=Math.floor(Math.random()*6)-Math.floor(Math.random()*6);pz+=Math.floor(Math.random()*6)-Math.floor(Math.random()*6)}
@@ -2909,8 +3045,8 @@ function dimVisual(){const o=DIM==='over';sky.visible=o;clouds.visible=false;if(
   $('dimTint').style.background=DIM==='nether'?'rgba(120,20,0,.08)':DIM==='end'?'rgba(40,10,60,.12)':'transparent'}
 function dimSky(dt){if(DIM==='over')return false;
   const nether=DIM==='nether';daylight=nether?.2:.55;const c=nether?0x5a1a0e:0x120c1a;tmpC.setHex(c);fogCol.setHex(nether?0x5a1a0e:0x16101e);
-  if(underWater){fogCol.setRGB(.08,.16,.5);tmpC.copy(fogCol)}renderer.setClearColor(tmpC);
-  const far=underWater?14:nether?Math.min(RD*16-4,72):RD*16-4,near=underWater?1:nether?16:far*.5;
+  if(underWater){const wv=waterVision(),k=.25+.75*daylight;fogCol.setRGB((.0196*(1-wv)+.098*wv)*k,(.0196*(1-wv)+.098*wv)*k,(.2*(1-wv)+1*wv)*k*.62);tmpC.copy(fogCol)}renderer.setClearColor(tmpC);
+  const far=underWater?Math.min(RD*16,96*Math.max(.25,waterVision())):nether?Math.min(RD*16-4,72):RD*16-4,near=underWater?0:nether?16:far*.5;
   for(const m of [worldMat,waterMat]){m.uniforms.day.value=daylight;m.uniforms.fogC.value.copy(fogCol);m.uniforms.fogN.value=near;m.uniforms.fogF.value=far}
   scene.fog.color.copy(fogCol);scene.fog.near=near;scene.fog.far=far;sky.position.copy(camera.position);stars.material.opacity=DIM==='end'?.6:0;return true}
 
@@ -2987,14 +3123,27 @@ function updateThrowns(dt){for(let i=throwns.length-1;i>=0;i--){const t=throwns[
 function chorusTP(){const p=player.pos;for(let k=0;k<16;k++){const x=Math.floor(p.x+(Math.random()-.5)*16),z=Math.floor(p.z+(Math.random()-.5)*16);for(let y=Math.floor(p.y)+8;y>Math.floor(p.y)-8;y--){if(SOLID[getB(x,y-1,z)]&&!SOLID[getB(x,y,z)]&&!SOLID[getB(x,y+1,z)]&&getB(x,y,z)!==LAVA){p.set(x+.5,y+.01,z+.5);player.vel.set(0,0,0);sfx('portal');return}}}}
 
 // ── 경험치
-const xpOrbs=[];const xpMat=new THREE.SpriteMaterial({map:(()=>{const c=cv(16,16),g=c.getContext('2d');const gr=g.createRadialGradient(8,8,0,8,8,8);gr.addColorStop(0,'#f0ff90');gr.addColorStop(.5,'#9ae020');gr.addColorStop(1,'rgba(60,140,0,0)');g.fillStyle=gr;g.fillRect(0,0,16,16);const t=new THREE.CanvasTexture(c);return t})(),transparent:true,depthWrite:false});
-function dropXP(x,y,z,n){if(!n||creative())return;while(n>0){const v=n>=10?10:n>=3?3:1;n-=v;const m=new THREE.Sprite(xpMat);m.scale.setScalar(.18+v*.02);m.position.set(x,y,z);scene.add(m);xpOrbs.push({m,v,pos:new V3(x,y,z),vel:new V3((Math.random()-.5)*3,3+Math.random()*2,(Math.random()-.5)*3),t:0})}}
+const xpOrbs=[],XP_TEX=[],XP_V=[2477,1237,617,307,149,73,37,17,7,3,1];
+// 구슬 그림 0~10 (값이 클수록 커요) · 회색 그림에 구슬마다 초록↔노랑 색을 입혀요 (ExperienceOrbRenderer)
+function xpTex(ic){if(XP_TEX[ic])return XP_TEX[ic];const c=cv(16,16),g=c.getContext('2d'),R=1.6+ic*.45,ins=(x,y)=>Math.hypot(x+.5-8,y+.5-8)<=R;
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){if(!ins(x,y))continue;const edge=!ins(x-1,y)||!ins(x+1,y)||!ins(x,y-1)||!ins(x,y+1),hl=Math.hypot(x+.5-(8-R*.35),y+.5-(8-R*.35))<Math.max(.8,R*.3);g.fillStyle=edge?'#55552e':hl?'#ffffff':'#d8d8c4';g.fillRect(x,y,1,1)}
+  const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;return XP_TEX[ic]=t}
+function dropXP(x,y,z,n){if(!n||creative())return;while(n>0){const v=XP_V.find(q=>n>=q)||1;n-=v;const m=new THREE.Sprite(new THREE.SpriteMaterial({map:xpTex(10-XP_V.indexOf(v)),alphaTest:.5}));m.scale.setScalar(.3);m.position.set(x,y,z);scene.add(m);
+  xpOrbs.push({m,v,pos:new V3(x,y,z),prev:new V3(x,y,z),vel:new V3((Math.random()*.2-.1)*2,Math.random()*.4,(Math.random()*.2-.1)*2),age:Math.floor(Math.random()*20)})}}
 // 수선: 경험치 1 = 내구도 2 를 고쳐요 (손 · 갑옷에서 수선이 붙고 닳은 것)
 function mendWith(v){const L=[inv[sel],...armor].filter(s=>s&&s.e&&s.e.mend&&s.d>0);if(!L.length)return v;const s=L[Math.floor(Math.random()*L.length)],fix=Math.min(s.d,v*2);s.d-=fix;renderHotbar();return v-Math.ceil(fix/2)}
-function updateXP(dt){const pc=new V3(player.pos.x,player.pos.y+.8,player.pos.z);for(let i=xpOrbs.length-1;i>=0;i--){const o=xpOrbs[i];o.t+=dt;const d=o.pos.distanceTo(pc);
-  if(d<7&&!player.dead){const dir=pc.clone().sub(o.pos).normalize();o.vel.addScaledVector(dir,dt*30*(1-d/7));o.vel.multiplyScalar(Math.exp(-dt*2))}else{o.vel.y-=14*dt;o.vel.x*=Math.exp(-dt*3);o.vel.z*=Math.exp(-dt*3)}
-  o.pos.addScaledVector(o.vel,dt);if(SOLID[getB(Math.floor(o.pos.x),Math.floor(o.pos.y-.1),Math.floor(o.pos.z))]&&o.vel.y<0){o.pos.y=Math.floor(o.pos.y-.1)+1.1;o.vel.y=0}
-  o.m.position.copy(o.pos);o.m.material.rotation=o.t;if(d<.9&&!player.dead){o.v=mendWith(o.v);player.xp=(player.xp||0)+o.v;scene.remove(o.m);xpOrbs.splice(i,1);sfx('xp');updateStats();continue}if(o.t>300){scene.remove(o.m);xpOrbs.splice(i,1)}}}
+// ExperienceOrb.tick: 중력 0.03 · 8칸 안이면 플레이어 쪽으로 끌려와요 · 땅에선 0.6 미끄러짐 · 몸 둘레 1칸 (위아래 0.5칸) 에 닿으면 2틱마다 하나씩 먹어요
+let xpDelay=0;
+function xpTick(){const p=player,tx=p.pos.x,ty=p.pos.y+p.eye/2,tz=p.pos.z,S=(x,y,z)=>SOLID[getB(Math.floor(x),Math.floor(y),Math.floor(z))];if(xpDelay>0)xpDelay--;
+  for(let i=xpOrbs.length-1;i>=0;i--){const o=xpOrbs[i],v=o.vel;o.age++;o.prev.copy(o.pos);
+    if(getB(Math.floor(o.pos.x),Math.floor(o.pos.y+.25),Math.floor(o.pos.z))===WATER){v.x*=.99;v.z*=.99;v.y=Math.min(v.y+5e-4,.06)}else v.y-=.03;
+    if(!p.dead){const dx=tx-o.pos.x,dy=ty-o.pos.y,dz=tz-o.pos.z,d2=dx*dx+dy*dy+dz*dz;if(d2<64&&d2>1e-6){const d=Math.sqrt(d2),e=1-d/8,k=e*e*.1/d;v.x+=dx*k;v.y+=dy*k;v.z+=dz*k}}
+    o.pos.x+=v.x;if(S(o.pos.x,o.pos.y+.1,o.pos.z)){o.pos.x-=v.x;v.x=0}o.pos.z+=v.z;if(S(o.pos.x,o.pos.y+.1,o.pos.z)){o.pos.z-=v.z;v.z=0}
+    o.pos.y+=v.y;let og=false;if(v.y<0&&S(o.pos.x,o.pos.y,o.pos.z)){o.pos.y=Math.floor(o.pos.y)+1;v.y=0;og=true}else if(v.y>0&&S(o.pos.x,o.pos.y+.5,o.pos.z)){o.pos.y-=v.y;v.y=0}
+    const f=og?.6*.98:.98;v.x*=f;v.y*=.98;v.z*=f;
+    if(!p.dead&&xpDelay<=0&&Math.abs(o.pos.x-p.pos.x)<1.55&&Math.abs(o.pos.z-p.pos.z)<1.55&&o.pos.y>p.pos.y-1&&o.pos.y<p.pos.y+PH+.5){xpDelay=2;o.v=mendWith(o.v);player.xp=(player.xp||0)+o.v;scene.remove(o.m);o.m.material.dispose();xpOrbs.splice(i,1);sfx('xp');updateStats();continue}
+    if(o.age>6000){scene.remove(o.m);o.m.material.dispose();xpOrbs.splice(i,1)}}}
+function updateXP(dt){for(const o of xpOrbs){o.m.position.set(lerp(o.prev.x,o.pos.x,PT),lerp(o.prev.y,o.pos.y,PT)+.1,lerp(o.prev.z,o.pos.z,PT));const r=(o.age+PT)/2;o.m.material.color.setRGB((Math.sin(r)+1)*.5,1,(Math.sin(r+4.1887903)+1)*.1)}}
 
 // ── 생성된 상자 보물
 function chestLoot(kind){if(kind)return lootOf(kind);const r=Math.random,L=[];const add=(id,a,b2,ch)=>{if(r()<(ch||1))L.push({id,n:a+Math.floor(r()*(b2-a+1)),d:0})};
@@ -3158,7 +3307,7 @@ function birdAI(m,dt){if(!mobCommon(m,dt))return;m.ai.t-=dt;if(m.ai.t<=0||!m.ai.
 function beeAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos;if(m.angry>0&&!player.dead&&!creative()){m.angry-=dt;flyMove(m,pp.x,pp.y+1.2,pp.z,4,dt);m.yaw=Math.atan2(pp.x-m.pos.x,pp.z-m.pos.z);
     if(m.pos.distanceTo(new V3(pp.x,pp.y+1,pp.z))<1.2&&m.atk<=0){m.atk=1;hurtPlayer(2,m.pos,'bee');m.angry=0;m.hp=0;m.dead=true;m.deadT=0}}else birdAI(m,dt);const t=performance.now()/30;m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*Math.sin(t)*.8)}
 function phantomAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,A=m.ai;A.t=(A.t||0)-dt;A.ang=(A.ang||Math.random()*6)+dt*.6;
-  if(daylight>.65){m.burnT=(m.burnT||0)+dt;if(m.burnT>1){m.burnT=0;m.hurtT=0;hurtMob(m,2,null)}}
+  if(daylight>.65&&lightAt(m.pos.x,m.pos.y+1,m.pos.z)[0]>=15&&!isWet(m.pos.x,m.pos.y+1,m.pos.z))m.fireT=Math.max(m.fireT||0,8);
   if(A.dive&&!player.dead&&!creative()){flyMove(m,pp.x,pp.y+1,pp.z,14,dt);if(m.pos.distanceTo(new V3(pp.x,pp.y+1,pp.z))<1.6&&m.atk<=0){m.atk=2;hurtPlayer(4,m.pos,'phantom');A.dive=false;A.t=6}if(A.t<-4)A.dive=false}
   else{flyMove(m,pp.x+Math.cos(A.ang)*14,pp.y+16,pp.z+Math.sin(A.ang)*14,9,dt);if(A.t<=0){A.dive=true;A.t=0}}
   if(Math.hypot(m.vel.x,m.vel.z)>.3)m.yaw=Math.atan2(m.vel.x,m.vel.z);m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*Math.sin(performance.now()/150)*.5)}
@@ -3817,7 +3966,7 @@ function camShake(ps,pt){const p=player;
 function updateHand(dt){const p=player,pt=PT;
   while(handScene.children.length)handScene.remove(handScene.children[0]);
   const st=p.handItem,id=st?st.id:0;
-  const obj=heldObj(id);handScene.add(obj);
+  const obj=heldObj(id);handScene.add(obj);if(p.burn>0&&!p.dead)handScene.add(fireOv);
   // 빛: 눈 위치의 밝기 + 카메라 방향에 따라 바뀌는 위쪽 빛
   lmColor(p.pos.x,p.pos.y+p.eye,p.pos.z,handU.lm.value);
   const qi=camera.quaternion.clone().invert();handU.L0.value.copy(HL0).applyQuaternion(qi);handU.L1.value.copy(HL1).applyQuaternion(qi);
@@ -4010,7 +4159,7 @@ function renderHotbar(){const hb=$('hotbar');if(!hb.querySelector('.hs')){for(le
   hb.querySelectorAll('.hs').forEach((d,i)=>d.innerHTML=slotHTML(inv[i]));$('sel').style.left=`calc(${sel*20-1}px * var(--s))`;setHeld()}
 let nameT=0;
 function selectSlot(i){if(i===sel)return;sel=(i+9)%9;eating=false;eatT=0;breaking=null;renderHotbar();const st=inv[sel];nameText=st?ITEM[st.id].n:'';nameTimer=st?40:0}
-let toastT=0;function toast(m){overlayText=m;overlayT=60}   // 마크 액션바: 핫바 위에 3초
+let toastT=0;function toast(m){if(started){overlayText=m;overlayT=60;$('toast').style.opacity=0;return}const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>t.style.opacity=0,2200)}   // 마크 액션바: 핫바 위에 3초
 /* ═════════════ HUD — 마크 Gui 그대로 (자동 GUI 크기 · 핫바 · 하트 깜빡임/떨림 · 배고픔 떨림 · 공기 방울 · 경험치 · 공격 쿨타임) ═════════════ */
 const hudC=document.createElement('canvas');hudC.id='hudc';$('hud').insertBefore(hudC,$('hud').firstChild);const hg=hudC.getContext('2d');
 let GS=2,guiOpt=0,hideGui=false;try{guiOpt=+localStorage.getItem('bc_opt_gui')||0}catch(e){}
@@ -4523,12 +4672,13 @@ function tpFix(){const p=player;if(!(p.tpHold>0))return false;const ch=chunks.ge
   if(p.tpSurface){for(let y=H-2;y>0;y--){const id=getB(x,y,z);if(id!==AIR&&B[id]&&!B[id].cross){p.pos.y=y+1;break}}}
   else{let y=Math.floor(p.pos.y);while(y<H-2&&(SOLID[getB(x,y,z)]||SOLID[getB(x,y+1,z)]))y++;p.pos.y=y}
   p.tpHold=0;p.fallStart=null;return false}
-const CMDS=['tp','locate','gamemode','time','spawn','seed','give','kill','help','nether','end','overworld'];
+const CMDS=['tp','locate','gamemode','time','weather','spawn','seed','give','kill','help','nether','end','overworld'];
 const LOC_WORDS=['village','stronghold','ancient_city','fortress','end_city','biome'];
 function cmdAllowed(){if(!WORLD||!WORLD.mp)return true;return creative()}
 function runCmd(t){const a=t.slice(1).trim().split(/\s+/),c=(a[0]||'').toLowerCase();
   const num=(s,base)=>{if(s==null)return NaN;if(s.startsWith('~'))return base+(s.length>1?parseFloat(s.slice(1)):0);return parseFloat(s)};
   if(c==='gamemode'||c==='gm'){const m=/^(c|creative|1|크리)/.test(a[1]||'')?'creative':'survival';GAMEMODE=m;if(WORLD&&!WORLD.mp){const L=worldsList(),w=L.find(x=>x.id===WORLD.id);if(w){w.mode=m;saveWorldsList(L)}}document.body.classList.toggle('creative',creative());player.fly=false;chatLine('게임 모드를 '+MODE_N[m]+'(으)로 바꿨어요','#aaa')}
+  else if(c==='weather'){const k=({clear:'clear',맑음:'clear',rain:'rain',비:'rain',thunder:'thunder',뇌우:'thunder'})[(a[1]||'').toLowerCase()];if(!k){chatLine('/weather clear · rain · thunder [초]','#ff5555');return}const sec=+a[2]>0?+a[2]:300+Math.random()*600;weatherOv={kind:k,until:worldTime+sec};chatLine(({clear:'날씨를 맑게 바꿨어요',rain:'비가 와요',thunder:'천둥번개가 쳐요'})[k],'#aaa')}
   else if(c==='time'){const w=(a[1]==='set'?a[2]:a[1])||'';const day=Math.floor(worldTime/DAYLEN)*DAYLEN;const T={day:.04,낮:.04,noon:.25,정오:.25,sunset:.5,night:.55,밤:.55,midnight:.75,자정:.75}[w];
     if(T!=null)worldTime=day+DAYLEN*T;else if(!isNaN(+w))worldTime=day+DAYLEN*((+w%24000)/24000);else{chatLine('/time set day · noon · night · midnight · 0~24000','#ff5555');return}chatLine('시간을 바꿨어요','#aaa')}
   else if(c==='nether'||c==='end'||c==='overworld'){if(!creative()){chatLine('크리에이티브 모드에서만 쓸 수 있어요','#ff5555');return}if(c==='end')travelEnd();else if((c==='nether')!==(DIM==='nether'))travelNether()}
@@ -4561,7 +4711,7 @@ function runCmd(t){const a=t.slice(1).trim().split(/\s+/),c=(a[0]||'').toLowerCa
     if(id<0||!ITEM[id]){chatLine('그런 아이템이 없어요. 예: /give 다이아몬드 5','#ff5555');return}addItem({id,n,d:0});chatLine(ITEM[id].n+' '+n+'개를 받았어요','#aaa')}
   else if(c==='kill'){hurtPlayer(999,null,'void')}
   else if(c==='seed')chatLine('시드: '+SEED,'#aaa');else if(c==='spawn'){const s=player.spawn;if(s)tpTo(s.x,s.y,s.z)}
-  else if(c==='help'||c==='?')chatLine('명령어: /tp x y z · /tp x z · /tp 이름 · /locate 구조물|biome 이름 · /gamemode c|s · /time set day|night · /give 아이템 개수 · /spawn · /seed · /kill  (Tab 으로 자동완성)','#aaa');
+  else if(c==='help'||c==='?')chatLine('명령어: /tp x y z · /tp x z · /tp 이름 · /locate 구조물|biome 이름 · /gamemode c|s · /time set day|night · /weather clear|rain|thunder · /give 아이템 개수 · /spawn · /seed · /kill  (Tab 으로 자동완성)','#aaa');
   else chatLine('알 수 없는 명령어예요. /help','#ff5555')}
 // 채팅 칸에서 Tab: 명령어 · locate 대상 자동완성
 function chatComplete(inp){const v=inp.value;if(!v.startsWith('/'))return;const parts=v.slice(1).split(' ');
@@ -4673,7 +4823,7 @@ function attackRemote(r){if(!MPS||!r.uid||r.d&&r.d.d)return;doSwing();if((r.cd||
 function pvpHit(v){if(!MPS||player.dead||v.to!==MPS.uid||now()-(v.ts||0)>4000)return;player.pvpBy=v.n||'플레이어';const hp=player.hp;
   hurtPlayer(v.dmg,new V3(v.x,v.y,v.z),'pvp');if(player.hp<hp){if(v.kb){player.vel.x*=1+v.kb*.6;player.vel.z*=1+v.kb*.6}if(v.fire)player.burn=Math.max(player.burn||0,4*v.fire)}}
 // 명령어 실시간 가이드: 치는 동안 채팅 칸 위에 후보 · 사용법이 떠요 (↑↓ 고르기, Tab 넣기)
-const CMD_USE={tp:'/tp <x> <y> <z> · /tp <x> <z> · /tp <플레이어> · /tp spawn · /tp target',locate:'/locate <구조물> · /locate biome <바이옴> · /locate clear',gamemode:'/gamemode <creative|survival>',time:'/time set <day|noon|night|midnight|0~24000>',
+const CMD_USE={weather:'/weather <clear|rain|thunder> [초]',tp:'/tp <x> <y> <z> · /tp <x> <z> · /tp <플레이어> · /tp spawn · /tp target',locate:'/locate <구조물> · /locate biome <바이옴> · /locate clear',gamemode:'/gamemode <creative|survival>',time:'/time set <day|noon|night|midnight|0~24000>',
   give:'/give <아이템> [개수]  (크리에이티브)',spawn:'/spawn — 스폰 지점으로',seed:'/seed — 세계 시드 보기',kill:'/kill — 스스로 쓰러지기',help:'/help — 명령어 목록',nether:'/nether — 네더로 (크리에이티브)',end:'/end — 엔드로 (크리에이티브)',overworld:'/overworld — 오버월드로'};
 const LOC_N={village:'Village',stronghold:'Stronghold',ancient_city:'Ancient City',fortress:'Nether Fortress',end_city:'End City',desert_pyramid:'Desert Pyramid',buried_treasure:'Buried Treasure',biome:'바이옴 찾기',clear:'길잡이 끄기'};
 let hintSel=0,hintList=[];
@@ -4688,6 +4838,7 @@ function cmdHints(v){const P=player.pos,parts=v.slice(1).split(' '),c=parts[0].t
     if(n===1){opt('~','지금 위치 기준');opt('spawn','스폰 지점');if(WAYPT)opt('target',WAYPT.n);for(const r of remotes.values())if(r.name)opt(r.name,'플레이어')}
     L.push({ins:null,t:['<x>','<y>','<z>'].map((s,i)=>i===Math.min(n-1,2)?'['+s+']':s).join(' '),d:`지금: ${xyz.join(' ')}`})}
   else if(c==='gamemode'&&parts.length===2){opt('creative','크리에이티브');opt('survival','서바이벌')}
+  else if(c==='weather'&&parts.length===2){opt('clear','맑음');opt('rain','비');opt('thunder','뇌우')}
   else if(c==='time'){if(parts.length===2)opt('set','');else if(parts[1]==='set'&&parts.length===3)for(const [w,d] of [['day','아침'],['noon','정오'],['night','밤'],['midnight','자정']])opt(w,d)}
   else if(c==='give'&&parts.length===2&&last){for(const k in ITEM){const it=ITEM[k];if(L.length>=8)break;if(it&&it.n&&it.n.toLowerCase().includes(last))L.push({ins:'/give '+it.n+' ',t:it.n,d:'#'+k})}}
   return{L,use}}
@@ -4706,6 +4857,18 @@ let last=performance.now(),statT=0,saveT=0,slowT=0,fps=0,fpsN=0,fpsT=0;
 const eul=new THREE.Euler(0,0,0,'YXZ'),_cmA=new THREE.Matrix4(),_cmB=new THREE.Matrix4(),_one3=new V3(1,1,1),_cs3=new V3();
 // 새 소식: 업데이트마다 트레일러 영상 + 바뀐 점 (새 업데이트는 맨 앞에 추가해요)
 const UPDATES=[
+  {v:'2026-10-23-mc',title:'마크 느낌 대업데이트',video:'trailers/blockcraft-2026-10-23-mc.mp4',notes:[
+    '움직임: 마크처럼 1초에 20틱 · 걷기 4.3칸/초 · 달리기 5.6칸/초 · 점프 1.25칸 · 걸을 때 화면 흔들림 · 맞으면 화면이 기울어요',
+    '손: 손에 든 물건의 위치 · 각도 · 휘두르기 · 먹기 · 활 당기기가 마크와 같아요. 바꿔 들면 손이 쑥 내려갔다 올라와요',
+    '공격 쿨타임: 휘두른 뒤 차오르는 막대가 꽉 찼을 때 때려야 아파요. 치명타 · 휩쓸기 · 달리며 밀치기',
+    '화면: 마크 크기 HUD (하트 · 배고픔 · 경험치 · 핫바), 자동 GUI 크기, F1 로 화면 숨기기, F3 디버그 화면',
+    '블록 부수기: 금 10단계 · 부스러기 64조각 · 떨어진 블록은 빙글빙글 · 동그란 그림자',
+    '하늘: 높이 192 의 입체 구름 · 해 질 녘 붉은 하늘 · 물속은 점점 잘 보여요',
+    '날씨: 비 · 눈 · 천둥번개 (하늘이 회색으로, 번개가 번쩍). /weather clear · rain · thunder',
+    '불: 해가 뜨면 좀비 · 스켈레톤이 불꽃에 타요. 용암에 빠지면 화면에 불이 보이고, 비나 물에 닿으면 꺼져요',
+    '경험치 구슬: 마크처럼 작은 구슬이 초록 ↔ 노랑으로 반짝이며 끌려와요',
+    '메뉴: 마크 버튼 · 타이틀 화면 · 설정 (GUI 크기 · 화면 흔들림 · 구름 · 음악) · 인벤토리 칸이 마크와 같은 자리',
+    '소리: 재질마다 다른 발소리 · 동굴 소리 · 잔잔한 피아노 음악 (설정에서 끌 수 있어요)']},
   {v:'2026-10-23',title:'보트 · 친구와 PvP · 활 · 명령어 가이드',video:'trailers/blockcraft-2026-10-23.mp4',notes:[
     '보트: 물에 놓고 오른쪽 클릭으로 타요. W/S 앞뒤, A/D 방향, Shift 내리기',
     '멀티에서 친구를 칼로 때리고 활로 맞힐 수 있어요 (화염 · 밀어내기 마법부여도 적용)',
@@ -4728,7 +4891,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
     if(ok===tot){loadDone=true;if(phase==='boot'){$('loading').classList.add('hide');showMenu('title')}else if(phase==='dim'){$('loading').classList.add('hide');phase='play';if(afterDim){const f=afterDim;afterDim=null;f()}}else finishEnter()}
     camera.position.set(player.pos.x,player.pos.y+eyeH(),player.pos.z);updateSky(dt);renderer.clear();renderer.render(scene,camera);return}
   const running=started&&!(menuOpen&&!MPS&&menuOpen!=='ready');
-  if(running){worldTime+=dt;pTickAcc+=dt;let g=0;while(pTickAcc>=TICK&&g++<5){pTickAcc-=TICK;updatePlayer(TICK);fxTick()}if(pTickAcc>=TICK)pTickAcc=0;PT=pTickAcc/TICK;
+  if(running){worldTime+=dt;pTickAcc+=dt;let g=0;while(pTickAcc>=TICK&&g++<5){pTickAcc-=TICK;updatePlayer(TICK);fxTick();weatherTick();fireTick();xpTick()}if(pTickAcc>=TICK)pTickAcc=0;PT=pTickAcc/TICK;
     worldTicks(dt);portalTick(dt);updateThrowns(dt);updateXP(dt);crystalTick(dt);breathTick(dt);updateMobs(dt);updateBoats(dt);updateProjs(dt);updateEnts(dt);updateParts(dt);furnaceTick(dt);spawnTick(dt);updateBreaking(dt);updateUse(dt);
     slowT+=dt;if(slowT>1){slowT=0;decayTick();saplingTick();cropTick()}decayQ.length&&decayTick()}
   mpTick(dt);
@@ -4744,7 +4907,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   updateMe(dt);if(screenOpen==='inv')pvRender();
   chunkTick(started?7:20);updateSky(dt);updateHand(dt);
   $('water').classList.toggle('hide',!underWater||!started);
-  fxRender(PT);updateShadows(PT);
+  fxRender(PT);updateShadows(PT);renderPrecip(PT);updateFlames();
   const _cp0=camera.position.clone(),_cq0=camera.quaternion.clone();if(started){const ps=camShake(new PoseS(),PT);_cmA.compose(camera.position,camera.quaternion,_one3).multiply(_cmB.copy(ps.m).invert());_cmA.decompose(camera.position,camera.quaternion,_cs3)}
   renderer.clear();renderer.render(scene,camera);if(started&&!p.dead&&!viewMode&&!hideGui){renderer.clearDepth();renderer.render(handScene,handCam)}camera.position.copy(_cp0);camera.quaternion.copy(_cq0);
   statT+=dt;if(statT>.25&&started){statT=0;updateStats();
@@ -4755,13 +4918,13 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
         `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-YO).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-YO} ${bz} [${bx&15} ${(by-YO)&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-YO)>>4} ${bz>>4}`,
         `Facing: ${face} (${my.toFixed(1)} / ${(-p.pitch/DEG).toFixed(1)})`,`Client Light: ${Math.max(l[0],l[1])} (${l[0]} sky, ${l[1]} block)`,`Biome: minecraft:${bk}`,`Day ${Math.floor(worldTime/DAYLEN)}  Time ${Math.floor((worldTime%DAYLEN)/DAYLEN*24000)}`,`Seed: ${SEED}`+(MPS?`  Server: ${MPS.sid} (${MPS.count})`:'')];
       $('debug').innerHTML=L.map(t=>t?`<div>${esc(t)}</div>`:'<div class="gap"></div>').join('')}}
-  drawHUD();$('cross').style.visibility=hideGui||viewMode?'hidden':'';$('chat').style.visibility=hideGui&&!chatOpen?'hidden':'';
+  drawHUD();$('cross').style.visibility=hideGui||viewMode||!started||player.dead||$('hud').classList.contains('hide')?'hidden':'';$('chat').style.visibility=hideGui&&!chatOpen?'hidden':'';
   {const lk=started?lightK(p.pos.x,p.pos.y+p.eye,p.pos.z):1;vigB+=((1-lk)-vigB)*Math.min(1,dt*.2);$('vig').style.opacity=clamp(vigB,0,1)}
   saveT+=dt;if(saveT>30){saveT=0;save()}}
 let vigB=0;
 requestAnimationFrame(frame);
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
-window.__BC={TEX,tileList,sfx:(...a)=>sfx(...a),composePiece,musPlay,musStop,get musPlaying(){return musPlaying},setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
+window.__BC={get camera(){return camera},set xpDelay(v){xpDelay=v},setWx(r,t){rainLvl=rainO=r;thunLvl=thunO=t},get wx(){return [rainLvl,thunLvl,skyFlash,weatherOv]},lightning:(x,z)=>lightning(x,z),get xpOrbs(){return xpOrbs},dropXP:(x,y,z,n)=>dropXP(x,y,z,n),selectSlot:i=>selectSlot(i),attack:m=>attack(m),get worldTime(){return worldTime},set worldTime(v){worldTime=v},DAYLEN,setMouseR(v){mouseR=v;if(v){useItem(true);useCD=.25}},TEX,tileList,sfx:(...a)=>sfx(...a),composePiece,musPlay,musStop,get musPlaying(){return musPlaying},setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
 </body>
 </html>

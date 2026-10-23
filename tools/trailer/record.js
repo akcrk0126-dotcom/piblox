@@ -92,10 +92,13 @@ const CAP = `(() => {
   await b.close();
   console.log(`\n${n} frames → ${outFile}`);
   fs.mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
-  execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(tmp, '%05d.jpg'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '27', '-preset', 'slow', '-movflags', '+faststart', outFile], { stdio: 'inherit' });
+  // 10MB 를 넘으면 crf 를 올려서 다시 만들어요 (비 · 눈처럼 잔무늬가 많으면 커져요)
+  const LIMIT = 9.5e6, fit = (file, crf0, step, max, args) => { let crf = crf0; for (;;) { execFileSync(FFMPEG, args(crf), { stdio: 'inherit' }); const sz = fs.statSync(file).size; if (sz <= LIMIT || crf >= max) return; crf += step; console.log(`${path.basename(file)} ${(sz / 1e6).toFixed(1)}MB → crf ${crf}`) } };
+  fit(outFile, +(process.env.CRF || 27), 2, 41, crf => ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(tmp, '%05d.jpg'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', String(crf), '-preset', 'slow', '-movflags', '+faststart', outFile]);
   // 브라우저마다 되는 형식이 달라서 webm 도 같이 만들어요 (mp4 를 못 트는 브라우저용)
-  execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(tmp, '%05d.jpg'), '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '4', outFile.replace(/\.mp4$/, '.webm')], { stdio: 'inherit' });
+  const webm = outFile.replace(/\.mp4$/, '.webm');
+  fit(webm, +(process.env.WEBM_CRF || 40), 3, 58, crf => ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(tmp, '%05d.jpg'), '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', String(crf), '-row-mt', '1', '-deadline', 'good', '-cpu-used', '4', webm]);
   fs.copyFileSync(path.join(tmp, String(Math.min(n - 1, 6 * FPS)).padStart(5, '0') + '.jpg'), outFile.replace(/\.mp4$/, '.jpg'));   // 영상 표지
   fs.rmSync(tmp, { recursive: true, force: true });
-  console.log('done', (fs.statSync(outFile).size / 1e6).toFixed(1) + 'MB');
+  console.log('done', (fs.statSync(outFile).size / 1e6).toFixed(1) + 'MB', '· webm', (fs.statSync(webm).size / 1e6).toFixed(1) + 'MB');
 })();
