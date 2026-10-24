@@ -1958,13 +1958,14 @@ const mapBase = cnv(512), mapR = 86;
 }
 const mapC = $('mapc'), mx = mapC.getContext('2d');
 function drawMap(){
-  const W = 312, k = 256 / AREA.mapR, zoom = 1.25, plaza = AREA === AREAS.plaza;
+  const W = 312, k = 256 / AREA.mapR, zoom = AREA.mapZoom || 1.25, plaza = AREA === AREAS.plaza;
   mx.fillStyle = '#1b2230'; mx.fillRect(0, 0, W, W);
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(camYaw); mx.scale(zoom * W / 512 * 1.6, zoom * W / 512 * 1.6);
-  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(AREA.mapBase, -256, -256);
+  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(AREA.mapBase, -256, -256, 512, 512);
+  if (AREA.mapDraw) AREA.mapDraw(mx, k);
   mx.fillStyle = 'rgba(255,255,255,.75)'; if (plaza) for (const n of NPCS){ if (n.hidden) continue; mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
-  mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, e.big ? 5 : 3, 0, TAU); mx.fill(); }
-  for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.fillStyle = '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
+  const ms = 1.25 / zoom; mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, (e.big ? 5 : 3) * ms, 0, TAU); mx.fill(); }
+  for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.scale(ms, ms); mx.fillStyle = m.c || '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
   mx.restore();
   // 플레이어 화살표
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(-(player.fig.root.rotation.y - camYaw));
@@ -2170,12 +2171,15 @@ function updateInteract(dt){
   if (toastT > 0){ toastT -= dt; if (toastT <= 0) $('toast').classList.remove('on'); }
 }
 
+let sunFollowing = false;
 function frame(){
   requestAnimationFrame(frame);
   const rdt = Math.min(0.05, clock.getDelta()); let dt = rdt;
   if (G.hitStop > 0){ G.hitStop -= rdt; dt = rdt * 0.06; }
   time += dt; TIMEU.value = time;
   if (playing){ updatePlayer(dt); for (const h of G.hooks) h(dt, rdt); updateCamera(rdt); updateInteract(dt); drawMap(); }
+  if (G.sunFollow){ const tx = Math.round(player.pos.x / 2) * 2, tz = Math.round(player.pos.z / 2) * 2; sun.target.position.set(tx, player.pos.y, tz); sun.position.set(tx, player.pos.y, tz).addScaledVector(SUN, 120); sunFollowing = true; }
+  else if (sunFollowing){ sunFollowing = false; sun.target.position.set(0, 0, 0); sun.position.copy(SUN).multiplyScalar(120); }
   else updateIntro(dt);
   if (AREA === AREAS.plaza){ updateNPCs(dt); updateFX(dt); updateCreatures(dt); }
   // 하늘
@@ -2233,7 +2237,7 @@ const G = {
   Builder, Kit, boxG, latheG, ringBand, mergeGeos, tex, cnv, runeStrip, runeColumn, drawRune, glowC, particles, T, rr, R,
   THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight, setMood,
   hooks: [], lock: false, faceLock: false, noJump: false, speedMul: 1, moveMul: 1, poseMod: null, poseK: 0, camOverride: null, shake: 0, hitStop: 0,
-  onKey: null, onClick: null, mapMarkers: [], mapEnemies: [],
+  onKey: null, onClick: null, mapMarkers: [], mapEnemies: [], sun, hemi, Q, gfxMode, SUN, sunFollow: false, get camPitch(){ return camPitch; }, get camDist(){ return camDist; },
   get time(){ return time; }, get camYaw(){ return camYaw; }, get playing(){ return playing; },
   toast(h, sub){ const t = $('toast'); t.querySelector('.h').textContent = h; t.querySelector('.s').textContent = sub; t.classList.add('on'); toastT = 2.6; },
   resize,
