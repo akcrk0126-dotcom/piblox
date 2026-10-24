@@ -2573,6 +2573,7 @@ function win(){
   if (first && n === 5 && d === 'e' && !S.rune){ S.rune = true; extra += ' · <em>룬 마법 습득!</em>'; }
   save(); gainExp(rw.exp);
   if (first && n === JOB_STAGE && !S.job) later(4.2, () => G.toast('⚜ 직업 해금!', '광장의 ⚜ 직업 버튼(V)에서 전직하고 스킬을 얻자'));
+  if (first && n === 1 && d === 'e') later(7.5, () => { G.toast('🌍 모험의 대지가 열렸다!', '튜토리얼 끝! 광장의 「모험의 대지」 로 진짜 모험을 떠나자'); BUS.emit('tutorialDone'); });
   if (ascReady()) later(4.6, () => G.toast('✦ 각성 가능!', `⚜ 직업 창(V)에서 ${JOBS[S.job].asc.n}(으)로 각성할 수 있다`));
   sfx('level'); burst(new V3(player.pos.x, 0.5, player.pos.z), 0xffe08a, 60, 4, 0.3, 1.4, 3, 4);
   bossEl.classList.remove('on'); bReturn.textContent = '⟲ 광장으로';
@@ -3063,7 +3064,7 @@ G.hooks.push((dt, rdt) => {
 
 // ───────────────────────── 시작 ─────────────────────────
 refreshHud(); refreshSkbar(); if (S.job && S.sword){ equipJob(); sword.visible = false; if (offhand) offhand.visible = false; }
-const waitStart = setInterval(() => { if (G.playing){ clearInterval(waitStart); setTimeout(() => { if (G.area === 'plaza') hint('오른쪽 <b>🗺 월드맵</b> 버튼(또는 <b>M</b>)으로 모험을 시작하세요', 7); }, 5500); } }, 300);
+const waitStart = setInterval(() => { if (G.playing){ clearInterval(waitStart); setTimeout(() => { if (G.area === 'plaza') hint(stars(1, 'e') ? '오른쪽 <b>🌍 모험의 대지</b> 로 떠나 보세요 — 사냥터 · 레이드 · 낚시가 기다려요' : '먼저 오른쪽 <b>📖 스토리 (튜토리얼)</b> 의 1-1 을 깨면 <b>모험의 대지</b> 가 열려요', 8); }, 5500); } }, 300);
 // ───────────────────────── 아바타 (봇 · NPC 용) ─────────────────────────
 // o = { job, asc, look: { hat, back, body, wpn, aura }, scale, mat } → { fig, weapon, offhand, upd(dt, moving, air), setArmed(bool) }
 function makeAvatar(o = {}){

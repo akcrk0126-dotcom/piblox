@@ -31,6 +31,17 @@
   #intro .line { width:min(420px,70vw); height:1px; margin:18px 0 26px; background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:0; animation:fin 2s 1.6s forwards; }
   #intro button { pointer-events:auto; font:700 16px 'Gowun Batang'; letter-spacing:.35em; color:#10131c; padding:14px 44px 14px 50px; border:none; border-radius:2px; cursor:pointer; background:linear-gradient(180deg,#fff2c9,#e2b964 60%,#b88c3e); box-shadow:0 0 0 1px rgba(255,240,200,.6), 0 0 0 5px rgba(233,200,126,.18), 0 8px 30px rgba(0,0,0,.5), 0 0 40px rgba(233,200,126,.35); opacity:0; animation:fin 1.6s 2.1s forwards; transition:transform .2s, box-shadow .2s; }
   #intro button:hover { transform:translateY(-2px) scale(1.03); box-shadow:0 0 0 1px rgba(255,240,200,.9), 0 0 0 7px rgba(233,200,126,.25), 0 10px 34px rgba(0,0,0,.55), 0 0 60px rgba(233,200,126,.55); }
+  #intro #newsBtn { margin-top:14px; position:relative; font:700 13px 'Gowun Batang'; letter-spacing:.12em; color:#fff3d6; padding:8px 18px; background:rgba(10,14,24,.55); box-shadow:0 0 0 1px rgba(233,200,126,.55); animation:fin 1.6s 2.7s forwards; }
+  #intro #newsBtn.new::after { content:''; position:absolute; right:-4px; top:-4px; width:11px; height:11px; border-radius:50%; background:#ff4a4a; box-shadow:0 0 8px #ff4a4a; }
+  #news { position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:rgba(4,6,12,.72); backdrop-filter:blur(3px); }
+  #news.hide { display:none; }
+  #news .box { position:relative; width:min(760px, 94vw); max-height:90vh; overflow:auto; padding:18px 20px; background:linear-gradient(180deg, rgba(16,20,34,.97), rgba(7,9,16,.97)); border:1px solid rgba(233,200,126,.55); border-radius:8px; box-shadow:0 0 0 4px rgba(10,14,24,.5), 0 20px 60px rgba(0,0,0,.7); color:#e8e1cf; }
+  #news .hd { font:700 11px 'Cinzel'; letter-spacing:.4em; color:#7ff3ff; margin-bottom:10px; }
+  #news #newsX { position:absolute; right:12px; top:8px; background:none; border:none; color:#e9c87e; font-size:22px; cursor:pointer; }
+  #news video { width:100%; border-radius:6px; background:#000; display:block; }
+  #news h3 { font:700 19px 'Gowun Batang'; color:#fff3d6; margin:14px 0 6px; } #news h3 small { font:400 12px 'Noto Sans KR'; color:#9fb6c0; margin-left:8px; }
+  #news ul { margin:0; padding-left:20px; font:400 13.5px/1.75 'Noto Sans KR'; color:#dfe8ea; }
+  #news .older { margin-top:16px; padding-top:8px; border-top:1px solid rgba(233,200,126,.2); opacity:.85; }
   #intro .hint { margin-top:16px; font:400 12px 'Noto Sans KR'; color:rgba(255,255,255,.6); opacity:0; animation:fin 1.6s 2.5s forwards; }
   @keyframes fin { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
 
@@ -93,8 +104,10 @@
   <div class="t2">룬 아 고 라</div>
   <div class="line"></div>
   <button id="enter">광장으로</button>
-  <div class="hint">스토리 모드 · 미니 게임 · 스탯 성장 — 곧 열립니다</div>
+  <div class="hint">모험의 대지 · 레이드 · 미니 게임 · 직업 · 의상실</div>
+  <button id="newsBtn">🎬 새 소식</button>
 </div>
+<div id="news" class="hide"><div class="box"><button id="newsX">✕</button><div class="hd">NEWS · 새 소식</div><div id="newsBody"></div></div></div>
 
 <div id="hud">
   <div id="loc"><div class="a">THE RUNE AGORA</div><div class="b">룬의 광장</div><div class="c"></div></div>
@@ -2247,6 +2260,27 @@ renderer.compile(scene, camera);
 frame();
 setTimeout(() => $('load').classList.add('off'), 250);
 window.__agora = { player, camera, scene, renderer, setCam: (y, p, d) => { camYaw = y; camPitch = p; camDistT = camDist = d; startBlend = 0; }, start: () => $('enter').click(), G };
+// 새 소식: 업데이트마다 트레일러 영상 + 바뀐 점 (새 업데이트는 맨 앞에 추가해요)
+const UPDATES = [
+  { v: '2026-10-23-wardrobe', title: '외형 상점 업데이트', video: '', notes: [
+    '광장 👑 외형 버튼 (B) — 머리 · 등 · 몸 · 무기 효과 · 오라, 41종 (일반 ~ 전설)',
+    '미리 입어 보고 골드로 구매 · 광장과 전투에서 모두 보여요'] },
+  { v: '2026-10-23-jobs', title: '직업 · 스킬 · 각성 업데이트', video: '', notes: [
+    '직업 4종 (검사 · 궁수 · 마법사 · 암살자) 과 전용 스킬, Lv.10 + 1-10 클리어 후 각성',
+    '정예 몬스터 · 보스 광폭화 · 증원 웨이브 · 콤보 · 저체력 경고로 더 긴장감 있게'] },
+];
+function newsUnseen(){ return UPDATES.length && SAVE.get('agora_news', '') !== UPDATES[0].v; }
+function openNews(){
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]), u = UPDATES[0];
+  const vid = o => o.video ? `<video controls autoplay muted playsinline loop poster="${o.video.replace(/\.mp4$/, '.jpg')}"><source src="${o.video}" type="video/mp4"><source src="${o.video.replace(/\.mp4$/, '.webm')}" type="video/webm"></video>` : '';
+  $('newsBody').innerHTML = vid(u) + `<h3>${esc(u.title)}<small>${u.v.slice(0, 10)}</small></h3><ul>${u.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` +
+    (UPDATES.length > 1 ? `<div class="older">${UPDATES.slice(1).map(o => `<h3>${esc(o.title)}<small>${o.v.slice(0, 10)}${o.video ? ` · <a href="${o.video}" target="_blank" style="color:#7ecbff">영상</a>` : ''}</small></h3><ul>${o.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</div>` : '');
+  $('news').classList.remove('hide'); SAVE.set('agora_news', u.v); $('newsBtn').classList.remove('new');
+}
+function closeNews(){ const v = $('news').querySelector('video'); if (v) v.pause(); $('news').classList.add('hide'); }
+$('newsBtn').onclick = openNews; $('newsX').onclick = closeNews; $('news').addEventListener('click', e => { if (e.target.id === 'news') closeNews(); });
+if (newsUnseen()) $('newsBtn').classList.add('new');
+G.openNews = openNews; G.UPDATES = UPDATES;
 import('./agora-story.js').then(m => m.init(G)).catch(e => console.error('story load failed', e));
 </script>
 </body>
