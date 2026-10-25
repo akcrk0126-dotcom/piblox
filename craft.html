@@ -1937,7 +1937,7 @@ const ICONC={};function iconURL(id){if(ICON[id])return ICON[id];const c=cv(32,32
 
 /* ═════════════ 월드 ═════════════ */
 let H=96,SEA=34,HW=96,YO=0;   // 세계 높이 · 해수면 · 화면에 보이는 Y 기준 (GEN 4: 마크처럼 Y -64~191, 해수면 63)
-const HMAX=256;
+const HMAX=384;
 let SEED=1;
 const chunks=new Map();
 let edits={};            // "cx,cz" → {idx:id}
@@ -1949,7 +1949,7 @@ const encB=(id,m)=>id<256?id|(m<<8):65536+(id-1024)+(m|0)*1024,decId=v=>v<65536?
 function dimPre(){return typeof DIM==='undefined'||DIM==='over'?'':DIM==='nether'?'n':DIM==='time'?'t':'e'}
 const bi=(x,y,z)=>x|(z<<4)|(y<<8);
 let WTYPE='default';   // GEN 1 = 예전 지형, GEN 2 = 마크 1.18식 다중 노이즈 지형
-function terrainH(x,z){if(WTYPE==='flat')return 4;if(GEN>=3)return terrainMC3(x,z);if(GEN===2)return terrainMC(x,z);
+function terrainH(x,z){if(WTYPE==='flat')return 4;if(GEN>=5)return terrainH5(x,z);if(GEN>=3)return terrainMC3(x,z);if(GEN===2)return terrainMC(x,z);
   const c=fbm2(x/300,z/300,SEED,3),d=fbm2(x/70,z/70,SEED+7,4),m=Math.max(0,fbm2(x/160,z/160,SEED+13,3)+.04);
   const [t,w]=climate(x,z),flat=clamp(1-(t>.25?.5:0)-(w<-.1?.2:0),.35,1);
   return Math.floor(clamp(SEA+3+c*24+d*7*flat+m*m*130*flat,4,H-16))}
@@ -1959,7 +1959,7 @@ const weird=(x,z)=>fbm2(x/300,z/300,SEED+501,2)*1.8;
 // 대륙성(C)·침식(E)·기묘함(W)→봉우리와 골짜기(PV)·온도(T)·습도(Hu) 다섯 노이즈로 높이와 바이옴을 정해요.
 let GEN=1;
 // 세계 버전에 맞춰 높이를 정해요: GEN 4 는 내부 0 = 마크 Y -64, 해수면 = Y 63
-function setDims(){if(GEN>=4){H=256;SEA=127;YO=64}else{H=96;SEA=34;YO=0}HW=H;DS_Y=mcY(0);LAVA_Y=GEN>=4?mcY(-55):3}
+function setDims(){if(GEN>=4){H=GEN>=5?384:256;SEA=127;YO=64}else{H=96;SEA=34;YO=0}HW=H;DS_Y=mcY(0);LAVA_Y=GEN>=4?mcY(-55):3;N_LAVA=GEN>=5?31:23;END_Y=GEN>=5?endY5():44}
 const erf=x=>{const t=x*x,r=Math.sqrt(1-Math.exp(-t*(1.2732+.147*t)/(1+.147*t)));return x<0?-r:r};
 const smf=(a,b,v)=>sm(clamp((v-a)/(b-a),0,1));
 let MNk=NaN,MNs=0,MNv=null;
@@ -2002,7 +2002,7 @@ function biomeMC(x,z,h){const n=mnoise(x,z),{C,E,W}=n,ti=lvl(n.T,TL),hi=lvl(n.Hu
 const BIO={OCEAN:0,FROZEN_OCEAN:1,BEACH:2,PLAINS:3,FOREST:4,BIRCH:5,TAIGA:6,SNOWY:7,DESERT:8,SAVANNA:9,JUNGLE:10,MOUNTAINS:11,SNOWY_PEAKS:12,SWAMP:13,DARK_FOREST:14,BADLANDS:15,MUSHROOM:16,FLOWER_FOREST:17,ICE_SPIKES:18,CHERRY:19,WINDSWEPT:20,DEEP_OCEAN:21,WARM_OCEAN:22,MEADOW:23,STONY_SHORE:24,BAMBOO_JUNGLE:25,SPARSE_JUNGLE:26,SAVANNA_PLATEAU:27,WOODED_BADLANDS:28,ERODED_BADLANDS:29,MANGROVE:30,OLD_BIRCH:31,OLD_TAIGA:32,SNOWY_TAIGA:33,GROVE:34,JAGGED_PEAKS:35,SUNFLOWER_PLAINS:36,COLD_OCEAN:37,LUKEWARM_OCEAN:38,SNOWY_BEACH:39,RIVER:40,FROZEN_RIVER:41,WINDSWEPT_GRAVELLY:42,WINDSWEPT_FOREST:43,WINDSWEPT_SAVANNA:44,FROZEN_PEAKS:45,DEEP_FROZEN_OCEAN:46,DEEP_COLD_OCEAN:47,DEEP_LUKEWARM_OCEAN:48,OLD_PINE_TAIGA:49};
 const BIO_N=['Ocean','Frozen Ocean','Beach','Plains','Forest','Birch Forest','Taiga','Snowy Plains','Desert','Savanna','Jungle','Stony Peaks','Snowy Slopes','Swamp','Dark Forest','Badlands','Mushroom Fields','Flower Forest','Ice Spikes','Cherry Grove','Windswept Hills','Deep Ocean','Warm Ocean','Meadow','Stony Shore','Bamboo Jungle','Sparse Jungle','Savanna Plateau','Wooded Badlands','Eroded Badlands','Mangrove Swamp','Old Growth Birch Forest','Old Growth Spruce Taiga','Snowy Taiga','Grove','Jagged Peaks','Sunflower Plains','Cold Ocean','Lukewarm Ocean','Snowy Beach','River','Frozen River','Windswept Gravelly Hills','Windswept Forest','Windswept Savanna','Frozen Peaks','Deep Frozen Ocean','Deep Cold Ocean','Deep Lukewarm Ocean','Old Growth Pine Taiga'];
 const BIO_KO=['바다','얼어붙은 바다','해변','평원','숲','자작나무 숲','타이가','눈 덮인 평원','사막','사바나','정글','돌 봉우리','눈 덮인 비탈','늪','어두운 숲','악지','버섯 들판','꽃 숲','역고드름','벚나무 숲','바람 부는 언덕','깊은 바다','따뜻한 바다','초원','돌 해안','대나무 정글','듬성듬성한 정글','사바나 고원','나무가 우거진 악지','침식된 악지','맹그로브 늪','오래된 자작나무 숲','오래된 가문비나무 타이가','눈 덮인 타이가','숲 언덕','뾰족한 봉우리','해바라기 평원','차가운 바다','미지근한 바다','눈 덮인 해변','강','얼어붙은 강','바람 부는 자갈 언덕','바람 부는 숲','바람 부는 사바나','얼어붙은 봉우리','깊은 얼어붙은 바다','깊은 차가운 바다','깊은 미지근한 바다','오래된 소나무 타이가'];   // 한글로 쳐도 찾아져요
-function biomeOf(x,z,h){if(GEN>=3)return biomeMC3(x,z,h);if(GEN===2)return biomeMC(x,z,h);const [t,w]=climate(x,z),q=weird(x,z);
+function biomeOf(x,z,h){if(GEN>=5)return biome5(x,z,h);if(GEN>=3)return biomeMC3(x,z,h);if(GEN===2)return biomeMC(x,z,h);const [t,w]=climate(x,z),q=weird(x,z);
   if(q>.62&&h>=SEA-2&&h<SEA+12&&fbm2(x/300,z/300,SEED,3)<-.05)return BIO.MUSHROOM;
   if(h<SEA-3){if(t<-.38)return BIO.FROZEN_OCEAN;if(h<SEA-12)return BIO.DEEP_OCEAN;if(t>.34)return BIO.WARM_OCEAN;if(t>.16)return BIO.LUKEWARM_OCEAN;if(t<-.18)return BIO.COLD_OCEAN;return BIO.OCEAN}
   if(h>SEA+40)return t<.15?(q>.22?BIO.JAGGED_PEAKS:BIO.SNOWY_PEAKS):BIO.MOUNTAINS;
@@ -2042,7 +2042,7 @@ function mc3Init(){if(MC3s===SEED)return MC3;const R=k=>mulberry((Math.imul(SEED
   MC3={T:dperlin(R(1),-10,[1.5,0,1,0,0,0]),H:dperlin(R(2),-8,[1,1,0,0,0,0]),C:dperlin(R(3),-9,[1,1,2,2,2,1,1,1,1]),E:dperlin(R(4),-9,[1,1,0,1,1]),W:dperlin(R(5),-7,[1,2,1,0,0,0]),
     S:dperlin(R(6),-3,[1,1,1,1]),S2:dperlin(R(7),-3,[1,1,1,1]),J:octaves(R(8),-16,new Array(16).fill(1))};MC3s=SEED;return MC3}
 let M3k=NaN,M3s=0,M3v=null;
-function mnoise3(x,z){const k=x*1e5+z;if(k===M3k&&M3s===SEED)return M3v;const N=mc3Init();
+function mnoise3(x,z){if(GEN>=5)return mnoise5(x,z);const k=x*1e5+z;if(k===M3k&&M3s===SEED)return M3v;const N=mc3Init();
   // 마크 shifted_noise: (x + 4·offset(x/4)) × 0.25
   const sx=N.S(x*.25,z*.25)*4,sz=N.S2(x*.25,z*.25)*4,qx=(x+sx)*.25,qz=(z+sz)*.25;
   const T=N.T(qx,qz),Hu=N.H(qx,qz),C=N.C(qx,qz),E=N.E(qx,qz),W=N.W(qx,qz),PV=-(Math.abs(Math.abs(W)-2/3)-1/3)*3;
@@ -2066,7 +2066,7 @@ const BNAME2ID={plains:3,sunflower_plains:36,snowy_plains:7,ice_spikes:18,desert
   savanna:9,savanna_plateau:27,windswept_hills:20,windswept_gravelly_hills:42,windswept_forest:43,windswept_savanna:44,jungle:10,sparse_jungle:26,bamboo_jungle:25,badlands:15,eroded_badlands:29,wooded_badlands:28,meadow:23,grove:34,snowy_slopes:12,
   frozen_peaks:45,jagged_peaks:35,stony_peaks:11,river:40,frozen_river:41,beach:2,snowy_beach:39,stony_shore:24,warm_ocean:22,lukewarm_ocean:38,deep_lukewarm_ocean:48,ocean:0,deep_ocean:21,cold_ocean:37,deep_cold_ocean:47,frozen_ocean:1,deep_frozen_ocean:46,mushroom_fields:16};
 const BIDS=BTAB.names.map(n=>BNAME2ID[n]);
-function biomeMC3(x,z,h){const n=mnoise3(x,z),ti=BLT(n.T),hi=BLH(n.Hu),ci=BLC(n.C),ei=BLE(n.E),wi=BLW(n.W);
+function biomeMC3(x,z,h){if(GEN>=5)return biome5(x,z,h);const n=mnoise3(x,z),ti=BLT(n.T),hi=BLH(n.Hu),ci=BLC(n.C),ei=BLE(n.E),wi=BLW(n.W);
   const nc=BTAB.bounds.C.length-1,ne=BTAB.bounds.E.length-1,nw=BTAB.bounds.W.length-1,nh=BTAB.bounds.H.length-1;
   let b=BIDS[BTAB.table.charCodeAt((((ti*nh+hi)*nc+ci)*ne+ei)*nw+wi)-65];
   // 1.19 맹그로브 늪: 따뜻한 늪 / 1.20 벚나무 숲: 시원한 초원의 변형(기묘함 > 0)
@@ -2091,11 +2091,460 @@ const PLANT_OFF={};FLOWERS_ALL.forEach(i=>PLANT_OFF[i]=1);PLANT_OFF[TALLGRASS]=2
 const TC_BANDS=[TERRACOTTA,ORANGE_TC,TERRACOTTA,YELLOW_TC,TERRACOTTA,TERRACOTTA,RED_TC,WHITE_TC,TERRACOTTA,BROWN_TC,ORANGE_TC,LGRAY_TC,TERRACOTTA,RED_TC];
 const mcY=mc=>GEN>=4?Math.round(mc+64):Math.round((mc+64)*34/127);   // 마크 높이(-64~320) → 이 세계 높이
 let DS_Y=mcY(0),LAVA_Y=3;
+// ── 마크 1.18+ 노이즈 지형 · 동굴 · 대수층 · 광맥 (GEN 5) (Agent 08) ──
+// 노이즈 옥타브 (마크 worldgen/noise) · 지형 스플라인 offset/factor/jaggedness (마크 density_function, float32 값)
+const G5N={offset:[-3,1,1,1,0],continentalness:[-9,1,1,2,2,2,1,1,1,1],erosion:[-9,1,1,0,1,1],ridge:[-7,1,2,1,0,0,0],temperature:[-10,1.5,0,1,0,0,0],vegetation:[-8,1,1,0,0,0,0],jagged:[-16,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],cave_entrance:[-7,0.4,0.5,1],cave_layer:[-8,1],cave_cheese:[-8,0.5,1,2,1,2,1,0,2,0],spaghetti_2d:[-7,1],spaghetti_2d_elevation:[-8,1],spaghetti_2d_modulator:[-11,1],spaghetti_2d_thickness:[-11,1],spaghetti_3d_1:[-7,1],spaghetti_3d_2:[-7,1],spaghetti_3d_rarity:[-11,1],spaghetti_3d_thickness:[-8,1],spaghetti_roughness:[-5,1],spaghetti_roughness_modulator:[-8,1],noodle:[-8,1],noodle_thickness:[-8,1],noodle_ridge_a:[-7,1],noodle_ridge_b:[-7,1],pillar:[-7,1,1],pillar_rareness:[-8,1],pillar_thickness:[-8,1],aquifer_barrier:[-3,1],aquifer_fluid_level_floodedness:[-7,1],aquifer_fluid_level_spread:[-5,1],aquifer_lava:[-1,1],ore_veininess:[-8,1],ore_vein_a:[-7,1],ore_vein_b:[-7,1],ore_gap:[-5,1],surface:[-6,1,1,1],surface_secondary:[-6,1,1,0,1],clay_bands_offset:[-8,1],surface_swamp:[-2,1],packed_ice:[-7,1,1,1,1],ice:[-4,1,1,1,1],powder_snow:[-6,1,1,1,1],calcite:[-9,1,1,1,1],gravel:[-8,1,1,1,1],badlands_surface:[-6,1,1,1],badlands_pillar:[-2,1,1,1,1],badlands_pillar_roof:[-8,1],iceberg_surface:[-6,1,1,1],iceberg_pillar:[-6,1,1,1,1],iceberg_pillar_roof:[-3,1]};
+const G5S=[[0,-1.1,.044,0,-1.02,-.2222,0,-.51,-.2222,0,-.44,-.12,0,-.18,-.12,0,-.16,[1,-.85,[2,-1,-.08880186,.38940096,1,.69000006,.38940096],0,-.7,[2,-1,-.115760356,.37788022,1,.6400001,.37788022],0,-.4,[2,-1,-.2222,0,-.75,-.2222,0,-.65,0,0,.5954547,2.9802322e-08,0,.6054547,2.9802322e-08,.2534563,1,.100000024,.2534563],0,-.35,[2,-1,-.3,.5,-.4,.05,0,0,.05,0,.4,.05,0,1,.060000002,.007000001],0,-.1,[2,-1,-.15,.5,-.4,0,0,0,0,0,.4,.05,.1,1,.060000002,.007000001],0,.2,[2,-1,-.15,.5,-.4,0,0,0,0,0,.4,0,0,1,0,0],0,.7,[2,-1,-.02,0,-.4,-.03,0,0,-.03,0,.4,0,.06,1,0,0],0],0,-.15,[1,-.85,[2,-1,-.08880186,.38940096,1,.69000006,.38940096],0,-.7,[2,-1,-.115760356,.37788022,1,.6400001,.37788022],0,-.4,[2,-1,-.2222,0,-.75,-.2222,0,-.65,0,0,.5954547,2.9802322e-08,0,.6054547,2.9802322e-08,.2534563,1,.100000024,.2534563],0,-.35,[2,-1,-.3,.5,-.4,.05,0,0,.05,0,.4,.05,0,1,.060000002,.007000001],0,-.1,[2,-1,-.15,.5,-.4,0,0,0,0,0,.4,.05,.1,1,.060000002,.007000001],0,.2,[2,-1,-.15,.5,-.4,0,0,0,0,0,.4,0,0,1,0,0],0,.7,[2,-1,-.02,0,-.4,-.03,0,0,-.03,0,.4,0,.06,1,0,0],0],0,-.1,[1,-.85,[2,-1,-.08880186,.38940096,1,.69000006,.38940096],0,-.7,[2,-1,-.115760356,.37788022,1,.6400001,.37788022],0,-.4,[2,-1,-.2222,0,-.75,-.2222,0,-.65,0,0,.5954547,2.9802322e-08,0,.6054547,2.9802322e-08,.2534563,1,.100000024,.2534563],0,-.35,[2,-1,-.25,.5,-.4,.05,0,0,.05,0,.4,.05,0,1,.060000002,.007000001],0,-.1,[2,-1,-.1,.5,-.4,.001,.01,0,.003,.01,.4,.05,.094000004,1,.060000002,.007000001],0,.2,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.7,[2,-1,-.02,0,-.4,-.03,0,0,-.03,0,.4,.03,.12,1,.1,.049],0],0,.25,[1,-.85,[2,-1,.20235021,0,0,.7161751,.5138249,1,1.23,.5138249],0,-.7,[2,-1,.2,0,0,.44682026,.43317974,1,.88,.43317974],0,-.4,[2,-1,.2,0,0,.30829495,.3917051,1,.70000005,.3917051],0,-.35,[2,-1,-.25,.5,-.4,.35,0,0,.35,0,.4,.35,0,1,.42000002,.049000014],0,-.1,[2,-1,-.1,.5,-.4,.0069999998,.07,0,.021,.07,.4,.35,.658,1,.42000002,.049000014],0,.2,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.4,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.45,[2,-1,-.1,0,-.4,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,0,.17,0],0,.55,[2,-1,-.1,0,-.4,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,0,.17,0],0,.58,[2,-1,-.1,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.7,[2,-1,-.02,0,-.4,-.03,0,0,-.03,0,.4,.03,.12,1,.1,.049],0],0,1,[1,-.85,[2,-1,.34792626,0,0,.9239631,.5760369,1,1.5,.5760369],0,-.7,[2,-1,.2,0,0,.5391705,.4608295,1,1,.4608295],0,-.4,[2,-1,.2,0,0,.5391705,.4608295,1,1,.4608295],0,-.35,[2,-1,-.2,.5,-.4,.5,0,0,.5,0,.4,.5,0,1,.6,.070000015],0,-.1,[2,-1,-.05,.5,-.4,.01,.099999994,0,.03,.099999994,.4,.5,.94,1,.6,.070000015],0,.2,[2,-1,-.05,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.4,[2,-1,-.05,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.45,[2,-1,-.05,0,-.4,[2,-1,-.05,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,0,.17,0],0,.55,[2,-1,-.05,0,-.4,[2,-1,-.05,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,0,.17,0],0,.58,[2,-1,-.05,.5,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0,.7,[2,-1,-.02,.015,-.4,.01,0,0,.01,0,.4,.03,.04,1,.1,.049],0],0],[0,-.19,3.95,0,-.15,[1,-.6,[3,-.2,6.3,0,.2,6.25,0],0,-.5,[3,-.05,6.3,0,.05,2.67,0],0,-.35,[3,-.2,6.3,0,.2,6.25,0],0,-.25,[3,-.2,6.3,0,.2,6.25,0],0,-.1,[3,-.05,2.67,0,.05,6.3,0],0,.03,[3,-.2,6.3,0,.2,6.25,0],0,.35,6.25,0,.45,[2,-.9,6.25,0,-.69,[3,0,6.25,0,.1,.625,0],0],0,.55,[2,-.9,6.25,0,-.69,[3,0,6.25,0,.1,.625,0],0],0,.62,6.25,0],0,-.1,[1,-.6,[3,-.2,6.3,0,.2,5.47,0],0,-.5,[3,-.05,6.3,0,.05,2.67,0],0,-.35,[3,-.2,6.3,0,.2,5.47,0],0,-.25,[3,-.2,6.3,0,.2,5.47,0],0,-.1,[3,-.05,2.67,0,.05,6.3,0],0,.03,[3,-.2,6.3,0,.2,5.47,0],0,.35,5.47,0,.45,[2,-.9,5.47,0,-.69,[3,0,5.47,0,.1,.625,0],0],0,.55,[2,-.9,5.47,0,-.69,[3,0,5.47,0,.1,.625,0],0],0,.62,5.47,0],0,.03,[1,-.6,[3,-.2,6.3,0,.2,5.08,0],0,-.5,[3,-.05,6.3,0,.05,2.67,0],0,-.35,[3,-.2,6.3,0,.2,5.08,0],0,-.25,[3,-.2,6.3,0,.2,5.08,0],0,-.1,[3,-.05,2.67,0,.05,6.3,0],0,.03,[3,-.2,6.3,0,.2,5.08,0],0,.35,5.08,0,.45,[2,-.9,5.08,0,-.69,[3,0,5.08,0,.1,.625,0],0],0,.55,[2,-.9,5.08,0,-.69,[3,0,5.08,0,.1,.625,0],0],0,.62,5.08,0],0,.06,[1,-.6,[3,-.2,6.3,0,.2,4.69,0],0,-.5,[3,-.05,6.3,0,.05,2.67,0],0,-.35,[3,-.2,6.3,0,.2,4.69,0],0,-.25,[3,-.2,6.3,0,.2,4.69,0],0,-.1,[3,-.05,2.67,0,.05,6.3,0],0,.03,[3,-.2,6.3,0,.2,4.69,0],0,.05,[2,.45,[3,-.2,6.3,0,.2,4.69,0],0,.7,1.56,0],0,.4,[2,.45,[3,-.2,6.3,0,.2,4.69,0],0,.7,1.56,0],0,.45,[2,-.7,[3,-.2,6.3,0,.2,4.69,0],0,-.15,1.37,0],0,.55,[2,-.7,[3,-.2,6.3,0,.2,4.69,0],0,-.15,1.37,0],0,.58,4.69,0],0],[0,-.11,0,0,.03,[1,-1,[2,.19999999,0,0,.44999996,0,0,1,[3,-.01,.63,0,.01,.3,0],0],0,-.78,[2,.19999999,0,0,.44999996,0,0,1,[3,-.01,.315,0,.01,.15,0],0],0,-.5775,[2,.19999999,0,0,.44999996,0,0,1,[3,-.01,.315,0,.01,.15,0],0],0,-.375,0,0],0,.65,[1,-1,[2,.19999999,0,0,.44999996,[3,-.01,.63,0,.01,.3,0],0,1,[3,-.01,.63,0,.01,.3,0],0],0,-.78,[2,.19999999,0,0,.44999996,0,0,1,[3,-.01,.63,0,.01,.3,0],0],0,-.5775,[2,.19999999,0,0,.44999996,0,0,1,[3,-.01,.63,0,.01,.3,0],0],0,-.375,0,0],0]];
+// 마크 자바 1.21 데이터(worldgen/noise · density_function · noise_settings)와 같은 계산이에요:
+// 같은 시드면 마크와 같은 대륙·산·강·동굴 모양이 나와요 (Xoroshiro128++ 난수 · MD5 이름 해시 · 개선 펄린 노이즈).
+// 64비트 정수는 위·아래 32비트 두 수로 다뤄요.
+const G5U={h:0,l:0};
+function g5mul(ah,al,bh,bl){const a48=ah>>>16,a32=ah&65535,a16=al>>>16,a00=al&65535,b48=bh>>>16,b32=bh&65535,b16=bl>>>16,b00=bl&65535;
+  let c00=a00*b00,c16=c00>>>16;c00&=65535;c16+=a16*b00;let c32=c16>>>16;c16&=65535;c16+=a00*b16;c32+=c16>>>16;c16&=65535;
+  c32+=a32*b00;let c48=c32>>>16;c32&=65535;c32+=a16*b16;c48+=c32>>>16;c32&=65535;c32+=a00*b32;c48+=c32>>>16;c32&=65535;
+  c48+=a48*b00+a32*b16+a16*b32+a00*b48;G5U.l=((c16<<16)|c00)>>>0;G5U.h=(((c48&65535)<<16)|c32)>>>0}
+function g5add(ah,al,bh,bl){const l=(al+bl)>>>0;G5U.l=l;G5U.h=(ah+bh+(l<al?1:0))>>>0}
+// 마크 Mth.getSeed(x,y,z)
+function g5seed(x,y,z){const a=Math.imul(x,3129871);g5mul(z<0?4294967295:0,z>>>0,0,116129781);let h=(G5U.h^(a<0?4294967295:0)^(y<0?4294967295:0))>>>0,l=(G5U.l^(a>>>0)^(y>>>0))>>>0;
+  g5mul(h,l,h,l);g5mul(G5U.h,G5U.l,0,42317861);const ph=G5U.h,pl=G5U.l;g5mul(h,l,0,11);g5add(ph,pl,G5U.h,G5U.l);h=G5U.h;l=G5U.l;G5U.l=((l>>>16)|(h<<16))>>>0;G5U.h=(h>>16)>>>0}
+// MD5 (난수 이름 해시용)
+function g5md5(s){const K=[],R=[7,12,17,22,5,9,14,20,4,11,16,23,6,10,15,21];for(let i=0;i<64;i++)K[i]=Math.floor(Math.abs(Math.sin(i+1))*4294967296)>>>0;
+  const n=s.length,nb=((n+8)>>6)+1,W=new Array(nb*16).fill(0);for(let i=0;i<n;i++)W[i>>2]|=s.charCodeAt(i)<<((i%4)*8);W[n>>2]|=128<<((n%4)*8);W[nb*16-2]=n*8;
+  let a=1732584193,b=-271733879,c=-1732584194,d=271733878;
+  for(let i=0;i<W.length;i+=16){const A=a,B=b,C=c,D=d;for(let j=0;j<64;j++){let f,g;if(j<16){f=(b&c)|(~b&d);g=j}else if(j<32){f=(d&b)|(~d&c);g=(5*j+1)%16}else if(j<48){f=b^c^d;g=(3*j+5)%16}else{f=c^(b|~d);g=(7*j)%16}
+      const t=d;d=c;c=b;const x=(a+f+K[j]+W[i+g])|0,r=R[(j>>4)*4+j%4];b=(b+((x<<r)|(x>>>(32-r))))|0;a=t}a=(a+A)|0;b=(b+B)|0;c=(c+C)|0;d=(d+D)|0}
+  const o=[];for(const v of [a,b,c,d])for(let k=0;k<4;k++)o.push((v>>>(8*k))&255);return o}
+const g5be=(o,i)=>((o[i]<<24)|(o[i+1]<<16)|(o[i+2]<<8)|o[i+3])>>>0;
+// Xoroshiro128++ (마크 XoroshiroRandomSource)
+class G5X{constructor(ah,al,bh,bl){if(!(ah|al|bh|bl)){ah=0x9E3779B9;al=0x7F4A7C15;bh=0x6A09E667;bl=0xF3BCC909}this.ah=ah>>>0;this.al=al>>>0;this.bh=bh>>>0;this.bl=bl>>>0;this.rh=0;this.rl=0}
+  next(){const ah=this.ah,al=this.al,bh=this.bh,bl=this.bl,sl=(al+bl)>>>0,sh=(ah+bh+(sl<al?1:0))>>>0,rh=((sh<<17)|(sl>>>15))>>>0,rl=((sl<<17)|(sh>>>15))>>>0,nl=(rl+al)>>>0;
+    this.rh=(rh+ah+(nl<rl?1:0))>>>0;this.rl=nl;const mh=(bh^ah)>>>0,ml=(bl^al)>>>0;
+    this.ah=(((al<<17)|(ah>>>15))^mh^((mh<<21)|(ml>>>11)))>>>0;this.al=(((ah<<17)|(al>>>15))^ml^(ml<<21))>>>0;this.bh=((mh<<28)|(ml>>>4))>>>0;this.bl=((ml<<28)|(mh>>>4))>>>0}
+  nextInt(n){this.next();let m=this.rl*n,lo=m%4294967296;if(lo<n){const t=(4294967296-n)%n;while(lo<t){this.next();m=this.rl*n;lo=m%4294967296}}return Math.floor(m/4294967296)}
+  nextDouble(){this.next();return(this.rh*2097152+(this.rl>>>11))*1.1102230246251565e-16}
+  nextFloat(){this.next();return(this.rh>>>8)*5.960464477539063e-8}
+  nextBoolean(){this.next();return(this.rl&1)!==0}
+  fork(){this.next();const h=this.rh,l=this.rl;this.next();return new G5P(h,l,this.rh,this.rl)}}
+// 위치 난수 공장 (forkPositional)
+class G5P{constructor(lh,ll,hh,hl){this.lh=lh;this.ll=ll;this.hh=hh;this.hl=hl}
+  at(x,y,z){g5seed(x,y,z);const t=this.t||(this.t=new G5X(1,1,1,1));t.ah=(G5U.h^this.lh)>>>0;t.al=(G5U.l^this.ll)>>>0;t.bh=this.hh>>>0;t.bl=this.hl>>>0;if(!(t.ah|t.al|t.bh|t.bl)){t.ah=0x9E3779B9;t.al=0x7F4A7C15;t.bh=0x6A09E667;t.bl=0xF3BCC909}return t}
+  hash(s){const o=g5md5(s);return new G5X(g5be(o,0)^this.lh,g5be(o,4)^this.ll,g5be(o,8)^this.hh,g5be(o,12)^this.hl)}}
+function g5mix(h,l){l=(l^((l>>>30)|(h<<2)))>>>0;h=(h^(h>>>30))>>>0;g5mul(h,l,0xBF58476D,0x1CE4E5B9);h=G5U.h;l=G5U.l;l=(l^((l>>>27)|(h<<5)))>>>0;h=(h^(h>>>27))>>>0;
+  g5mul(h,l,0x94D049BB,0x133111EB);h=G5U.h;l=G5U.l;G5U.l=(l^((l>>>31)|(h<<1)))>>>0;G5U.h=(h^(h>>>31))>>>0}
+// 세계 시드(32비트 정수 = 마크 long) → 위치 난수 공장 (RandomState.random)
+function g5root(seed){const sh=seed<0?4294967295:0,sl=seed>>>0,lh=(sh^0x6A09E667)>>>0,ll=(sl^0xF3BCC909)>>>0;g5add(lh,ll,0x9E3779B9,0x7F4A7C15);const hh=G5U.h,hl=G5U.l;
+  g5mix(lh,ll);const a=G5U.h,b=G5U.l;g5mix(hh,hl);return new G5X(a,b,G5U.h,G5U.l).fork()}
+// 자바 Random (네더 · 엔드 · 카버가 써요)
+class G5L{constructor(h,l){this.set(h,l)}
+  set(h,l){l=(l^0xDEECE66D)>>>0;h=(h^5)&65535;this.hi=h*256+(l>>>24);this.lo=l&16777215}
+  nx(b){const lo=this.lo*15525485+11,c=Math.floor(lo/16777216),hi=(this.hi*15525485+this.lo*1502+c)%16777216;this.lo=lo-c*16777216;this.hi=hi;return Math.floor((hi*16777216+this.lo)/2**(48-b))|0}
+  nextInt(n){if(n===undefined)return this.nx(32);if((n&-n)===n)return Math.floor(n*this.nx(31)/2147483648);let i,j;do{i=this.nx(31);j=i%n}while(((i-j+n-1)|0)<0);return j}
+  nextLong(){const h=this.nx(32),l=this.nx(32);G5U.h=(h+(l<0?-1:0))>>>0;G5U.l=l>>>0}
+  nextFloat(){return this.nx(24)*5.960464477539063e-8}
+  nextDouble(){const i=this.nx(26),j=this.nx(27);return(i*134217728+j)*1.1102230246251565e-16}
+  nextBoolean(){return this.nx(1)!==0}
+  consume(n){for(let i=0;i<n;i++)this.nx(32)}
+  fork(){this.nextLong();return new G5LP(G5U.h,G5U.l)}}
+class G5LP{constructor(h,l){this.h=h;this.l=l}
+  at(x,y,z){g5seed(x,y,z);return new G5L(G5U.h^this.h,G5U.l^this.l)}
+  hash(s){let c=0;for(let i=0;i<s.length;i++)c=(Math.imul(31,c)+s.charCodeAt(i))|0;return new G5L((c<0?4294967295:0)^this.h,(c>>>0)^this.l)}}
+// 개선 펄린 노이즈 (마크 ImprovedNoise): 순열 256 + 원점 이동
+const G5GX=[1,-1,1,-1,1,-1,1,-1,0,0,0,0,1,0,-1,0],G5GY=[1,1,-1,-1,0,0,0,0,1,-1,1,-1,1,-1,1,-1],G5GZ=[0,0,0,0,1,1,-1,-1,1,1,-1,-1,0,1,0,-1];
+function G5I(r){this.xo=r.nextDouble()*256;this.yo=r.nextDouble()*256;this.zo=r.nextDouble()*256;const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;
+  for(let i=0;i<256;i++){const j=r.nextInt(256-i),t=p[i];p[i]=p[i+j];p[i+j]=t}this.p=p}
+const g5wrap=d=>d-Math.floor(d/33554432+.5)*33554432;
+// noise(x,y,z) — ys·ym: 눌린(smear) 노이즈용 (old_blended_noise)
+function g5n(n,x,y,z,ys,ym){const d=x+n.xo,e=y+n.yo,f=z+n.zo,i=Math.floor(d),j=Math.floor(e),k=Math.floor(f),g=d-i,h=e-j,l=f-k,P=n.p;
+  let o=0;if(ys!==0){const m=ym>=0&&ym<h?ym:h;o=Math.floor(m/ys+1.0000000116860974e-7)*ys}
+  const hy=h-o,A=P[i&255],B=P[(i+1)&255],AA=P[(A+j)&255],AB=P[(A+j+1)&255],BA=P[(B+j)&255],BB=P[(B+j+1)&255];
+  let q=P[(AA+k)&255]&15;const d0=G5GX[q]*g+G5GY[q]*hy+G5GZ[q]*l;q=P[(BA+k)&255]&15;const d1=G5GX[q]*(g-1)+G5GY[q]*hy+G5GZ[q]*l;
+  q=P[(AB+k)&255]&15;const d2=G5GX[q]*g+G5GY[q]*(hy-1)+G5GZ[q]*l;q=P[(BB+k)&255]&15;const d3=G5GX[q]*(g-1)+G5GY[q]*(hy-1)+G5GZ[q]*l;
+  q=P[(AA+k+1)&255]&15;const d4=G5GX[q]*g+G5GY[q]*hy+G5GZ[q]*(l-1);q=P[(BA+k+1)&255]&15;const d5=G5GX[q]*(g-1)+G5GY[q]*hy+G5GZ[q]*(l-1);
+  q=P[(AB+k+1)&255]&15;const d6=G5GX[q]*g+G5GY[q]*(hy-1)+G5GZ[q]*(l-1);q=P[(BB+k+1)&255]&15;const d7=G5GX[q]*(g-1)+G5GY[q]*(hy-1)+G5GZ[q]*(l-1);
+  const r=g*g*g*(g*(g*6-15)+10),s=h*h*h*(h*(h*6-15)+10),t=l*l*l*(l*(l*6-15)+10);
+  const a0=d0+r*(d1-d0),a1=d2+r*(d3-d2),a2=d4+r*(d5-d4),a3=d6+r*(d7-d6),b0=a0+s*(a1-a0),b1=a2+s*(a3-a2);return b0+t*(b1-b0)}
+function g5n0(n,x,y,z){const d=x+n.xo,e=y+n.yo,f=z+n.zo,i=Math.floor(d),j=Math.floor(e),k=Math.floor(f),g=d-i,h=e-j,l=f-k,P=n.p;
+  const A=P[i&255],B=P[(i+1)&255],AA=P[(A+j)&255],AB=P[(A+j+1)&255],BA=P[(B+j)&255],BB=P[(B+j+1)&255],X=G5GX,Y=G5GY,Z=G5GZ,g1=g-1,h1=h-1,l1=l-1;
+  let q=P[(AA+k)&255]&15;const d0=X[q]*g+Y[q]*h+Z[q]*l;q=P[(BA+k)&255]&15;const d1=X[q]*g1+Y[q]*h+Z[q]*l;q=P[(AB+k)&255]&15;const d2=X[q]*g+Y[q]*h1+Z[q]*l;q=P[(BB+k)&255]&15;const d3=X[q]*g1+Y[q]*h1+Z[q]*l;
+  q=P[(AA+k+1)&255]&15;const d4=X[q]*g+Y[q]*h+Z[q]*l1;q=P[(BA+k+1)&255]&15;const d5=X[q]*g1+Y[q]*h+Z[q]*l1;q=P[(AB+k+1)&255]&15;const d6=X[q]*g+Y[q]*h1+Z[q]*l1;q=P[(BB+k+1)&255]&15;const d7=X[q]*g1+Y[q]*h1+Z[q]*l1;
+  const r=g*g*g*(g*(g*6-15)+10),s=h*h*h*(h*(h*6-15)+10),t=l*l*l*(l*(l*6-15)+10),a0=d0+r*(d1-d0),a1=d2+r*(d3-d2),a2=d4+r*(d5-d4),a3=d6+r*(d7-d6),b0=a0+s*(a1-a0);return b0+t*((a2+s*(a3-a2))-b0)}
+const g5w2=d=>d>16777216||d<-16777216?g5wrap(d):d;
+// 마크 NormalNoise (펄린 두 겹, 새 초기화): 옥타브마다 "octave_N" 해시
+function G5Z(r,first,amps){const n=amps.length,mk=()=>{const pos=r.fork(),L=[],F=[];for(let i=0;i<n;i++)if(amps[i]!==0){L.push(new G5I(pos.hash('octave_'+(first+i))));F.push(amps[i],2**(first+i),2**(n-1)/(2**n-1)/2**i)}return[L,new Float64Array(F)]};
+  [this.L1,this.F1]=mk();[this.L2,this.F2]=mk();this.n=this.L1.length;let lo=99,hi=-1;amps.forEach((v,i)=>{if(v){lo=Math.min(lo,i);hi=Math.max(hi,i)}});this.vf=(1/6)/(.1*(1+1/(hi-lo+1)))}
+G5Z.prototype.v=function(x,y,z){const L1=this.L1,L2=this.L2,F1=this.F1,F2=this.F2,n=this.n;let a=0,b=0;
+  for(let i=0,k=0;i<n;i++,k+=3){const e=F1[k+1];a+=F1[k]*g5n0(L1[i],g5w2(x*e),g5w2(y*e),g5w2(z*e))*F1[k+2]}
+  const x2=x*1.0181268882175227,y2=y*1.0181268882175227,z2=z*1.0181268882175227;
+  for(let i=0,k=0;i<n;i++,k+=3){const e=F2[k+1];b+=F2[k]*g5n0(L2[i],g5w2(x2*e),g5w2(y2*e),g5w2(z2*e))*F2[k+2]}return(a+b)*this.vf};
+// old_blended_noise (기본 3D 지형 노이즈): 예전 방식 초기화 — 가장 높은 옥타브부터 차례로 만들어요
+function G5B(r,xs,ys,xf,yf,sm){const mk=n=>{const L=new Array(n);for(let k=n-1;k>=0;k--)L[k]=new G5I(r);return L};this.mn=mk(16);this.mx=mk(16);this.ma=mk(8);
+  this.xzm=684.412*xs;this.ym=684.412*ys;this.xf=xf;this.yf=yf;this.sm=sm}
+G5B.prototype.v=function(x,y,z){const d=x*this.xzm,e=y*this.ym,f=z*this.xzm,g=d/this.xf,h=e/this.yf,i=f/this.xf,j=this.ym*this.sm,k=j/this.yf;
+  let n=0,o=1;for(let p=0;p<8;p++){n+=g5n(this.ma[7-p],g5wrap(g*o),g5wrap(h*o),g5wrap(i*o),k*o,h*o)/o;o/=2}
+  const q=(n/10+1)/2,b2=q>=1,b3=q<=0;let l=0,m=0;o=1;
+  for(let r=0;r<16;r++){const s=g5wrap(d*o),t=g5wrap(e*o),u=g5wrap(f*o),v=j*o;if(!b2)l+=g5n(this.mn[15-r],s,t,u,v,e*o)/o;if(!b3)m+=g5n(this.mx[15-r],s,t,u,v,e*o)/o;o/=2}
+  const a=l/512,b=m/512;return(q<0?a:q>1?b:a+q*(b-a))/128};
+// 심플렉스 노이즈 2D (엔드 바깥 섬)
+function G5Sx(r){this.xo=r.nextDouble()*256;this.yo=r.nextDouble()*256;this.zo=r.nextDouble()*256;const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;
+  for(let i=0;i<256;i++){const j=r.nextInt(256-i),t=p[i];p[i]=p[i+j];p[i+j]=t}this.p=p}
+G5Sx.prototype.v=function(x,y){const F2=.5*(Math.sqrt(3)-1),G2=(3-Math.sqrt(3))/6,P=this.p,d=(x+y)*F2,i=Math.floor(x+d),j=Math.floor(y+d),e=(i+j)*G2,h=x-(i-e),k=y-(j-e);
+  const l=h>k?1:0,m=h>k?0:1,n=h-l+G2,o=k-m+G2,p=h-1+2*G2,q=k-1+2*G2,r=i&255,s=j&255;
+  const c=(gi,X,Y)=>{let t=.5-X*X-Y*Y;if(t<0)return 0;t*=t;return t*t*(G5GX[gi]*X+G5GY[gi]*Y)};
+  return 70*(c(P[(r+P[s&255])&255]%12,h,k)+c(P[(r+l+P[(s+m)&255])&255]%12,n,o)+c(P[(r+1+P[(s+1)&255])&255]%12,p,q))};
+// 지형 스플라인 (offset · factor · jaggedness): 마크와 같이 float 계산
+const g5f=Math.fround;
+function g5fl(s){if(typeof s==='number')return g5f(s);for(let i=1;i<s.length;i++)s[i]=g5fl(s[i]);return s}
+function g5spl(s,P){if(typeof s==='number')return s;const c=P[s[0]],n=(s.length-1)/3;let i=-1;for(let k=0;k<n;k++){if(c<s[1+3*k])break;i=k}
+  if(i<0||i===n-1){const j=i<0?0:i,v=g5spl(s[2+3*j],P),d=s[3+3*j];return d===0?v:g5f(v+g5f(d*g5f(c-s[1+3*j])))}
+  const x0=s[1+3*i],dx=g5f(s[4+3*i]-x0),k=g5f(g5f(c-x0)/dx),y0=g5spl(s[2+3*i],P),dy=g5f(g5spl(s[5+3*i],P)-y0),p=g5f(g5f(s[3+3*i]*dx)-dy),q=g5f(g5f(-s[6+3*i]*dx)+dy);
+  return g5f(g5f(y0+g5f(k*dy))+g5f(g5f(k*g5f(1-k))*g5f(p+g5f(k*g5f(q-p)))))}
+const g5cl=(v,a,b)=>v<a?a:v>b?b:v,g5cm=(v,a,b,c,d)=>{const t=(v-a)/(b-a);return t<0?c:t>1?d:c+t*(d-c)};
+let G5=null,G5SF=0;
+// 세계마다 한 번: 노이즈 만들기 (오버월드)
+function g5init(){if(G5&&G5.seed===SEED)return G5;if(!G5SF){G5S.forEach(g5fl);G5SF=1}
+  const R=g5root(SEED),N={};for(const k in G5N){const a=G5N[k];N[k]=new G5Z(R.hash('minecraft:'+k),a[0],a.slice(1))}
+  G5={seed:SEED,R,N,B:new G5B(R.hash('minecraft:terrain'),.25,.125,80,160,8),aq:R.hash('minecraft:aquifer').fork(),ore:R.hash('minecraft:ore').fork(),
+    bed:R.hash('minecraft:bedrock_floor').fork(),ds:R.hash('minecraft:deepslate').fork(),col:new Map(),cc:new Map(),ps:new Map(),bio:new Map(),nether:null,end:null};
+  G5.bands=g5bands(R.hash('minecraft:clay_bands'));return G5}
+// 기둥(4칸 격자) 값: 대륙성 · 침식 · 봉우리 · 온도 · 습도 + offset · factor · jaggedness (flat_cache)
+function g5col(x,z){const g=G5,k=x*1048576+z;let c=g.col.get(k);if(c)return c;if(g.col.size>20000)g.col.clear();const N=g.N;
+  const sx=N.offset.v(x*.25,0,z*.25)*4,sz=N.offset.v(z*.25,x*.25,0)*4,X=x*.25+sx,Z=z*.25+sz;
+  const C=N.continentalness.v(X,0,Z),E=N.erosion.v(X,0,Z),W=N.ridge.v(X,0,Z),PV=(Math.abs(Math.abs(W)+-.6666667)+-.33333334)*-3;
+  const P=[g5f(C),g5f(E),g5f(PV),g5f(W)],off=-.5037500262260437+g5spl(G5S[0],P),fac=10+(-10+g5spl(G5S[1],P)),jg=g5spl(G5S[2],P);
+  let jag=0;if(jg!==0){const v=N.jagged.v(x*1500,0,z*1500);jag=jg*(v>0?v:v*.5)}
+  c={C,E,W,PV,off,fac,jag,T:N.temperature.v(X,0,Z),H:N.vegetation.v(X,0,Z),el:0+8*N.spaghetti_2d_elevation.v(x,0,z)};g.col.set(k,c);return c}
+// 얽힌 동굴 입구 (cave_entrances) · 거칠기
+function g5ent(N,x,y,z,ro){const r=N.spaghetti_3d_rarity.v(x*2,y,z*2),e=r<-.5?.75:r<0?1:r<.5?1.5:2;
+  const w=Math.max(e*Math.abs(N.spaghetti_3d_1.v(x/e,y/e,z/e)),e*Math.abs(N.spaghetti_3d_2.v(x/e,y/e,z/e)));
+  return Math.min(.37+N.cave_entrance.v(x*.75,y*.5,z*.75)+g5cm(y,-10,30,.3,0),ro+g5cl(w+(-.0765+-.011499999999999996*N.spaghetti_3d_thickness.v(x,y,z)),-1,1))}
+// 꼭짓점(4×8×4 칸의 모서리) 밀도: 마크 final_density 의 보간 전 값
+function g5D(c,x,y,z){const gb=g5cm(y,-64,-40,0,1);if(gb===0)return .1171875;const gt=g5cm(y,240,256,1,0);let t2=0;
+  if(gt!==0){const g=G5,N=g.N,dp=g5cm(y,-64,320,1.5,-1.5)+c.off,sq=(dp+c.jag)*c.fac,sc=4*(sq>0?sq:sq*.25)+g.B.v(x,y,z);
+    const ro=(-.05+-.05*N.spaghetti_roughness_modulator.v(x,y,z))*(-.4+Math.abs(N.spaghetti_roughness.v(x,y,z)));let rc;
+    if(sc<1.5625)rc=Math.min(sc,5*g5ent(N,x,y,z,ro));
+    else{const ent=g5ent(N,x,y,z,ro),cl=N.cave_layer.v(x,y*8,z),ch=4*(cl*cl)+(g5cl(.27+N.cave_cheese.v(x,y*.6666666666666666,z),-1,1)+g5cl(1.5+-.64*sc,0,.5));
+      const md=N.spaghetti_2d_modulator.v(x*2,y,z*2),e2=md<-.75?.5:md<-.5?.75:md<.5?1:md<.75?2:3,tm=-.95+-.35000000000000003*N.spaghetti_2d_thickness.v(x*2,y,z*2);
+      const el=Math.abs(c.el+g5cm(y,-64,320,8,-40))+tm,sp=g5cl(Math.max(e2*Math.abs(N.spaghetti_2d.v(x/e2,y/e2,z/e2))+.083*tm,el*el*el),-1,1);
+      const pa=2*N.pillar.v(x*25,y*.3,z*25)+(-1+-1*N.pillar_rareness.v(x,y,z)),pt=.55+.55*N.pillar_thickness.v(x,y,z),pl=pa===0?0:pa*(pt*pt*pt);
+      rc=Math.max(Math.min(Math.min(ch,ent),sp+ro),pl<.03?-1e6:pl)}
+    t2=gt*(.078125+rc)}
+  return .1171875+gb*(-.1171875+(-.078125+t2))}
+// 국수 동굴 꼭짓점 값 [noodle, thickness, ridge_a, ridge_b]
+function g5noo(o,j,x,y,z){const N=G5.N;if(y<-60||y>=321){o[j]=-1;o[j+1]=0;o[j+2]=0;o[j+3]=0;return}
+  o[j]=N.noodle.v(x,y,z);o[j+1]=-.07500000000000001+-.025*N.noodle_thickness.v(x,y,z);const s=2.6666666666666665;o[j+2]=N.noodle_ridge_a.v(x*s,y*s,z*s);o[j+3]=N.noodle_ridge_b.v(x*s,y*s,z*s)}
+// 꼭짓점 기둥 캐시: 이웃 청크 · 높이 찾기가 같이 써요 (D: y=-64+8j, j=0..48)
+function g5cc(x,z){const g=G5,k=x*1048576+z;let o=g.cc.get(k);if(o)return o;if(g.cc.size>4000)g.cc.clear();
+  o={x,z,c:g5col(x,z),D:new Float64Array(49).fill(NaN),O:null,top:null};g.cc.set(k,o);return o}
+function g5d(o,j){let v=o.D[j];if(v!==v)v=o.D[j]=g5D(o.c,o.x,-64+8*j,o.z);return v}
+function g5o(o,j){const i=j*4;if(!o.O)o.O=new Float64Array(196).fill(NaN);if(o.O[i]!==o.O[i])g5noo(o.O,i,o.x,-64+8*j,o.z);return i}
+// 악지 점토 띠 (마크 SurfaceSystem.generateBands)
+function g5bands(r){const b=new Array(192).fill(TERRACOTTA);for(let i=0;i<192;i++){i+=r.nextInt(5)+1;if(i<192)b[i]=ORANGE_TC}
+  const mk=(mn,id)=>{const n=r.nextInt(10)+6;for(let j=0;j<n;j++){const k=mn+r.nextInt(3),l=r.nextInt(192);for(let m=0;l+m<192&&m<k;m++)b[l+m]=id}};
+  mk(1,YELLOW_TC);mk(2,BROWN_TC);mk(1,RED_TC);const j=r.nextInt(7)+9;let k=0;
+  for(let l=0;k<j&&l<192;l+=r.nextInt(16)+4){b[l]=WHITE_TC;if(l-1>0&&r.nextBoolean())b[l-1]=LGRAY_TC;if(l+1<192&&r.nextBoolean())b[l+1]=LGRAY_TC;k++}return b}
+// 바이옴: 마크 OverworldBiomeBuilder 그대로 (지상 바이옴은 깊이와 상관없어서 5차원 칸 표 하나로 찾아요)
+const g5q=v=>Math.trunc(g5f(g5f(v)*10000)),G5BQ=[[-.45,-.15,.2,.55],[-.35,-.1,.1,.3],[-1.05,-.455,-.19,-.11,.03,.3],[-.78,-.375,-.2225,.05,.45,.55],
+  [-.93333334,-.7666667,-.56666666,-.4,-.26666668,-.05,.05,.26666668,.4,.56666666,.7666667,.93333334]].map(a=>a.map(g5q));
+let G5BT=null;
+function g5btab(){if(G5BT)return G5BT;const T=new Uint8Array(15925).fill(255),b=BIO;
+  const put=(t,h,c,e,w,v)=>{for(let i=t[0];i<=t[1];i++)for(let j=h[0];j<=h[1];j++)for(let k=c[0];k<=c[1];k++)for(let l=e[0];l<=e[1];l++)for(let m=w[0];m<=w[1];m++)T[(((i*5+j)*7+k)*7+l)*13+m]=v};
+  const F=[0,4],FE=[0,6],FW=[0,12],I=[4,6],ER=i=>[i,i],S=(a,c)=>[a,c];
+  const MID=[[7,7,7,33,6],[3,3,4,6,32],[17,3,4,5,14],[9,9,4,10,10],[8,8,8,8,8]],MIDV=[[18,-1,33,-1,-1],[-1,-1,-1,-1,49],[36,-1,-1,31,-1],[-1,-1,3,26,25],[-1,-1,-1,-1,-1]],
+    PLA=[[7,7,7,33,33],[23,23,4,6,32],[23,23,23,23,14],[27,27,4,4,10],[15,15,15,28,28]],PLAV=[[18,-1,-1,-1,-1],[19,-1,23,23,49],[19,19,4,5,50],[-1,-1,-1,-1,-1],[29,29,-1,-1,-1]],
+    SHA=[[42,42,20,43,43],[42,42,20,43,43],[20,20,20,43,43],[-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1]];
+  const neg=w=>w[1]<=5;   // weirdness.max() < 0
+  const mid=(t,h,w)=>!neg(w)&&MIDV[t][h]>=0?MIDV[t][h]:MID[t][h],bad=(h,w)=>h<2?(neg(w)?b.BADLANDS:b.ERODED_BADLANDS):h<3?b.BADLANDS:b.WOODED_BADLANDS,
+    midB=(t,h,w)=>t===4?bad(h,w):mid(t,h,w),pla=(t,h,w)=>!neg(w)&&PLAV[t][h]>=0?PLAV[t][h]:PLA[t][h],slope=(t,h,w)=>t>=3?pla(t,h,w):h<=1?b.SNOWY_PEAKS:b.GROVE,
+    midBS=(t,h,w)=>t===0?slope(t,h,w):midB(t,h,w),wsav=(t,h,w,u)=>t>1&&h<4&&!neg(w)?b.WINDSWEPT_SAVANNA:u,beach=t=>t===0?b.SNOWY_BEACH:t===4?b.DESERT:b.BEACH,
+    shatC=(t,h,w)=>wsav(t,h,w,!neg(w)?mid(t,h,w):beach(t)),peak=(t,h,w)=>t<=2?(neg(w)?b.JAGGED_PEAKS:b.FROZEN_PEAKS):t===3?b.MOUNTAINS:bad(h,w),shat=(t,h,w)=>SHA[t][h]>=0?SHA[t][h]:mid(t,h,w);
+  put(F,F,[0,0],FE,FW,b.MUSHROOM);const OC=[[46,47,21,48,22],[1,37,0,38,22]];for(let t=0;t<5;t++){put(ER(t),F,[1,1],FE,FW,OC[0][t]);put(ER(t),F,[2,2],FE,FW,OC[1][t])}
+  const each=(w,f)=>{for(let t=0;t<5;t++)for(let h=0;h<5;h++)f(ER(t),ER(h),t,h)};
+  const peaks=w=>each(w,(T_,H_,t,h)=>{const a=mid(t,h,w),c2=midB(t,h,w),c3=midBS(t,h,w),c4=pla(t,h,w),c5=shat(t,h,w),c6=wsav(t,h,w,c5),c7=peak(t,h,w);
+    put(T_,H_,S(3,6),ER(0),w,c7);put(T_,H_,S(3,4),ER(1),w,c3);put(T_,H_,S(5,6),ER(1),w,c7);put(T_,H_,S(3,4),S(2,3),w,a);put(T_,H_,S(5,6),ER(2),w,c4);put(T_,H_,ER(5),ER(3),w,c2);
+    put(T_,H_,ER(6),ER(3),w,c4);put(T_,H_,S(3,6),ER(4),w,a);put(T_,H_,S(3,4),ER(5),w,c6);put(T_,H_,S(5,6),ER(5),w,c5);put(T_,H_,S(3,6),ER(6),w,a)});
+  const high=w=>each(w,(T_,H_,t,h)=>{const a=mid(t,h,w),c2=midB(t,h,w),c3=midBS(t,h,w),c4=pla(t,h,w),c5=shat(t,h,w),c6=wsav(t,h,w,a),c7=slope(t,h,w),c8=peak(t,h,w);
+    put(T_,H_,ER(3),S(0,1),w,a);put(T_,H_,ER(4),ER(0),w,c7);put(T_,H_,S(5,6),ER(0),w,c8);put(T_,H_,ER(4),ER(1),w,c3);put(T_,H_,S(5,6),ER(1),w,c7);put(T_,H_,S(3,4),S(2,3),w,a);
+    put(T_,H_,S(5,6),ER(2),w,c4);put(T_,H_,ER(5),ER(3),w,c2);put(T_,H_,ER(6),ER(3),w,c4);put(T_,H_,S(3,6),ER(4),w,a);put(T_,H_,S(3,4),ER(5),w,c6);put(T_,H_,S(5,6),ER(5),w,c5);put(T_,H_,S(3,6),ER(6),w,a)});
+  const midS=w=>{put(F,F,ER(3),S(0,2),w,b.STONY_SHORE);put(S(1,2),F,I,ER(6),w,b.SWAMP);put(S(3,4),F,I,ER(6),w,b.MANGROVE);
+    each(w,(T_,H_,t,h)=>{const a=mid(t,h,w),c2=midB(t,h,w),c3=midBS(t,h,w),c4=shat(t,h,w),c5=pla(t,h,w),c6=beach(t),c7=wsav(t,h,w,a),c8=shatC(t,h,w),c9=slope(t,h,w);
+      put(T_,H_,S(4,6),ER(0),w,c9);put(T_,H_,S(4,5),ER(1),w,c3);put(T_,H_,ER(6),ER(1),w,t===0?c9:c5);put(T_,H_,ER(4),ER(2),w,a);put(T_,H_,ER(5),ER(2),w,c2);put(T_,H_,ER(6),ER(2),w,c5);
+      put(T_,H_,S(3,4),ER(3),w,a);put(T_,H_,S(5,6),ER(3),w,c2);if(neg(w)){put(T_,H_,ER(3),ER(4),w,c6);put(T_,H_,S(4,6),ER(4),w,a)}else put(T_,H_,S(3,6),ER(4),w,a);
+      put(T_,H_,ER(3),ER(5),w,c8);put(T_,H_,ER(4),ER(5),w,c7);put(T_,H_,S(5,6),ER(5),w,c4);put(T_,H_,ER(3),ER(6),w,neg(w)?c6:a);if(t===0)put(T_,H_,S(4,6),ER(6),w,a)})};
+  const low=w=>{put(F,F,ER(3),S(0,2),w,b.STONY_SHORE);put(S(1,2),F,I,ER(6),w,b.SWAMP);put(S(3,4),F,I,ER(6),w,b.MANGROVE);
+    each(w,(T_,H_,t,h)=>{const a=mid(t,h,w),c2=midB(t,h,w),c3=midBS(t,h,w),c4=beach(t),c5=wsav(t,h,w,a),c6=shatC(t,h,w);
+      put(T_,H_,ER(4),S(0,1),w,c2);put(T_,H_,S(5,6),S(0,1),w,c3);put(T_,H_,ER(4),S(2,3),w,a);put(T_,H_,S(5,6),S(2,3),w,c2);put(T_,H_,ER(3),S(3,4),w,c4);put(T_,H_,S(4,6),ER(4),w,a);
+      put(T_,H_,ER(3),ER(5),w,c6);put(T_,H_,ER(4),ER(5),w,c5);put(T_,H_,S(5,6),ER(5),w,a);put(T_,H_,ER(3),ER(6),w,c4);if(t===0)put(T_,H_,S(4,6),ER(6),w,a)})};
+  const valley=w=>{const n=neg(w);put([0,0],F,ER(3),S(0,1),w,n?b.STONY_SHORE:b.FROZEN_RIVER);put([1,4],F,ER(3),S(0,1),w,n?b.STONY_SHORE:b.RIVER);put([0,0],F,ER(4),S(0,1),w,b.FROZEN_RIVER);
+    put([1,4],F,ER(4),S(0,1),w,b.RIVER);put([0,0],F,S(3,6),S(2,5),w,b.FROZEN_RIVER);put([1,4],F,S(3,6),S(2,5),w,b.RIVER);put([0,0],F,ER(3),ER(6),w,b.FROZEN_RIVER);put([1,4],F,ER(3),ER(6),w,b.RIVER);
+    put(S(1,2),F,I,ER(6),w,b.SWAMP);put(S(3,4),F,I,ER(6),w,b.MANGROVE);put([0,0],F,I,ER(6),w,b.FROZEN_RIVER);each(w,(T_,H_,t,h)=>put(T_,H_,S(5,6),S(0,1),w,midB(t,h,w)))};
+  midS([0,0]);high([1,1]);peaks([2,2]);high([3,3]);midS([4,4]);low([5,5]);valley([6,6]);low([7,7]);midS([8,8]);high([9,9]);peaks([10,10]);high([11,11]);midS([12,12]);return G5BT=T}
+const g5cell=(v,q)=>{let i=0;while(i<q.length&&v>q[i])i++;return i};
+// 지상 바이옴 (기둥 기후값 c) / 동굴 바이옴까지 (마크 y)
+function g5sb(c){return g5btab()[(((g5cell(g5q(c.T),G5BQ[0])*5+g5cell(g5q(c.H),G5BQ[1]))*7+g5cell(g5q(c.C),G5BQ[2]))*7+g5cell(g5q(c.E),G5BQ[3]))*13+g5cell(g5q(c.W),G5BQ[4])]}
+function g5b3(c,y){const t=g5q(c.T),h=g5q(c.H),C=g5q(c.C),e=g5q(c.E),w=g5q(c.W),d=g5q(g5cm(y,-64,320,1.5,-1.5)+c.off),x=(v,a,b)=>v<a?(a-v)*(a-v):v>b?(v-b)*(v-b):0;
+  const fT=x(t,-1e4,1e4),fH=x(h,-1e4,1e4),fC=x(C,-1e4,1e4),fE=x(e,-1e4,1e4),fW=x(w,-1e4,1e4),cd=x(d,2000,9000);
+  let best=fT+fH+x(C,-12000,1e4)+fE+fW+Math.min(d*d,(d-1e4)*(d-1e4)),bm=g5sb(c),v;
+  if((v=fT+fH+x(C,8000,1e4)+fE+fW+cd)<best){best=v;bm=BIO.DRIPSTONE_CAVES}if((v=fT+x(h,7000,1e4)+fC+fE+fW+cd)<best){best=v;bm=BIO.LUSH_CAVES}
+  if((v=fT+fH+fC+x(e,-1e4,-3750)+fW+(d-11000)*(d-11000))<best)bm=BIO.DEEP_DARK;return bm}
+// 한 칸의 최종 밀도 (마크 보간 순서: y → x → z) — 양수면 돌
+function g5den(x,y,z){const x0=x&~3,z0=z&~3,j=(y+64)>>3,fx=(x&3)/4,fy=((y+64)&7)/8,fz=(z&3)/4,a=g5cc(x0,z0),b=g5cc(x0+4,z0),c=g5cc(x0,z0+4),d=g5cc(x0+4,z0+4);
+  const L=(t,p,q)=>p+t*(q-p),I=(A,B,C,D,k,s)=>{const e=k*1;return L(fz,L(fx,L(fy,A[e],A[e+s]),L(fy,B[e],B[e+s])),L(fx,L(fy,C[e],C[e+s]),L(fy,D[e],D[e+s])))};
+  for(const o of [a,b,c,d]){g5d(o,j);g5d(o,j+1)}const v=I(a.D,b.D,c.D,d.D,j,1),cl=g5cl(.64*v,-1,1),sq=cl/2-cl*cl*cl/24;
+  for(const o of [a,b,c,d]){g5o(o,j);g5o(o,j+1)}const n=I(a.O,b.O,c.O,d.O,j*4,4);
+  const no=n<0?64:I(a.O,b.O,c.O,d.O,j*4+1,4)+1.5*Math.max(Math.abs(I(a.O,b.O,c.O,d.O,j*4+2,4)),Math.abs(I(a.O,b.O,c.O,d.O,j*4+3,4)));return Math.min(sq,no)}
+// 대수층 (마크 Aquifer.NoiseBasedAquifer): 16×12×16 칸마다 중심점, 가까운 세 중심의 물 높이로 물 · 용암 · 막(돌)을 정해요
+const G5AO=[[0,0],[-2,-1],[-1,-1],[0,-1],[1,-1],[-3,0],[-2,0],[-1,0],[1,0],[-2,1],[-1,1],[0,1],[1,1]],G5LV={lv:-54,ty:LAVA},G5SW={lv:63,ty:WATER},G5WAY=-32512;
+// 예비 지표 높이 (find_top_surface: 4칸 격자)
+function g5ps(x,z){x&=~3;z&=~3;const g=G5,k=x*1048576+z;let v=g.ps.get(k);if(v!==undefined)return v;if(g.ps.size>40000)g.ps.clear();
+  const c=g5col(x,z);let y=Math.floor(g5cl(128+-128*(.2734375*(1/c.fac)+-1*c.off),-40,320)/8)*8;v=-64;
+  for(;y>=-64;y-=8){const gb=g5cm(y,-64,-40,0,1),gt=g5cm(y,240,256,1,0),s=(g5cm(y,-64,320,1.5,-1.5)+c.off)*c.fac,q=4*(s>0?s:s*.25);
+    const d=-.390625+(.1171875+(gb===0?0:gb*(-.1171875+(-.078125+(gt===0?0:gt*(.078125+g5cl(-.703125+q,-64,64)))))));if(d>0){v=y;break}}
+  g.ps.set(k,v);return v}
+const g5at=(s,y)=>y<s.lv?s.ty:AIR;
+function g5fluid(x,y,z){const gl=y<-54?G5LV:G5SW;let mn=2147483647,near=false;
+  for(const [dx,dz] of G5AO){const sx=x+dx*16,sz=z+dz*16,n=g5ps(sx,sz),o=n+8,ce=dx===0&&dz===0;if(ce&&y-12>o)return gl;const b3=y+12>o;
+    if(b3||ce){const gs=o<-54?G5LV:G5SW;if(g5at(gs,o)!==AIR){if(ce)near=true;if(b3)return gs}}mn=Math.min(mn,n)}
+  const c=g5col(x&~3,z&~3),N=G5.N;let d,e;
+  if(c.E<-.22499999403953552&&g5cm(y,-64,320,1.5,-1.5)+c.off>.8999999761581421){d=-1;e=-1}
+  else{const f=near?g5cm(mn+8-y,0,64,1,0):0,g=g5cl(N.aquifer_fluid_level_floodedness.v(x,y*.67,z),-1,1),t=(f-1)/(0-1);d=g-(-.8+t*(.4- -.8));e=g-(-.3+t*(.8- -.3))}
+  let lv;if(e>0)lv=gl.lv;else if(d>0){const k=Math.floor(x/16),l=Math.floor(y/40),m=Math.floor(z/16),sp=N.aquifer_fluid_level_spread.v(k,l*.7142857142857143,m)*10;lv=Math.min(mn,l*40+20+Math.floor(sp/3)*3)}else lv=G5WAY;
+  let ty=gl.ty;if(lv<=-10&&lv!==G5WAY&&gl.ty!==LAVA&&Math.abs(N.aquifer_lava.v(Math.floor(x/64),Math.floor(y/40),Math.floor(z/64)))>.3)ty=LAVA;return{lv,ty}}
+// 청크 하나의 대수층 (중심점 · 상태 캐시)
+function g5aqc(ox,oz){const A={gx:Math.floor(ox/16)-1,gz:Math.floor(oz/16)-1,L:new Int32Array(315*3),hasL:new Uint8Array(315),S:new Array(315),U:new Array(315)};return A}
+function g5ai(A,gx,gy,gz){return((gy+7)*3+(gz-A.gz))*3+(gx-A.gx)}
+function g5al(A,gx,gy,gz){const i=g5ai(A,gx,gy,gz);if(!A.hasL[i]){const r=G5.aq.at(gx,gy,gz);A.L[i*3]=gx*16+r.nextInt(10);A.L[i*3+1]=gy*12+r.nextInt(9);A.L[i*3+2]=gz*16+r.nextInt(10);A.hasL[i]=1}return i}
+function g5as(A,i){let s=A.S[i];if(!s)s=A.S[i]=g5fluid(A.L[i*3],A.L[i*3+1],A.L[i*3+2]);return s}
+// 12개 후보 중심이 모두 같은 상태면 그 상태 (밀도 계산 없이 끝나요)
+function g5au(A,l,m,n){const k=g5ai(A,l,m,n);let u=A.U[k];if(u!==undefined)return u;let s0=null;u=null;
+  for(let a=0;a<=1;a++)for(let b=-1;b<=1;b++)for(let c=0;c<=1;c++){const s=g5as(A,g5al(A,l+a,m+b,n+c));if(!s0)s0=s;else if(s.lv!==s0.lv||s.ty!==s0.ty){A.U[k]=false;return false}}return A.U[k]=s0}
+// 마크 computeSubstance: -1 = 돌(막), 아니면 공기 · 물 · 용암 (den(): 그 칸의 최종 밀도 — 막을 따질 때만 불러요)
+let G5BV=NaN;
+function g5pr(sa,sb,x,y,z){const ba=g5at(sa,y),bb=g5at(sb,y);if(ba===LAVA&&bb===WATER||ba===WATER&&bb===LAVA)return 2;const j=Math.abs(sa.lv-sb.lv);if(j===0)return 0;
+  const e=y+.5-.5*(sa.lv+sb.lv),ov=j/2-Math.abs(e);let q;if(e>0){const p=0+ov;q=p>0?p/1.5:p/2.5}else{const p=3+ov;q=p>0?p/3:p/10}
+  let r=0;if(!(q<-2)&&!(q>2)){if(G5BV!==G5BV)G5BV=G5.N.aquifer_barrier.v(x,y*.5,z);r=G5BV}return 2*(r+q)}
+function g5aqs(A,x,y,z,den){if(y<-54)return LAVA;const l=Math.floor((x-5)/16),m=Math.floor((y+1)/12),n=Math.floor((z-5)/16),u=g5au(A,l,m,n);if(u)return g5at(u,y);
+  let o=2147483647,p=o,q=o,r=0,s=0,t=0;
+  for(let a=0;a<=1;a++)for(let b=-1;b<=1;b++)for(let c=0;c<=1;c++){const i=g5al(A,l+a,m+b,n+c),dx=A.L[i*3]-x,dy=A.L[i*3+1]-y,dz=A.L[i*3+2]-z,ag=dx*dx+dy*dy+dz*dz;
+    if(o>=ag){t=s;s=r;r=i;q=p;p=o;o=ag}else if(p>=ag){t=s;s=i;q=p;p=ag}else if(q>=ag){t=i;q=ag}}
+  const s1=g5as(A,r),d=1-Math.abs(p-o)/25,bs=g5at(s1,y);if(d<=0)return bs;if(bs===WATER&&y-1<-54)return bs;
+  const dn=den();G5BV=NaN;const s2=g5as(A,s);if(dn+d*g5pr(s1,s2,x,y,z)>0)return -1;const s3=g5as(A,t),f=1-Math.abs(q-o)/25;if(f>0&&dn+d*f*g5pr(s1,s3,x,y,z)>0)return -1;
+  const g2=1-Math.abs(q-p)/25;if(g2>0&&dn+d*g2*g5pr(s2,s3,x,y,z)>0)return -1;return bs}
+// 광맥 (마크 OreVeinifier): 구리(+화강암) y 0~50, 철(+응회암) y -60~-8
+function g5vn(o,j){if(!o.V)o.V=new Float64Array(147).fill(NaN);const i=j*3;if(o.V[i]!==o.V[i]){const y=-64+8*j,N=G5.N;
+  if(y<-60||y>=51){o.V[i]=0;o.V[i+1]=0;o.V[i+2]=0}else{o.V[i]=N.ore_veininess.v(o.x*1.5,y*1.5,o.z*1.5);o.V[i+1]=N.ore_vein_a.v(o.x*4,y*4,o.z*4);o.V[i+2]=N.ore_vein_b.v(o.x*4,y*4,o.z*4)}}return i}
+// 표면 규칙 (마크 1.21 overworld surface_rule 그대로) — S: 칸 상황, 돌려주는 값 -1 = 그대로
+function g5w(S,off,mul,add){return S.wh===-2147483648||S.y+(add?S.sa:0)>=S.wh+off+S.sd*mul}
+function g5nz(S,k){let v=S.nz[k];if(v===undefined)v=S.nz[k]=G5.N[k].v(S.x,0,S.z);return v}
+function g5band(S){if(S.bo===undefined)S.bo=Math.round(G5.N.clay_bands_offset.v(S.x,0,S.z)*4);return G5.bands[(S.y+S.bo+192)%192]}
+const g5in=(v,a,b)=>v>=a&&v<=b,g5bad3=n=>n>=-.909&&n<=-.5454||n>=-.1818&&n<=.1818||n>=.5454&&n<=.909;
+// 위층(1)·아래층(2) 바이옴 블록
+function g5top(S,b,L){const B=BIO,sn=S.sn,c=S.sb<=1,w0=()=>g5w(S,0,0,0);
+  if(b===B.FROZEN_PEAKS){if(S.steep)return PACKED_ICE;if(g5in(g5nz(S,'packed_ice'),L===1?0:-.5,.2))return PACKED_ICE;if(g5in(g5nz(S,'ice'),L===1?0:-.0625,.025))return ICE;if(w0())return SNOW}
+  else if(b===B.SNOWY_PEAKS){if(S.steep)return STONE;if(g5in(g5nz(S,'powder_snow'),L===1?.35:.45,L===1?.6:.58)&&w0())return SNOW;if(w0())return SNOW}
+  else if(b===B.JAGGED_PEAKS){if(L===2||S.steep)return STONE;if(w0())return SNOW}
+  else if(b===B.GROVE){if(g5in(g5nz(S,'powder_snow'),L===1?.35:.45,L===1?.6:.58)&&w0())return SNOW;if(L===2)return DIRT;if(w0())return SNOW}
+  if(b===B.MOUNTAINS)return g5in(g5nz(S,'calcite'),-.0125,.0125)?CALCITE:STONE;
+  if(b===B.STONY_SHORE)return g5in(g5nz(S,'gravel'),-.05,.05)?(c?STONE:GRAVEL):STONE;
+  if(b===B.WINDSWEPT&&sn>=.12121212121212122)return STONE;
+  if(b===B.WARM_OCEAN||b===B.BEACH||b===B.SNOWY_BEACH||b===B.DESERT)return c?SANDSTONE:SAND;
+  if(b===B.DRIPSTONE_CAVES)return STONE;
+  if(b===B.WINDSWEPT_SAVANNA){if(sn>=.21212121212121213)return STONE;if(L===1&&sn>=-.06060606060606061)return COARSE_DIRT}
+  if(b===B.WINDSWEPT_GRAVELLY){if(sn>=.24242424242424243)return c?STONE:GRAVEL;if(sn>=.12121212121212122)return STONE;if(sn>=-.12121212121212122)return L===1&&w0()?GRASS:DIRT;return c?STONE:GRAVEL}
+  if(L===1){if(b===B.OLD_PINE_TAIGA||b===B.OLD_TAIGA){if(sn>=.21212121212121213)return COARSE_DIRT;if(sn>=-.11515151515151514)return PODZOL}
+    if(b===B.ICE_SPIKES&&w0())return SNOW;if(b===B.MANGROVE)return MUD;if(b===B.MUSHROOM)return MYCELIUM;return w0()?GRASS:DIRT}
+  return b===B.MANGROVE?MUD:DIRT}
+function g5rule(S){const b=S.bm,y=S.y,B=BIO;if(y<S.ms)return -1;
+  if(S.sa<=1){if(b===B.WOODED_BADLANDS&&y>=97+2*S.sd)return g5bad3(S.sn)?COARSE_DIRT:g5w(S,0,0,0)?GRASS:DIRT;
+    if((b===B.SWAMP&&y>=62||b===B.MANGROVE&&y>=60)&&y<63&&g5nz(S,'surface_swamp')>=0)return WATER}
+  if(b===B.BADLANDS||b===B.ERODED_BADLANDS||b===B.WOODED_BADLANDS){
+    if(S.sa<=1){if(y>=256)return ORANGE_TC;if(y+S.sa>=74+S.sd)return g5bad3(S.sn)?TERRACOTTA:g5band(S);if(g5w(S,-1,0,0))return S.sb<=1?RED_SANDSTONE:RED_SAND;
+      if(S.sd>0)return ORANGE_TC;if(g5w(S,-6,-1,1))return WHITE_TC;return S.sb<=1?STONE:GRAVEL}
+    if(y+S.sa>=63-S.sd)return y>=63&&!(y+S.sa>=74+S.sd)?ORANGE_TC:g5band(S);if(S.sa<=1+S.sd&&g5w(S,-6,-1,1))return WHITE_TC}
+  const fo=b===B.FROZEN_OCEAN||b===B.DEEP_FROZEN_OCEAN;
+  if(S.sa<=1&&g5w(S,-1,0,0)){if(fo&&S.sd<=0)return g5w(S,0,0,0)?AIR:ICE;return g5top(S,b,1)}
+  if(g5w(S,-6,-1,1)){if(S.sa<=1&&fo&&S.sd<=0)return WATER;if(S.sa<=1+S.sd)return g5top(S,b,2);
+    const sec=r=>Math.trunc(r*((S.sec+1)/2));if((b===B.WARM_OCEAN||b===B.BEACH||b===B.SNOWY_BEACH)&&S.sa<=1+S.sd+sec(6))return SANDSTONE;if(b===B.DESERT&&S.sa<=1+S.sd+sec(30))return SANDSTONE}
+  if(S.sa<=1){if(b===B.FROZEN_PEAKS||b===B.JAGGED_PEAKS)return STONE;if(b===B.WARM_OCEAN||b===B.LUKEWARM_OCEAN||b===B.DEEP_LUKEWARM_OCEAN)return S.sb<=1?SANDSTONE:SAND;return S.sb<=1?STONE:GRAVEL}
+  return -1}
+// 바이옴 경계 흔들기 (마크 BiomeManager: 시드의 SHA-256 → 칸마다 흔든 거리로 이웃 4칸 격자 중 하나를 골라요)
+function g5sha(bytes){const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,
+  0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,
+  0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const m=new Uint8Array(64);m.set(bytes);m[bytes.length]=128;m[63]=bytes.length*8;const W=new Array(64),H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19],ro=(v,n)=>(v>>>n)|(v<<(32-n));
+  for(let i=0;i<16;i++)W[i]=(m[i*4]<<24)|(m[i*4+1]<<16)|(m[i*4+2]<<8)|m[i*4+3];for(let i=16;i<64;i++){const a=W[i-15],c=W[i-2];W[i]=(W[i-16]+(ro(a,7)^ro(a,18)^(a>>>3))+W[i-7]+(ro(c,17)^ro(c,19)^(c>>>10)))|0}
+  let [a,b,c,d,e,f,g,h]=H;for(let i=0;i<64;i++){const t1=(h+(ro(e,6)^ro(e,11)^ro(e,25))+((e&f)^(~e&g))+K[i]+W[i])|0,t2=((ro(a,2)^ro(a,13)^ro(a,22))+((a&b)^(a&c)^(b&c)))|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0}
+  return[(H[0]+a)|0,(H[1]+b)|0]}
+function g5zinit(){const s=SEED,by=[s&255,(s>>8)&255,(s>>16)&255,(s>>>24)&255],x=s<0?255:0,o=g5sha(by.concat([x,x,x,x])),sw=v=>((v&255)<<24|((v>>8)&255)<<16|((v>>16)&255)<<8|(v>>>24))>>>0;
+  G5.zl=sw(o[0]);G5.zh=sw(o[1]);G5.zf=new Map()}
+function g5lcg(ah,al,bh,bl){g5mul(ah,al,0x5851F42D,0x4C957F2D);g5add(G5U.h,G5U.l,0x14057B7E,0xF767814F);g5mul(ah,al,G5U.h,G5U.l);g5add(G5U.h,G5U.l,bh,bl)}
+function g5fid(x,y,z){const k=(x*4096+y)*4096+z,g=G5;let v=g.zf.get(k);if(v)return v;if(g.zf.size>50000)g.zf.clear();let h=g.zh,l=g.zl;
+  for(const c of [x,y,z,x,y,z]){g5lcg(h,l,c<0?4294967295:0,c>>>0);h=G5U.h;l=G5U.l}const fd=()=>((((l>>>24)|((h&3)<<8))&1023)/1024-.5)*.9,d=fd();
+  g5lcg(h,l,g.zh,g.zl);h=G5U.h;l=G5U.l;const e=fd();g5lcg(h,l,g.zh,g.zl);h=G5U.h;l=G5U.l;v=[d,e,fd()];g.zf.set(k,v);return v}
+const G5Q={x:0,y:0,z:0};
+function g5zoom(x,y,z){if(!G5.zf)g5zinit();const i=x-2,j=y-2,k=z-2,l=i>>2,m=j>>2,n=k>>2,d=(i&3)/4,e=(j&3)/4,f=(k&3)/4;let o=0,g=Infinity;
+  for(let p=0;p<8;p++){const a=(p&4)===0,b=(p&2)===0,c=(p&1)===0,F=g5fid(a?l:l+1,b?m:m+1,c?n:n+1),h=a?d:d-1,t=b?e:e-1,u=c?f:f-1,v=(u+F[2])*(u+F[2])+(t+F[1])*(t+F[1])+(h+F[0])*(h+F[0]);if(g>v){o=p;g=v}}
+  G5Q.x=(o&4)===0?l:l+1;G5Q.y=(o&2)===0?m:m+1;G5Q.z=(o&1)===0?n:n+1}
+// 4칸 격자 기둥의 지상 바이옴 (캐시)
+function g5qb(qx,qz){const g=G5,k=qx*1048576+qz;let v=g.bio.get(k);if(v===undefined){if(g.bio.size>40000)g.bio.clear();v=g5sb(g5col(qx*4,qz*4));g.bio.set(k,v)}return v}
+// 바깥에서 쓰는 바이옴: biome5(x,z,h) 지상 (h = 이 세계 높이, 없으면 해수면), biome5At(x,y,z) 동굴 바이옴까지
+function biome5(x,z,h){g5init();g5zoom(x,(h===undefined?SEA:Math.max(h+1,SEA))-64,z);return g5qb(G5Q.x,G5Q.z)}
+function biome5At(x,y,z){g5init();g5zoom(x,y-64,z);return g5b3(g5col(G5Q.x*4,G5Q.z*4),G5Q.y*4)}
+// 청크 지형 채우기 (GEN 5 오버월드): 노이즈 → 대수층 · 광맥 → 표면 규칙 → 카버 → 바이옴 · 높이 지도
+const g5L=(t,a,b)=>a+t*(b-a),G5Q8=new Float64Array(64);
+function g5c8(Q,k,A0,A1,A2,A3,e,s){Q[k]=A0[e];Q[k+1]=A0[e+s];Q[k+2]=A1[e];Q[k+3]=A1[e+s];Q[k+4]=A2[e];Q[k+5]=A2[e+s];Q[k+6]=A3[e];Q[k+7]=A3[e+s]}
+function g5i8(Q,k,fy,fx,fz){const ya=Q[k]+fy*(Q[k+1]-Q[k]),yb=Q[k+2]+fy*(Q[k+3]-Q[k+2]),yc=Q[k+4]+fy*(Q[k+5]-Q[k+4]),yd=Q[k+6]+fy*(Q[k+7]-Q[k+6]),xa=ya+fx*(yb-ya);return xa+fz*((yc+fx*(yd-yc))-xa)}
+// 대수층이 막을 따질 때 부르는 최종 밀도 (전역 상태: 보간 위치 G5DS = [fy,fx,fz,v])
+const G5DS=new Float64Array(4);let G5DO=null,G5DJ=0,G5DN=false;
+function g5ldn(){if(G5DN)return;const o=G5DO,j=G5DJ;for(let k=0;k<4;k++){g5o(o[k],j);g5o(o[k],j+1)}for(let c=0;c<4;c++)g5c8(G5Q8,8*c,o[0].O,o[1].O,o[2].O,o[3].O,j*4+c,4);G5DN=true}
+function g5dn(){g5ldn();const Q=G5Q8,fy=G5DS[0],fx=G5DS[1],fz=G5DS[2],cl=g5cl(.64*G5DS[3],-1,1);
+  return Math.min(cl/2-cl*cl*cl/24,g5i8(Q,0,fy,fx,fz)>=0?g5i8(Q,8,fy,fx,fz)+1.5*Math.max(Math.abs(g5i8(Q,16,fy,fx,fz)),Math.abs(g5i8(Q,24,fy,fx,fz))):64)}
+function terrain5(b,cx,cz,hm,bio,gt){const g=g5init(),ox=cx*16,oz=cz*16,N=g.N,C=new Array(25),Q=G5Q8,O4=[null,null,null,null];
+  for(let k=0;k<5;k++)for(let i=0;i<5;i++){const o=g5cc(ox+4*i,oz+4*k);C[k*5+i]=o;for(let j=0;j<49;j++)g5d(o,j)}
+  // 이 위로는 대수층 중심이 모두 바다 높이 그대로 → 계산 없이 공기/물
+  let mps=-64;for(let x=ox-40;x<=ox+44;x+=4)for(let z=oz-40;z<=oz+44;z+=4)mps=Math.max(mps,g5ps(x,z));const skipY=mps+42,A=g5aqc(ox,oz);let top=0;G5DO=O4;
+  for(let ck=0;ck<4;ck++)for(let ci=0;ci<4;ci++){const o0=C[ck*5+ci],o1=C[ck*5+ci+1],o2=C[(ck+1)*5+ci],o3=C[(ck+1)*5+ci+1];O4[0]=o0;O4[1]=o1;O4[2]=o2;O4[3]=o3;
+    for(let j=0;j<48;j++){G5DJ=j;G5DN=false;const a0=o0.D[j],a1=o0.D[j+1],b0=o1.D[j],b1=o1.D[j+1],c0=o2.D[j],c1=o2.D[j+1],d0=o3.D[j],d1=o3.D[j+1],y0=-64+8*j;
+      const pos=a0>0||a1>0||b0>0||b1>0||c0>0||c1>0||d0>0||d1>0;if(!pos&&y0>skipY)continue;if(pos)g5ldn();
+      const vein=pos&&y0+8>-60&&y0<51;if(vein){for(let k=0;k<4;k++){g5vn(O4[k],j);g5vn(O4[k],j+1)}for(let c=0;c<3;c++)g5c8(Q,32+8*c,o0.V,o1.V,o2.V,o3.V,j*3+c,3)}
+      for(let ly=0;ly<8;ly++){const fy=ly/8,y=y0+ly,iy=y+64;if(!pos&&y>skipY)break;const ya=a0+fy*(a1-a0),yb=b0+fy*(b1-b0),yc=c0+fy*(c1-c0),yd=d0+fy*(d1-d0);
+        const na=Q[0]+fy*(Q[1]-Q[0]),nb=Q[2]+fy*(Q[3]-Q[2]),nc=Q[4]+fy*(Q[5]-Q[4]),nd=Q[6]+fy*(Q[7]-Q[6]);
+        for(let lx=0;lx<4;lx++){const fx=lx/4,xa=ya+fx*(yb-ya),xc=yc+fx*(yd-yc),nxa=na+fx*(nb-na),nxc=nc+fx*(nd-nc);
+          for(let lz=0;lz<4;lz++){const fz=lz/4,v=xa+fz*(xc-xa),X=ci*4+lx,Z=ck*4+lz,idx=X|(Z<<4)|(iy<<8);let id;
+            if(v>0&&(nxa+fz*(nxc-nxa)<0||g5i8(Q,8,fy,fx,fz)+1.5*Math.max(Math.abs(g5i8(Q,16,fy,fx,fz)),Math.abs(g5i8(Q,24,fy,fx,fz)))>0)){id=STONE;
+              if(vein&&y>=-60&&y<=50){const t=g5i8(Q,32,fy,fx,fz),cu=t>0,e=Math.abs(t),lo=cu?0:-60,hi=cu?50:-8;
+                if(y>=lo&&y<=hi&&e+g5cm(Math.min(hi-y,y-lo),0,20,-.2,0)>=.4){const x=ox+X,z=oz+Z,r=g.ore.at(x,y,z);
+                  if(!(r.nextFloat()>g5f(.7))&&-.07999999821186066+Math.max(Math.abs(g5i8(Q,40,fy,fx,fz)),Math.abs(g5i8(Q,48,fy,fx,fz)))<0){
+                    if(r.nextFloat()<g5cm(e,.4,.6,.1,.3)&&N.ore_gap.v(x,y,z)>g5f(-.3))id=r.nextFloat()<g5f(.02)?(cu?RAW_COPPER_BLOCK:RAW_IRON_BLOCK):(cu?COPPER_ORE:D_IRON);else id=cu?GRANITE:TUFF}}}}
+            else if(y>skipY)id=y<63?WATER:AIR;
+            else{G5DS[0]=fy;G5DS[1]=fx;G5DS[2]=fz;G5DS[3]=v;id=g5aqs(A,ox+X,y,oz+Z,g5dn);if(id<0)id=STONE}
+            if(id!==AIR){b[idx]=id;if(iy>top)top=iy}}}}}}
+  g5surface(b,ox,oz,A,top);g5carve(b,cx,cz,A);
+  // 바이옴 · 높이 지도 · 풀색, 추운 바이옴은 눈 덮인 풀 · 얼음
+  let maxY=SEA;for(let z=0;z<16;z++)for(let x=0;x<16;x++){const c=x|z<<4;let h=-1,tw=-1;
+    for(let iy=Math.min(H-1,top+1);iy>0;iy--){const v=b[c|(iy<<8)];if(v===AIR)continue;if(v===WATER||v===LAVA){if(tw<0)tw=iy;continue}h=iy;break}
+    hm[c]=h<1?1:h;const bm=biome5(ox+x,oz+z,hm[c]);bio[c]=bm;gt.set(grassTint(ox+x,oz+z,bm),c*3);if(h>maxY)maxY=h;
+    if(g5cold(bm)){if(h>0&&tw<0&&b[c|(h<<8)]===GRASS)b[c|(h<<8)]=SNOWY_GRASS;if(bm!==BIO.DEEP_FROZEN_OCEAN&&tw>h&&b[c|(tw<<8)]===WATER&&b[c|((tw+1)<<8)]===AIR)b[c|(tw<<8)]=ICE}}
+  return maxY}
+const g5cold=bm=>bm===BIO.SNOWY||bm===BIO.FROZEN_OCEAN||bm===BIO.SNOWY_PEAKS||bm===BIO.ICE_SPIKES||bm===BIO.SNOWY_TAIGA||bm===BIO.GROVE||bm===BIO.JAGGED_PEAKS||bm===BIO.SNOWY_BEACH||bm===BIO.FROZEN_RIVER||bm===BIO.FROZEN_PEAKS||bm===BIO.DEEP_FROZEN_OCEAN;
+// 표면 규칙 적용 (마크 SurfaceSystem.buildSurface): 돌만 바꿔요 · 기반암 바닥 · 심층암 경계(0~8) · 악지 기둥 · 빙산
+function g5surface(b,ox,oz,A,top){const g=G5,N=g.N,p00=g5ps(ox,oz),p10=g5ps(ox+16,oz),p01=g5ps(ox,oz+16),p11=g5ps(ox+16,oz+16),tops=new Int16Array(256);
+  const tp=c=>{for(let iy=Math.min(H-1,top+1);iy>=0;iy--)if(b[c|(iy<<8)]!==AIR)return iy;return -1};for(let c=0;c<256;c++)tops[c]=tp(c);
+  const S={x:0,z:0,y:0,sa:0,sb:0,wh:0,sd:0,sec:0,sn:0,ms:0,bm:0,steep:false,nz:null,bo:undefined},MIN=-2147483648,fl=v=>v===AIR||v===WATER||v===LAVA;
+  for(let z=0;z<16;z++)for(let x=0;x<16;x++){const c=x|z<<4,X=ox+x,Z=oz+z;let t=tops[c];const bm=biome5(X,Z,t);
+    if(bm===BIO.ERODED_BADLANDS){g5ebad(b,c,X,Z,t);t=tp(c)}
+    const sn=N.surface.v(X,0,Z),sd=Math.trunc(sn*2.75+3+g.R.at(X,0,Z).nextDouble()*.25);
+    S.x=X;S.z=Z;S.sn=sn;S.sd=sd;S.sec=N.surface_secondary.v(X,0,Z);S.bm=bm;S.nz={};S.bo=undefined;
+    S.ms=Math.floor(g5L(z/16,g5L(x/16,p00,p10),g5L(x/16,p01,p11)))+sd-8;
+    const m=tops[x|Math.max(z-1,0)<<4],n=tops[x|Math.min(z+1,15)<<4];S.steep=n>=m+4||tops[Math.max(x-1,0)|z<<4]>=tops[Math.min(x+1,15)|z<<4]+4;
+    let o=0,p=MIN,q=2147483647;
+    for(let iy=t+1;iy>=0;iy--){const y=iy-64,i=c|(iy<<8),v=b[i];if(v===AIR){o=0;p=MIN;continue}if(v===WATER||v===LAVA){if(p===MIN)p=y+1;continue}
+      if(q>=y){q=G5WAY;for(let tt=y-1;tt>=-65;tt--)if(tt<-64||fl(b[c|((tt+64)<<8)])){q=tt+1;break}}
+      o++;if(v!==STONE)continue;S.y=y;S.sa=o;S.sb=y-q+1;S.wh=p;let r=-1;
+      if(y<=-64||y<-59&&g.bed.at(X,y,Z).nextFloat()<1+((y+64)/5)*-1)r=BEDROCK;
+      else{r=g5rule(S);if(r<0&&y<8&&(y<=0||g.ds.at(X,y,Z).nextFloat()<1+(y/8)*-1))r=DEEPSLATE}
+      if(r>=0)b[i]=r}
+    if(bm===BIO.FROZEN_OCEAN||bm===BIO.DEEP_FROZEN_OCEAN)g5froz(b,c,X,Z,S.ms,t,bm)}}
+function g5ebad(b,c,X,Z,t){const N=G5.N,e=Math.min(Math.abs(N.badlands_surface.v(X,0,Z)*8.25),N.badlands_pillar.v(X*.2,0,Z*.2)*15);if(e<=0)return;
+  const h=Math.abs(N.badlands_pillar_roof.v(X*.75,0,Z*.75)*1.5),j=Math.floor(64+Math.min(e*e*2.5,Math.ceil(h*50)+24));if(t+1-64>j)return;
+  for(let k=j;k>=-64;k--){const v=b[c|((k+64)<<8)];if(v===STONE)break;if(v===WATER)return}for(let k=j;k>=-64&&b[c|((k+64)<<8)]===AIR;k--)b[c|((k+64)<<8)]=STONE}
+function g5froz(b,c,X,Z,ms,t,bm){const N=G5.N,e=Math.min(Math.abs(N.iceberg_surface.v(X,0,Z)*8.25),N.iceberg_pillar.v(X*1.28,0,Z*1.28)*15);if(e<=1.8)return;
+  const h=Math.abs(N.iceberg_pillar_roof.v(X*1.17,0,Z*1.17)*1.5);let i=Math.min(e*e*1.2,Math.ceil(h*40)+14),j;if(bm===BIO.DEEP_FROZEN_OCEAN)i-=2;
+  if(i>2){j=63-i-7;i+=63}else{i=0;j=0}const r=G5.R.at(X,0,Z),l=2+r.nextInt(4),m=63+18+r.nextInt(10),ki=Math.trunc(i),ji=Math.trunc(j);let n=0;
+  for(let o=Math.max(t+1-64,ki+1);o>=ms;o--){const iy=o+64;if(iy<0||iy>=H)continue;const v=b[c|(iy<<8)];
+    if(v===AIR&&o<ki&&r.nextDouble()>.01||v===WATER&&o>ji&&o<63&&j!==0&&r.nextDouble()>.15){if(n<=l&&o>m){b[c|(iy<<8)]=SNOW;n++}else b[c|(iy<<8)]=PACKED_ICE}}}
+// 카버 (마크 CaveWorldCarver · CanyonWorldCarver): 예전 방식 굴 · 방 · 협곡 — 주변 8청크에서 시작한 것까지 파요
+let G5SIN=null;const g5sn=d=>G5SIN[Math.trunc(d*10430.378350470453)&65535],g5cs=d=>G5SIN[Math.trunc(d*10430.378350470453+16384)&65535];
+let G5REP=null;
+function g5carve(b,cx,cz,A,nether){if(!G5SIN){G5SIN=new Float32Array(65536);for(let i=0;i<65536;i++)G5SIN[i]=Math.sin(i*Math.PI*2/65536)}
+  if(!G5REP)G5REP=new Set([STONE,GRANITE,DIORITE,ANDESITE,TUFF,DEEPSLATE,DIRT,COARSE_DIRT,PODZOL,GRASS,SNOWY_GRASS,MYCELIUM,MUD,ROOTED_DIRT,TERRACOTTA,ORANGE_TC,WHITE_TC,YELLOW_TC,BROWN_TC,RED_TC,LGRAY_TC,
+    SAND,RED_SAND,SANDSTONE,RED_SANDSTONE,GRAVEL,CALCITE,SNOW,PACKED_ICE,WATER,COPPER_ORE,D_IRON,RAW_IRON_BLOCK,RAW_COPPER_BLOCK].filter(v=>v!==undefined));
+  const rep=nether?(v=>v===NETHERRACK||v===SOUL_SAND||v===SOUL_SOIL||v===BASALT||v===BLACKSTONE||v===CRIMSON_NYLIUM||v===WARPED_NYLIUM):(v=>G5REP.has(v));
+  const ox=cx*16,oz=cz*16,mx=ox+8,mz=oz+8,minY=nether?0:-64,dep=nether?128:384,yo=nether?0:64,mask=new Uint8Array(16*16*dep),PI=g5f(Math.PI);
+  const R=new G5L(0,0),sh=SEED<0?4294967295:0,sl=SEED>>>0;let fs=null;
+  const carveBlock=(i,y,top)=>{const v=b[i];if(v===GRASS||v===MYCELIUM)top.v=v;if(!rep(v))return;let ns;
+    if(nether)ns=y<=31?LAVA:AIR;else if(y<=-56)ns=LAVA;else{ns=g5aqs(A,ox+(i&15),y,oz+((i>>4)&15),()=>0);if(ns<0)return}
+    b[i]=ns;if(top.v&&ns===AIR){const j=i-256;if(j>=0&&b[j]===DIRT)b[j]=top.v}};
+  const ell=(x,y,z,hr,vr,skip)=>{const f=16+hr*2;if(Math.abs(x-mx)>f||Math.abs(z-mz)>f)return;
+    const k=Math.max(Math.floor(x-hr)-ox-1,0),l=Math.min(Math.floor(x+hr)-ox,15),m=Math.max(Math.floor(y-vr)-1,minY+1),o=Math.min(Math.floor(y+vr)+1,minY+dep-1-7),p=Math.max(Math.floor(z-hr)-oz-1,0),q=Math.min(Math.floor(z+hr)-oz,15);
+    for(let r=k;r<=l;r++){const g=(ox+r+.5-x)/hr;for(let t=p;t<=q;t++){const h=(oz+t+.5-z)/hr;if(g*g+h*h>=1)continue;const top={v:0};
+      for(let v=o;v>m;v--){const w=(v-.5-y)/vr,mi=r|(t<<4)|((v-minY)<<8);if(skip(g,w,h,v)||mask[mi])continue;mask[mi]=1;carveBlock(r|(t<<4)|((v+yo)<<8),v,top)}}}};
+  const reach=(x,z,bi,bc,w)=>{const f=x-mx,g=z-mz,h=bc-bi,i=g5f(g5f(w+2)+16);return f*f+g*g-h*h<=i*i};
+  const tunnel=(sd,x,y,z,hm,vm,th,yaw,pit,bi,bc,ys,skip)=>{const r=new G5L(sd[0],sd[1]),i=r.nextInt(bc>>1)+(bc>>2),bl=r.nextInt(6)===0;let f=0,g=0;
+    for(let j=bi;j<bc;j++){const d=1.5+g5f(g5sn(g5f(g5f(PI*j)/bc))*th),e=d*ys,h=g5cs(pit);x+=g5f(g5cs(yaw)*h);y+=g5sn(pit);z+=g5f(g5sn(yaw)*h);
+      pit=g5f(pit*(bl?g5f(.92):g5f(.7)));pit=g5f(pit+g5f(g*g5f(.1)));yaw=g5f(yaw+g5f(f*g5f(.1)));g=g5f(g*g5f(.9));f=g5f(f*.75);
+      g=g5f(g+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*2));f=g5f(f+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*4));
+      if(j===i&&th>1){for(const s of [-1,1]){r.nextLong();const sd2=[G5U.h,G5U.l];tunnel(sd2,x,y,z,hm,vm,g5f(g5f(r.nextFloat()*.5)+.5),g5f(yaw+s*g5f(PI/2)),g5f(pit/3),j,bc,1,skip)}return}
+      if(r.nextInt(4)!==0){if(!reach(x,z,j,bc,th))return;ell(x,y,z,d*hm,e*vm,skip)}}};
+  const caves=(rnd,ccx,ccz,ymin,ymax,hr0,hr1,vr0,vr1,fl0,fl1,ys0,ys1,bound,thick,yS)=>{const i=112,j=rnd.nextInt(rnd.nextInt(rnd.nextInt(bound)+1)+1);
+    for(let k=0;k<j;k++){const d=ccx*16+rnd.nextInt(16),e=rnd.nextInt(ymax-ymin+1)+ymin,f=ccz*16+rnd.nextInt(16),g=hr0===hr1?hr0:g5f(g5f(rnd.nextFloat()*g5f(hr1-hr0))+hr0),
+      h=vr0===vr1?vr0:g5f(g5f(rnd.nextFloat()*g5f(vr1-vr0))+vr0),l=fl0===fl1?fl0:g5f(g5f(rnd.nextFloat()*g5f(fl1-fl0))+fl0),skip=(a,c,e2)=>c<=l||a*a+c*c+e2*e2>=1;let m=1;
+      if(rnd.nextInt(4)===0){const n=ys0===ys1?ys0:g5f(g5f(rnd.nextFloat()*g5f(ys1-ys0))+ys0),o=g5f(1+g5f(rnd.nextFloat()*6)),d2=1.5+g5f(g5sn(g5f(PI/2))*o);ell(d+1,e,f,d2,d2*n,skip);m+=rnd.nextInt(4)}
+      for(let p=0;p<m;p++){const q=g5f(rnd.nextFloat()*g5f(PI*2)),o=g5f(g5f(rnd.nextFloat()-.5)/4),r=thick(rnd),s=i-rnd.nextInt(i>>2);rnd.nextLong();tunnel([G5U.h,G5U.l],d,e,f,g,h,r,q,o,0,s,yS,skip)}}};
+  const thickC=r=>{let f=g5f(g5f(r.nextFloat()*2)+r.nextFloat());if(r.nextInt(10)===0)f=g5f(f*g5f(g5f(g5f(r.nextFloat()*r.nextFloat())*3)+1));return f};
+  const thickN=r=>g5f(g5f(g5f(r.nextFloat()*2)+r.nextFloat())*2);
+  const canyon=(rnd,ccx,ccz)=>{const i=112,d=ccx*16+rnd.nextInt(16),j=rnd.nextInt(58)+10,e=ccz*16+rnd.nextInt(16),f=g5f(rnd.nextFloat()*g5f(PI*2)),g=g5f(g5f(rnd.nextFloat()*.25)+-.125),
+      k=g5f(g5f(rnd.nextFloat()*g5f(4))+g5f(rnd.nextFloat()*g5f(2))),l=Math.trunc(g5f(i*g5f(g5f(rnd.nextFloat()*.25)+.75)));rnd.nextLong();
+    const r=new G5L(G5U.h,G5U.l);if(!fs){fs=new Float32Array(dep)}let fw=1;for(let a=0;a<dep;a++){if(a===0||r.nextInt(3)===0)fw=g5f(1+g5f(r.nextFloat()*r.nextFloat()));fs[a]=g5f(fw*fw)}
+    const skip=(a,c,e2,v)=>(a*a+e2*e2)*fs[v-minY-1]+c*c/6>=1;let x=d,y=j,z=e,yaw=f,pit=g,ff=0,gg=0;
+    for(let q=0;q<l;q++){let dd=1.5+g5f(g5sn(g5f(g5f(q*PI)/l))*k),ee=dd*3;dd*=g5f(g5f(r.nextFloat()*.25)+.75);const t=g5f(1-g5f(Math.abs(g5f(.5-g5f(q/l)))*2));ee=g5f(1+0*t)*ee*g5f(g5f(r.nextFloat()*.25)+.75);
+      const h=g5cs(pit),s2=g5sn(pit);x+=g5f(g5cs(yaw)*h);y+=s2;z+=g5f(g5sn(yaw)*h);pit=g5f(pit*g5f(.7));pit=g5f(pit+g5f(gg*g5f(.05)));yaw=g5f(yaw+g5f(ff*g5f(.05)));gg=g5f(gg*g5f(.8));ff=g5f(ff*.5);
+      gg=g5f(gg+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*2));ff=g5f(ff+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*4));
+      if(r.nextInt(4)!==0){if(!reach(x,z,q,l,k))return;ell(x,y,z,dd,ee,skip)}}};
+  const P=nether?[[g5f(.2),0]]:[[g5f(.15),0],[g5f(.07),1],[g5f(.01),2]];
+  for(let dx=-8;dx<=8;dx++)for(let dz=-8;dz<=8;dz++){const ccx=cx+dx,ccz=cz+dz;
+    for(const [pr,k] of P){g5add(sh,sl,0,k);const s0h=G5U.h,s0l=G5U.l;R.set(s0h,s0l);R.nextLong();const ah=G5U.h,al=G5U.l;R.nextLong();const bh=G5U.h,bl=G5U.l;
+      g5mul(ccx<0?4294967295:0,ccx>>>0,ah,al);const ph=G5U.h,pl=G5U.l;g5mul(ccz<0?4294967295:0,ccz>>>0,bh,bl);R.set((ph^G5U.h^s0h)>>>0,(pl^G5U.l^s0l)>>>0);
+      if(!(R.nextFloat()<=pr))continue;
+      if(nether)caves(R,ccx,ccz,0,126,1,1,1,1,g5f(-.7),g5f(-.7),.5,.5,10,thickN,5);
+      else if(k===2)canyon(R,ccx,ccz);else caves(R,ccx,ccz,-56,k===0?180:47,g5f(.7),g5f(1.4),g5f(.8),g5f(1.3),-1,g5f(-.4),g5f(.1),g5f(.9),15,thickC,1)}}}
+// 땅 높이 (이 세계 y): 꼭짓점 밀도만으로 가장 높은 돌을 찾아요 (나무 · 구조물 · 스폰 찾기가 써요)
+function g5ct(o){if(o.top===null){let t=-1;for(let j=39;j>=0;j--)if(g5d(o,j)>0){t=j;break}o.top=t}return o.top}
+function terrainH5(x,z){g5init();const x0=x&~3,z0=z&~3,fx=(x&3)/4,fz=(z&3)/4,a=g5cc(x0,z0),b=g5cc(x0+4,z0),c=g5cc(x0,z0+4),d=g5cc(x0+4,z0+4),
+  I=(A,B,C,D,e,s,fy)=>{const ya=A[e]+fy*(A[e+s]-A[e]),yb=B[e]+fy*(B[e+s]-B[e]),yc=C[e]+fy*(C[e+s]-C[e]),yd=D[e]+fy*(D[e+s]-D[e]),xa=ya+fx*(yb-ya);return xa+fz*((yc+fx*(yd-yc))-xa)};
+  for(let j=Math.min(47,Math.max(g5ct(a),g5ct(b),g5ct(c),g5ct(d)));j>=0;j--){for(const o of [a,b,c,d]){g5d(o,j);g5d(o,j+1)}
+    for(let ly=7;ly>=0;ly--){const fy=ly/8;if(I(a.D,b.D,c.D,d.D,j,1,fy)<=0)continue;for(const o of [a,b,c,d]){g5o(o,j);g5o(o,j+1)}
+      if(I(a.O,b.O,c.O,d.O,j*4,4,fy)>=0&&I(a.O,b.O,c.O,d.O,j*4+1,4,fy)+1.5*Math.max(Math.abs(I(a.O,b.O,c.O,d.O,j*4+2,4,fy)),Math.abs(I(a.O,b.O,c.O,d.O,j*4+3,4,fy)))<=0)continue;
+      return 8*j+ly}}return 1}
+// 다른 코드가 쓰는 기후값 (mnoise3 모양, 4칸 격자)
+function mnoise5(x,z){g5init();const c=g5col(x&~3,z&~3);return c.m||(c.m={T:c.T,Hu:c.H,C:c.C,E:c.E,W:c.W,PV:c.PV,eo:g5cl((-.2225-c.E)/.55,0,1),rv:1})}
+// ── 네더 (GEN 5): 마크 nether noise_settings — 높이 128, 4×8 칸, 용암 바다 y 31까지, 기반암 바닥 · 천장
+function g5ninit(){const g=g5init();if(g.nether)return g.nether;const sh=SEED<0?4294967295:0,sl=SEED>>>0,R=new G5L(sh,sl).fork();
+  return g.nether={B:new G5B(new G5L(sh,sl),.25,.375,80,60,8),bf:R.hash('minecraft:bedrock_floor').fork(),br:R.hash('minecraft:bedrock_roof').fork(),cc:new Map()}}
+function g5ncol(x,z){const n=g5ninit(),k=x*1048576+z;let D=n.cc.get(k);if(D)return D;if(n.cc.size>4000)n.cc.clear();D=new Float64Array(17);
+  for(let j=0;j<17;j++){const y=8*j,gb=g5cm(y,-8,24,0,1),gt=g5cm(y,104,128,1,0),t2=gt===0?0:gt*(-.9375+n.B.v(x,y,z)),t5=gb===0?0:gb*(-2.5+(.9375+t2));D[j]=2.5+t5}n.cc.set(k,D);return D}
+function nether5(b,cx,cz){const n=g5ninit(),ox=cx*16,oz=cz*16,C=[];for(let k=0;k<5;k++)for(let i=0;i<5;i++)C.push(g5ncol(ox+4*i,oz+4*k));
+  for(let ck=0;ck<4;ck++)for(let ci=0;ci<4;ci++){const A=C[ck*5+ci],B=C[ck*5+ci+1],Cc=C[(ck+1)*5+ci],D=C[(ck+1)*5+ci+1];
+    for(let j=0;j<16;j++)for(let ly=0;ly<8;ly++){const fy=ly/8,y=8*j+ly,ya=A[j]+fy*(A[j+1]-A[j]),yb=B[j]+fy*(B[j+1]-B[j]),yc=Cc[j]+fy*(Cc[j+1]-Cc[j]),yd=D[j]+fy*(D[j+1]-D[j]);
+      for(let lx=0;lx<4;lx++){const fx=lx/4,xa=ya+fx*(yb-ya),xc=yc+fx*(yd-yc);for(let lz=0;lz<4;lz++){const v=xa+(lz/4)*(xc-xa),X=ci*4+lx,Z=ck*4+lz;let id=v>0?NETHERRACK:y<32?LAVA:AIR;
+        if(id===NETHERRACK&&(y<=0||y<5&&n.bf.at(ox+X,y,oz+Z).nextFloat()<1+(y/5)*-1||y>=127||y>122&&!(n.br.at(ox+X,y,oz+Z).nextFloat()<1+((y-122)/5)*-1)))id=BEDROCK;b[X|(Z<<4)|(y<<8)]=id}}}}}
+// ── 엔드 (GEN 5): 마크 end noise_settings — 높이 128, 8×4 칸, 가운데 섬 + 1000칸 빈 고리 + 바깥 섬 (심플렉스 섬 노이즈)
+function g5einit(){const g=g5init();if(g.end)return g.end;const sh=SEED<0?4294967295:0,sl=SEED>>>0,r=new G5L(sh,sl);r.consume(17292);
+  return g.end={B:new G5B(new G5L(sh,sl),.25,.25,80,160,4),S:new G5Sx(r),cc:new Map(),isl:new Map()}}
+// 마크 EndIslandDensityFunction.getHeightValue (x,z: 블록/8, 자바 정수 나눗셈)
+function g5eh(x,z){const e=g5einit(),k=x*1048576+z;let f=e.isl.get(k);if(f!==undefined)return f;if(e.isl.size>20000)e.isl.clear();
+  const i=(x/2)|0,j=(z/2)|0,kk=x%2,l=z%2;f=g5cl(g5f(100-g5f(g5f(Math.sqrt(g5f(x*x+z*z)))*8)),-100,80);
+  if((Math.abs(i)+12)*(Math.abs(i)+12)+(Math.abs(j)+12)*(Math.abs(j)+12)>4096)for(let m=-12;m<=12;m++)for(let n=-12;n<=12;n++){const o=i+m,p=j+n;
+    if(o*o+p*p>4096&&e.S.v(o,p)<g5f(-.9)){const gg=g5f(g5f(g5f(g5f(Math.abs(o))*3439)+g5f(g5f(Math.abs(p))*147))%13+9),h=g5f(kk-m*2),q=g5f(l-n*2);
+      f=Math.max(f,g5cl(g5f(100-g5f(g5f(Math.sqrt(g5f(g5f(h*h)+g5f(q*q))))*gg)),-100,80))}}
+  e.isl.set(k,f);return f}
+function g5ecol(x,z){const e=g5einit(),k=x*1048576+z;let D=e.cc.get(k);if(D)return D;if(e.cc.size>4000)e.cc.clear();D=new Float64Array(33);const isl=(g5eh((x/8)|0,(z/8)|0)-8)/128;
+  for(let j=0;j<33;j++){const y=4*j,gb=g5cm(y,4,32,0,1),gt=g5cm(y,56,312,1,0),t2=gt===0?0:gt*(23.4375+(isl+e.B.v(x,y,z))),t5=gb===0?0:gb*(.234375+(-23.4375+t2));D[j]=-.234375+t5}e.cc.set(k,D);return D}
+function end5(b,cx,cz){const ox=cx*16,oz=cz*16,C=[];let maxY=0;for(let k=0;k<3;k++)for(let i=0;i<3;i++)C.push(g5ecol(ox+8*i,oz+8*k));
+  for(let ck=0;ck<2;ck++)for(let ci=0;ci<2;ci++){const A=C[ck*3+ci],B=C[ck*3+ci+1],Cc=C[(ck+1)*3+ci],D=C[(ck+1)*3+ci+1];if(Math.max(...A,...B,...Cc,...D)<=0)continue;
+    for(let j=0;j<32;j++)for(let ly=0;ly<4;ly++){const fy=ly/4,y=4*j+ly,ya=A[j]+fy*(A[j+1]-A[j]),yb=B[j]+fy*(B[j+1]-B[j]),yc=Cc[j]+fy*(Cc[j+1]-Cc[j]),yd=D[j]+fy*(D[j+1]-D[j]);
+      for(let lx=0;lx<8;lx++){const fx=lx/8,xa=ya+fx*(yb-ya),xc=yc+fx*(yd-yc);for(let lz=0;lz<8;lz++){if(xa+(lz/8)*(xc-xa)>0){b[(ci*8+lx)|((ck*8+lz)<<4)|(y<<8)]=END_STONE;if(y>maxY)maxY=y}}}}}return maxY}
+// 엔드 섬 높이 (가장 높은 / 낮은 엔드 돌), 없으면 null
+function islandTop5(x,z){const x0=Math.floor(x/8)*8,z0=Math.floor(z/8)*8,fx=(x-x0)/8,fz=(z-z0)/8,A=g5ecol(x0,z0),B=g5ecol(x0+8,z0),Cc=g5ecol(x0,z0+8),D=g5ecol(x0+8,z0+8);let top=-1,bot=-1;
+  for(let j=31;j>=0;j--)for(let ly=3;ly>=0;ly--){const fy=ly/4,ya=A[j]+fy*(A[j+1]-A[j]),yb=B[j]+fy*(B[j+1]-B[j]),yc=Cc[j]+fy*(Cc[j+1]-Cc[j]),yd=D[j]+fy*(D[j+1]-D[j]),xa=ya+fx*(yb-ya);
+    if(xa+fz*((yc+fx*(yd-yc))-xa)>0){if(top<0)top=4*j+ly;bot=4*j+ly}}return top<0?null:{top,bot}}
+function endY5(){const t=islandTop5(0,0);return t?t.top:64}
 function genChunk(cx,cz){
   if(DIM==='nether')return genNether(cx,cz);if(DIM==='end')return genEnd(cx,cz);if(DIM==='time')return genTime(cx,cz);
   const b=new Uint16Array(16*16*H),ox=cx*16,oz=cz*16,hm=new Int16Array(256),bio=new Uint8Array(256),gt=new Float32Array(768);let maxY=SEA;
   if(WTYPE==='flat'){for(let z=0;z<16;z++)for(let x=0;x<16;x++){b[bi(x,0,z)]=BEDROCK;b[bi(x,1,z)]=DIRT;b[bi(x,2,z)]=DIRT;b[bi(x,3,z)]=DIRT;b[bi(x,4,z)]=GRASS;hm[x|z<<4]=4;bio[x|z<<4]=BIO.PLAINS;gt.set(C_MID,(x|z<<4)*3)}
     return finishChunk(cx,cz,b,8,bio,gt)}
+  if(GEN>=5)maxY=terrain5(b,cx,cz,hm,bio,gt);else{   // GEN 5: 마크 1.18+ 노이즈 지형 · 동굴 · 대수층 · 카버 (Agent 08)
   // 동굴 노이즈: 4칸 간격 격자에서 계산하고 보간 (마크처럼)
   const GX=5,GY=(H>>2)+1,F=new Float32Array(GX*GY*GX*6);
   for(let gz=0;gz<GX;gz++)for(let gy=0;gy<GY;gy++)for(let gx=0;gx<GX;gx++){const wx=ox+gx*4,wy=gy*4,wz=oz+gz*4,o=((gz*GY+gy)*GX+gx)*6;
@@ -2156,6 +2605,7 @@ function genChunk(cx,cz){
   // 대수층(지하 물) · 용암 높이
   const aq=noise2(ox/48,oz/48,SEED+701),aqLvl=aq>.3?Math.floor(8+(noise2(ox/30,oz/30,SEED+703)+1)*.5*(SEA-14)):-1,aqLava=aq>.3&&aqLvl<DS_Y;
   for(let z=0;z<16;z++)for(let x=0;x<16;x++)for(let y=1;y<SEA-2;y++){const i=bi(x,y,z);if(b[i]!==AIR)continue;if(y<=LAVA_Y)b[i]=LAVA;else if(y<=aqLvl)b[i]=aqLava?LAVA:WATER}
+  }
   // 광석 (마크 1.18 분포를 이 세계 높이로 옮김)
   const r=mulberry((cx*73856093^cz*19349663^SEED*83492791)|0);
   const exposed=(x,y,z)=>{for(let d=0;d<6;d++){const nx=x+DV0[d][0],ny=y+DV0[d][1],nz=z+DV0[d][2];if(nx<0||nz<0||nx>15||nz>15||ny<0||ny>=H)continue;if(b[bi(nx,ny,nz)]===AIR)return true}return false};
@@ -3591,20 +4041,21 @@ const DIM_N={over:'오버월드',nether:'네더',end:'엔드',time:'시간의 �
 const tilesByDim={over:new Map(),nether:new Map(),end:new Map(),time:new Map()};
 let dimState={dragonDead:false,crystals:0,egg:false};
 B[NWART0].crop=2;B[NWART1].crop=3;B[NWART0].wart=B[NWART1].wart=1;
-const N_LAVA=23,N_FY=50;
+let N_LAVA=23,N_FY=50;   // GEN 5 네더는 마크처럼 용암 바다 y 31까지 (setDims)
 
 // ── 네더 지형
 function nBiome(x,z){const a=fbm2(x/140,z/140,SEED+901,2),c=fbm2(x/150,z/150,SEED+907,2);if(a>.28)return c>0?2:3;if(a<-.3)return c>.1?4:1;return 0}
 function fortressAt(rx,rz){const h=hash2(rx,rz,SEED+933);if(h>.5)return null;return{x:rx*160+40+Math.floor(hash2(rx,rz,SEED+941)*80),z:rz*160+40+Math.floor(hash2(rx,rz,SEED+947)*80)}}
-function genNether(cx,cz){const H=96;   // 네더는 예전 높이 그대로
+function genNether(cx,cz){const H=GEN>=5?128:96;   // 네더는 예전 높이 그대로 (GEN 5: 마크처럼 128칸)
   const b=new Uint16Array(16*16*HW),ox=cx*16,oz=cz*16,bio=new Uint8Array(256),gt=new Float32Array(768);
   const GX=5,GY=(H>>2)+1,F=new Float32Array(GX*GY*GX);
-  for(let gz=0;gz<GX;gz++)for(let gy=0;gy<GY;gy++)for(let gx=0;gx<GX;gx++){const wx=ox+gx*4,wy=gy*4,wz=oz+gz*4;
+  if(GEN<5)for(let gz=0;gz<GX;gz++)for(let gy=0;gy<GY;gy++)for(let gx=0;gx<GX;gx++){const wx=ox+gx*4,wy=gy*4,wz=oz+gz*4;
     F[(gz*GY+gy)*GX+gx]=noise3(wx/46,wy/22,wz/46,SEED+811)*.68+noise3(wx/16,wy/9,wz/16,SEED+823)*.32}
   const fld=(x,y,z)=>{const fx=x/4,fy=y/4,fz=z/4,x0=Math.floor(fx),y0=Math.min(GY-2,Math.floor(fy)),z0=Math.floor(fz),tx=fx-x0,ty=fy-y0,tz=fz-z0,x1=Math.min(GX-1,x0+1),z1=Math.min(GX-1,z0+1);
     const g=(a,b2,c)=>F[(c*GY+b2)*GX+a];return lerp(lerp(lerp(g(x0,y0,z0),g(x1,y0,z0),tx),lerp(g(x0,y0+1,z0),g(x1,y0+1,z0),tx),ty),lerp(lerp(g(x0,y0,z1),g(x1,y0,z1),tx),lerp(g(x0,y0+1,z1),g(x1,y0+1,z1),tx),ty),tz)};
+  if(GEN>=5)nether5(b,cx,cz);   // GEN 5: 마크 네더 노이즈 지형 (Agent 08)
   for(let z=0;z<16;z++)for(let x=0;x<16;x++){const wx=ox+x,wz=oz+z,c=x|z<<4,bm=nBiome(wx,wz);bio[c]=bm;gt.set([.5,.4,.3],c*3);
-    for(let y=0;y<H;y++){const i=bi(x,y,z);
+    if(GEN<5)for(let y=0;y<H;y++){const i=bi(x,y,z);
       if(y===0||y===H-1||(y<4&&hash3(wx,y,wz,SEED)<1-y/4)||(y>H-5&&hash3(wx,y,wz,SEED+1)<(y-(H-5))/4)){b[i]=BEDROCK;continue}
       const edge=Math.max(0,(14-y)/14)*.9+Math.max(0,(y-(H-18))/16)*.9,v=fld(x,y,z)+edge;
       if(v>.08)b[i]=NETHERRACK;else b[i]=y<=N_LAVA?LAVA:AIR}
@@ -3617,6 +4068,7 @@ function genNether(cx,cz){const H=96;   // 네더는 예전 높이 그대로
     // 천장 발광석 · 현무암 기둥
     for(let y=H-6;y>N_LAVA+4;y--){const i=bi(x,y,z);if(b[i]!==AIR)continue;if(b[bi(x,y+1,z)]===NETHERRACK&&(bm===0||bm===2)&&noise3(wx/5,y/5,wz/5,SEED+51)>.42){b[i]=GLOWSTONE;if(y>1&&b[bi(x,y-1,z)]===AIR&&hash3(wx,y,wz,SEED+53)<.5)b[bi(x,y-1,z)]=GLOWSTONE}}
   }
+  if(GEN>=5)g5carve(b,cx,cz,null,true);   // GEN 5: 네더 동굴 카버 (Agent 08)
   const r=mulberry((cx*73856093^cz*19349663^SEED*7349)|0);
   const vein=(id,count,size,lo,hi)=>{for(let k=0;k<count;k++){let x=Math.floor(r()*16),y=lo+Math.floor(r()*(hi-lo)),z=Math.floor(r()*16);for(let s2=0;s2<size;s2++){if(x>=0&&x<16&&z>=0&&z<16&&y>0&&y<H){const i=bi(x,y,z);if(b[i]===NETHERRACK||(id===ANCIENT_DEBRIS&&b[i]===BLACKSTONE))b[i]=id}const d=Math.floor(r()*6);if(d===0)x++;else if(d===1)x--;else if(d===2)z++;else if(d===3)z--;else if(d===4)y++;else y--}}};
   netherOres(b,cx,cz,false,false);
@@ -3653,12 +4105,13 @@ function stampFortress(b,ox,oz,f){const L=56,FY=N_FY;
 function inFortress(x,z){const rx=Math.floor(x/160),rz=Math.floor(z/160);for(let a=-1;a<=1;a++)for(let c=-1;c<=1;c++){const f=fortressAt(rx+a,rz+c);if(f&&Math.abs(x-f.x)<60&&Math.abs(z-f.z)<60)return true}return false}
 
 // ── 엔드 지형
-const END_Y=44;
+let END_Y=44;   // GEN 5 엔드는 가운데 섬 실제 높이 (setDims)
 function pillarList(){const r=mulberry(SEED*31+7|0),L=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2,R=42;L.push({x:Math.round(Math.cos(a)*R),z:Math.round(Math.sin(a)*R),r:2+Math.floor(r()*3),h:END_Y+10+Math.floor(r()*28)})}return L}
 let PILLARS=null;
-function islandTop(x,z){const d=Math.hypot(x,z);if(d<100){const R=78+fbm2(x/40,z/40,SEED+1201,2)*14;if(d<R){const k=d/R;return{top:END_Y+Math.round(fbm2(x/25,z/25,SEED+1203,2)*3-k*k*4),bot:END_Y-Math.round((1-k*k)*30)+2}}return null}
+function islandTop(x,z){if(GEN>=5)return islandTop5(x,z);const d=Math.hypot(x,z);if(d<100){const R=78+fbm2(x/40,z/40,SEED+1201,2)*14;if(d<R){const k=d/R;return{top:END_Y+Math.round(fbm2(x/25,z/25,SEED+1203,2)*3-k*k*4),bot:END_Y-Math.round((1-k*k)*30)+2}}return null}
   if(d<180)return null;const n=fbm2(x/60,z/60,SEED+1301,3);if(n<.22)return null;const k=(n-.22)/.4;return{top:END_Y-6+Math.round(k*8+fbm2(x/20,z/20,SEED+1303,2)*2),bot:END_Y-6-Math.round(k*22)}}
 function genEnd(cx,cz){const b=new Uint16Array(16*16*H),ox=cx*16,oz=cz*16,bio=new Uint8Array(256),gt=new Float32Array(768);if(!PILLARS)PILLARS=pillarList();let maxY=END_Y+4;
+  if(GEN>=5){const m=end5(b,cx,cz);if(m>maxY)maxY=m;for(let i=0;i<256;i++)gt.set([.5,.5,.5],i*3)}else   // GEN 5: 마크 엔드 섬 노이즈 (Agent 08)
   for(let z=0;z<16;z++)for(let x=0;x<16;x++){const wx=ox+x,wz=oz+z,t=islandTop(wx,wz);gt.set([.5,.5,.5],(x|z<<4)*3);if(!t)continue;for(let y=Math.max(1,t.bot);y<=t.top;y++)b[bi(x,y,z)]=END_STONE;if(t.top>maxY)maxY=t.top}
   {const a=smallEndIsland(b,cx,cz,ox,oz);if(a>maxY)maxY=a}
   for(const p of PILLARS){if(p.x+p.r<ox||p.x-p.r>ox+15||p.z+p.r<oz||p.z-p.r>oz+15)continue;for(let z=0;z<16;z++)for(let x=0;x<16;x++){const dx=ox+x-p.x,dz=oz+z-p.z;if(dx*dx+dz*dz>p.r*p.r+.5)continue;for(let y=END_Y-12;y<=p.h;y++)b[bi(x,y,z)]=OBSIDIAN;if(dx===0&&dz===0)b[bi(x,p.h,z)]=BEDROCK}if(p.h>maxY)maxY=p.h}
@@ -5219,11 +5672,11 @@ function menuAct(a){if(a==='news'){openNews();return}if(a==='fb'){FULLBRIGHT=!FU
   else if(a==='create'){newW=null;showMenu('create')}
   else if(a==='nwMode'||a==='nwMode2'){keep();newW.mode=newW.mode==='survival'?'creative':'survival';showMenu(a==='nwMode'?'create':'mkSrv')}
   else if(a==='nwType'||a==='nwType2'){keep();newW.type=newW.type==='default'?'flat':'default';showMenu(a==='nwType'?'create':'mkSrv')}
-  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,gen:4,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;newW=null;enterWorld(w,null)}
+  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,gen:5,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;newW=null;enterWorld(w,null)}
   else if(a==='play'){const w=worldsList().find(x=>x.id===selWorld);if(!w)return;let d=null;try{d=JSON.parse(localStorage.getItem('bc_w_'+w.id))}catch(e){}enterWorld(w,d)}
   else if(a==='del'){const w=worldsList().find(x=>x.id===selWorld);if(!w||!confirm(`'${w.name}' 월드를 영원히 지울까요?`))return;saveWorldsList(worldsList().filter(x=>x.id!==w.id));localStorage.removeItem('bc_w_'+w.id);selWorld=null;showMenu('single')}
   else if(a==='mkSrv'){newW=null;showMenu('mkSrv')}
-  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,gen:4,seed:seedOf(newW.seed)})}
+  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,gen:5,seed:seedOf(newW.seed)})}
   else if(a==='join'){if(selServer)joinServer(selServer)}
   else if(a==='joinCode'){const c=($('srvCode').value||'').trim().toLowerCase();if(c)joinServer(c)}
   else if(a==='resume'){hideMenu();lockPointer()}
@@ -5260,7 +5713,7 @@ function resetWorld(){DIM='over';GW_EXIT.clear();GW_RING.clear();levT=0;HEARTS.c
   started=false;worldTime=DAYLEN*.04;$('hud').classList.add('hide');$('touch').classList.add('hide');$('dead').classList.add('hide');viewMode=0;heldId=-1}
 function findSpawnXZ(){if(WTYPE==='flat')return[0,0];for(let k=0;k<600;k++){const a=k*2.4,r=k*6;const x=Math.round(Math.cos(a)*r),z=Math.round(Math.sin(a)*r);const h=terrainH(x,z),bm=biomeOf(x,z,h);if(h>SEA+2&&h<SEA+24&&bm!==BIO.DESERT&&bm!==BIO.SNOWY_PEAKS)return[x,z]}return[0,0]}
 let spawnFix=false;
-function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen>=4?4:w.gen===3?3:w.gen===2?2:1;setDims();GAMEMODE=w.mode||'survival';
+function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen>=5?5:w.gen>=4?4:w.gen===3?3:w.gen===2?2:1;setDims();GAMEMODE=w.mode||'survival';
   if(mpData){edits=mpData.edits||{};(mpData.tiles||[]).forEach(([k,v])=>{if(/^[net]/.test(k))tilesByDim[{n:'nether',e:'end',t:'time'}[k[0]]].set(k.slice(1),v);else tilesByDim.over.set(k,v)})}
   else if(data){edits=data.edits||{};(data.tiles||[]).forEach(([k,v])=>tilesByDim.over.set(k,v));const td=data.tilesD||{};(td.nether||[]).forEach(([k,v])=>tilesByDim.nether.set(k,v));(td.end||[]).forEach(([k,v])=>tilesByDim.end.set(k,v));(td.time||[]).forEach(([k,v])=>tilesByDim.time.set(k,v));saplings=data.saplings||[];crops=data.crops||[];VSTATE=data.vill||{}}
   if(data&&data.ds)dimState=Object.assign({dragonDead:false,crystals:0,egg:false},data.ds);DIM=(data&&data.dim)||'over';portalStay=true;portalT=0;for(const [k,v] of tilesByDim[DIM])tiles.set(k,v);dimVisual();
@@ -5292,7 +5745,7 @@ function loadServers(){waitMP(ok=>{const box=$('srvList');if(!box)return;if(!ok)
     if(!$('srvList'))return;$('srvList').innerHTML=L.length?L.map(x=>{const on=t-(x.upd||0)<90000;return`<div class="mitem${x.sid===selServer?' on':''}" data-s="${esc(x.sid)}"><b>${esc(x.name)}</b><small>${on?'<span style="color:#55ff55">● 접속 '+(x.players||1)+'명</span>':'<span style="color:#aaa">○ 비어 있음 (들어가면 다시 열려요)</span>'} · ${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'}</small><small>코드 ${esc(x.sid)} · 만든 사람 ${esc(x.hostName||'?')}</small></div>`}).join(''):'<div class="mempty">열린 서버가 없어요. 서버 만들기로 첫 서버를 열어 보세요</div>';
     $('srvList').querySelectorAll('[data-s]').forEach(el=>{el.onclick=()=>{selServer=el.dataset.s;$('srvList').querySelectorAll('.mitem').forEach(x=>x.classList.toggle('on',x===el));$('mJoin').disabled=false};el.ondblclick=()=>joinServer(el.dataset.s)})}).catch(e=>{if($('srvList'))$('srvList').innerHTML='<div class="mempty">서버 목록을 읽지 못했어요: '+esc(errMsg(e))+'</div>'})})}
 function createServer(o){waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}const uid=window.__mpUid,sid=Math.random().toString(36).slice(2,8);
-  const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen>=4?4:o.gen===3?3:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
+  const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen>=5?5:o.gen>=4?4:o.gen===3?3:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
   Promise.all([dbr('bc_list/players/'+uid+'/'+sid).set(meta),dbr('bc_'+sid+'/players/'+uid+'/m').set(meta)]).then(()=>joinServer(sid)).catch(e=>showMenu('msg','서버를 만들지 못했어요. '+errMsg(e)))})}
 function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}
   showMenu('msg','서버 정보를 받는 중...');
