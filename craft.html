@@ -1356,6 +1356,46 @@ function oreMC2(seed,baseName,pal,o){const base=imgOf(baseName);
   addTile('lantern_m',lanternM(4105,['#fff6b0','#ffd36a','#f0a040','#b8642a']));addTile('soul_lantern_m',lanternM(4106,['#e0ffff','#7ff0f0','#38c6d0','#1f7f8f']));
   const e=imgOf('glass_pane');addTile('pane_edge_h',paint(4107,P=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const i=(x*16+y)*4;P.set(x,y,[e[i],e[i+1],e[i+2]],e[i+3])}}));
 }
+// 조약돌 · 광석 (Agent 01): 크기가 제각각인 돌 (오른쪽 아래 틈 · 왼쪽 위 밝은 테) · 광석 덩어리는 원본처럼 굵고 둘레 돌이 물들어요
+{// 조약돌: 크기가 제각각인 둥근 돌 (가중 보로노이) · 돌마다 왼쪽 위 밝게 · 틈은 짙게
+function cobbleV(seed,pal,o){return paint(seed,P=>{const S=[];for(let i=0;i<o.n;i++)S.push([P.r()*16,P.r()*16,.8+P.r()*.5,P.r()]);
+  const own=new Int16Array(256);for(let y=0;y<16;y++)for(let x=0;x<16;x++){let b=1e9,k=0;for(let j=0;j<S.length;j++){const s=S[j];for(let ox=-16;ox<=16;ox+=16)for(let oy=-16;oy<=16;oy+=16){const d=Math.hypot(x+.5-s[0]-ox,y+.5-s[1]-oy)/s[2];if(d<b){b=d;k=j}}}own[x+y*16]=k}
+  const at=(x,y)=>own[(x&15)+(y&15)*16];
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){const k=at(x,y),s=S[k],dr=at(x+1,y)!==k||at(x,y+1)!==k,ul=at(x-1,y)!==k||at(x,y-1)!==k,dg=at(x+1,y+1)!==k;
+    let v=o.base+s[3]*o.vr+(P.r()-.5)*o.nz;if(dr)v=P.r()<o.gapP?o.gapV+P.r()*.12:v-.22;else if(ul)v+=o.hi;else if(dg)v-=.1;
+    P.set(x,y,rampC(pal,clamp(v,0,.999)))}})}
+const CBP=['#4f4f4f','#5f5f5f','#6e6e6e','#7a7a7a','#868686','#939393','#a2a2a2','#b4b4b4'];
+RT('cobble',cobbleV(5101,CBP,{n:20,gapP:.7,gapV:.02,base:.42,vr:.3,hi:.18,nz:.12}));
+RT('mossy_cobble',paint(5102,P=>{const b=cobbleV(5101,CBP,{n:20,gapP:.7,gapV:.02,base:.42,vr:.3,hi:.18,nz:.12}).getContext('2d').getImageData(0,0,16,16).data;
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){const i=(y*16+x)*4,m=tn(x,y,4,5102)*.7+P.r()*.3;P.set(x,y,m>.5?P.pick(['#4f6b2a','#5b7a31','#6a8a3a','#45602a']):[b[i],b[i+1],b[i+2]])}}));
+RT('cobbled_deepslate',cobbleV(5103,['#202024','#2a2a2e','#36363a','#404044','#4a4a4e','#55555a','#636367','#727276'],{n:18,gapP:.6,gapV:.1,base:.4,vr:.3,hi:.16,nz:.12}));
+// 광석: 서로 떨어진 덩어리 (왼쪽 위 밝게 · 가장자리 짙게) + 둘레 돌이 광물 빛으로 물들어요
+function oreV(seed,baseName,pal,o){const base=imgOf(baseName);return paint(seed,P=>{for(let i=0;i<256;i++)P.set(i&15,i>>4,[base[i*4],base[i*4+1],base[i*4+2]]);
+  const own=new Int16Array(256).fill(-1),cl=[];let t=0;
+  while(cl.length<o.n&&t++<800){const x=Math.floor(P.r()*16),y=Math.floor(P.r()*16);if(cl.some(c=>{const dx=Math.min(Math.abs(c[0]-x),16-Math.abs(c[0]-x)),dy=Math.min(Math.abs(c[1]-y),16-Math.abs(c[1]-y));return dx*dx+dy*dy<o.sp*o.sp}))continue;cl.push([x,y])}
+  cl.forEach(([cx,cy],k)=>{const sz=o.min+Math.floor(P.r()*(o.max-o.min+1)),cells=[[cx,cy]];own[cx+cy*16]=k;let g=0;
+    if(o.plus)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=(cx+dx)&15,ny=(cy+dy)&15;if(own[nx+ny*16]<0){own[nx+ny*16]=k;cells.push([nx,ny])}}
+    while(cells.length<sz&&g++<200){const cand=[];for(const [bx,by] of cells)for(const [dx,dy] of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=(bx+dx)&15,ny=(by+dy)&15;if(own[nx+ny*16]>=0)continue;
+        let nb=0,bad=0;for(const [ex,ey] of [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){const q=own[((nx+ex)&15)+((ny+ey)&15)*16];if(q===k)nb++;else if(q>=0)bad=1}if(bad)continue;cand.push([nx,ny,(nb*nb+.4)*(o.wide&&dy===0?1.6:1)])}
+      if(!cand.length)break;let r=P.r()*cand.reduce((a,c)=>a+c[2],0),pk=cand[0];for(const c of cand){r-=c[2];if(r<=0){pk=c;break}}own[pk[0]+pk[1]*16]=k;cells.push([pk[0],pk[1]])}
+    const is=(x,y)=>own[(x&15)+(y&15)*16]===k;
+    for(const [x,y] of cells)for(const [dx,dy] of [[1,0],[0,1],[1,1],[-1,0],[0,-1],[-1,-1],[1,-1],[-1,1]]){const nx=(x+dx)&15,ny=(y+dy)&15;if(own[nx+ny*16]>=0||own[nx+ny*16]===-2)continue;
+      if(P.r()<o.halo){own[nx+ny*16]=-2;const c=P.get(nx,ny),h=dx+dy>0?o.hd:o.hl;P.set(nx,ny,h?mixC(c,rgb(h),o.hm):c)}}
+    let best=null;for(const [x,y] of cells){if(!best||x+y<best[0]+best[1])best=[x,y]}
+    for(const [x,y] of cells){const up=is(x,y-1),lf=is(x-1,y),dn=is(x,y+1),rt=is(x+1,y);let v=.5;if(!up||!lf)v+=.25;if(!dn||!rt)v-=.3;if(!up&&!lf)v+=.12;if(!dn&&!rt)v-=.12;v+=(P.r()-.5)*.2;
+      P.set(x,y,pal[clamp(Math.floor(v*(pal.length-1)+.5),0,pal.length-2)])}
+    P.set(best[0],best[1],pal[pal.length-1])})})}
+const OREV={coal:[['#1a1a1a','#252525','#2e2e2e','#363636','#494b3f'],{n:7,min:7,max:10,sp:4.2,halo:.3,hd:'#3a3a3a',hl:'#5c5c5c',hm:.45}],
+  iron:[['#77674f','#887455','#af8e77','#d8af93','#e2c0aa'],{n:7,min:7,max:10,sp:4.2,halo:.25,hd:'#6b5a42',hl:null,hm:.3,wide:1}],
+  gold:[['#9c7020','#c27f12','#eb9d0e','#fcee4b','#ffffb5'],{n:6,min:8,max:11,sp:4.6,halo:.35,hd:'#5c5c5c',hl:'#a2a2a2',hm:.7,wide:1}],
+  diamond:[['#127f78','#239698','#1ed0d6','#77e7d1','#d5fff6'],{n:8,min:5,max:7,sp:4,halo:.35,hd:'#676767',hl:'#8dadb1',hm:.7,plus:1}],
+  copper:[['#3a685a','#3a7663','#c16746','#e0734d','#f38268'],{n:10,min:3,max:6,sp:3.4,halo:.35,hd:'#818058',hl:'#599581',hm:.55}],
+  redstone:[['#960606','#ca0707','#f71c1c','#fd5e5e','#ff8989'],{n:7,min:5,max:8,sp:4.2,halo:.45,hd:'#695c5c',hl:'#938c8c',hm:.55,wide:1}],
+  lapis:[['#10349c','#1044ac','#1855bd','#446fdc','#6995f4'],{n:10,min:5,max:8,sp:3.6,halo:.35,hd:'#5c5c5c',hl:'#a2a2a2',hm:.6}],
+  emerald:[['#007b18','#1c9829','#17c544','#41f384','#d9ffeb'],{n:6,min:5,max:6,sp:4.8,halo:.5,hd:'#375b3e',hl:'#526b50',hm:.7,plus:1}]};
+{let sd=5200;for(const k in OREV){const [p,o]=OREV[k];RT(k+'_ore',oreV(sd++,'stone',p,o));RT('d_'+k+'_ore',oreV(sd++,'deepslate',k==='coal'?['#0a0a0a','#141414','#1f1f1f','#2a2a2a','#494b3f']:p,o))}}
+
+for(const k of ['cobble','mossy_cobble','cobbled_deepslate'])if(MCPAL[k])mcRecolor(k,MCPAL[k]);}
 // 색 맞추기에서 뺀 픽셀 표시 (알파 251) 를 다시 불투명으로
 for(const c of tileList){if(!c||!c.getContext)continue;const g=c.getContext('2d'),im=g.getImageData(0,0,16,16),d=im.data;let ch=false;for(let i=3;i<1024;i+=4)if(d[i]===KEEPA){d[i]=255;ch=true}if(ch)g.putImageData(im,0,0)}
 const ATLAS=cv(512,512);{const g=ATLAS.getContext('2d');tileList.forEach((c,i)=>g.drawImage(c,(i%32)*16,Math.floor(i/32)*16))}
