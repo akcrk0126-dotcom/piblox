@@ -31,6 +31,17 @@
   #intro .line { width:min(420px,70vw); height:1px; margin:18px 0 26px; background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:0; animation:fin 2s 1.6s forwards; }
   #intro button { pointer-events:auto; font:700 16px 'Gowun Batang'; letter-spacing:.35em; color:#10131c; padding:14px 44px 14px 50px; border:none; border-radius:2px; cursor:pointer; background:linear-gradient(180deg,#fff2c9,#e2b964 60%,#b88c3e); box-shadow:0 0 0 1px rgba(255,240,200,.6), 0 0 0 5px rgba(233,200,126,.18), 0 8px 30px rgba(0,0,0,.5), 0 0 40px rgba(233,200,126,.35); opacity:0; animation:fin 1.6s 2.1s forwards; transition:transform .2s, box-shadow .2s; }
   #intro button:hover { transform:translateY(-2px) scale(1.03); box-shadow:0 0 0 1px rgba(255,240,200,.9), 0 0 0 7px rgba(233,200,126,.25), 0 10px 34px rgba(0,0,0,.55), 0 0 60px rgba(233,200,126,.55); }
+  #intro #newsBtn { margin-top:14px; position:relative; font:700 13px 'Gowun Batang'; letter-spacing:.12em; color:#fff3d6; padding:8px 18px; background:rgba(10,14,24,.55); box-shadow:0 0 0 1px rgba(233,200,126,.55); animation:fin 1.6s 2.7s forwards; }
+  #intro #newsBtn.new::after { content:''; position:absolute; right:-4px; top:-4px; width:11px; height:11px; border-radius:50%; background:#ff4a4a; box-shadow:0 0 8px #ff4a4a; }
+  #news { position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:rgba(4,6,12,.72); backdrop-filter:blur(3px); }
+  #news.hide { display:none; }
+  #news .box { position:relative; width:min(760px, 94vw); max-height:90vh; overflow:auto; padding:18px 20px; background:linear-gradient(180deg, rgba(16,20,34,.97), rgba(7,9,16,.97)); border:1px solid rgba(233,200,126,.55); border-radius:8px; box-shadow:0 0 0 4px rgba(10,14,24,.5), 0 20px 60px rgba(0,0,0,.7); color:#e8e1cf; }
+  #news .hd { font:700 11px 'Cinzel'; letter-spacing:.4em; color:#7ff3ff; margin-bottom:10px; }
+  #news #newsX { position:absolute; right:12px; top:8px; background:none; border:none; color:#e9c87e; font-size:22px; cursor:pointer; }
+  #news video { width:100%; border-radius:6px; background:#000; display:block; }
+  #news h3 { font:700 19px 'Gowun Batang'; color:#fff3d6; margin:14px 0 6px; } #news h3 small { font:400 12px 'Noto Sans KR'; color:#9fb6c0; margin-left:8px; }
+  #news ul { margin:0; padding-left:20px; font:400 13.5px/1.75 'Noto Sans KR'; color:#dfe8ea; }
+  #news .older { margin-top:16px; padding-top:8px; border-top:1px solid rgba(233,200,126,.2); opacity:.85; }
   #intro .hint { margin-top:16px; font:400 12px 'Noto Sans KR'; color:rgba(255,255,255,.6); opacity:0; animation:fin 1.6s 2.5s forwards; }
   @keyframes fin { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
 
@@ -93,8 +104,10 @@
   <div class="t2">룬 아 고 라</div>
   <div class="line"></div>
   <button id="enter">광장으로</button>
-  <div class="hint">스토리 모드 · 미니 게임 · 스탯 성장 — 곧 열립니다</div>
+  <div class="hint">모험의 대지 · 레이드 · 미니 게임 · 직업 · 의상실</div>
+  <button id="newsBtn">🎬 새 소식</button>
 </div>
+<div id="news" class="hide"><div class="box"><button id="newsX">✕</button><div class="hd">NEWS · 새 소식</div><div id="newsBody"></div></div></div>
 
 <div id="hud">
   <div id="loc"><div class="a">THE RUNE AGORA</div><div class="b">룬의 광장</div><div class="c"></div></div>
@@ -1958,13 +1971,14 @@ const mapBase = cnv(512), mapR = 86;
 }
 const mapC = $('mapc'), mx = mapC.getContext('2d');
 function drawMap(){
-  const W = 312, k = 256 / AREA.mapR, zoom = 1.25, plaza = AREA === AREAS.plaza;
+  const W = 312, k = 256 / AREA.mapR, zoom = AREA.mapZoom || 1.25, plaza = AREA === AREAS.plaza;
   mx.fillStyle = '#1b2230'; mx.fillRect(0, 0, W, W);
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(camYaw); mx.scale(zoom * W / 512 * 1.6, zoom * W / 512 * 1.6);
-  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(AREA.mapBase, -256, -256);
+  mx.translate(-player.pos.x * k, -player.pos.z * k); mx.drawImage(AREA.mapBase, -256, -256, 512, 512);
+  if (AREA.mapDraw) AREA.mapDraw(mx, k);
   mx.fillStyle = 'rgba(255,255,255,.75)'; if (plaza) for (const n of NPCS){ if (n.hidden) continue; mx.beginPath(); mx.arc(n.pos.x * k, n.pos.z * k, 2.2, 0, TAU); mx.fill(); }
-  mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, e.big ? 5 : 3, 0, TAU); mx.fill(); }
-  for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.fillStyle = '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
+  const ms = 1.25 / zoom; mx.fillStyle = '#ff3a5a'; for (const e of G.mapEnemies){ mx.beginPath(); mx.arc(e.x * k, e.z * k, (e.big ? 5 : 3) * ms, 0, TAU); mx.fill(); }
+  for (const m of G.mapMarkers){ mx.save(); mx.translate(m.x * k, m.z * k); mx.rotate(Math.PI / 4 - camYaw); mx.scale(ms, ms); mx.fillStyle = m.c || '#ffd36a'; mx.shadowColor = '#ffd36a'; mx.shadowBlur = 12; mx.fillRect(-5, -5, 10, 10); mx.restore(); }
   mx.restore();
   // 플레이어 화살표
   mx.save(); mx.translate(W / 2, W / 2); mx.rotate(-(player.fig.root.rotation.y - camYaw));
@@ -2170,12 +2184,15 @@ function updateInteract(dt){
   if (toastT > 0){ toastT -= dt; if (toastT <= 0) $('toast').classList.remove('on'); }
 }
 
+let sunFollowing = false;
 function frame(){
   requestAnimationFrame(frame);
   const rdt = Math.min(0.05, clock.getDelta()); let dt = rdt;
   if (G.hitStop > 0){ G.hitStop -= rdt; dt = rdt * 0.06; }
   time += dt; TIMEU.value = time;
   if (playing){ updatePlayer(dt); for (const h of G.hooks) h(dt, rdt); updateCamera(rdt); updateInteract(dt); drawMap(); }
+  if (G.sunFollow){ const tx = Math.round(player.pos.x / 2) * 2, tz = Math.round(player.pos.z / 2) * 2; sun.target.position.set(tx, player.pos.y, tz); sun.position.set(tx, player.pos.y, tz).addScaledVector(SUN, 120); sunFollowing = true; }
+  else if (sunFollowing){ sunFollowing = false; sun.target.position.set(0, 0, 0); sun.position.copy(SUN).multiplyScalar(120); }
   else updateIntro(dt);
   if (AREA === AREAS.plaza){ updateNPCs(dt); updateFX(dt); updateCreatures(dt); }
   // 하늘
@@ -2233,7 +2250,7 @@ const G = {
   Builder, Kit, boxG, latheG, ringBand, mergeGeos, tex, cnv, runeStrip, runeColumn, drawRune, glowC, particles, T, rr, R,
   THREE, scene, world, camera, renderer, player, COL, NPCS, Figure, POSES, pose, P0, M, FX, TAU, IS_TOUCH, $, SAVE, keys, std, mat, collide, groundY, INTERACT, CLAY, CLAY_B, addCircle, setNight, setMood,
   hooks: [], lock: false, faceLock: false, noJump: false, speedMul: 1, moveMul: 1, poseMod: null, poseK: 0, camOverride: null, shake: 0, hitStop: 0,
-  onKey: null, onClick: null, mapMarkers: [], mapEnemies: [],
+  onKey: null, onClick: null, mapMarkers: [], mapEnemies: [], sun, hemi, Q, gfxMode, SUN, sunFollow: false, get camPitch(){ return camPitch; }, get camDist(){ return camDist; },
   get time(){ return time; }, get camYaw(){ return camYaw; }, get playing(){ return playing; },
   toast(h, sub){ const t = $('toast'); t.querySelector('.h').textContent = h; t.querySelector('.s').textContent = sub; t.classList.add('on'); toastT = 2.6; },
   resize,
@@ -2243,6 +2260,36 @@ renderer.compile(scene, camera);
 frame();
 setTimeout(() => $('load').classList.add('off'), 250);
 window.__agora = { player, camera, scene, renderer, setCam: (y, p, d) => { camYaw = y; camPitch = p; camDistT = camDist = d; startBlend = 0; }, start: () => $('enter').click(), G };
+// 새 소식: 업데이트마다 트레일러 영상 + 바뀐 점 (새 업데이트는 맨 앞에 추가해요)
+const UPDATES = [
+  { v: '2026-10-25-arcadia', title: '모험의 대지 「아르카디아」 업데이트', video: '', notes: [
+    '광장 🌍 모험의 대지: 1.6km 거대한 오픈 월드 — 9개 지역 (Lv.1 ~ 30), 마을에서 북쪽으로 갈수록 강해져요. 스토리 1-1 이 튜토리얼이에요',
+    '이름 있는 땅: 하얀 갈기 폭포 · 그림자 낭떠러지 · 울음바위 절벽 · 하늘 끝 봉우리 … 랜드마크 37곳을 발견하면 탐험 경험치',
+    '레벨별 사냥터 29곳 (몬스터 배회 → 추격 → 귀환) · 돌아가며 나타나는 필드 보스 5종 · 새 몬스터 얼음 늑대 · 서리 골렘 · 설인 · 가시 망령',
+    '글라이더 (공중에서 Space 길게) · 룬 비석 빠른 이동 · 월드맵 (M) · 낮과 밤 · 헤엄 · 바람 승강 룬',
+    '함께 사는 세계: 다른 모험가들이 사냥하고 수다 떨어요 · 채팅 (Enter) · 감정표현 (T)',
+    '성장: 장비 (일반 ~ 전설) · 강화 +15 · 물약 (H/G) · 메인 · 지역 · 일일 퀘스트 · 보물 상자 · 숨은 룬 정령 36 · 칭호와 업적',
+    '레이드 3종: 늪의 왕 그롬 · 바위 거인 그라녹 · 서리 거룡 크라이오스 (파티원 봇과 함께, 첫 클리어 보상)',
+    '낚시 (물고기 26종 도감) · 광장 미니 게임: 룬 리듬 · 과녁 맞히기 · 룬 메아리'] },
+  { v: '2026-10-23-wardrobe', title: '외형 상점 업데이트', video: '', notes: [
+    '광장 👑 외형 버튼 (B) — 머리 · 등 · 몸 · 무기 효과 · 오라, 41종 (일반 ~ 전설)',
+    '미리 입어 보고 골드로 구매 · 광장과 전투에서 모두 보여요'] },
+  { v: '2026-10-23-jobs', title: '직업 · 스킬 · 각성 업데이트', video: '', notes: [
+    '직업 4종 (검사 · 궁수 · 마법사 · 암살자) 과 전용 스킬, Lv.10 + 1-10 클리어 후 각성',
+    '정예 몬스터 · 보스 광폭화 · 증원 웨이브 · 콤보 · 저체력 경고로 더 긴장감 있게'] },
+];
+function newsUnseen(){ return UPDATES.length && SAVE.get('agora_news', '') !== UPDATES[0].v; }
+function openNews(){
+  const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]), u = UPDATES[0];
+  const vid = o => o.video ? `<video controls autoplay muted playsinline loop poster="${o.video.replace(/\.mp4$/, '.jpg')}"><source src="${o.video}" type="video/mp4"><source src="${o.video.replace(/\.mp4$/, '.webm')}" type="video/webm"></video>` : '';
+  $('newsBody').innerHTML = vid(u) + `<h3>${esc(u.title)}<small>${u.v.slice(0, 10)}</small></h3><ul>${u.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` +
+    (UPDATES.length > 1 ? `<div class="older">${UPDATES.slice(1).map(o => `<h3>${esc(o.title)}<small>${o.v.slice(0, 10)}${o.video ? ` · <a href="${o.video}" target="_blank" style="color:#7ecbff">영상</a>` : ''}</small></h3><ul>${o.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</div>` : '');
+  $('news').classList.remove('hide'); SAVE.set('agora_news', u.v); $('newsBtn').classList.remove('new');
+}
+function closeNews(){ const v = $('news').querySelector('video'); if (v) v.pause(); $('news').classList.add('hide'); }
+$('newsBtn').onclick = openNews; $('newsX').onclick = closeNews; $('news').addEventListener('click', e => { if (e.target.id === 'news') closeNews(); });
+if (newsUnseen()) $('newsBtn').classList.add('new');
+G.openNews = openNews; G.UPDATES = UPDATES;
 import('./agora-story.js').then(m => m.init(G)).catch(e => console.error('story load failed', e));
 </script>
 </body>
