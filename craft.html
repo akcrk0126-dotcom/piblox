@@ -2209,7 +2209,7 @@ class G5C{constructor(n){this.m=n-1;this.kx=new Int32Array(n).fill(-2147483648);
 function g5init(){if(G5&&G5.seed===SEED)return G5;if(!G5SF){G5S.forEach(g5fl);G5SF=1}
   const R=g5root(SEED),N={};for(const k in G5N){const a=G5N[k];N[k]=new G5Z(R.hash('minecraft:'+k),a[0],a.slice(1))}
   G5={seed:SEED,R,N,B:new G5B(R.hash('minecraft:terrain'),.25,.125,80,160,8),aq:R.hash('minecraft:aquifer').fork(),ore:R.hash('minecraft:ore').fork(),
-    bed:R.hash('minecraft:bedrock_floor').fork(),ds:R.hash('minecraft:deepslate').fork(),col:new G5C(65536),cc:new Map(),ps:new G5C(65536),bio:new G5C(16384),nether:null,end:null};
+    bed:R.hash('minecraft:bedrock_floor').fork(),ds:R.hash('minecraft:deepslate').fork(),col:new G5C(16384),cc:new Map(),ps:new G5C(16384),bio:new G5C(16384),nether:null,end:null};
   G5.bands=g5bands(R.hash('minecraft:clay_bands'));return G5}
 // 기둥(4칸 격자) 값: 대륙성 · 침식 · 봉우리 · 온도 · 습도 + offset · factor · jaggedness (flat_cache)
 function g5col(x,z){const g=G5;let c=g.col.get(x,0,z);if(c)return c;const N=g.N;
@@ -2240,6 +2240,8 @@ function g5noo(o,j,x,y,z){const N=G5.N;if(y<-60||y>=321){o[j]=-1;o[j+1]=0;o[j+2]
 // 꼭짓점 기둥 캐시: 이웃 청크 · 높이 찾기가 같이 써요 (D: y=-64+8j, j=0..48)
 function g5cc(x,z){const g=G5,k=x*1048576+z;let o=g.cc.get(k);if(o)return o;if(g.cc.size>4000)g.cc.clear();
   o={x,z,c:g5col(x,z),D:new Float64Array(49).fill(NaN),O:null,top:null};g.cc.set(k,o);return o}
+// 이 높이부터는 기본 노이즈가 아무리 커도 공기 (|기본 노이즈| ≤ 1.5 → 밀도 < 0): 계산을 건너뛰어도 결과가 같아요
+function g5cg(o){if(o.g===undefined){const c=o.c;let j=0;for(;j<49;j++){const y=-64+8*j;if(y>=-40&&(g5cm(y,-64,320,1.5,-1.5)+c.off+c.jag)*c.fac<-1.6)break}o.g=j}return o.g}
 function g5d(o,j){let v=o.D[j];if(v!==v)v=o.D[j]=g5D(o.c,o.x,-64+8*j,o.z);return v}
 function g5o(o,j){const i=j*4;if(!o.O)o.O=new Float64Array(196).fill(NaN);if(o.O[i]!==o.O[i])g5noo(o.O,i,o.x,-64+8*j,o.z);return i}
 // 악지 점토 띠 (마크 SurfaceSystem.generateBands)
@@ -2407,14 +2409,16 @@ function g5ldn(){if(G5DN)return;const o=G5DO,j=G5DJ;for(let k=0;k<4;k++){g5o(o[k
 function g5dn(){g5ldn();const Q=G5Q8,fy=G5DS[0],fx=G5DS[1],fz=G5DS[2],cl=g5cl(.64*G5DS[3],-1,1);
   return Math.min(cl/2-cl*cl*cl/24,g5i8(Q,0,fy,fx,fz)>=0?g5i8(Q,8,fy,fx,fz)+1.5*Math.max(Math.abs(g5i8(Q,16,fy,fx,fz)),Math.abs(g5i8(Q,24,fy,fx,fz))):64)}
 function terrain5(b,cx,cz,hm,bio,gt){const g=g5init(),ox=cx*16,oz=cz*16,N=g.N,C=new Array(25),Q=G5Q8,O4=[null,null,null,null];
-  for(let k=0;k<5;k++)for(let i=0;i<5;i++){const o=g5cc(ox+4*i,oz+4*k);C[k*5+i]=o;for(let j=0;j<49;j++)g5d(o,j)}
+  for(let k=0;k<5;k++)for(let i=0;i<5;i++)C[k*5+i]=g5cc(ox+4*i,oz+4*k);
   // 이 위로는 대수층 중심이 모두 바다 높이 그대로 → 계산 없이 공기/물
   let mps=-64;for(let x=ox-40;x<=ox+44;x+=4)for(let z=oz-40;z<=oz+44;z+=4)mps=Math.max(mps,g5ps(x,z));const skipY=mps+42,A=g5aqc(ox,oz),AQL=new Int8Array(16),AQN=new Int8Array(16);for(let i=0;i<16;i++){AQL[i]=Math.floor((ox+i-5)/16)-A.gx;AQN[i]=Math.floor((oz+i-5)/16)-A.gz}let top=0;G5DO=O4;
   for(let ck=0;ck<4;ck++)for(let ci=0;ci<4;ci++){const o0=C[ck*5+ci],o1=C[ck*5+ci+1],o2=C[(ck+1)*5+ci],o3=C[(ck+1)*5+ci+1];O4[0]=o0;O4[1]=o1;O4[2]=o2;O4[3]=o3;
-    for(let j=0;j<48;j++){G5DJ=j;G5DN=false;const a0=o0.D[j],a1=o0.D[j+1],b0=o1.D[j],b1=o1.D[j+1],c0=o2.D[j],c1=o2.D[j+1],d0=o3.D[j],d1=o3.D[j+1],y0=-64+8*j;
-      const pos=a0>0||a1>0||b0>0||b1>0||c0>0||c1>0||d0>0||d1>0;if(!pos&&y0>skipY)continue;if(pos)g5ldn();
+    const gm=Math.max(g5cg(o0),g5cg(o1),g5cg(o2),g5cg(o3));
+    for(let j=0;j<48;j++){const y0=-64+8*j;if(j>=gm&&y0>skipY&&y0>=63)break;g5d(o0,j);g5d(o0,j+1);g5d(o1,j);g5d(o1,j+1);g5d(o2,j);g5d(o2,j+1);g5d(o3,j);g5d(o3,j+1);
+      G5DJ=j;G5DN=false;const a0=o0.D[j],a1=o0.D[j+1],b0=o1.D[j],b1=o1.D[j+1],c0=o2.D[j],c1=o2.D[j+1],d0=o3.D[j],d1=o3.D[j+1];
+      const pos=a0>0||a1>0||b0>0||b1>0||c0>0||c1>0||d0>0||d1>0;if(!pos&&y0>skipY&&y0>=63)continue;if(pos)g5ldn();
       const vein=pos&&y0+8>-60&&y0<51;if(vein){for(let k=0;k<4;k++){g5vn(O4[k],j);g5vn(O4[k],j+1)}for(let c=0;c<3;c++)g5c8(Q,32+8*c,o0.V,o1.V,o2.V,o3.V,j*3+c,3)}
-      for(let ly=0;ly<8;ly++){const fy=ly/8,y=y0+ly,iy=y+64;if(!pos&&y>skipY)break;const ya=a0+fy*(a1-a0),yb=b0+fy*(b1-b0),yc=c0+fy*(c1-c0),yd=d0+fy*(d1-d0);
+      for(let ly=0;ly<8;ly++){const fy=ly/8,y=y0+ly,iy=y+64;if(!pos&&y>skipY&&y>=63)break;const ya=a0+fy*(a1-a0),yb=b0+fy*(b1-b0),yc=c0+fy*(c1-c0),yd=d0+fy*(d1-d0);
         const na=Q[0]+fy*(Q[1]-Q[0]),nb=Q[2]+fy*(Q[3]-Q[2]),nc=Q[4]+fy*(Q[5]-Q[4]),nd=Q[6]+fy*(Q[7]-Q[6]);
         for(let lx=0;lx<4;lx++){const fx=lx/4,xa=ya+fx*(yb-ya),xc=yc+fx*(yd-yc),nxa=na+fx*(nb-na),nxc=nc+fx*(nd-nc);
           for(let lz=0;lz<4;lz++){const fz=lz/4,v=xa+fz*(xc-xa),X=ci*4+lx,Z=ck*4+lz,idx=X|(Z<<4)|(iy<<8);let id;
@@ -2508,7 +2512,7 @@ function g5carve(b,cx,cz,A,nether){if(!G5SIN){G5SIN=new Float32Array(65536);for(
       if(nether)caves(R,ccx,ccz,0,126,1,1,1,1,g5f(-.7),g5f(-.7),.5,.5,10,thickN,5);
       else if(k===2)canyon(R,ccx,ccz);else caves(R,ccx,ccz,-56,k===0?180:47,g5f(.7),g5f(1.4),g5f(.8),g5f(1.3),-1,g5f(-.4),g5f(.1),g5f(.9),15,thickC,1)}}}
 // 땅 높이 (이 세계 y): 꼭짓점 밀도만으로 가장 높은 돌을 찾아요 (나무 · 구조물 · 스폰 찾기가 써요)
-function g5ct(o){if(o.top===null){let t=-1;for(let j=39;j>=0;j--)if(g5d(o,j)>0){t=j;break}o.top=t}return o.top}
+function g5ct(o){if(o.top===null){let t=-1;for(let j=Math.min(39,g5cg(o)-1);j>=0;j--)if(g5d(o,j)>0){t=j;break}o.top=t}return o.top}
 function terrainH5(x,z){g5init();const x0=x&~3,z0=z&~3,fx=(x&3)/4,fz=(z&3)/4,a=g5cc(x0,z0),b=g5cc(x0+4,z0),c=g5cc(x0,z0+4),d=g5cc(x0+4,z0+4),
   I=(A,B,C,D,e,s,fy)=>{const ya=A[e]+fy*(A[e+s]-A[e]),yb=B[e]+fy*(B[e+s]-B[e]),yc=C[e]+fy*(C[e+s]-C[e]),yd=D[e]+fy*(D[e+s]-D[e]),xa=ya+fx*(yb-ya);return xa+fz*((yc+fx*(yd-yc))-xa)};
   for(let j=Math.min(47,Math.max(g5ct(a),g5ct(b),g5ct(c),g5ct(d)));j>=0;j--){for(const o of [a,b,c,d]){g5d(o,j);g5d(o,j+1)}
