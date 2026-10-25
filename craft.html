@@ -6130,7 +6130,7 @@ setInterval(()=>{const now=Date.now();document.querySelectorAll('#chatLog>div').
 let CMD_NAT=false,CMD_NOGRIEF=false,CMD_MOBKILL=false;
 // 몹 공격 세기 (마크 Player.hurt: 평화로움 0 · 쉬움 절반+1 · 어려움 1.5배) · 떨어짐/불/익사 규칙 · 관전자·pvp
 const _hurtPlayer0=hurtPlayer;
-hurtPlayer=function(d,src,why){if(why==='fall'&&!gr('fall_damage')||(why==='fire'||why==='lava')&&!gr('fire_damage')||why==='drown'&&!gr('drowning_damage')||why==='freeze'&&!gr('freeze_damage')||why==='pvp'&&!gr('pvp'))return;
+hurtPlayer=function(d,src,why){if(GAMEMODE==='spectator'&&why!=='void'&&why!=='kill')return;if(why==='fall'&&!gr('fall_damage')||(why==='fire'||why==='lava')&&!gr('fire_damage')||why==='drown'&&!gr('drowning_damage')||why==='freeze'&&!gr('freeze_damage')||why==='pvp'&&!gr('pvp'))return;
   if(why==='starve'&&diffNow()==='easy'&&player.hp<=10)return;
   if(MOBDEF[why]||why==='creeper'||why==='witch'||why==='sonic'){const df=diffNow();if(df==='peaceful')return;if(df==='easy')d=Math.min(d/2+1,d);else if(df==='hard')d*=1.5}
   return _hurtPlayer0(d,src,why)};
@@ -6163,9 +6163,14 @@ const _dropXP0=dropXP;dropXP=function(){if(CMD_MOBKILL)return;return _dropXP0.ap
 // 네더 차원문 (allow_entering_nether_using_portals) · pvp
 const _travelNether0=travelNether;travelNether=function(){if(!gr('allow_entering_nether_using_portals'))return;return _travelNether0()};
 const _attackRemote0=attackRemote;attackRemote=function(r){if(!gr('pvp')){doSwing();return}return _attackRemote0(r)};
-// 모험 모드: 블록을 부수거나 놓을 수 없어요 (문 · 상자 · 버튼 같은 것은 써요)
-const _updBreak0=updateBreaking;updateBreaking=function(dt){if(GAMEMODE==='adventure'){breaking=null;crackM.visible=false;if(mouseL&&target&&!screenOpen)doSwing();return}return _updBreak0(dt)};
-const _useItem0=useItem;useItem=function(){if(GAMEMODE!=='adventure'||!target)return _useItem0.apply(this,arguments);const t0=target;target=Object.assign({},t0,{face:-1});try{return _useItem0.apply(this,arguments)}finally{if(target&&target.face===-1)target=t0}};
+// 모험 모드: 블록을 부수거나 놓을 수 없어요 (문 · 상자 · 버튼 같은 것은 써요) · 관전자: 아무것도 못 만지고 블록을 뚫고 날아다녀요
+const _updBreak0=updateBreaking;updateBreaking=function(dt){if(GAMEMODE==='adventure'||GAMEMODE==='spectator'){breaking=null;crackM.visible=false;if(mouseL&&target&&!screenOpen&&GAMEMODE==='adventure')doSwing();return}return _updBreak0(dt)};
+const _attack0=attack;attack=function(){if(GAMEMODE==='spectator')return;return _attack0.apply(this,arguments)};
+let CMD_SPEC=false;const _updatePlayer0=updatePlayer;
+updatePlayer=function(dt){if(GAMEMODE!=='spectator')return _updatePlayer0(dt);GAMEMODE='creative';CMD_SPEC=true;player.fly=true;try{return _updatePlayer0(dt)}finally{GAMEMODE='spectator';CMD_SPEC=false;player.fly=true}};
+const _moveEnt0=moveEnt;moveEnt=function(e,dx,dy,dz){if(CMD_SPEC&&e===player){e.pos.x+=dx;e.pos.y+=dy;e.pos.z+=dz;e.onGround=false;e.hitX=e.hitZ=false;return}return _moveEnt0.apply(this,arguments)};
+const _updateEnts0=updateEnts;updateEnts=function(dt){if(GAMEMODE!=='spectator'||player.dead)return _updateEnts0(dt);player.dead=true;try{return _updateEnts0(dt)}finally{player.dead=false}};   // 관전자는 아이템을 못 주워요
+const _useItem0=useItem;useItem=function(){if(GAMEMODE==='spectator')return;if(GAMEMODE!=='adventure'||!target)return _useItem0.apply(this,arguments);const t0=target;target=Object.assign({},t0,{face:-1});try{return _useItem0.apply(this,arguments)}finally{if(target&&target.face===-1)target=t0}};
 // 매 프레임 (worldTicks 에 얹어요): 시계 빠르기 · 멈춤 (advance_time · /time pause · rate) · 게임 시간 · 엔드 시계 · 저절로 회복 · 평화로움
 let cmdPeaceT=0,cmdPeaceH=0;const _worldTicks0=worldTicks;
 worldTicks=function(dt){const r=clkRate('minecraft:overworld');if(r!==1&&(DIM!=='time'||MPS))worldTime+=dt*(r-1);
