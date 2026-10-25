@@ -1392,7 +1392,7 @@ for (const r of ['quest_main', 'quest', 'smith', 'shop', 'inn', 'resident']) F.r
 F.roleTalkers.board = () => F.openBoard();
 // 다른 모듈이 대화를 맡은 NPC (글라이더 제피 · 낚시꾼 노아 · 레이드 대장 · 재봉사)도 이야기 퀘스트를 주고받을 수 있게:
 // 퀘스트 일(이야기하기 목표 · 보고 · 새 퀘스트)이 있으면 rpg 가 먼저 묻고, 없으면 원래 대화(F.roleTalkers[role])로 그대로 넘겨요
-const SVC = { glider: '🪂 바람 이야기 · 글라이더', fish: '🎣 낚시 · 물고기', raid: '⚔ 레이드', wardrobe: '👗 의상실' };
+const SVC = { glider: '🪂 글라이더 · 바람 이야기', fish: '🎣 낚시 · 물고기 매입', raid: '⚔ 레이드 게시판', wardrobe: '👗 의상실' };
 const WRAPPED = {};
 for (const n of W.npcs){ if (n.object || RPG_ROLE[n.role] || F.talkers[n.id]) continue; WRAPPED[n.id] = 1;
   F.talkers[n.id] = async nn => { const role = F.roleTalkers[nn.role]; await npcTalk(nn, role ? { label: SVC[nn.role] || '💬 이야기 나누기', fn: () => role(nn) } : null); }; }

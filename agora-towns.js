@@ -94,7 +94,7 @@ add('snow', std({ color: 0xeef4fa, roughness: 0.8 })); add('ice', std({ color: 0
 add('bone', std({ color: 0xe8dcc0, roughness: 0.7 }));
 add('thorn', std({ color: 0x1e1626, roughness: 0.4, metalness: 0.25, flatShading: true })); add('thornR', std({ color: 0x3a1a3a, roughness: 0.5, flatShading: true }));
 add('brass', std({ color: 0xc89a48, roughness: 0.3, metalness: 0.9 })); add('rust', std({ color: 0x6a4030, roughness: 0.8, metalness: 0.5 })); add('tin', std({ color: 0x8a9098, roughness: 0.5, metalness: 0.6 }));
-add('soil', std({ map: TX.dirt, roughness: 1 })); add('water', X.water());
+add('soil', std({ map: TX.dirt, roughness: 1 })); add('water', X.water()); add('waterS', std({ color: 0x3a90b8, roughness: 0.1, metalness: 0.1 }));
 add('cobble', std({ map: T.cobble, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
 add('pathD', std({ map: TX.dirt, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
 add('wheat', std({ color: 0xd8b24a, roughness: 0.9, side: DS })); add('wheatD', std({ color: 0xb08a30, roughness: 0.9 }));
@@ -113,6 +113,8 @@ add('lampN', std({ color: 0x3a2a12, emissive: 0xffc070, emissiveIntensity: 2.2 }
 add('lampS', std({ color: 0x0a2a10, emissive: 0x9aff70, emissiveIntensity: 2.2 }), 3);   // 말뚝 마을 등불 (swamp_lanterns)
 add('lampD', std({ color: 0x3a2a12, emissive: 0xffb050, emissiveIntensity: 2.2 }), 4);   // 광산촌 등불 줄 (dust_lively)
 add('lampF', std({ color: 0x3a2a12, emissive: 0xffd080, emissiveIntensity: 2.2 }), 5);   // 축제 등불 (festival)
+add('lampFR', std({ color: 0x3a1a12, emissive: 0xff6a3a, emissiveIntensity: 2.2 }), 5); add('lampFP', std({ color: 0x3a1a2a, emissive: 0xff7ac8, emissiveIntensity: 2.2 }), 5); add('lampFB', std({ color: 0x1a2a3a, emissive: 0x7ac8ff, emissiveIntensity: 2.0 }), 5);
+const FESTL = [['lampF', 0xffd080], ['lampFR', 0xff7a4a], ['lampF', 0xffd080], ['lampFP', 0xff8ad0], ['lampFB', 0x8ad0ff]];
 for (const k of ['fabricR', 'fabricB', 'fabricY', 'fabricG', 'fabricW', 'fabricP', 'canvas', 'canvasD', 'pelt']) MAT[k].userData.noCast = false;
 // 그물 (알파 격자)
 const netTex = canvasTex(64, 64, (x, w) => { x.clearRect(0, 0, w, w); x.strokeStyle = 'rgba(120,100,70,1)'; x.lineWidth = 3; for (let i = 0; i <= w; i += 16){ x.beginPath(); x.moveTo(i, 0); x.lineTo(i, w); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); } }, 1);
@@ -177,23 +179,25 @@ const grainTex = canvasTex(128, 128, (x, w) => { x.fillStyle = '#e8e8e8'; x.fill
 const meshOf = (geo, m, cast = false) => { const o = new THREE.Mesh(geo, m); o.castShadow = cast; o.receiveShadow = true; o.matrixAutoUpdate = false; return o; };
 let TRIS = 0;
 // 재질별 지오메트리 → 묶음마다 한 메시. 작은 텍스처 묶음(정점 < 900)은 결 텍스처 정점색 묶음에 합쳐 드로콜을 줄여요
-function buildMerged(g, parent, castBig = true){
+function buildMerged(g, parent, castBig = true, one = false){
   const groups = new Map(), small = [];
+  if (one){ for (const key in g){ const mt = MAT[key]; if (!mt) continue; if (SOLO.has(key) || mt.transparent || mt.alphaTest > 0){ const ge = G.mergeGeos(g[key]); TRIS += ge.attributes.position.count / 3; parent.add(meshOf(ge, mt, false)); } else for (const q of g[key]) small.push([key, q]); }
+    if (small.length){ const geo = mergeVC(small, 0.04, false); TRIS += geo.attributes.position.count / 3; parent.add(meshOf(geo, vcMat(grainTex), castBig)); } return; }
   for (const key in g){
     const mt = MAT[key]; if (!mt){ console.warn('[towns] 재질 없음', key); continue; }
     let nv = 0; for (const q of g[key]) nv += q.attributes.position.count;
     if (SOLO.has(key) || mt.transparent || !mt.isMeshStandardMaterial || mt.alphaTest > 0){ const ge = G.mergeGeos(g[key]); TRIS += ge.attributes.position.count / 3; parent.add(meshOf(ge, mt, false)); continue; }
     const emi = colOf(key, true).emi;
-    if (!emi && mt.map && nv < 900){ for (const q of g[key]) small.push([key, q]); continue; }
+    if (!emi && mt.map && nv < 2400){ for (const q of g[key]) small.push([key, q]); continue; }
     const gk = emi ? 'emi' : (mt.map ? mt.map.uuid : 'plain') + (mt.flatShading ? 'f' : '') + (mt.metalness > 0.5 ? 'm' : '');
     let gr = groups.get(gk); if (!gr) groups.set(gk, gr = { keys: [], map: emi ? null : mt.map, flat: !emi && mt.flatShading, metal: !emi && mt.metalness > 0.5, cast: false, nv: 0 }); gr.keys.push(key); gr.nv += nv; if (!NOCAST.has(key)) gr.cast = true;
   }
   // 작은 무리(평평 · 금속 · 단색)도 정점이 적으면 결 묶음으로
-  for (const [gk, gr] of groups) if (gk !== 'emi' && !gr.map && gr.nv < 600){ for (const key of gr.keys) for (const q of g[key]) small.push([key, q]); groups.delete(gk); }
+  for (const [gk, gr] of groups) if (gk !== 'emi' && !gr.map && gr.nv < 1500){ for (const key of gr.keys) for (const q of g[key]) small.push([key, q]); groups.delete(gk); }
   for (const [gk, gr] of groups){
     const list = []; for (const key of gr.keys) for (const geo of g[key]) list.push([key, geo]);
     const geo = mergeVC(list, 0.03, !!gr.map); TRIS += geo.attributes.position.count / 3;
-    parent.add(meshOf(geo, vcMat(gr.map, gr.flat, gr.metal), castBig && gr.cast && gk !== 'emi' && gr.nv > 400));
+    const ms = meshOf(geo, vcMat(gr.map, gr.flat, gr.metal), castBig && gr.cast && gk !== 'emi' && gr.nv > 400); if (gk !== 'emi' && (gr.map || gr.nv > 3000)) ms.userData.big = true; parent.add(ms);
   }
   if (small.length){ const geo = mergeVC(small, 0.04, false); TRIS += geo.attributes.position.count / 3; parent.add(meshOf(geo, vcMat(grainTex), false)); }
 }
@@ -248,7 +252,7 @@ const LBY = {}; for (const L of LORE) if (L && L.settlement && L.settlement.id) 
 const TOWNS = [], TBY = {};
 function mkTown(s, L){
   const st = (L && L.settlement) || {}, t = { id: s.id, s, L, name: st.name || s.name, en: st.en || s.en || '', desc: st.desc || '', c: s.c, r: s.r, x: s.c[0], z: s.c[1], style: s.style, region: s.region || (L && L.region),
-    existing: !!(s.existing || st.existing), near: null, farIdx: -1, anims: [], smoke: [], sparks: [], nearR: (LOW ? 175 : 225), active: false, top: 0, cols: [], hidden: false, mapbox: [], chg: {} };
+    existing: !!(s.existing || st.existing), near: null, farIdx: -1, anims: [], smoke: [], sparks: [], nearR: (LOW ? 165 : 205), active: false, top: 0, cols: [], hidden: false, mapbox: [], chg: {} };
   t.y = s.y != null ? s.y : H(t.x, t.z); TBY[t.id] = t; TOWNS.push(t); return t;
 }
 for (const s of W.settlements || []) mkTown(s, LBY[s.id] || LORE.find(l => l && l.region === s.region) || null);
@@ -299,6 +303,8 @@ function finish(){
   if (t.smoke.length) smokeFx(t.near, t.smoke, t.smokeCol);
   if (t.sparks.length) sparkFx(t.near, t.sparks);
   const bb = new THREE.Box3().setFromObject(t.near); t.top = isFinite(bb.max.y) ? Math.min(bb.max.y, t.y + 40) : t.y + 8;
+  t.casters = []; t.near.traverse(o => { if (o.isMesh && o.castShadow) t.casters.push(o); }); t.castOn = true;
+  t.detail = t.near.children.filter(o => !o.userData.big && !Object.values(t.chg).includes(o)); t.detailOn = true;   // 멀면(120m~) 큰 덩어리만 그려요
   t.near.visible = false; FW.add(t.near); STATS.towns++; STATS.tris[t.id] = Math.round(TRIS - tr0);
   COLREC = null; B = K = null; CUR = null; return t;
 }
@@ -309,7 +315,7 @@ function subMesh(fn, pivot = [0, 0, 0], parent){
   const pk = K, pb = B, sb = new LB(1e9); B = sb; K = new G.Kit(sb);
   try { fn(); } finally { K = pk; B = pb; }
   const g = sb.g, outer = new THREE.Group(), inner = new THREE.Group(); outer.position.set(...pivot); inner.position.set(-pivot[0], -pivot[1], -pivot[2]); outer.add(inner);
-  buildMerged(g, inner, false); (parent || CUR.near).add(outer); return outer;
+  buildMerged(g, inner, false, true); (parent || CUR.near).add(outer); return outer;
 }
 // 굴뚝 연기 · 불티 (그룹 로컬)
 function smokeFx(parent, pts, col = '0.78, 0.77, 0.76'){
@@ -368,10 +374,27 @@ const faceTo = (x, z, to) => Math.atan2((to ? to[0] : 0) - x, (to ? to[1] : 0) -
 function faceRoad(x, z){ const rn = roadNear(OX + x, OZ + z); return rn && rn[2] < 40 ? Math.atan2(rn[0] - OX - x, rn[1] - OZ - z) : faceTo(x, z); }
 // 건물 자리: (w × d) 를 원 하나로 어림. o.face = 'road' | [x, z] | 숫자(ry). 정면(문) = 로컬 +z
 function site(x, z, w, d, o = {}){
-  const rad = Math.hypot(w, d) * 0.5 * (o.k ?? 0.84), p = spot(x, z, rad, o); if (!p) return null;
+  const rad = Math.hypot(w, d) * 0.5 * (o.k ?? 0.84), p = spot(x, z, rad, o); if (!p){ (CUR.fails = CUR.fails || []).push([Math.round(x), Math.round(z), w]); return null; }
   const ry = typeof o.face === 'number' ? o.face : o.face === 'road' ? faceRoad(p[0], p[1]) : faceTo(p[0], p[1], o.face);
   occupy(p[0], p[1], rad + (o.gap ?? 0.6)); return { x: p[0], z: p[1], ry, rad };
 }
+// 후보 자리들을 차례로 시도해 n 채 지어요: fn(site)
+function sites(cands, n, w, d, o, fn){ let made = 0; for (const [x, z] of cands){ if (made >= n) break; const pf = CUR.fails ? CUR.fails.length : 0, s = site(x, z, w, d, o); if (s){ fn(s); made++; } else if (CUR.fails) CUR.fails.length = pf; } if (made < n) (CUR.fails = CUR.fails || []).push(['n', made, n]); return made; }
+// 나무 (X.treeGeo 인스턴스 · 그룹 로컬): list = [[x, z, s]]
+function plantTrees(list, type = 'oak'){ if (!list.length || !X.treeGeo) return; const im = new THREE.InstancedMesh(X.treeGeo(type), X.TREEMAT, list.length), c = new THREE.Color();
+  list.forEach(([x, z, sc], i) => { im.setMatrixAt(i, G.mat(x, gy(x, z) - 0.1, z, 0, R() * TAU, 0, sc, sc, sc)); c.setHSL(0.25 + rr(-0.04, 0.04), 0.5, rr(0.85, 1)); im.setColorAt(i, c); cc(x, z, 0.45 * sc); B.far.push(['leafB', ico(2.0 * sc, 0).translate(x, gy(x, z) + 3.9 * sc, z)]); });
+  im.castShadow = true; im.receiveShadow = true; CUR.near.add(im); }
+function trees(cands, n, type = 'oak', smin = 0.9, smax = 1.3){ const out = []; for (const [x, z] of cands){ if (out.length >= n) break; const p = prop(x, z, 1.6, { max: 4, plaza: false }); if (p) out.push([p[0], p[1], rr(smin, smax)]); } plantTrees(out, type); }
+// 노점 (차양 · 과일 · 호박 · 밀단)
+function produceStall(x, z, ry){ const [lo, hi] = foot(OX + x, OZ + z, 1.6, 1.2, ry), y = hi; K.push(x, y, z, ry);
+  if (hi - lo > 0.1) K.box('stoneD', 3.0, hi - lo + 0.2, 2.0, 0, -(hi - lo) / 2, 0);
+  K.box('wood', 2.8, 0.9, 1.0, 0, 0.45, 0.3); K.box('woodD', 3.0, 0.08, 1.2, 0, 0.93, 0.3);
+  for (const sx of [-1.4, 1.4]) for (const sz of [-0.6, 0.85]) K.box('woodD', 0.1, sz > 0 ? 2.3 : 2.7, 0.1, sx, (sz > 0 ? 2.3 : 2.7) / 2, sz);
+  for (let i = 0; i < 7; i++) K.box(i % 2 ? 'fabricW' : 'fabricG', 3.3 / 7 + 0.003, 0.06, 2.1, -1.65 + (i + 0.5) * 3.3 / 7, 2.55, 0.2, 0.22);
+  for (let i = 0; i < 6; i++){ const gx = -1.1 + i * 0.44; if (i % 2){ K.geo('wicker', lathe([[0, 0], [0.16, 0.02], [0.18, 0.14], [0, 0.14]], 8, 0.3), gx, 0.97, 0.3); for (let k = 0; k < 4; k++) K.geo(pick(['fruitR', 'fruitG', 'fruitO']), sph(0.075, 6, 4), gx + rr(-0.06, 0.06), 1.12 + k * 0.03, 0.3 + rr(-0.06, 0.06)); } else K.geo('pumpkin', sph(0.17, 8, 5), gx, 1.1, 0.3, 0, 0, 0, 1.25, 0.85, 1.25); }
+  for (let k = 0; k < 2; k++) K.geo('hay', cylM(0.18, 0.22, 0.9, 7), 1.0 + k * 0.45, 0.45, 1.25, 0.15, 0, 0);
+  K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.55, 1.1); K.pop(); mapbox(x, z, 1.5, 1.0, ry); }
+function flowerBed(x, z, ry, w = 3){ const y = gy(x, z); K.push(x, y, z, ry); K.box('stoneD', w, 0.3, 0.8, 0, 0.12, 0); K.box('soil', w - 0.15, 0.05, 0.65, 0, 0.28, 0); for (let i = 0; i < w * 5; i++) K.geo(pick(['flower', 'flowerY', 'flowerW', 'rose', 'leafC']), ico(rr(0.09, 0.15), 0), rr(-w / 2 + 0.15, w / 2 - 0.15), 0.42, rr(-0.25, 0.25)); K.pop(); K.push(x, 0, z, ry); cb(0, 0, w / 2, 0.4); K.pop(); }
 // 작은 소품 자리 (반경 r) — 못 찾으면 null
 const prop = (x, z, r, o = {}) => { const p = spot(x, z, r, Object.assign({ max: 4, plaza: true, roadPad: 0.6 }, o)); if (p) occupy(p[0], p[1], r + 0.2); return p; };
 
@@ -450,7 +473,8 @@ const P = {
     const L = Math.hypot(b[0] - a[0], b[2] - a[2]), n = Math.max(3, Math.round(L / 0.8)), yaw = Math.atan2(b[0] - a[0], b[2] - a[2]);
     const yAt = t => lerp(a[1], b[1], t) - Math.sin(t * Math.PI) * sag;
     for (let i = 0; i < n; i++){ const t0 = i / n, t1 = (i + 1) / n, y0 = yAt(t0), y1 = yAt(t1), hl = L / n; K.push(lerp(a[0], b[0], (t0 + t1) / 2), (y0 + y1) / 2, lerp(a[2], b[2], (t0 + t1) / 2), yaw); K.box('rope', 0.02, 0.02, Math.hypot(hl, y1 - y0), 0, 0, 0, -Math.atan2(y1 - y0, hl)); K.pop(); }
-    const m = Math.max(2, Math.round(L / step)); for (let i = 1; i < m; i++){ const t = i / m, x = lerp(a[0], b[0], t), z = lerp(a[2], b[2], t), y = yAt(t); K.geo(key, sph(0.13, 6, 4), x, y - 0.18, z, 0, 0, 0, 1, 1.25, 1); if (i % 2) glow(x, y - 0.18, z, col, 1.3, 0.35, grp); }
+    const m = Math.max(2, Math.round(L / step)); for (let i = 1; i < m; i++){ const t = i / m, x = lerp(a[0], b[0], t), z = lerp(a[2], b[2], t), y = yAt(t), fl = key === 'lampF' ? FESTL[i % FESTL.length] : [key, col];
+      if (key === 'lampF'){ K.geo(fl[0], cyl(0.16, 0.13, 0.32, 7), x, y - 0.26, z); K.geo('woodD', cyl(0.165, 0.165, 0.03, 7), x, y - 0.09, z); } else K.geo(fl[0], sph(0.13, 6, 4), x, y - 0.18, z, 0, 0, 0, 1, 1.25, 1); if (i % 2) glow(x, y - 0.22, z, fl[1], 1.4, 0.35, grp); }
   },
   pole(x, z, h = 4.4){ const y = gyk(x, z); K.geo('woodD', cyl(0.07, 0.09, h, 6), x, y + h / 2, z); cc(x, z, 0.15); return [x, y + h - 0.2, z]; },
   pickaxe(x, y, z, ry = 0, lean = 0.35){ K.push(x, y, z, ry, lean); K.geo('wood', cyl(0.035, 0.035, 1.2, 5), 0, 0.6, 0); K.geo('iron', tubeG([[-0.38, 1.12, 0], [0, 1.24, 0], [0.38, 1.12, 0]], 0.045, 0.02, 4, 3)); K.pop(); },
@@ -503,7 +527,8 @@ function gables(w, d, y, rise, key, tim = true){
   }
 }
 const faces = (w, d) => [[0, d / 2, 0, w], [0, -d / 2, Math.PI, w], [w / 2, 0, Math.PI / 2, d], [-w / 2, 0, -Math.PI / 2, d]];
-const mapbox = (x, z, hw, hd, ry) => CUR.mapbox.push([OX + x, OZ + z, hw, hd, ry]);
+// 미니맵 윤곽 + 뒤에 놓는 것들이 피할 사각형 (돌린 사각형의 AABB + 1m)
+const mapbox = (x, z, hw, hd, ry) => { CUR.mapbox.push([OX + x, OZ + z, hw, hd, ry]); const ex = Math.abs(Math.cos(ry)) * hw + Math.abs(Math.sin(ry)) * hd + 1.0, ez = Math.abs(Math.sin(ry)) * hw + Math.abs(Math.cos(ry)) * hd + 1.0; if (CUR.rects) CUR.rects.push([x - ex, z - ez, x + ex, z + ez]); };
 // 집: (x, z) 그룹 로컬, ry = 정면(문) 방향. o = { w, d, fl, wall, roof, paint, chimney, smoke, snow, lampKey, lampGrp }
 function house(x, z, ry, o = {}){
   const w = o.w || 7, d = o.d || 6, fl = o.fl || 1, wall = o.wall || pick(WALLS), roof = o.roof || pick(['slate', 'shingle', 'thatch']), paint = o.paint || pick(PAINT);
@@ -644,7 +669,7 @@ const chickGeo = () => VCG.chick || (VCG.chick = vcGeo(() => { K.geo('chick', sp
 function bobbers(geo, list, amp = 0.05, roll = 0.05){
   if (!list.length) return; const im = new THREE.InstancedMesh(geo, vcMat(grainTex), list.length); im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; CUR.near.add(im);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new V3(), one = new V3(1, 1, 1), ph = list.map(() => R() * 6);
-  const upd = t => { list.forEach(([x, y, z, ry], i) => { e.set(Math.sin(t * 0.8 + ph[i]) * roll * 0.6, ry, Math.sin(t * 1.1 + ph[i]) * roll); q.setFromEuler(e); m4.compose(v.set(x, y + Math.sin(t * 1.3 + ph[i]) * amp, z), q, one); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; };
+  const upd = t => { for (let i = 0; i < list.length; i++){ const it = list[i]; e.set(Math.sin(t * 0.8 + ph[i]) * roll * 0.6, it[3], Math.sin(t * 1.1 + ph[i]) * roll); q.setFromEuler(e); m4.compose(v.set(it[0], it[1] + Math.sin(t * 1.3 + ph[i]) * amp, it[2]), q, one); im.setMatrixAt(i, m4); } im.instanceMatrix.needsUpdate = true; };
   upd(0); anim((dt, t) => upd(t));
 }
 // 흔들리는 묶음 (빨래 · 매달린 것): pivot 에서 yaw 방향 축으로 앞뒤로 흔들려요. fn 의 K 원점 = pivot, 줄 = 로컬 z 축
@@ -727,10 +752,10 @@ function coop(x, z, ry){
   for (let i = 0; i < NC; i++){ const a = rr(-1.6, 1.6), b = rr(1.8, 4.4); K.push(x, 0, z, ry); const v = K.world(a, b); K.pop(); cs.push({ x: v.x, z: v.z, y: gy(v.x, v.z), ry: R() * TAU, ph: R() * 9 }); }
   const im = new THREE.InstancedMesh(chickGeo(), vcMat(grainTex), NC); im.frustumCulled = false; im.castShadow = false; CUR.near.add(im);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new V3(), one = new V3(1, 1, 1);
-  const upd = t => { cs.forEach((c, i) => { const pk = Math.pow(Math.max(0, Math.sin(t * 2.2 + c.ph)), 8); e.set(pk * 0.7, c.ry + Math.sin(t * 0.4 + c.ph) * 1.2, 0); q.setFromEuler(e); m4.compose(v.set(c.x, c.y, c.z), q, one); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; };
+  const upd = t => { for (let i = 0; i < cs.length; i++){ const c = cs[i], pk = Math.pow(Math.max(0, Math.sin(t * 2.2 + c.ph)), 8); e.set(pk * 0.7, c.ry + Math.sin(t * 0.4 + c.ph) * 1.2, 0); q.setFromEuler(e); m4.compose(v.set(c.x, c.y, c.z), q, one); im.setMatrixAt(i, m4); } im.instanceMatrix.needsUpdate = true; };
   upd(0); anim((dt, t) => upd(t));
 }
-function trough(x, z, ry){ const y = gy(x, z); K.push(x, y, z, ry); K.box('wood', 2.2, 0.55, 0.75, 0, 0.35, 0); K.box('water', 2.0, 0.04, 0.55, 0, 0.6, 0); for (const s of [-1, 1]) K.box('woodD', 0.1, 0.35, 0.8, s * 0.9, 0.12, 0); K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.1, 0.4); K.pop(); }
+function trough(x, z, ry){ const y = gy(x, z); K.push(x, y, z, ry); K.box('wood', 2.2, 0.55, 0.75, 0, 0.35, 0); K.box('waterS', 2.0, 0.04, 0.55, 0, 0.6, 0); for (const s of [-1, 1]) K.box('woodD', 0.1, 0.35, 0.8, s * 0.9, 0.12, 0); K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.1, 0.4); K.pop(); }
 // 꽃 아치 (길을 가로질러요): (x, z) 가운데 · ry = 길 방향 · w = 폭
 function flowerArch(x, z, ry, w = 6){
   const y = Math.min(gy(x - Math.cos(ry) * w / 2, z + Math.sin(ry) * w / 2), gy(x + Math.cos(ry) * w / 2, z - Math.sin(ry) * w / 2)); K.push(x, y, z, ry + Math.PI / 2);
@@ -743,7 +768,7 @@ function flowerArch(x, z, ry, w = 6){
 function bFarm(t){
   const R0 = t.r; let s, p;
   // 농가 (2층 초가) · 헛간 · 사일로 · 닭장
-  const farmhouse = site(2, -24, 9, 7.4, { maxR: R0 + 5, maxDh: 3.5 }); if (farmhouse) t.home = house(farmhouse.x, farmhouse.z, farmhouse.ry, { w: 9, d: 7, fl: 2, roof: 'thatch', paint: 'pGreen', wall: 'plaster2' });
+  const farmhouse = site(2, -24, 9, 7.4, { maxR: R0 + 5, maxDh: 1.8, max: 11 }) || site(-4, 20, 9, 7.4, { maxR: R0 + 5, maxDh: 2.5, max: 11 }); if (farmhouse) t.home = house(farmhouse.x, farmhouse.z, farmhouse.ry, { w: 9, d: 7, fl: 2, roof: 'thatch', paint: 'pGreen', wall: 'plaster2' });
   const bs = site(-21, -3, 7.8, 10.2, { maxDh: 3, k: 0.8 }); const bn = bs ? barn(bs.x, bs.z, bs.ry) : null;
   s = site(-26, -15, 4.6, 4.6, { maxDh: 3 }); if (s) silo(s.x, s.z);
   s = site(20, 9, 4.6, 6.5, { maxDh: 2, k: 0.7 }); if (s) coop(s.x, s.z, s.ry);
@@ -764,6 +789,11 @@ function bFarm(t){
     else { p = prop(16, -22, 3.5); if (p) laundry(p[0] - 3, p[1] + 1, p[0] + 3, p[1] - 1); } }
   for (const [x, z, n] of [[-17, 3, 3], [6, -16, 2], [24, 0, 2]]){ p = prop(x, z, 1.1); if (p) P.clutter(p[0], p[1], n); }
   p = prop(-7, -14, 1.0); if (p) P.bench(p[0], p[1], faceTo(p[0], p[1]));
+  // 광장 둘레: 과일 노점 · 소풍 탁자 · 꽃밭 · 사과나무
+  p = prop(12, 6, 1.9, { max: 6 }); if (p) produceStall(p[0], p[1], faceTo(p[0], p[1]));
+  p = prop(-11, -3, 1.2, { max: 5 }); if (p){ P.table(p[0], p[1], faceTo(p[0], p[1]) + Math.PI / 2); for (const sd of [-1, 1]){ const a = faceTo(p[0], p[1]), q = [p[0] + Math.sin(a) * sd * 1.1, p[1] + Math.cos(a) * sd * 1.1]; if (free(q[0], q[1], 0.4, { plaza: true })) P.bench(q[0], q[1], a + (sd > 0 ? Math.PI : 0)); } }
+  if (farmhouse){ const a = farmhouse.ry, fx = farmhouse.x + Math.sin(a) * 5.6, fz = farmhouse.z + Math.cos(a) * 5.6; for (const sd of [-1, 1]){ const q = [fx + Math.cos(a) * sd * 3.2, fz - Math.sin(a) * sd * 3.2]; if (free(q[0], q[1], 1.0, { plaza: true })) flowerBed(q[0], q[1], a, 2.8); } }
+  trees([[-30, -22], [27, -2], [-24, 22], [16, 28], [-6, 30], [30, 14]], 4, 'oak', 1.0, 1.35);
   // 등불 · 길목 표지판
   for (const [x, z] of [[11, -3], [-9, 6], [-6, -18], [22, 3]]){ p = prop(x, z, 0.5); if (p) P.lamp(p[0], p[1], 'wood', faceRoad(p[0], p[1])); }
   entrySigns(t);
@@ -773,7 +803,7 @@ function bFarm(t){
   if (farmhouse && bn) fest.push(() => { const a = [farmhouse.x + 3, gy(farmhouse.x, farmhouse.z) + 5.4, farmhouse.z], b = [bn.x, bn.y + 5.4, bn.z]; P.pennants(a, b, 1.4, ['fabricR', 'fabricY', 'fabricB', 'fabricG', 'fabricW']); });
   fest.push(() => { const pts = []; for (const [x, z] of [[-9, -11], [10, -11], [12, 9], [-10, 9]]){ const q = spot(x, z, 0.4, { plaza: true, max: 4 }); if (q) pts.push(P.pole(q[0], q[1], 4.6)); } for (let i = 0; i < pts.length; i++) P.lights(pts[i], pts[(i + 1) % pts.length], 0.8); });
   fest.push(() => { for (let i = 0; i < 6; i++){ const a = i / 6 * TAU, x = Math.cos(a) * 6.5, z = Math.sin(a) * 6.5; if (!free(x, z, 0.5, { plaza: true })) continue; const y = gy(x, z); K.geo('pumpkin', sph(0.38, 8, 6), x, y + 0.3, z, 0, a, 0, 1.25, 0.85, 1.25); K.geo('lampF', new THREE.CircleGeometry(0.1, 3), x + Math.cos(a) * 0.01, y + 0.36, z, 0, -a + Math.PI / 2, 0); K.geo('leafB', cyl(0.04, 0.05, 0.2, 4), x, y + 0.66, z); glow(x, y + 0.35, z, 0xffa040, 1.4, 0.4, 3); } });
-  t.chg.festival = subMesh(() => { for (const f of fest) f(); }, [0, t.y, 0]); t.chg.festival.visible = false;
+  t.chg.festival = subMesh(() => { for (const f of fest) f(); }, [0, t.y, 0]); skyLanterns(t.chg.festival, [0, t.y, 0], 20, LOW ? 8 : 14); t.chg.festival.visible = false;
 }
 
 // ───────────────────────── 잎새 마을 (treehouse) ─────────────────────────
@@ -912,7 +942,7 @@ function bMist(t){
   bobbers(buoyGeo(), buoys, 0.07, 0.12);
   // 오두막 넷 · 훈제막
   const ry0 = Math.atan2(ux, uz);
-  for (const [x, z] of [[-13, -5], [13, -9], [12, 6], [-7, 9]]){ s = site(x, z, 7, 6.2, { maxDh: 2.5, max: 10 }); if (s) house(s.x, s.z, s.ry, { w: 6.4, d: 5.4, roof: pick(['slate', 'shingle']), paint: pick(['pBlue', 'pTeal', 'pBlue']), wall: pick(['plaster', 'plaster3']), back: false }); }
+  sites([[-13, -5], [13, -9], [12, 6], [-7, 9], [-18, 6], [20, 4], [-4, 18], [16, -18]], 4, 7, 6.2, { maxDh: 2.5, max: 8 }, s => house(s.x, s.z, s.ry, { w: 6.4, d: 5.4, roof: pick(['slate', 'shingle']), paint: pick(['pBlue', 'pTeal', 'pBlue']), wall: pick(['plaster', 'plaster3']), back: false }));
   s = site(16, -16, 4, 3.6, { maxDh: 2.5, max: 8 }); if (s) smokehouse(s.x, s.z, s.ry);
   // 그물 · 생선 건조대 · 뒤집힌 배 · 통발 · 짐
   for (const [x, z] of [[-11, -15], [9, -19]]){ p = prop(x, z, 2.0, { max: 6 }); if (p) netRack(p[0], p[1], ry0 + Math.PI / 2 + rr(-0.3, 0.3)); }
@@ -922,6 +952,8 @@ function bMist(t){
   p = prop(da[0] - D.px * 3.2, da[1] - D.pz * 3.2, 1.0, { max: 4 }); if (p){ for (let i = 0; i < 4; i++) trap(p[0] + rr(-0.8, 0.8), p[1] + rr(-0.8, 0.8)); cc(p[0], p[1], 0.9); }
   for (const [x, z] of [[17, 2], [-15, 12]]){ p = prop(x, z, 1.0); if (p) P.clutter(p[0], p[1], 2); }
   p = prop(-4, -9, 1.0); if (p) P.bench(p[0], p[1], ry0 + Math.PI);
+  for (const [x, z] of [[-9, -12], [8, -13], [-14, 7]]){ p = prop(x, z, 0.7); if (p){ P.barrel(p[0] - 0.3, gy(p[0], p[1]), p[1]); P.crate(p[0] + 0.4, gy(p[0], p[1]), p[1] + 0.2, 0.6, R()); cc(p[0], p[1], 0.7); } }
+  trees([[-22, 12], [22, 12], [-24, -2], [4, 24], [24, -10]], 3, 'birch', 0.9, 1.2);
   // 등불 (물가 길 · 광장)
   for (const k of [0.45, 0.85]){ const x = ux * sd * k - uz * 2.0, z = uz * sd * k + ux * 2.0; if (free(x, z, 0.4, { plaza: true, roadPad: 0.2 })) P.lamp(x, z, 'wood', ry0); }
   for (const [x, z] of [[8, 1], [-8, -1]]){ p = prop(x, z, 0.5); if (p) P.lamp(p[0], p[1], 'wood', faceRoad(p[0], p[1])); }
@@ -988,7 +1020,7 @@ function bStilt(t){
   for (const k of ['a', 'b', 'c', 'f', 'g']){ if (!used.has(k)) continue; const n = NODES[k]; walkPad(n[0], n[1], n[2], 1.4); occupy(n[0], n[1], 2.0); }
   // 말뚝집: 물 위 넷 + 둑 위 둘 — 툇마루에서 가까운 갈림목까지 판자길
   const nearNode = (x, z) => { let b = null, bd = 1e9; for (const k of ['a', 'b', 'c', 'd', 'f', 'g']){ if (!used.has(k)) continue; const n = NODES[k], d = Math.hypot(n[0] - x, n[1] - z); if (d < bd){ bd = d; b = n; } } return b; };
-  const want = [[...tw(-0.05, -0.55), 1], [...tw(0.25, 0.62), 1], [...tw(0.95, -0.2), 1], [...tw(-0.62, 0.72), 1], [...tw(-1.15, -0.3), 0], [...tw(0.55, -1.25), 0], [...tw(-0.5, -1.35), 0]];
+  const want = [[...tw(-0.05, -0.55), 1], [...tw(0.25, 0.62), 1], [...tw(0.95, -0.2), 1], [...tw(-0.62, 0.72), 1], [...tw(-1.15, -0.3), 0], [...tw(0.55, -1.25), 0], [...tw(-0.5, -1.35), 0], [...tw(-1.3, 0.6), 0], [...tw(1.1, 0.9), 0]];
   let nets = 0;
   for (const [x, z, wet] of want){ const nn = nearNode(x, z), s = site(x, z, 5.2, 6.4, { water: true, max: 7, face: [nn[0], nn[1]], maxR: R0 + 6, k: 0.78 }); if (!s) continue;
     const hs = stiltHouse(s.x, s.z, s.ry, { floor: wet ? DY + 0.15 : undefined, nets: nets++ % 2 === 0 }), n2 = nearNode(...hs.front), d = Math.hypot(n2[0] - hs.front[0], n2[1] - hs.front[1]);
@@ -1060,7 +1092,7 @@ function bDust(t){
   { let acc = 0; for (let i = 0; i < rp.length - 1; i++){ const [ax, az] = rp[i], [bx, bz] = rp[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L;
       for (let d = 0; d < L; d += 3){ const x = ax + ux * d, z = az + uz * d; if (Math.hypot(x, z) < 5 || Math.cos(Math.atan2(z, x) - ang) < 0.2 || Math.hypot(x, z) > R0 + 16) continue; rpts.push([x + uz * 5.6, z - ux * 5.6]); } acc += L; } }
   const rkeep = rpts.filter(([x, z]) => !t.keep.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr - 0.6));
-  if (rkeep.length >= 3){ rails(rkeep); for (const [x, z] of rkeep) occupy(x, z, 1.6);
+  if (rkeep.length >= 3){ rails(rkeep); for (const [x, z] of rkeep) occupy(x, z, 1.2);
     const st = rkeep[0], st2 = rkeep[1], ry = Math.atan2(st2[0] - st[0], st2[1] - st[1]); p = [st[0] - Math.sin(ry) * 2.6, st[1] - Math.cos(ry) * 2.6]; if (free(p[0], p[1], 1.6, { plaza: true, roadPad: 0.3 })) tipple(p[0], p[1], ry + Math.PI);
     oreCartAt(rkeep[2][0], rkeep[2][1], ry);
     // 레일 위를 오가는 광차 하나
@@ -1079,11 +1111,14 @@ function bDust(t){
   for (const [x, z] of [[9, 4], [-9, -4], [4, -9], [-5, 8]]){ p = prop(x, z, 0.6, { roadPad: 0.4 }); if (p) P.lamp(p[0], p[1], 'iron', 0); }
   // 활기 (dust_lively): 길 위 깃발 줄 · 등불 줄 · 지붕 깃발 · 화로 둘 더
   t.chg.dust = subMesh(() => {
-    const pairs = []; for (const k of [-0.45, 0.4]){ const rn = roadNear(OX + Math.cos(ang) * R0 * k, OZ + Math.sin(ang) * R0 * k); if (!rn) continue; const sg = rn[3], ux = sg.ex / Math.sqrt(sg.l2), uz = sg.ez / Math.sqrt(sg.l2), lx = rn[0] - OX, lz = rn[1] - OZ, off = sg.w / 2 + 1.6;
-      const a = [lx - uz * off, lz + ux * off], b = [lx + uz * off, lz - ux * off]; if (free(a[0], a[1], 0.3, { plaza: true, roadPad: 0 }) && free(b[0], b[1], 0.3, { plaza: true, roadPad: 0 })){ const pa = P.pole(a[0], a[1], 5.2), pb = P.pole(b[0], b[1], 5.2); pairs.push([pa, pb]); } }
+    const pairs = [], used = []; const po = { plaza: true, roadPad: 0.1, keepK: 0.4 };
+    for (const k of [-0.45, 0.4, -0.25, 0.2, 0.62, -0.68, 0]){ if (pairs.length >= 2) break; const rn = roadNear(OX + Math.cos(ang) * R0 * k, OZ + Math.sin(ang) * R0 * k); if (!rn) continue; const sg = rn[3], ux = sg.ex / Math.sqrt(sg.l2), uz = sg.ez / Math.sqrt(sg.l2), lx = rn[0] - OX, lz = rn[1] - OZ;
+      if (used.some(([x, z]) => Math.hypot(x - lx, z - lz) < 8)) continue;
+      for (const extra of [0.8, 1.4, 2.2]){ const off = sg.w / 2 + extra, a = [lx - uz * off, lz + ux * off], b = [lx + uz * off, lz - ux * off]; if (free(a[0], a[1], 0.3, po) && free(b[0], b[1], 0.3, po)){ const pa = P.pole(a[0], a[1], 5.2), pb = P.pole(b[0], b[1], 5.2); occupy(a[0], a[1], 0.5); occupy(b[0], b[1], 0.5); pairs.push([pa, pb]); used.push([lx, lz]); break; } } }
     for (const [pa, pb] of pairs){ P.pennants(pa, pb, 0.9, ['fabricR', 'fabricY', 'fabricB', 'fabricW']); P.lights([pa[0], pa[1] - 0.6, pa[2]], [pb[0], pb[1] - 0.6, pb[2]], 0.7, 'lampD', 2, 0xffb050); }
     if (pairs.length === 2) for (const i of [0, 1]) P.lights(pairs[0][i], pairs[1][i], 1.2, 'lampD', 2, 0xffb050, 1.8);
-    for (const [x, z] of [[0, -11], [-11, 3]]){ const q = spot(x, z, 0.6, { plaza: true, max: 4 }); if (q) P.lamp(q[0], q[1], 'iron', 0, { grp: 2, sparks: false }); }
+    for (const [x, z] of [[0, -11], [-11, 3], [11, 8]]){ const q = spot(x, z, 0.6, { plaza: true, max: 5 }); if (q){ P.lamp(q[0], q[1], 'iron', 0, { grp: 2, sparks: false }); occupy(q[0], q[1], 0.6); } }
+    for (const [x, z, c] of [[-14, 6, 'fabricR'], [14, -10, 'fabricY'], [6, 16, 'fabricB'], [-16, -12, 'fabricG']]){ const q = spot(x, z, 0.4, { plaza: true, max: 6 }); if (!q) continue; const top = P.pole(q[0], q[1], 6.0); K.geo(c, triG([top[0], top[1], top[2]], [top[0], top[1] - 0.8, top[2]], [top[0] + 1.3, top[1] - 0.4, top[2]])); K.geo('gold', sph(0.1, 5, 4), top[0], top[1] + 0.25, top[2]); occupy(q[0], q[1], 0.5); }
   }, [0, t.y, 0]);
   t.chg.dust.visible = false;
   entrySigns(t);
@@ -1140,7 +1175,8 @@ function bStar(t){
   const p1 = site(7, 14, 6.5, 5.5, { maxDh: 1.2, max: 10 }); if (p1){ pit(p1.x, p1.z, 5.6, 4.6, p1.ry); const sx = p1.x - Math.sin(p1.ry) * 0.2, sz = p1.z - Math.cos(p1.ry) * 0.2; scaffold(sx + Math.cos(p1.ry) * 3.2, sz - Math.sin(p1.ry) * 3.2, p1.ry, 5); }
   const p2 = spNear(t, ['excavation']) ? null : site(-9, 16, 5.5, 4.8, { maxDh: 1.2, max: 10 }); if (p2){ pit(p2.x, p2.z, 4.6, 3.8, p2.ry); const cx = p2.x - Math.sin(p2.ry) * 6.4, cz = p2.z - Math.cos(p2.ry) * 6.4; if (free(cx, cz, 2.2, { plaza: true })){ crane(cx, cz, p2.ry); occupy(cx, cz, 3); } }
   // 무너진 왕도 거리 조각
-  if (!spNear(t, ['ruined_street'])){ s = site(17, 6, 8, 16, { maxDh: 2, max: 10, k: 0.7, roadPad: 1.5 }); if (s) ruinedStreet(s.x, s.z, s.ry + Math.PI / 2, 13); }
+  if (!spNear(t, ['ruined_street'])) sites([[17, 6], [16, 14], [-16, -15], [-18, 12], [12, 20]], 1, 7.5, 12, { maxDh: 2, max: 6, k: 0.68, roadPad: 1.2 }, s => ruinedStreet(s.x, s.z, s.ry + Math.PI / 2, 10.5));
+  trees([[-22, -12], [24, -14], [-24, 16], [22, 20], [6, -26]], 3, 'pine', 0.9, 1.3);
   // 별 지도 · 망원경 · 화톳불 · 짐 · 손수레 · 깃발 · 쇠 화로
   p = prop(-6, -12, 1.0); if (p){ starBoard(p[0], p[1], faceTo(p[0], p[1])); const q = prop(p[0] + 1.8, p[1] + 0.6, 0.7, { max: 3 }); if (q) telescope(q[0], q[1], faceTo(q[0], q[1]) + Math.PI); }
   p = prop(-10, 4, 1.4); if (p){ P.campfire(p[0], p[1]); for (let i = 0; i < 2; i++){ const a = i * 2.6 + 0.6, q = [p[0] + Math.cos(a) * 2.1, p[1] + Math.sin(a) * 2.1]; if (free(q[0], q[1], 0.5, { plaza: true })) P.logSeat(q[0], q[1], a + Math.PI / 2, 1.6); } }
@@ -1199,7 +1235,7 @@ function bFort(t){
   // 막사 둘 · 치료소 · 지휘 천막
   for (const [x, z, ky] of [[10, -7, 'fabricR'], [-13, 4, 'fabricR']]){ s = site(x, z, 7.2, 4.8, { maxDh: 1.6, max: 8 }); if (s) pavilion(s.x, s.z, s.ry, { w: 6.8, d: 4.4, key: 'canvasD', stripe: ky, roof: ky, cap: 'iron' }); }
   s = site(12, 8, 6.2, 5.2, { maxDh: 1.6, max: 8 }); if (s){ pavilion(s.x, s.z, s.ry, { w: 5.8, d: 4.8, key: 'canvas', stripe: 'fabricW', roof: 'fabricW', emblem: 'fabricG', cap: 'gold' }); const q = prop(s.x + Math.cos(s.ry) * 3.8, s.z - Math.sin(s.ry) * 3.8, 1.0, { max: 3 }); if (q) P.clutter(q[0], q[1], 2, 0.7); }
-  s = site(-11, -12, 6, 5, { maxDh: 1.6, max: 8 }); if (s) pavilion(s.x, s.z, s.ry, { w: 5.4, d: 4.4, key: 'fabricB', stripe: 'fabricY', roof: 'fabricB', cap: 'gold' });
+  sites([[-11, -12], [-4, -14], [-15, -4], [4, -14]], 1, 6, 5, { maxDh: 1.8, max: 6 }, s => pavilion(s.x, s.z, s.ry, { w: 5.4, d: 4.4, key: 'fabricB', stripe: 'fabricY', roof: 'fabricB', cap: 'gold' }));
   // 투석기 (북쪽을 봐요)
   if (!spNear(t, ['catapult'])){ s = site(2, 9, 3.4, 5.2, { maxDh: 1.2, max: 8, face: Math.PI }); if (s) catapult(s.x, s.z, Math.PI); }
   // 깃발 · 화로 · 무기 걸이 · 허수아비 · 짐 · 모닥불
@@ -1254,7 +1290,7 @@ function bFrost(t){
   lowWall(0, 0, R0 * 0.9, R0 * 0.72);
   s = site(5, -12, 13, 9, { maxDh: 3, max: 10, k: 0.78 }); if (s) abbey(s.x, s.z, s.ry - Math.PI / 2);
   if (!spNear(t, ['bell_tower'])){ s = site(14, 5, 4.6, 4.6, { maxDh: 2.5, max: 8 }); if (s) bellTower(s.x, s.z); }
-  for (const [x, z] of [[-10, 10], [-1, 13], [9, 12]]){ s = site(x, z, 4, 3.8, { maxDh: 2, max: 8 }); if (s) house(s.x, s.z, s.ry, { w: 3.6, d: 3.2, h: 2.5, wall: 'stone', base: 'stoneD', roof: 'slate', paint: 'woodD', timber: false, flowers: false, snow: true, back: false, pitch: 0.9 }); }
+  sites([[-10, 10], [-1, 13], [9, 12], [-16, 2], [16, -2], [-14, -12]], 3, 4, 3.8, { maxDh: 2.2, max: 6 }, s => house(s.x, s.z, s.ry, { w: 3.6, d: 3.2, h: 2.5, wall: 'stone', base: 'stoneD', roof: 'slate', paint: 'woodD', timber: false, flowers: false, snow: true, back: false, pitch: 0.9 }));
   // 눈 덮인 정원: 작은 전나무 · 얼어붙은 연못 · 돌 등불 · 석상
   p = prop(-11, -7, 3.2); if (p){ K.geo('ice', new THREE.CircleGeometry(2.4, 18).rotateX(-Math.PI / 2), p[0], gy(p[0], p[1]) + 0.07, p[1]); for (let i = 0; i < 12; i++){ const a = i / 12 * TAU; K.geo('stone', rockG(rr(0.25, 0.4), 0.6, 0), p[0] + Math.cos(a) * 2.6, gy(p[0], p[1]) + 0.1, p[1] + Math.sin(a) * 2.6); snowPile(p[0] + Math.cos(a + 0.2) * 3.0, p[1] + Math.sin(a + 0.2) * 3.0, 0.35); } }
   for (const [x, z] of [[-17, -3], [-15, -13], [-5, -15], [-19, 6], [18, -8]]){ p = prop(x, z, 0.8); if (p) pineTree(p[0], p[1], rr(0.9, 1.3)); }
@@ -1277,7 +1313,12 @@ function bVillageFest(t){
     const mp = [26 - t.x, gy(26 - t.x, 559 - t.z) + 8.4, 559 - t.z];
     for (const [x, z] of [[30, 542], [40, 560], [17, 562]]) P.lights(mp, lampTop(x, z), 1.0, 'lampF', 3, 0xffd080, 1.6);
     P.lights(lampTop(-30, 540), lampTop(-12, 562), 0.9); P.lights(lampTop(-38, 562), lampTop(-12, 562), 0.8);
-    P.pennants(lampTop(-30, 540), lampTop(-38, 562), 0.8, ['fabricR', 'fabricY', 'fabricB', 'fabricG', 'fabricW']);
+    const PF = ['fabricR', 'fabricY', 'fabricB', 'fabricG', 'fabricW', 'fabricP'];
+    P.pennants(lampTop(-30, 540), lampTop(-38, 562), 0.8, PF); P.pennants(lampTop(30, 542), lampTop(40, 560), 0.8, PF); P.pennants(lampTop(-12, 562), lampTop(17, 562), 1.0, PF);
+    // 큰길 위 깃발 줄 (가로등 사이 X 자로)
+    for (const [z0, z1] of [[512, 528], [571, 588], [588, 612]]){ P.pennants(lampTop(-5.6, z0 + 1.5), lampTop(5.6, z1), 0.7, PF); P.pennants(lampTop(5.6, z0), lampTop(-5.6, z1 + 1.5), 0.7, PF); }
+    // 광장 둘레 꽃 아치 (큰길 위)
+    flowerArch(0 - t.x, 538 - t.z, 0, 6.4); flowerArch(0 - t.x, 569 - t.z, 0, 6.4);
     // 꽃 아치: 서문(농원길) · 동문
     const rn = roadNear(-66, 553); if (rn && rn[2] < 4){ const s = rn[3]; flowerArch(rn[0] - t.x, rn[1] - t.z, Math.atan2(s.ex, s.ez), 6.4); }
     flowerArch(66 - t.x, 559 - t.z, Math.PI / 2, 6.4);
@@ -1285,8 +1326,27 @@ function bVillageFest(t){
     { const a = lampTop(-5.6, 529.5), b = lampTop(5.6, 528), uv = signCell('새싹 축제', 'Harvest Festival'), mx = (a[0] + b[0]) / 2, my = Math.max(a[1], b[1]) + 0.2, mz = (a[2] + b[2]) / 2; link('rope', a, [mx, my, mz], 0.02); link('rope', [mx, my, mz], b, 0.02);
       K.push(mx, my - 0.75, mz, Math.atan2(b[0] - a[0], b[2] - a[2]) + Math.PI / 2); K.box('fabricR', 3.4, 1.0, 0.04, 0, 0, 0); K.geo('signT', quadUV(3.0, 0.75, uv), 0, 0, 0.03); K.geo('signT', quadUV(3.0, 0.75, uv), 0, 0, -0.03, 0, Math.PI, 0); K.pop(); }
   }, [0, t.y, 0]);
+  skyLanterns(t.chg.festival, [0 - t.x, t.y, 556 - t.z], 46, LOW ? 16 : 30);
   t.chg.festival.visible = false;
 }
+// 하늘로 떠오르는 종이 등불 (축제): 인스턴스 + 같은 식으로 움직이는 빛 점 (그룹 안 · 그룹이 보일 때만)
+function skyLanterns(parent, c, r, n){
+  const geo = vcGeo(() => { K.geo('lampF', cyl(0.26, 0.2, 0.5, 7), 0, 0, 0); K.geo('woodD', cyl(0.27, 0.27, 0.04, 7), 0, 0.26, 0); K.geo('woodD', tor(0.2, 0.02, 3, 8), 0, -0.25, 0, Math.PI / 2); });
+  const im = new THREE.InstancedMesh(geo, vcMat(grainTex), n); im.frustumCulled = false; im.castShadow = false; const inner = parent.children[0]; inner.add(im);
+  const B0 = [], seeds = new Float32Array(n), base = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++){ const a = R() * TAU, d = Math.sqrt(R()) * r, o = [c[0] + Math.cos(a) * d, c[1] + rr(3, 6), c[2] + Math.sin(a) * d * 0.6]; B0.push(o); seeds[i] = R(); base.set(o, i * 3); }
+  const pos = (i, t, v) => { const sd = seeds[i], b = B0[i], life = (t * (0.018 + sd * 0.012) + sd) % 1; return v.set(b[0] + Math.sin(t * 0.3 + sd * 40) * 1.6 + life * 6, b[1] + life * 34, b[2] + Math.cos(t * 0.25 + sd * 30) * 1.6); };
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new V3(), sc = new V3();
+  const upd = t => { for (let i = 0; i < n; i++){ pos(i, t, v); const life = (t * (0.018 + seeds[i] * 0.012) + seeds[i]) % 1, k = Math.min(1, life * 8, (1 - life) * 4); e.set(Math.sin(t + i) * 0.12, i, Math.cos(t * 0.8 + i) * 0.12); q.setFromEuler(e); m4.compose(v, q, sc.set(k, k, k)); im.setMatrixAt(i, m4); } im.instanceMatrix.needsUpdate = true; };
+  upd(0); anim((dt, t) => { if (parent.visible) upd(t); });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(base, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+  const pm = new THREE.ShaderMaterial({ uniforms: { uTime: TU, uScale: { value: 500 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    vertexShader: `attribute float aSeed; uniform float uTime, uScale; varying float vA; void main(){ float life = mod(uTime * (0.018 + aSeed * 0.012) + aSeed, 1.0); vec3 p = position + vec3(sin(uTime * 0.3 + aSeed * 40.0) * 1.6 + life * 6.0, life * 34.0, cos(uTime * 0.25 + aSeed * 30.0) * 1.6);
+      vA = min(1.0, min(life * 8.0, (1.0 - life) * 4.0)); vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = 2.4 * uScale / -mv.z; }`,
+    fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d); a = a * a * vA * 0.8; gl_FragColor = vec4(vec3(1.0, 0.72, 0.36) * a, a); }` });
+  const pts = new THREE.Points(g, pm); pts.frustumCulled = false; inner.add(pts); RGU.push(pm);
+}
+const RGU = [];
 
 // ───────────────────────── 조립: 정착지 ─────────────────────────
 const BUILD = { farm: bFarm, treehouse: bLeaf, fishing: bMist, stilt: bStilt, mining: bDust, dig: bStar, fort: bFort, monastery: bFrost };
@@ -1305,7 +1365,9 @@ const RDMAT = (() => { const m = std({ map: grainTex, vertexColors: true, side: 
     sh.vertexShader = 'attribute float aRd;\nuniform float uRH[96];\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tif (uRH[int(aRd + 0.5)] > 0.5 || distance(cameraPosition, transformed) > 330.0) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);'); };
   m.customProgramCacheKey = () => 'twrd'; OWN.push(m); return m; })();
 const RDS = [], RBY = {};
-const baseY = (o, x, z) => o.top ? Math.max(F.groundFn(x, z), H(x, z)) : H(x, z);
+// 걸을 수 있는 면 (그루터기 윗면 · 봉우리 돔 같은 발판 포함) — 발판은 땅보다 높을 때만 이겨요
+const baseY = (o, x, z) => Math.max(F.groundFn(x, z), H(x, z));
+const onTop = (o, x, z) => !!o.top || F.groundFn(x, z) > H(x, z) + 0.3;
 function rdFace(x, z){
   for (const t of TOWNS) if (Math.hypot(x - t.x, z - t.z) < t.r + 4) return Math.atan2(t.x - x, t.z - z);
   const rn = roadNear(x, z); if (rn && rn[2] < 45) return Math.atan2(rn[0] - x, rn[1] - z);
@@ -1359,7 +1421,7 @@ const rgGeo = new THREE.BufferGeometry(); rgGeo.setAttribute('position', new THR
 const RGMAT = new THREE.ShaderMaterial({ uniforms: { uTime: TU, uScale: { value: 400 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
   vertexShader: `attribute float aOn; uniform float uTime, uScale; varying float vA; varying float vT;
     void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); float d = -mv.z; vT = uTime * 2.2 + position.x * 0.7; vA = aOn * smoothstep(170.0, 120.0, d) * (0.7 + 0.3 * sin(vT));
-      gl_Position = projectionMatrix * mv; position.y += 0.0; if (vA < 0.01) gl_Position = vec4(0.0, 0.0, -2.0, 1.0); gl_PointSize = max(1.6 * uScale / d * (0.9 + 0.2 * sin(vT * 1.3)), 6.0); }`,
+      gl_Position = projectionMatrix * mv; if (vA < 0.01) gl_Position = vec4(0.0, 0.0, -2.0, 1.0); gl_PointSize = max(1.6 * uScale / d * (0.9 + 0.2 * sin(vT * 1.3)), 6.0); }`,
   fragmentShader: `varying float vA; varying float vT; void main(){ vec2 p = gl_PointCoord - 0.5; float r = length(p), a = atan(p.y, p.x) + vT * 0.25;
     float star = smoothstep(0.5, 0.0, r) * (0.35 + 0.65 * pow(abs(cos(a * 2.0)), 18.0)) + smoothstep(0.18, 0.0, r);
     float al = star * vA; gl_FragColor = vec4(vec3(1.0, 0.86, 0.45) * al * 1.5, al); }` });
@@ -1377,7 +1439,7 @@ const PILLARS = [];
 function bKeystone(L){
   const k = L.keystone, s = k.small ? 0.55 : 1, rec = !!k.record, x = k.c[0], z = k.c[1];
   srand(hashS(k.id)); OX = x; OZ = z;
-  const [lo, hi] = footC(x, z, 2.4 * s), y0 = k.top ? baseY(k, x, z) : (hi - lo > 1.2 ? (lo + hi) / 2 + 0.3 : hi), yb = k.top ? y0 - 0.1 : lo - 0.25;
+  const top = onTop(k, x, z), [lo, hi] = footC(x, z, 2.4 * s), y0 = top ? baseY(k, x, z) : (hi - lo > 1.2 ? (lo + hi) / 2 + 0.3 : hi), yb = top ? y0 - 0.1 : lo - 0.25;
   const g = new THREE.Group(); g.position.set(x, 0, z); g.name = 'ks_' + k.id;
   const o = { id: k.id, L, x, z, y: y0, s, g, k: 0, cols: [], hidden: false, active: false };
   COLREC = o.cols; CUR = { anims: [], smoke: [], sparks: [], occ: [], keep: [], rects: [], r: 5, near: g, mapbox: [] };
@@ -1386,9 +1448,10 @@ function bKeystone(L){
   let sb = new LB(1e9); B = sb; K = new G.Kit(sb);
   K.geo('stoneD', cylM(2.4 * s, 2.6 * s, y0 + 0.4 * s - yb, 8), 0, (y0 + 0.4 * s + yb) / 2, 0); K.geo('stone', cylM(1.6 * s, 1.8 * s, 0.4 * s, 8), 0, y0 + 0.55 * s, 0);
   K.geo('darkst', cyl(mw * 0.62, mw, mh, 4).rotateY(Math.PI / 4), 0, ph + mh / 2, 0, 0, 0, 0, 1, 1, dz); K.geo('darkst', cone(mw * 0.62 * 1.02, 0.8 * s, 4).rotateY(Math.PI / 4), 0, ph + mh + 0.4 * s, 0, 0, 0, 0, 1, 1, dz);
-  const RS = []; const nRing = rec ? 6 : 8; for (let i = 0; i < nRing; i++){ const a = i / nRing * TAU + 0.2, rx = Math.cos(a) * 3.5 * s, rz = Math.sin(a) * 3.5 * s, h = rr(0.9, 1.5) * s, yy = (k.top ? y0 : H(x + rx, z + rz)) - 0.15; K.push(rx, yy, rz, -a - Math.PI / 2, rr(-0.06, 0.06)); K.geo('stone', cyl(0.2 * s, 0.32 * s, h, 5), 0, h / 2, 0); K.pop(); RS.push([rx, yy + h * 0.6, rz, a]); cc(rx, rz, 0.35 * s); }
+  const RS = []; const nRing = rec ? 6 : 8; for (let i = 0; i < nRing; i++){ const a = i / nRing * TAU + 0.2, rx = Math.cos(a) * 3.5 * s, rz = Math.sin(a) * 3.5 * s, h = rr(0.9, 1.5) * s, gb = baseY(k, x + rx, z + rz), yy = (top ? gb : H(x + rx, z + rz)) - 0.15; if (top && Math.abs(gb - y0) > 1.0) continue;   // 그루터기 · 봉우리 가장자리 밖은 빼요
+    K.push(rx, yy, rz, -a - Math.PI / 2, rr(-0.06, 0.06)); K.geo('stone', cyl(0.2 * s, 0.32 * s, h, 5), 0, h / 2, 0); K.pop(); RS.push([rx, yy + h * 0.6, rz, a]); cc(rx, rz, 0.35 * s); }
   for (let i = 0; i < 5; i++){ const a = R() * TAU, d = rr(2.7, 3.2) * s; K.geo('mossy', rockG(rr(0.2, 0.35) * s, 0.6, 0), Math.cos(a) * d, y0 + 0.4 * s, Math.sin(a) * d); }
-  buildMerged(sb.g, g, true);
+  buildMerged(sb.g, g, true, true);
   // 룬 홈 (자기 재질 · 빛 세기 = k)
   sb = new LB(1e9); B = sb; K = new G.Kit(sb);
   const zAt = yy => (hwB + (hwT - hwB) * (yy - ph) / mh) * dz;
@@ -1407,7 +1470,7 @@ function bKeystone(L){
   for (let v = 0; v < 3; v++){ const pts = [], a0 = v * 2.1 + R(); for (let i = 0; i <= 7; i++){ const yy = ph - 0.2 + i / 7 * mh * 0.85, a = a0 + i * 1.05, r = (hwB + (hwT - hwB) * (yy - ph) / mh) * 1.15 + 0.12 * s; pts.push([Math.cos(a) * r, yy, Math.sin(a) * r * Math.max(dz * 1.6, 0.7)]); } thornVine(pts, 0.16 * s, 0.05 * s, 10); }
   for (let v = 0; v < 4; v++){ const a = v / 4 * TAU + R(), r0 = 0.6 * s, r1 = 2.4 * s; thornVine([[Math.cos(a) * r0, ph - 0.1, Math.sin(a) * r0], [Math.cos(a + 0.4) * (r0 + r1) / 2, y0 + 0.7 * s, Math.sin(a + 0.4) * (r0 + r1) / 2], [Math.cos(a + 0.7) * r1, y0 + 0.3 * s, Math.sin(a + 0.7) * r1]], 0.12 * s, 0.04 * s, 5); }
   for (let i = 0; i < 5; i++){ const a = R() * TAU, d = rr(1.0, 2.0) * s; K.geo('crystalP', new THREE.OctahedronGeometry(rr(0.15, 0.3) * s, 0), Math.cos(a) * d, y0 + 0.6 * s, Math.sin(a) * d, R(), R(), R(), 0.7, 1.8, 0.7); }
-  const vg = new THREE.Group(); vg.position.y = y0; const vin = new THREE.Group(); vin.position.y = -y0; vg.add(vin); buildMerged(sb.g, vin, false); g.add(vg);
+  const vg = new THREE.Group(); vg.position.y = y0; const vin = new THREE.Group(); vin.position.y = -y0; vg.add(vin); buildMerged(sb.g, vin, false, true); g.add(vg);
   // 빛 · 빛기둥 · 떠오르는 빛가루
   const spr = X.glowSprite(0x6af0ff, 7 * s, 0); spr.position.set(0, ph + mh * 0.62, 0); g.add(spr);
   const pm = new THREE.MeshBasicMaterial({ color: 0x8af4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: DS, fog: false });
@@ -1436,3 +1499,120 @@ buildGlows();
 if (PLAT.length) F.groundFn = townGround;
 SA.t.needsUpdate = true;
 F.addCollider = _addCol; STATS.colliders = MYCOL.length;
+
+// ───────────────────────── 이야기 변화 (정착지 쪽) ─────────────────────────
+// e = 정점 발광 묶음 번호 (uGrp) · g = 빛 점 묶음 (uOn) · groups = 켜고 끄는 장식 묶음
+const CHG = {
+  swamp_lanterns: { e: 0, g: 1, k: 0, tgt: 0, groups: () => [], at: () => ['t_stilt'] },
+  dust_lively: { e: 1, g: 2, k: 0, tgt: 0, groups: () => [TBY.t_dust && TBY.t_dust.chg.dust], at: () => ['t_dust'] },
+  festival: { e: 2, g: 3, k: 0, tgt: 0, groups: () => [TBY.village && TBY.village.chg.festival, TBY.t_farm && TBY.t_farm.chg.festival], at: () => ['village', 't_farm'] },
+};
+function applyChg(c){
+  VU.uGrp.value[c.e] = c.k; GON[c.g] = c.k;
+  const sc = c.k >= 0.999 ? 1 : c.tgt > 0.5 ? easeOB(c.k) : c.k;
+  for (const g of c.groups()) if (g){ g.visible = c.k > 0.002; g.scale.setScalar(Math.max(0.002, sc)); }
+}
+function setChange(key, on, instant){
+  const c = CHG[key]; if (!c) return false;
+  c.tgt = on ? 1 : 0;
+  if (instant){ c.k = c.tgt; c.anim = false; applyChg(c); return true; }
+  c.anim = true;
+  if (on && F.inField) for (const id of c.at()){ const t = TBY[id]; if (!t || Math.hypot(X.player.pos.x - t.x, X.player.pos.z - t.z) > 160) continue; try { for (let i = 0; i < 5; i++) X.burst(new V3(t.x + rr(-t.r, t.r) * 0.5, rr(2, 5), t.z + rr(-t.r, t.r) * 0.5), key === 'swamp_lanterns' ? 0x9aff70 : 0xffd080, 14, 2.2, 0.2, 1.2, -1, 2); } catch (e){} }
+  return true;
+}
+for (const k in CHG) applyChg(CHG[k]);
+
+// ───────────────────────── 지도 · 이름표 · 처음 오면 알림 ─────────────────────────
+const TINFO = {};
+for (const t of TOWNS) TINFO[t.id] = { id: t.id, name: t.name, en: t.en, desc: t.desc, c: [t.x, t.z], r: t.r, region: t.region, style: t.style, existing: t.existing, lore: t.L, get seen(){ return !!S.towns.seen[t.id]; } };
+const LIST = TOWNS.filter(t => !t.existing).map(t => TINFO[t.id]);
+const LABELS = {};
+for (const t of TOWNS){ if (t.existing || !F.label) continue; LABELS[t.id] = F.label({ pos: new V3(t.x, Math.max(t.top, t.y + 10) + 2.5, t.z), text: `🏘 ${t.name}`, cls: 'place', max: 320 }); LABELS[t.id].hidden = true; }
+function drawTowns(ctx, k){
+  const pp = X.player.pos;
+  ctx.save(); ctx.fillStyle = 'rgba(120,96,70,.95)'; ctx.strokeStyle = 'rgba(30,20,10,.6)'; ctx.lineWidth = 0.4;
+  for (const t of TOWNS){ if (t.hidden || Math.abs(t.x - pp.x) > 260 || Math.abs(t.z - pp.z) > 260) continue; for (const [x, z, hw, hd, ry] of t.mapbox){ ctx.save(); ctx.translate(x * k, z * k); ctx.rotate(-ry); ctx.fillRect(-hw * k, -hd * k, hw * 2 * k, hd * 2 * k); ctx.strokeRect(-hw * k, -hd * k, hw * 2 * k, hd * 2 * k); ctx.restore(); } }
+  ctx.restore();
+  const ms = 1.3 / ((F.area && F.area.mapZoom) || 5);
+  for (const t of TOWNS){ if (t.existing || t.hidden) continue; const d = Math.hypot(t.x - pp.x, t.z - pp.z); if (d > 420) continue;
+    ctx.save(); ctx.translate(t.x * k, t.z * k); ctx.rotate(-G.camYaw); ctx.scale(ms, ms); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '13px sans-serif'; ctx.fillText('🏘', 0, -8); ctx.font = "700 10px 'Gowun Batang'"; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,14,8,.85)'; ctx.strokeText(t.name, 0, 8); ctx.fillStyle = '#fff3d6'; ctx.fillText(t.name, 0, 8); ctx.restore(); }
+}
+if (F.area){ const prevDraw = F.area.mapDraw || null; F.area.mapDraw = (ctx, k) => { if (prevDraw) prevDraw(ctx, k); drawTowns(ctx, k); }; }
+function enterTown(t){
+  const first = !S.towns.seen[t.id], now = performance.now();
+  if (first){ S.towns.seen[t.id] = Date.now(); X.save(); }
+  if (first || now - (t.lastNote || -1e9) > 120000){ t.lastNote = now;
+    F.note(`🏘 <b>${t.name}</b>${t.en ? ` <span style="opacity:.75;font:700 10px 'Cinzel';letter-spacing:.2em">${t.en.toUpperCase()}</span>` : ''}`, first ? 4.6 : 2.8);
+    if (first && t.desc) F.note(`<span style="font-weight:500">${t.desc}</span>`, 5.5); }
+  BUS.emit('town', { id: t.id, first });
+}
+
+// ───────────────────────── 매 프레임 ─────────────────────────
+let cullT = 0, visT = 0, envT = 0, nightK = 0;
+const ACTIVE = [];
+function cull(px, pz){
+  ACTIVE.length = 0;
+  for (const t of TOWNS){ if (!t.near) continue; const d = Math.hypot(px - t.x, pz - t.z), near = !t.hidden && d < t.nearR; t.near.visible = near; if (t.farIdx >= 0) FARH[t.farIdx] = near || t.hidden ? 1 : 0; t.active = near && d < 175; t.d = d; if (t.active) ACTIVE.push(t);
+    const cast = near && d < (LOW ? 70 : 110); if (cast !== t.castOn){ t.castOn = cast; for (const m of t.casters) m.castShadow = cast; }
+    const det = d < (LOW ? 95 : 125); if (det !== t.detailOn){ t.detailOn = det; for (const o of t.detail) o.visible = det; } }
+  for (const o of KSS){ const d = Math.hypot(px - o.x, pz - o.z); o.g.visible = !o.hidden && d < 290; o.active = o.g.visible && d < 170; o.d = d; }
+  const ls = []; for (const id in LABELS){ const t = TBY[id]; LABELS[id].hidden = true; if (!t.hidden && t.d > t.r * 0.9 && t.d < 300) ls.push(t); }
+  ls.sort((a, b) => a.d - b.d); for (let i = 0; i < Math.min(2, ls.length); i++){ const t = ls[i]; LABELS[t.id].hidden = false; LABELS[t.id].set(`🏘 ${t.name}`, `${Math.round(t.d)}m`); }
+}
+function visits(px, pz){ if (X.tpBusy || X.dead) return; for (const t of TOWNS){ if (t.existing || t.hidden) continue; const d = Math.hypot(px - t.x, pz - t.z); if (d < t.r && !t.inside){ t.inside = true; enterTown(t); } else if (d > t.r + 10) t.inside = false; } }
+const nightTarget = () => { if (typeof F.timeOfDay === 'number'){ const k = Math.abs(F.timeOfDay - 0.5) * 2; return clamp((k - 0.4) / 0.2, 0, 1); } if (typeof F.isNight === 'function') return F.isNight() ? 1 : 0; return 0; };
+G.hooks.push((dt, rdt) => {
+  if (!F.inField) return;
+  TU.value += dt;
+  const px = X.player.pos.x, pz = X.player.pos.z;
+  cullT -= rdt; if (cullT <= 0){ cullT = 0.25; cull(px, pz); }
+  visT -= rdt; if (visT <= 0){ visT = 0.4; visits(px, pz); }
+  for (const t of ACTIVE) for (const f of t.anims) f(dt, TU.value);
+  for (const o of KSS){ if (!o.active || o.k <= 0) continue; o.runeMat.emissiveIntensity = (0.05 + 2.6 * o.k) * (0.85 + 0.15 * Math.sin(TU.value * 2.1 + o.x)); }
+  for (const key in CHG){ const c = CHG[key]; if (!c.anim) continue; const sp = c.tgt > c.k ? 0.45 : 0.8; c.k = c.tgt > c.k ? Math.min(c.tgt, c.k + rdt * sp) : Math.max(c.tgt, c.k - rdt * sp); applyChg(c); if (c.k === c.tgt) c.anim = false; }
+  nightK += (nightTarget() - nightK) * Math.min(1, rdt * 1.5); VU.uNight.value = nightK;
+  const us = innerHeight * G.renderer.getPixelRatio() * 0.5 / Math.tan(G.camera.fov * Math.PI / 360);
+  if (glowPts) glowPts.material.uniforms.uScale.value = us; RGMAT.uniforms.uScale.value = us; for (const m of RGU) m.uniforms.uScale.value = us;
+  for (const o of PILLARS){ if (!o.pil.visible) continue; const d = Math.hypot(px - o.x, pz - o.z); o.pm.opacity = (o.k - 0.5) * 2 * (0.08 + 0.12 * nightK) * clamp((d - 20) / 70, 0.2, 1); }
+  envT -= rdt; if (envT <= 0){ envT = 1; const e = G.M.stone.envMapIntensity ?? 1; for (const m of OWN) m.envMapIntensity = e; }
+});
+// 처음 필드에 들어올 때 내 셰이더를 미리 컴파일 (가까이 갈 때 끊기지 않게)
+let compiled = false;
+function precompile(){
+  if (compiled) return; compiled = true;
+  try { for (const t of TOWNS) if (t.near) t.near.visible = true; for (const o of KSS) o.g.visible = true; for (const k in CHG) for (const g of CHG[k].groups()) if (g){ g.userData.v = g.visible; g.visible = true; }
+    G.renderer.compile(FW, G.camera, G.scene); }
+  catch (e){ console.warn('[towns] 미리 컴파일 실패', e); }
+  for (const k in CHG) for (const g of CHG[k].groups()) if (g) g.visible = !!g.userData.v;
+  cull(X.player.pos.x, X.player.pos.z);
+}
+BUS.on('enterField', () => { cullT = 0; precompile(); });
+BUS.on('leaveField', () => { for (const id in LABELS) LABELS[id].hidden = true; });
+
+// ───────────────────────── API ─────────────────────────
+function setCols(list, on){ for (const c of list){ if (on){ if (!c._cells) F.addCollider(c); } else if (c._cells) F.removeCollider(c); } }
+F.towns = {
+  obj(id){ const t = TBY[id]; if (t) return t.near; const r = RBY[id]; if (r) return r.obj; const k = KBY[id]; if (k) return k.g; return null; },
+  pos(id){ const t = TBY[id]; if (t) return [t.x, t.y, t.z]; const r = RBY[id]; if (r) return [r.x, r.y, r.z]; const k = KBY[id]; if (k) return [k.x, k.y, k.z]; return null; },
+  show(id, on = true){
+    const t = TBY[id]; if (t){ t.hidden = !on; setCols(t.cols, on); cullT = 0; return true; }
+    const r = RBY[id]; if (r){ r.hidden = !on; RHIDE[r.idx] = on ? 0 : 1; setCols(r.cols, on); rdGlow(r, r.glow); r.obj.visible = on; return true; }
+    const k = KBY[id]; if (k){ k.hidden = !on; setCols(k.cols, on); ksApply(k, k.k); cullT = 0; return true; }
+    return false;
+  },
+  setChange,
+  settlementAt(x, z){ let best = null, bk = 1e9; for (const t of TOWNS){ const k = Math.hypot(x - t.x, z - t.z) / t.r; if (k < 1 && k < bk){ bk = k; best = t; } } return best ? TINFO[best.id] : null; },
+  info: id => TINFO[id] || null,
+  list: LIST,
+  changes: () => Object.fromEntries(Object.entries(CHG).map(([k, c]) => [k, c.tgt > 0.5])),
+  readables: () => RDS.map(r => r.id), keystones: () => KSS.map(o => o.id),
+  platformY: platY,
+  __fails: () => Object.fromEntries(TOWNS.filter(t => t.fails).map(t => [t.id, t.fails])),
+};
+const ms = Math.round(performance.now() - T0); TIMES.sort((a, b) => b[1] - a[1]);
+STATS.tris.total = Math.round(TRIS); STATS.ms = ms; STATS.failed = FAILED; STATS.slow = TIMES.slice(0, 4).map(t => t.join(':')).join(' ');
+console.log(`[towns] 정착지 ${STATS.towns} · 읽을거리 ${STATS.readables} · 수호석 ${STATS.keystones} · 충돌체 ${STATS.colliders} · 빛 ${STATS.glows} · 발판 ${STATS.platforms} · 삼각형 ${STATS.tris.total} · ${ms}ms (${STATS.slow})` + (FAILED.length ? ` · 빠짐: ${FAILED.join(', ')}` : ''));
+F.townStats = STATS; F.towns.stats = STATS;
+return F.towns;
+}

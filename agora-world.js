@@ -1230,7 +1230,7 @@ css.textContent = `
 `;
 document.head.appendChild(css);
 const MW = X.mk('div', 'wwmap', `<canvas></canvas><div class="hd"><div class="a">ARCADIA</div><div class="b">아르카디아</div><div class="c"></div></div><div class="side"></div><div class="zm"><button data-z="1">＋</button><button data-z="-1">－</button><button data-z="0">◎</button></div>
-  <div class="lg"><div><i style="color:#7ff3ff">◆</i>룬 비석 (빠른 이동)</div><div><i>?</i>미발견 장소</div><div><i style="color:#ff7a5a">⚔</i>사냥터 (권장 레벨)</div><div><i style="color:#ff5a8a">♛</i>레이드</div><div><i style="color:#ffd36a">◆</i>퀘스트</div></div>
+  <div class="lg"><div><i style="color:#7ff3ff">◆</i>룬 비석 (빠른 이동)</div><div><i>?</i>미발견 장소</div><div><i>🏘</i>정착지</div><div><i style="color:#ff7a5a">⚔</i>사냥터 (권장 레벨)</div><div><i style="color:#ff5a8a">♛</i>레이드</div><div><i style="color:#ffd36a">◆</i>퀘스트</div></div>
   <div class="tip"></div><div class="cf"><div class="q"></div><div class="w"></div><button class="y">이동</button><button class="n">취소</button></div><button class="x">✕</button>`);
 const MC = MW.querySelector('canvas'), mctx = MC.getContext('2d'), mTip = MW.querySelector('.tip'), mCf = MW.querySelector('.cf'), mSide = MW.querySelector('.side');
 const MV2 = { cx: 0, cz: 0, s: 0.5, travel: false, sel: null, hov: null, open: false, t: 0, pend: null };
@@ -1273,6 +1273,11 @@ function drawWorldMap(){
     c.font = `${Math.round(12 * fz)}px sans-serif`; c.fillStyle = '#fff'; c.fillText(dsc ? (raid ? '♛' : LMI[l.type] || '★') : '?', x, y + 1);
     if (dsc && s > 0.6){ c.font = `700 ${Math.round(11 * fz)}px 'Gowun Batang'`; c.lineWidth = 3; c.strokeStyle = 'rgba(20,14,8,.8)'; c.strokeText(l.name, x, y + 19 * fz); c.fillStyle = raid ? '#ffb0c8' : '#fff3d6'; c.fillText(l.name, x, y + 19 * fz); }
     MV2.hits.push({ x, y, r: 13 * fz, kind: 'lm', o: l }); }
+  // 정착지 (agora-towns.js 가 F.towns.list 를 채워요 · 탐험했거나 가 본 곳만)
+  for (const t of (F.towns && F.towns.list) || []){ if (!t.seen && !revealed(t.c[0], t.c[1])) continue; const [x, y] = toS(t.c[0], t.c[1]);
+    c.beginPath(); c.arc(x, y, 11 * fz, 0, TAU); c.fillStyle = 'rgba(70,46,20,.9)'; c.fill(); c.lineWidth = 1.5; c.strokeStyle = '#ffd08a'; c.stroke(); c.font = `${Math.round(12 * fz)}px sans-serif`; c.fillStyle = '#fff'; c.fillText('🏘', x, y + 1);
+    if (s > 0.5){ c.font = `700 ${Math.round(11 * fz)}px 'Gowun Batang'`; c.lineWidth = 3; c.strokeStyle = 'rgba(20,14,8,.8)'; c.strokeText(t.name, x, y + 19 * fz); c.fillStyle = '#ffe2b0'; c.fillText(t.name, x, y + 19 * fz); }
+    MV2.hits.push({ x, y, r: 13 * fz, kind: 'town', o: t }); }
   // 룬 비석
   for (const w of WPS){ const on = wpOn(w.id); if (!on && !revealed(w.c[0], w.c[1])) continue; const [x, y] = toS(w.c[0], w.c[1]), hov = MV2.hov && MV2.hov.o === w, sel = MV2.sel === w.id, r = (hov || sel ? 11 : 8) * fz;
     c.save(); c.translate(x, y); c.rotate(Math.PI / 4); if (on){ c.shadowColor = '#7ff3ff'; c.shadowBlur = 12 + Math.sin(t * 3) * 4; } c.fillStyle = on ? '#7ff3ff' : '#8a8f9a'; c.fillRect(-r / 1.4, -r / 1.4, r * 1.41, r * 1.41); c.strokeStyle = on ? '#e8ffff' : '#444'; c.lineWidth = 1.5; c.strokeRect(-r / 1.4, -r / 1.4, r * 1.41, r * 1.41); c.restore();
@@ -1316,7 +1321,8 @@ MC.addEventListener('pointermove', e => {
   let best = null, bd = 1e9; for (const h of MV2.hits || []){ const d = Math.hypot(h.x - e.clientX, h.y - e.clientY); if (d < h.r && d < bd){ bd = d; best = h; } }
   MV2.hov = best; MC.classList.toggle('hov', !!best);
   if (best){ const o = best.o; mTip.style.display = 'block'; mTip.style.left = e.clientX + 'px'; mTip.style.top = e.clientY + 'px';
-    if (best.kind === 'wp') mTip.innerHTML = `<b>◆ ${o.name}</b>${wpOn(o.id) ? '룬 비석' : '잠든 룬 비석 — 찾아가서 깨우세요'}${wpOn(o.id) ? '<em>클릭: 빠른 이동</em>' : ''}`;
+    if (best.kind === 'town') mTip.innerHTML = `<b>🏘 ${o.name}</b>${o.desc || ''}<em>정착지${o.en ? ' · ' + o.en : ''}</em>`;
+    else if (best.kind === 'wp') mTip.innerHTML = `<b>◆ ${o.name}</b>${wpOn(o.id) ? '룬 비석' : '잠든 룬 비석 — 찾아가서 깨우세요'}${wpOn(o.id) ? '<em>클릭: 빠른 이동</em>' : ''}`;
     else { const d = isDisc(o.id); mTip.innerHTML = d ? `<b>${LMI[o.type] || '★'} ${o.name}</b>${o.desc || ''}${o.raid ? '<em>♛ 레이드 입구</em>' : ''}` : '<b>? 미발견 장소</b>가까이 가 보면 무엇이 있는지 알 수 있어요'; } }
   else mTip.style.display = 'none';
 });

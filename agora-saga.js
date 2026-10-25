@@ -226,12 +226,12 @@ function updFallback(rdt){
 // 키마다 towns · props 의 setChange 를 부르고, 풍차(windmill_spin)는 여기서: F.lmState.windmill 0 → 1 (landmarks 가 회전 속도에 곱해요)
 F.lmState = F.lmState || {};
 const WM = { has: CH.some(c => (c.c.change || []).includes('windmill_spin')), cur: 1, tgt: 1 };
-const CHG = {};   // 지금 켜진 변화 키 (F.saga.changed(key) 로 다른 모듈이 물어봐요)
+const CHG = {}, PROPKEY = {};   // 지금 켜진 변화 키 (F.saga.changed(key) 로 다른 모듈이 물어봐요) · props 가 맡은 키
 function setChange(key, on, instant){
   CHG[key] = !!on;
   if (on && /_home$/.test(key)) guard('home ' + key, () => moveHome(key.slice(0, -5)));
   guard('towns.setChange', () => { if (F.towns && F.towns.setChange) F.towns.setChange(key, on, instant); });
-  guard('props.setChange', () => { if (F.props && F.props.setChange) F.props.setChange(key, on, instant); });
+  guard('props.setChange', () => { if (F.props && F.props.setChange && F.props.setChange(key, on, instant) === true) PROPKEY[key] = true; });   // true = props 가 그 키를 맡았어요
   if (key === 'windmill_spin'){ WM.tgt = on ? 1 : 0; if (instant){ WM.cur = WM.tgt; F.lmState.windmill = WM.cur; } }
   if (CALM[key]) for (const id of CALM[key]) guard('campCalm', () => F.campCalm && F.campCalm(id, !!on));   // 진정된 사냥터: 때리지 않으면 덤비지 않아요 (life)
 }
@@ -297,7 +297,7 @@ let RT = null;
 const holdOn = e => { if (!RT) return; e.preventDefault(); e.stopPropagation(); RT.hold = true; RT.mode = 'btn'; }, holdOff = () => { if (RT && RT.mode === 'btn') RT.hold = false; };
 RT_RING.addEventListener('pointerdown', holdOn); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) RT_RING.addEventListener(ev, holdOff);
 addEventListener('keyup', e => { if (e.code === 'KeyE' && RT && RT.mode === 'key') RT.hold = false; });
-addEventListener('blur', () => { if (RT) RT.hold = false; });
+addEventListener('blur', () => { if (RT && RT.mode === 'btn') RT.hold = false; });
 function startRitual(id){
   const k = KS[id], key = !!(G.keys && G.keys.KeyE);
   RT = { id, k: 0, mode: key ? 'key' : 'btn', hold: key, started: false, t0: now(), last: now(), shown: -1, y: spotOf(id, k.o.c)[1] };
@@ -310,10 +310,10 @@ function endRitual(ok, quiet){ const r = RT; if (!r) return; RT = null; G.lock =
 let ritPT = 0;
 function updRitual(){ try { updRitual0(); } catch (e){ console.error('[saga] ritual', e); RT = null; G.lock = false; RTW.classList.remove('on', 'hold'); } }
 function updRitual0(){
-  const r = RT; if (!r) return; const t = now(), dt = Math.min(0.1, t - r.last); r.last = t; const k = KS[r.id], [x, z] = k.o.c;
+  const r = RT; if (!r) return; const t = now(), dt = Math.min(0.25, t - r.last); r.last = t; const k = KS[r.id], [x, z] = k.o.c;
   if (!fieldOn() || X.dead || X.dialogOpen || Math.hypot(pp.x - x, pp.z - z) > 5){ endRitual(false, true); return; }
   G.lock = true;
-  if (r.mode === 'key' && !(G.keys && G.keys.KeyE)) r.hold = false;
+  if (r.mode === 'key') r.hold = !!(G.keys && G.keys.KeyE);
   if (r.hold){ r.started = true; r.k = Math.min(1, r.k + dt / 2.6); }
   else if (r.started){ endRitual(false); return; }
   else if (t - r.t0 > 7){ endRitual(false, true); return; }
@@ -343,7 +343,7 @@ const isFix = id => !!guard('props.isFixture', () => F.props && F.props.isFixtur
 const PK = {};
 for (const id in SP){ const s = SP[id]; if (!s.o.pickup) continue; guard('pickup ' + id, () => { const [x, z] = s.o.c, pn = guard('props.name', () => F.props && F.props.name ? F.props.name(id) : null), name = (pn && String(pn).trim()) || spName(s.o), u = USE[s.o.kind] || ['✋', '줍기', '주웠다'];
   PK[id] = { s, name, u, on: null, it: F.addInteract({ x, z, r: 2.4, title: `${u[0]} ${name} ${u[1]}`, action: () => pickUp(id), hidden: true }), fb: propObj(id) ? null : fbPickup(s.o) };
-  showPick(id, false); }); }
+  showPick(id, false); if (SG.picked[id]) guard('props.collected', () => F.props && F.props.collected && F.props.collected(id, true)); }); }   // 이미 주운 것: props 가 주운 뒤 모습으로 (검은 웅덩이 → 맑은 물)
 // props.show(id, on): 들고 갈 물건이면 물체를, 늘 보이는 고정물(쓰러진 골렘 · 검은 웅덩이 …)이면 빛 표식만 켜고 꺼요 — props 가 정해요
 function showPick(id, on){ const p = PK[id]; if (!p || p.on === on) return; p.on = on; p.it.hidden = !on;
   if (!SG.picked[id] || on) guard('props.show', () => { if (F.props && F.props.show) F.props.show(id, on); }); if (p.fb){ p.fb.on = on; if (!on) p.fb.g.visible = false; } }
@@ -413,7 +413,7 @@ BUS.on('kill', e => guard('sb kill', () => { if (!e || !e.sbId) return; const id
 const CE = X.mk('div', 'sagaCine', '<div class="shade"></div><div class="fade"></div><div class="card"><div class="no"></div><div class="ti"></div><div class="ln"></div><div class="en"></div></div><div class="nar"></div><div class="skip">클릭 · E · Esc — 건너뛰기</div>');
 const CE_FADE = CE.querySelector('.fade'), CE_CARD = CE.querySelector('.card'), CE_NAR = CE.querySelector('.nar');
 CE.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (CINE && now() - CINE.t0 > 0.8) skipCine(); });
-const OV = { pos: new V3(), look: new V3() }, _a = new V3(), _b = new V3();
+const OV = { pos: new V3(), look: new V3() };
 const CPS = 0.05, HOLD = 1.05;   // 글자당 초 · 줄 사이 쉼
 let CINE = null;
 const busy = () => !!CINE;
@@ -487,7 +487,7 @@ function playEpi(n, replay){
   });
 }
 function outroChange(C){ if (C.changed) return; C.changed = true; applyChanges(C.n, true, false);
-  const [x, z] = C.f; pillar(x, z, 0xfff0b8, 3.6, 70, C.fy); X.shockwave(x, 0.2, z, 12, 0xffd36a, 1.2); X.burst(new V3(x, 2, z), 0xfff0b0, LOW ? 30 : 70, 7, 0.3, 1.4, -1, 5); X.sfx('rune'); X.sfx('shard'); }
+  const [x, z] = C.f; pillar(x, z, 0xfff0b8, 3.6, 70, C.fy); const bf = C.c.c.bell || BELL[C.c.L.region]; if (bf) bell(3, typeof bf === 'number' ? bf : 196); X.shockwave(x, 0.2, z, 12, 0xffd36a, 1.2); X.burst(new V3(x, 2, z), 0xfff0b0, LOW ? 30 : 70, 7, 0.3, 1.4, -1, 5); X.sfx('rune'); X.sfx('shard'); }
 function updOutro(C, t){
   const [fx, fz] = C.f, fy = C.fy;
   if (t >= 0.5){
@@ -697,6 +697,37 @@ function updAltar(rdt){
   ALTAR.g.visible = near; if (!near) return; const t = G.time || 0; ALTAR.r[0].rotation.z += rdt * 0.12; ALTAR.r[1].rotation.z -= rdt * 0.25; ALTAR.gl.material.opacity = 0.45 + Math.sin(t * 1.4) * 0.15;
 }
 
+// ───────────────────────── 쉬러 간 그라녹 (granok_rest) ─────────────────────────
+// 5장이 끝나면 거인의 유해 곁에 웅크린 바위 거인이 생기고, 엄니왕이 그 발치에서 잠들어요. props 가 그 키를 맡으면(setChange → true 또는 F.props.handles) 세우지 않아요.
+const REST = (() => { const c = CH.find(x => (x.c.change || []).includes('granok_rest')); if (!c) return null; const k = c.ks ? c.ks.c : (byId('landmarks', 'remains') || {}).c; return k ? { c: [k[0] + 18, k[1] + 9], g: null } : null; })();
+function buildRest(){ const [x, z] = REST.c, g = new THREE.Group(), y = gy(x, z), M = std({ color: 0x9a6250, roughness: 0.95, flatShading: true }), Mm = std({ color: 0x6a7a44, roughness: 1, flatShading: true });
+  g.position.set(x, y - 0.3, z); g.rotation.y = Math.atan2(REST.c[0] - 18 - x, REST.c[1] - 9 - z) + 0.5;   // 아버지(유해) 쪽을 보며 웅크려요
+  const part = (geo, mat, px, py, pz, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.rotation.set(rx, ry, rz); m.scale.set(sx, sy, sz); m.castShadow = !LOW; g.add(m); return m; };
+  part(new THREE.DodecahedronGeometry(3.2, 1), M, 0, 2.6, -0.4, 0.3, 0, 0, 1.25, 0.9, 1.05);          // 웅크린 등
+  part(new THREE.DodecahedronGeometry(1.35, 0), M, 0, 3.7, 2.1, 0.6, 0.2, 0);                           // 숙인 머리
+  for (const sx of [-1, 1]){ part(new THREE.DodecahedronGeometry(1.45, 0), M, sx * 1.5, 1.5, 2.3);      // 무릎
+    part(new THREE.CylinderGeometry(0.75, 0.9, 3.8, 6), M, sx * 0.9, 1.9, 2.9, 0, 0, Math.PI / 2 - sx * 0.25); }   // 무릎을 감싼 팔
+  part(new THREE.DodecahedronGeometry(1.6, 0), Mm, -1.2, 4.4, -1.6, 0, 0, 0, 1.2, 0.35, 1);           // 등에 앉은 이끼
+  const gl = X.glowSprite(0xffb070, 4, 0.22); gl.position.set(0, 2.6, 1.6); g.add(gl);
+  if (X.MK && X.MK.mkBoar) guard('tusk', () => { const b = X.MK.mkBoar(0x8a4a34); b.g.scale.set(2.1, 1.7, 2.1); b.g.position.set(1.2, 0, 5.6); b.g.rotation.set(0, 1.9, 0.08); g.add(b.g); });   // 발치에서 잠든 엄니왕
+  FW.add(g); REST.g = g; REST.col = [F.circle(x, z, 3.6)];
+}
+function updRest(){
+  if (!REST) return; const on = !!CHG.granok_rest && !PROPKEY.granok_rest && !guard('props.handles', () => F.props && F.props.handles && F.props.handles('granok_rest'));
+  if (!on){ if (REST.g && REST.g.visible){ REST.g.visible = false; for (const c of REST.col) F.removeCollider(c); } return; }
+  const near = Math.hypot(pp.x - REST.c[0], pp.z - REST.c[1]) < 260;
+  if (!REST.g){ if (near) buildRest(); return; }
+  if (!REST.g.visible){ REST.g.visible = true; REST.col = [F.circle(REST.c[0], REST.c[1], 3.6)]; }
+}
+// 종소리 (늪의 신전 · 서리 수도원 장이 끝날 때) — 합성 종: 배음 몇 개가 천천히 사라져요
+let BAC = null;
+function bell(times = 3, f0 = 196){ guard('bell', () => { if (!BAC) BAC = new (window.AudioContext || window.webkitAudioContext)(); if (BAC.state === 'suspended') BAC.resume();
+  for (let k = 0; k < times; k++){ const t = BAC.currentTime + 0.05 + k * 1.7;
+    for (const [r, a, d] of [[1, 0.16, 4.5], [2, 0.08, 3.2], [2.4, 0.05, 2.6], [3, 0.045, 2.2], [4.2, 0.03, 1.6], [5.4, 0.02, 1.1]]){
+      const o = BAC.createOscillator(), g = BAC.createGain(); o.type = 'sine'; o.frequency.value = f0 * r * (1 + (R() - 0.5) * 0.004);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(BAC.destination); o.start(t); o.stop(t + d + 0.1); } } }); }
+const BELL = { swamp: 196, frost: 233 };
+
 // ───────────────────────── 키 · 이벤트 ─────────────────────────
 // 연출 · 의식 중엔 다른 키가 새지 않게 맨 앞에 끼워요
 X.KEYH.unshift(code => {
@@ -717,13 +748,14 @@ BUS.on('hurt', () => { if (CINE) skipCine(); });   // 연출 중에 맞으면 �
 BUS.on('fieldReady', () => guard('ready', () => { buildResidentFigs(); applyAllChanges(); needDirty = true; }));
 
 // ───────────────────────── 매 프레임 ─────────────────────────
-let tickT = 0, mkT = 0, needT = 0;
+let tickT = 0, mkT = 0, needT = 0, restT = 0;
 G.hooks.push((dt, rdt) => {
   guard('cine', updCine); guard('ritual', updRitual); guard('fx', () => updFx(rdt)); guard('windmill', () => updWindmill(rdt));
   if (saveT > 0 && (saveT -= rdt) <= 0) X.save();
   if ((cxOpen || readCur) && F.rpgWindowOpen && F.rpgWindowOpen()){ closeCodex(); if (readCur){ readRet = false; closeRead(); } }
   if (!F.inField) return;
   T += rdt; guard('fallback', () => updFallback(rdt)); guard('lord', () => updLord(rdt)); guard('star', () => updStar(rdt)); guard('altar', () => updAltar(rdt));
+  if ((restT -= rdt) <= 0){ restT = 1; guard('rest', updRest); }
   if ((tickT -= rdt) > 0) return; tickT = 0.25;
   needT -= 0.25; if (needDirty || needT <= 0){ needT = 2; guard('need', calcNeed); }
   guard('sboss', sbTick); guard('story', storyTick);
