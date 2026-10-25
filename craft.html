@@ -7078,6 +7078,11 @@ function txcDraw(g,R,x,y,s,a,shadow){g.save();g.globalAlpha=Math.max(0,Math.min(
     const pass=(dx,dy,cl)=>{g.fillStyle=cl;g.fillText(t,X+dx,y+dy);if(r.b)g.fillText(t,X+dx+s,y+dy);if(r.u)g.fillRect(X+dx,y+dy+9*s,w,s);if(r.s)g.fillRect(X+dx,y+dy+4*s,w,s)};
     if(shadow!==false)pass(s,s,r.sh||txcShadow(col));pass(0,0,col);X+=w}
   g.restore();return X-x}
+// 크게 (제목 4배 · 부제목 2배): 보통 크기로 그린 뒤 픽셀 그대로 키워요 (마크 글꼴처럼 또렷하게)
+let TXC_OFF=null;
+function txcDrawK(g,R,x,y,s,k,a,shadow){if(k===1)return txcDraw(g,R,x,y,s,a,shadow);const w=Math.ceil(txcW(g,R,s)+s*2),h=Math.ceil(12*s),c=TXC_OFF||(TXC_OFF=document.createElement('canvas'));
+  if(c.width<w)c.width=w;if(c.height<h)c.height=h;const o=c.getContext('2d');o.clearRect(0,0,c.width,c.height);txcDraw(o,R,0,0,s,1,shadow);
+  g.save();g.globalAlpha=Math.max(0,Math.min(1,a==null?1:a));g.imageSmoothingEnabled=false;g.drawImage(c,0,0,w,h,Math.round(x),Math.round(y),w*k,h*k);g.restore();return w*k}
 // ── 상태 효과 (마크 MobEffects 26.3: 40가지 · 이름 · 색 · 분류 1 이로움 / -1 해로움 / 0 중립 · 즉시 효과) ──
 const EFFECTS={speed:['신속',0x33EBFF,1],slowness:['구속',0x8BAFE0,-1],haste:['성급함',0xD9C043,1],mining_fatigue:['채굴 피로',0x4A4217,-1],strength:['힘',0xFFC700,1],
   instant_health:['즉시 회복',0xF82423,1,1],instant_damage:['즉시 피해',0xA9656A,-1,1],jump_boost:['점프 강화',0xFDFF84,1],nausea:['멀미',0x551D4A,-1],regeneration:['재생',0xCD5CAB,1],
@@ -7490,11 +7495,11 @@ function hud6(){if(!started||hideGui||$('hud').classList.contains('hide'))return
       const title=txcRuns(O.d,null,null),tw=txcW(g,title,s)/s,colw=g.measureText?txcW(g,[{t:': '}],s)/s:4;let w=tw;for(const [nm,,sw] of L)w=Math.max(w,txcW(g,nm,s)/s+(sw>0?colw+sw:0));
       const n=L.length,bot=Math.floor(H/2+n*9/3),x0=W-w-3,x1=W-3+2,top=bot-n*9;g.fillStyle='rgba(0,0,0,.4)';g.fillRect(Math.round((x0-2)*s),Math.round((top-10)*s),Math.round((x1-x0+2)*s),Math.round(9*s));
       g.fillStyle='rgba(0,0,0,.3)';g.fillRect(Math.round((x0-2)*s),Math.round((top-1)*s),Math.round((x1-x0+2)*s),Math.round((n*9+1)*s));txcDraw(g,title,Math.round((x0+w/2-tw/2)*s),(top-9)*s,s,1,false);
-      L.forEach(([nm,sc,sw],q)=>{const y=bot-(n-q)*9;txcDraw(g,nm,Math.round(x0*s),y*s,s,1,false);txcDraw(g,sc,Math.round((x1-sw)*s),y*s,s,1,false)})}}
+      L.forEach(([nm,sc,sw],q)=>{const y=bot-(n-q)*9;txcDraw(g,nm,Math.round(x0*s),y*s,s,1,false);txcDraw(g,sc,Math.round((x1-sw-1)*s),y*s,s,1,false)})}}
   // 제목 · 부제목 (가운데: 4배 · 2배, 들어오기/나가기 흐림)
   if(TTL.t&&TTL.time>0){const h=TTL.time-PT;let l=255;if(TTL.time>TTL.fo+TTL.st)l=(TTL.fi+TTL.st+TTL.fo-h)*255/Math.max(1,TTL.fi);if(TTL.time<=TTL.fo)l=h*255/Math.max(1,TTL.fo);l=Math.max(0,Math.min(255,l));
-    if(l>8){const a=l/255,S4=s*4,w4=txcW(g,TTL.t,S4);txcDraw(g,TTL.t,Math.round(W/2*s-w4/2),Math.round(H/2*s-10*S4),S4,a,true);
-      if(TTL.sub){const S2=s*2,w2=txcW(g,TTL.sub,S2);txcDraw(g,TTL.sub,Math.round(W/2*s-w2/2),Math.round(H/2*s+5*S2),S2,a,true)}}}
+    if(l>8){const a=l/255,w4=txcW(g,TTL.t,s)*4;txcDrawK(g,TTL.t,Math.round(W/2*s-w4/2),Math.round(H/2*s-10*s*4),s,4,a,true);
+      if(TTL.sub){const w2=txcW(g,TTL.sub,s)*2;txcDrawK(g,TTL.sub,Math.round(W/2*s-w2/2),Math.round(H/2*s+5*s*2),s,2,a,true)}}}
   // 액션 바 (/title actionbar · 원래 알림 줄 자리 H-68, 마지막 20틱 흐려져요)
   if(TTL.ab&&TTL.abT>0){if(overlayT>0&&overlayText)TTL.abT=0;else{const a=Math.min(1,(TTL.abT-PT)/20),w=txcW(g,TTL.ab,s);txcDraw(g,TTL.ab,Math.round(W/2*s-w/2),Math.round((H-68+(surv?0:14))*s),s,a,true)}}}
 {const _drawHUD0=drawHUD;drawHUD=function(){_drawHUD0();hud6()}}
@@ -7781,9 +7786,9 @@ function dmgWhy(t,by){if(t==='in_fire'||t==='on_fire'||t==='campfire'||t==='hot_
   if(t==='cactus'||t==='sweet_berry_bush')return'cactus';if(t==='out_of_world')return'void';if(t==='generic_kill')return'kill';if(t==='magic'||t==='indirect_magic')return'magic';if(t==='wither'||t==='wither_skull')return'eff_wither';if(t==='sonic_boom')return'sonic';
   if(t==='in_wall'||t==='cramming'||t==='fly_into_wall')return'wall';if(t==='outside_border')return'border';if(t==='freeze')return'freeze';if(t==='explosion'||t==='player_explosion')return'creeper';if(by&&x6Mob(by))return by.type;return'generic'}
 function dmgDo(c,a,at,by){const t=selFind(a.target,c)[0];if(!t)cFail('no_ent');const ty=mcN(a.damageType||'minecraft:generic'),src=by?cmdEntPos(by):null;
-  if(t===player){const p=player,h0=p.hp,a0=p.abs||0,t0=p.hurtT;if(p.dead)cFail('dm_inv');const why=dmgWhy(ty,by);if(effFireImmune(p,why))cFail('dm_inv');hurtPlayer(a.amount,src?new V3(src.x,src.y,src.z):null,why,DMG_NOARMOR.has(ty)?{noArmor:1}:undefined);
-    if(!(p.hp<h0||(p.abs||0)<a0||p.hurtT>t0&&p.hurtT>0||p.dead))cFail('dm_inv')}
-  else if(x6Mob(t)){if(t.dead||t.D.invuln)cFail('dm_inv');const h0=t.hp;if(by===player){t.byPlayer=0;t.x6By=player}hurtMob(t,a.amount,src?new V3(src.x,src.y,src.z):null);if(!(t.hp<h0||t.dead))cFail('dm_inv')}
+  if(t===player){const p=player,why=dmgWhy(ty,by),bypass=ty==='out_of_world'||ty==='generic_kill';   // 마크 hurtServer 가 false 를 돌려주는 경우만 실패: 죽음 · 크리에이티브/관전자 · 화염 저항 · 무적 시간 동안 더 약한 피해
+    if(p.dead||(creative()||GAMEMODE==='spectator')&&!bypass||effFireImmune(p,why)||p.hurtT>0&&a.amount<=(p.lastHurt||0))cFail('dm_inv');hurtPlayer(a.amount,src?new V3(src.x,src.y,src.z):null,why,DMG_NOARMOR.has(ty)?{noArmor:1}:undefined)}
+  else if(x6Mob(t)){if(t.dead||t.D.invuln||t.hurtT>0&&a.amount<=(t.lastHurt||0))cFail('dm_inv');if(by===player){t.byPlayer=0;t.x6By=player;t.x6ByT=performance.now()}hurtMob(t,a.amount,src?new V3(src.x,src.y,src.z):null)}
   else cFail('dm_inv');cFb(c,'dm_ok',cmdFloat(a.amount),cmdEntName(t));return 1}
 cmdReg(cLit('damage',cArg('target',CmdArg.ent(true,false),cArg('amount',CmdArg.num(0),(c,a)=>dmgDo(c,a),cArg('damageType',CmdArg.res('minecraft:damage_type',()=>DMG_TYPES.map(k=>'minecraft:'+k)),(c,a)=>dmgDo(c,a),
   cLit('at',cArg('location',CmdArg.vec3(),(c,a)=>dmgDo(c,a,cmdCoordGet(a.location,c),null))),
@@ -7992,11 +7997,13 @@ function cmdTick6(){if(!started)return;effTick();p6Tick();wbTick();flTick();if(T
   spin6o=spin6;conf6++;if(effLv(player,'nausea'))spin6=Math.min(1,spin6+.006666667);else if(spin6>0)spin6=Math.max(0,spin6-.05)}
 {const _updatePlayer6=updatePlayer;updatePlayer=function(dt){const r=_updatePlayer6.apply(this,arguments);cmdTick6();return r}}
 // ── 그리기 바로 앞 (scene.onBeforeRender): 파티클 · 경계 벽 · 야간 투시 · 실명 안개 · 멀미 화면 일그러짐 · 투명한 몹 ──
-const FX6={amb:null,sky:null,proj:null,hid:[]};
-function fx6Before(cam){p6Render();wbRender();const p=player;if(!started)return;
+const FX6={amb:null,sky:null,proj:null,hid:[]};let nvK6=0;
+// 야간 투시는 몹 · 손 · 파티클 밝기 (lightK) 에도 (마크 라이트맵처럼 모두 밝아져요)
+{const _lightK6=lightK;lightK=function(x,y,z){const v=_lightK6(x,y,z);return nvK6>0?v+(1-v)*nvK6:v}}
+function fx6Before(cam){p6Render();wbRender();const p=player;nvK6=0;if(!started)return;
   // 야간 투시 (마크 getNightVisionScale: 10초 남으면 깜빡여요) · 전달체의 힘은 물속에서
-  const nv=p.eff&&p.eff.night_vision,cp=effLv(p,'conduit_power')&&underWater;if(nv&&effLv(p,'night_vision')||cp){const d=nv?nv.dur:-1,k=d===-1||d>200?1:.7+Math.sin((d-PT)*Math.PI*.2)*.3;
-    FX6.amb=[worldMat.uniforms.amb.value,waterMat.uniforms.amb.value];for(const m of [worldMat,waterMat])m.uniforms.amb.value+= (1-m.uniforms.amb.value)*(cp&&!nv?1:k)}
+  const nv=p.eff&&p.eff.night_vision,cp=effLv(p,'conduit_power')&&underWater;nvK6=0;if(nv&&effLv(p,'night_vision')||cp){const d=nv?nv.dur:-1,k=d===-1||d>200?1:.7+Math.sin((d-PT)*Math.PI*.2)*.3;nvK6=cp&&!(nv&&effLv(p,'night_vision'))?1:k;
+    FX6.amb=[worldMat.uniforms.amb.value,waterMat.uniforms.amb.value];for(const m of [worldMat,waterMat])m.uniforms.amb.value+=(1-m.uniforms.amb.value)*nvK6}
   // 실명 (마크 BlindnessFogFunction: 5칸 안개 · 하늘도 검게)
   const bl=p.eff&&p.eff.blindness;if(bl&&effLv(p,'blindness')){const far=RD*16,f=far+(5-far)*Math.min(1,bl.dur===-1?1:bl.dur/20);for(const m of [worldMat,waterMat]){m.uniforms.fogN.value=f*.25;m.uniforms.fogF.value=f;m.uniforms.fogC.value.setRGB(0,0,0)}
     scene.fog.near=f*.25;scene.fog.far=f;scene.fog.color.setRGB(0,0,0);renderer.setClearColor(0x000000);FX6.sky=[skyDome.visible,sky.visible,stars.visible];skyDome.visible=sky.visible=stars.visible=false}
