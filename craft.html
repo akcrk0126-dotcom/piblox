@@ -7395,7 +7395,7 @@ cmdReg(cLit('team',
   cLit('remove',cArg('team',CmdArg.team6(),(c,a)=>{const D=SBD().t,T=cTeam(a.team),nm=teamDisp(T);delete D[a.team];cFb(c,'tm_rm',nm);return Object.keys(D).length}))));
 // 팀 메시지: 보낸 사람에게 "-> [팀] <이름> 말", 팀원에게 "[팀] <이름> 말" (멀티 팀원 전송은 아직 없어요)
 {const tm=cLit('teammsg',{perm:0},cArg('message',CmdArg.msg(),(c,a)=>{const s=cSelf(c),T=teamObj(holderOf(s));if(!T)cFail('tmsg_noteam');const t=msgText(c,a.message);
-    const R=[];txcText('-> ',{},R);txcRuns(T.d,null,null,{c:T.col&&T.col!=='reset'?TXC_COL[T.col]:null},R);txcText(' <',{},R);txcName(s,{},R);txcText('> '+t,{},R);
+    const R=[],tc={c:T.col&&T.col!=='reset'?TXC_COL[T.col]:null};txcText('-> ',{},R);txcText('[',tc,R);txcRuns(T.d,null,null,tc,R);txcText(']',tc,R);txcText(' <',{},R);txcName(s,{},R);txcText('> '+t,{},R);
     if(!c.silent)chatLine(txcHTML(R.map(r=>Object.assign({},r,{hover:{action:'show_text',value:'팀에게 메시지 보내기'}}))),'#fff',true);return T.m.length}));
   cmdReg(tm);cmdReg(cLit('tm',{perm:0,redirect:tm}))}
 // ── /tellraw · /title · /bossbar + HUD 그리기 (제목 · 액션 바 · 보스 바 · 사이드바 · 효과 아이콘 · 하트 줄) ──
@@ -8000,7 +8000,7 @@ function cmdTick6(){if(!started)return;effTick();p6Tick();wbTick();flTick();if(T
 const FX6={amb:null,sky:null,proj:null,hid:[]};let nvK6=0;
 // 야간 투시는 몹 · 손 · 파티클 밝기 (lightK) 에도 (마크 라이트맵처럼 모두 밝아져요)
 {const _lightK6=lightK;lightK=function(x,y,z){const v=_lightK6(x,y,z);return nvK6>0?v+(1-v)*nvK6:v}}
-function fx6Before(cam){p6Render();wbRender();const p=player;nvK6=0;if(!started)return;
+function fx6Before(cam){p6Render();wbRender();glowSync();const p=player;nvK6=0;if(!started)return;
   // 야간 투시 (마크 getNightVisionScale: 10초 남으면 깜빡여요) · 전달체의 힘은 물속에서
   const nv=p.eff&&p.eff.night_vision,cp=effLv(p,'conduit_power')&&underWater;nvK6=0;if(nv&&effLv(p,'night_vision')||cp){const d=nv?nv.dur:-1,k=d===-1||d>200?1:.7+Math.sin((d-PT)*Math.PI*.2)*.3;nvK6=cp&&!(nv&&effLv(p,'night_vision'))?1:k;
     FX6.amb=[worldMat.uniforms.amb.value,waterMat.uniforms.amb.value];for(const m of [worldMat,waterMat])m.uniforms.amb.value+=(1-m.uniforms.amb.value)*nvK6}
@@ -8012,6 +8012,16 @@ function fx6Before(cam){p6Render();wbRender();const p=player;nvK6=0;if(!started)
     cam.projectionMatrix.multiply(R).multiply(S).multiply(Ri)}
   // 투명화: 몹 · 3인칭 내 모습을 숨겨요
   FX6.hid.length=0;for(const m of mobs)if(m.eff&&effLv(m,'invisibility')&&m.g.visible){m.g.visible=false;FX6.hid.push(m.g)}if(effLv(p,'invisibility')&&me&&me.g.visible){me.g.visible=false;FX6.hid.push(me.g)}}
+// 발광 (마크: 벽 너머로도 보이는 테두리 · 팀 색): 스텐실에 몸 모양을 찍고, 조금 키운 같은 모양을 그 바깥에만 그려요
+const GLOW6=new Map(),glowMatA=new THREE.MeshBasicMaterial({colorWrite:false,depthTest:false,depthWrite:false,stencilWrite:true,stencilRef:1,stencilFunc:THREE.AlwaysStencilFunc,stencilZPass:THREE.ReplaceStencilOp});
+function glowMk(src){const a=src.clone(true),b=src.clone(true),mb=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,depthWrite:false,fog:false,stencilWrite:true,stencilRef:1,stencilFunc:THREE.NotEqualStencilFunc,stencilFail:THREE.KeepStencilOp,stencilZFail:THREE.KeepStencilOp,stencilZPass:THREE.KeepStencilOp});
+  const S=[],A=[],Bq=[];src.traverse(o=>S.push(o));a.traverse(o=>A.push(o));b.traverse(o=>Bq.push(o));for(const [L,mt,ro] of[[A,glowMatA,990],[Bq,mb,991]])for(const o of L){if(o.isMesh){o.material=mt;o.renderOrder=ro;o.frustumCulled=false}else if(o.isSprite)o.material=mt}
+  scene.add(a);scene.add(b);return{a,b,S,A,B:Bq,mb}}
+function glowSync(){const want=new Map();if(started)for(const m of mobs)if(!m.dead&&m.eff&&effLv(m,'glowing'))want.set(m.g,holderOf(m));if(started&&viewMode>0&&!player.dead&&effLv(player,'glowing'))want.set(me.g,myName());
+  for(const [g,G] of GLOW6)if(!want.has(g)){scene.remove(G.a);scene.remove(G.b);G.mb.dispose();GLOW6.delete(g)}
+  for(const [g,h] of want){let G=GLOW6.get(g),n=0;g.traverse(()=>n++);if(G&&G.S.length!==n){scene.remove(G.a);scene.remove(G.b);G.mb.dispose();G=null}if(!G){G=glowMk(g);GLOW6.set(g,G)}
+    G.S.forEach((o,i)=>{const x=G.A[i],y=G.B[i];for(const q of[x,y]){q.position.copy(o.position);q.quaternion.copy(o.quaternion);q.scale.copy(o.scale);q.visible=i===0||o.visible}if(o.isMesh)y.scale.multiplyScalar(1.12)});
+    const T=teamObj(h);G.mb.color.set(T&&T.col!=='reset'?TXC_COL[T.col]:'#ffffff')}}
 function fx6After(cam){if(FX6.amb){worldMat.uniforms.amb.value=FX6.amb[0];waterMat.uniforms.amb.value=FX6.amb[1];FX6.amb=null}if(FX6.sky){[skyDome.visible,sky.visible,stars.visible]=FX6.sky;FX6.sky=null}
   if(FX6.proj){cam.projectionMatrix.copy(FX6.proj);FX6.proj=null}for(const g of FX6.hid)g.visible=true;FX6.hid.length=0}
 {const ob=scene.onBeforeRender,oa=scene.onAfterRender;scene.onBeforeRender=function(r,s,cam){ob.apply(this,arguments);fx6Before(cam)};scene.onAfterRender=function(r,s,cam){oa.apply(this,arguments);fx6After(cam)}}
