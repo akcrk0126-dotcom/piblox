@@ -533,7 +533,8 @@ SP.memorial = (x, z, ry, s) => { fr(x, z, ry, s, 1.2);
   kp(0, 0.55, 0.42, 0, 1, -0.35); gm('leafD', tor(0.28, 0.06, 4, 12)); for (let i = 0; i < 8; i++){ const a = i / 8 * TAU; gm(i % 2 ? 'flowerW' : 'flowerB', oct(0.06), Math.cos(a) * 0.28, Math.sin(a) * 0.28, 0.05); } kq();
   for (const sd of [-1, 1]){ P.candle(sd * 0.68, 0.3, 0.38); P.candle(sd * 0.5, 0.3, 0.42); } for (let i = 0; i < 5; i++) P.flower(rr(-0.9, 0.9), gl(0, 0.8), rr(0.7, 1.0), pick(['flowerW', 'flowerB', 'flowerY']));
   cb(0, 0, 0.95, 0.55); kq(); };
-SP.dock = (x, z, ry, s, o) => { const dir = waterDir(x, z, ry), dx = Math.sin(dir), dz = Math.cos(dir), L = (nearSettle(x, z, 0) ? 6.2 : 9) * s,   // 정착지 안이면 짧게 (towns 판자길이 셋피스 둘레 ~7m 를 비켜 가요) dy = Math.max(WY(x, z) + 0.55, H(x, z) + 0.35);
+// 선착장: 정착지 안이면 짧게 (towns 판자길이 셋피스 둘레 ~7m 를 비켜 가요)
+SP.dock = (x, z, ry, s, o) => { const dir = waterDir(x, z, ry), dx = Math.sin(dir), dz = Math.cos(dir), L = (nearSettle(x, z, 0) ? 6.2 : 9) * s, dy = Math.max(WY(x, z) + 0.55, H(x, z) + 0.35);
   kp(x, 0, z, dir); const n = Math.round(L / 0.36);
   for (let i = 0; i <= n; i++){ const lz = i * L / n; bx('plank', 1.9, 0.07, 0.32, rr(-0.03, 0.03), dy, lz, 0, rr(-0.03, 0.03), 0); }
   for (let i = 0; i <= Math.floor(L / 1.8); i++){ const lz = i * 1.8 + 0.2; for (const sd of [-1, 1]){ const v = kw(sd * 0.9, lz), gy = H(v.x, v.z); P.post(sd * 0.9, gy - 0.3, lz, dy - gy + 0.35 + (i === 0 || i === Math.floor(L / 1.8) ? 0.5 : 0), 0.1); } }

@@ -109,8 +109,8 @@ css.textContent = `
   #sagaCine .card .en { font:700 clamp(10px, 1.6vw, 13px) 'Cinzel'; letter-spacing:.55em; padding-left:.55em; color:#d6eef2; }
   #sagaCine .card.sm { top:17%; } #sagaCine .card.sm .ti { font-size:clamp(22px, 4.6vw, 40px); }
   #sagaCine .nar { position:absolute; left:50%; bottom:calc(13vh + 26px); transform:translateX(-50%); width:min(760px, 92vw); text-align:center; }
-  #sagaCine .nar p { margin:2px 0; font:400 clamp(15px, 2.3vw, 20px)/1.7 'Gowun Batang'; color:#fbf3df; text-shadow:0 2px 10px rgba(0,0,0,.95), 0 0 3px #000; transition:opacity .9s; min-height:1.7em; }
-  #sagaCine .nar p.old { opacity:.5; }
+  #sagaCine .nar p { margin:2px 0; word-break:keep-all; font:400 clamp(13.5px, 3.7vw, 20px)/1.7 'Gowun Batang'; color:#fbf3df; text-shadow:0 2px 10px rgba(0,0,0,.95), 0 0 3px #000; transition:opacity .9s; min-height:1.7em; }
+  #sagaCine .nar p.old { opacity:.5; } #sagaCine .nar.out p { opacity:0; transition:opacity .4s; }
   #sagaCine .skip { position:absolute; right:16px; bottom:calc(13vh + 8px); font:500 11px 'Noto Sans KR'; color:#e8dcc0; opacity:.55; letter-spacing:.06em; }
   body.saga-cine.cine .lb { height:13vh; }
   body.saga-cine #fregion, body.saga-cine #lmfound, body.saga-cine #prompt, body.saga-cine #hud, body.saga-cine #banner { opacity:0 !important; pointer-events:none !important; }
@@ -175,6 +175,8 @@ css.textContent = `
   #sagaRite .t { font:700 16px 'Gowun Batang'; color:#fff3d6; text-shadow:0 1px 4px #000; } #sagaRite .s { font:500 12px 'Noto Sans KR'; color:#d8e4e8; text-shadow:0 1px 3px #000; }
   #sagaRite.done .ring { animation:sgrite .9s ease-out forwards; } @keyframes sgrite { 40% { transform:scale(1.15); box-shadow:0 0 90px #ffd36a; } 100% { transform:scale(1.3); opacity:0; } }
   body.cine #sagaRite { opacity:0; }
+  body.touch #sagaRite { bottom:34vh; } body.saga-rite #cbtns, body.saga-rite #skbar, body.saga-rite .tbtn, body.saga-rite #joy, body.saga-rite #prompt, body.saga-rite #rpgPot { opacity:0 !important; pointer-events:none !important; }
+  #sagaCine .card .ti, #sagaRead .tx, #sagaCodex .in, #sagaCodex .out, #sagaCodex .pe p { word-break:keep-all; }
 `;
 document.head.appendChild(css);
 
@@ -303,12 +305,12 @@ function startRitual(id){
   RT = { id, k: 0, mode: key ? 'key' : 'btn', hold: key, started: false, t0: now(), last: now(), shown: -1, y: spotOf(id, k.o.c)[1] };
   G.lock = true; X.fig.root.rotation.y = Math.atan2(k.o.c[0] - pp.x, k.o.c[1] - pp.z);
   RTW.querySelector('.t').textContent = k.o.name; RTW.querySelector('.s').textContent = key ? `E 를 누르고 있기 — 손을 떼면 ${k.o.record ? '글자가' : '룬이'} 흩어져요` : '룬 고리를 누르고 있기';
-  RTW.classList.remove('done', 'hold'); RTW.classList.add('on'); RT_PG.style.strokeDashoffset = 326.7; for (const t of RT_TX) t.classList.remove('on'); X.sfx('rune');
+  RTW.classList.remove('done', 'hold'); RTW.classList.add('on'); document.body.classList.add('saga-rite'); RT_PG.style.strokeDashoffset = 326.7; for (const t of RT_TX) t.classList.remove('on'); X.sfx('rune');
 }
-function endRitual(ok, quiet){ const r = RT; if (!r) return; RT = null; G.lock = false; RTW.classList.remove('hold');
+function endRitual(ok, quiet){ const r = RT; if (!r) return; RT = null; G.lock = false; RTW.classList.remove('hold'); document.body.classList.remove('saga-rite');
   if (!ok){ RTW.classList.remove('on'); setLit(r.id, SG.cleansed[r.id] ? 1 : 0); if (!quiet) X.hint('손을 떼자 룬의 빛이 흩어졌다… 다시 해 보자', 2.6); } }
 let ritPT = 0;
-function updRitual(){ try { updRitual0(); } catch (e){ console.error('[saga] ritual', e); RT = null; G.lock = false; RTW.classList.remove('on', 'hold'); } }
+function updRitual(){ try { updRitual0(); } catch (e){ console.error('[saga] ritual', e); RT = null; G.lock = false; RTW.classList.remove('on', 'hold'); document.body.classList.remove('saga-rite'); } }
 function updRitual0(){
   const r = RT; if (!r) return; const t = now(), dt = Math.min(0.25, t - r.last); r.last = t; const k = KS[r.id], [x, z] = k.o.c;
   if (!fieldOn() || X.dead || X.dialogOpen || Math.hypot(pp.x - x, pp.z - z) > 5){ endRitual(false, true); return; }
@@ -324,7 +326,7 @@ function updRitual0(){
   if (r.k >= 1) finishRitual();
 }
 function finishRitual(){
-  const id = RT.id, k = KS[id], [x, y, z] = spotOf(id, k.o.c); RT = null; G.lock = false;
+  const id = RT.id, k = KS[id], [x, y, z] = spotOf(id, k.o.c); RT = null; G.lock = false; document.body.classList.remove('saga-rite');
   RTW.classList.remove('hold'); RTW.classList.add('done'); setTimeout(() => { if (!RT) RTW.classList.remove('on', 'done'); }, 950);
   SG.cleansed[id] = Date.now(); setLit(id, 1); X.save();
   pillar(x, z, 0xffe9a0, 3.4, 70, y); X.shockwave(x, 0.15, z, 7, 0xffd36a, 0.9); X.shockwave(x, 0.4, z, 4, 0x9ff6ff, 0.7);
@@ -425,7 +427,7 @@ function narUpd(C, t){
 }
 function cineStart(kind, n){
   document.body.classList.add('cine', 'saga-cine'); document.body.classList.toggle('saga-intro', kind === 'intro');
-  CE.classList.add('on'); CE_NAR.innerHTML = ''; CE_CARD.classList.remove('on', 'sm'); fade(true, 0.45); G.lock = true; X.hint('', 0);
+  CE.classList.add('on'); CE_NAR.innerHTML = ''; CE_NAR.classList.remove('out'); CE_CARD.classList.remove('on', 'sm'); fade(true, 0.45); G.lock = true; X.hint('', 0);
   if (readCur) closeRead(); if (cxOpen) closeCodex(); if (F.closeRpgWindow) guard('closeRpg', () => F.closeRpgWindow());
   const c = CHN[n]; CE_CARD.querySelector('.no').textContent = kind === 'outro' ? `「${chNo(n)}」 · 끝` : `「${chNo(n)}」`;
   CE_CARD.querySelector('.ti').textContent = c.c.title || ''; CE_CARD.querySelector('.en').textContent = kind === 'outro' ? `${chEn(n)} · COMPLETE` : (c.c.en || chEn(n)).toUpperCase();
@@ -454,7 +456,7 @@ function updIntro(C, t){
   if (C.ph === 0 && t >= 1.3){ C.ph = 1; fade(false, 0.9); }
   if (C.ph === 1 && t >= 1.8){ C.ph = 2; CE_CARD.classList.add('on'); X.sfx('rune'); }
   if (!C.out) narUpd(C, t);
-  if (!C.out && t >= C.tEnd){ C.out = t; fade(true, 0.45); CE_CARD.classList.remove('on'); }
+  if (!C.out && t >= C.tEnd){ C.out = t; fade(true, 0.45); CE_CARD.classList.remove('on'); CE_NAR.classList.add('out'); }
   if (C.out && t >= C.out + 0.5 && G.camOverride === OV) G.camOverride = null;
   if (C.out && t >= C.out + 1.25) cineEnd();
 }
@@ -497,7 +499,7 @@ function updOutro(C, t){
   if (C.ph === undefined && t >= 1.3){ C.ph = 1; fade(false, 0.9); CE_CARD.classList.add('on'); }
   if (!C.out) narUpd(C, t);
   if (!C.changed && t >= C.tc) outroChange(C);
-  if (!C.out && t >= C.tEnd){ C.out = t; fade(true, 0.45); CE_CARD.classList.remove('on'); }
+  if (!C.out && t >= C.tEnd){ C.out = t; fade(true, 0.45); CE_CARD.classList.remove('on'); CE_NAR.classList.add('out'); }
   if (C.out && t >= C.out + 0.5 && G.camOverride === OV) G.camOverride = null;
   if (C.out && t >= C.out + 1.25) cineEnd();
 }
@@ -679,11 +681,15 @@ function updStar(rdt){
   if (!STAR) return;
   if (!STAR.me){ const [x, y, z] = STAR.id ? spotOf(STAR.id, STAR.c) : [STAR.c[0], gy(STAR.c[0], STAR.c[1]), STAR.c[1]];
     const m = new THREE.ShaderMaterial({ uniforms: { uC: { value: new THREE.Color(0xbfe8ff) }, uO: { value: 0 }, uT: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, vertexShader: PIL_VS, fragmentShader: PIL_FS });
-    STAR.me = new THREE.Mesh(PIL_G, m); STAR.me.position.set(x, y, z); STAR.me.scale.set(1.2, 340, 1.2); STAR.me.renderOrder = 2; STAR.me.frustumCulled = false; FW.add(STAR.me); }
+    STAR.me = new THREE.Mesh(PIL_G, m); STAR.me.position.set(x, y, z); STAR.me.scale.set(1.2, 340, 1.2); STAR.me.renderOrder = 2; STAR.me.frustumCulled = false; FW.add(STAR.me);
+    // 기둥 위 별 — 멀수록 크게 그려서 북쪽 하늘에 별 하나로 보여요
+    STAR.sp = X.glowSprite(0xdff4ff, 10, 0.5); STAR.sp.material.fog = false; STAR.sp.renderOrder = 2; STAR.sp.position.set(x, y + 150, z); STAR.sp.frustumCulled = false; FW.add(STAR.sp); STAR.k = CHG.summit_star ? 1 : 0; }
   const on = !!CHG.summit_star, u = STAR.me.material.uniforms; u.uT.value += rdt * (on ? 0.6 : 1);
   STAR.k += ((on ? 1 : 0) - STAR.k) * Math.min(1, rdt * 0.5);
   if (!on && R() < rdt * 2.5) STAR.fl = rr(0.05, 0.6); STAR.fl += (1 - STAR.fl) * Math.min(1, rdt * 4);   // 깜빡임
-  u.uO.value = lerp(0.22 * STAR.fl, 0.85 + Math.sin(u.uT.value * 1.3) * 0.08, STAR.k); const w = lerp(1.1, 2.4, STAR.k); STAR.me.scale.x = STAR.me.scale.z = w;
+  u.uO.value = lerp(0.22 * STAR.fl, 0.85 + Math.sin(u.uT.value * 1.3) * 0.08, STAR.k);
+  const cd = G.camera.position.distanceTo(STAR.me.position), w = lerp(1.1, 2.4, STAR.k) * Math.max(1, cd / 260); STAR.me.scale.x = STAR.me.scale.z = w;
+  STAR.sp.scale.setScalar(Math.max(10, cd * lerp(0.025, 0.05, STAR.k))); STAR.sp.material.opacity = lerp(0.35 * STAR.fl, 0.95, STAR.k);
 }
 // 서리 거룡을 풀어 준 뒤 (레이드 cryos 클리어): 얼어붙은 제단 바닥에 푸른 룬 고리가 은은하게
 const ALTAR = (() => { const l = byId('landmarks', 'altar'); return l ? { c: l.c, g: null } : null; })();
@@ -771,5 +777,5 @@ if (F.ready) guard('residents', buildResidentFigs);
 F.saga = { chapterState, openCodex: tab => openCodex(tab), target, playIntro: n => playIntro(n, true), playEpilogue: n => playEpi(n, true), busy, afterQuest, changed: key => !!CHG[key], state: SG, chapters: CH };
 F.story = Object.assign(F.story || {}, { done: n => chapterState(n) === 'after' });
 console.log(`[saga] 장 ${CH.length} · 읽을거리 ${Object.keys(RD).length} · 수호석 ${Object.keys(KS).length} · 줍기 ${Object.keys(PK).length} · 이야기 보스 ${Object.keys(SB).length} · 주민 ${Object.keys(RES).length} · 대신 세운 표식 ${FBK.length} · ${Math.round(performance.now() - T0)}ms`);
-return { CH, RD, SP, KS, SB, RES, NEED, chapterState, playIntro, playOutro, playEpi, openCodex, closeCodex, openRead, target, calcNeed, setChange, get cine(){ return CINE; }, get ritual(){ return RT; }, sbs: SBS, startRitual, pickUp };
+return { CH, RD, SP, KS, SB, RES, NEED, CHG, REST, STAR, ALTAR, LORD, chapterState, playIntro, playOutro, playEpi, openCodex, closeCodex, openRead, target, calcNeed, setChange, get cine(){ return CINE; }, get ritual(){ return RT; }, sbs: SBS, startRitual, pickUp };
 }
