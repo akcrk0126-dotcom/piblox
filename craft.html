@@ -2194,12 +2194,48 @@ const maxStack=id=>ITEM[id]?ITEM[id].stack:64;
 const ICON={};
 const TCACHE={};function tintTile(t,tc){if(!tc)return tileList[t];const k=t+'|'+tc;if(TCACHE[k])return TCACHE[k];const c=cv(16,16),g=c.getContext('2d');g.drawImage(tileList[t],0,0);const im=g.getImageData(0,0,16,16),d=im.data;for(let i=0;i<d.length;i+=4)if(d[i+3]>200&&d[i+3]<255){d[i]*=tc[0];d[i+1]*=tc[1];d[i+2]*=tc[2];d[i+3]=255}g.putImageData(im,0,0);return TCACHE[k]=c}
 const ICON_TINT=id=>{if(id===WATER)return WATER_C[0];const t=B[id]&&B[id].tint;return t==='grass'?[.57,.74,.35]:t==='fol'?[.36,.68,.19]:t||null};
-const ICONC={};function iconURL(id){if(ICON[id])return ICON[id];const c=cv(32,32),g=c.getContext('2d');g.imageSmoothingEnabled=false;const b=B[id],tc=ICON_TINT(id);
-  if(b&&ITEM[id].block&&!b.cross&&!b.torch&&!b.icon2d&&id!==WATER){const tl=i=>tintTile(b.tex[i],tc);const front=b.face?tileList[TEX[b.face]]:tl(4);const hh=b.bh||1,yo=(1-hh)*15.5;
+const ICONC={};function iconURL(id){if(ICON[id])return ICON[id];{const q=typeof iconModelURL==='function'?iconModelURL(id):null;if(q)return q}const c=cv(32,32),g=c.getContext('2d');g.imageSmoothingEnabled=false;const b=B[id],tc=ICON_TINT(id);
+  if(b&&ITEM[id].block&&!b.cross&&!b.torch&&!b.icon2d&&id!==WATER){const tl=i=>tintTile(b.tex[i],tc);const front=b.face?tileList[TEX[b.face]]:b.mface?tileList[TEX[b.mface]]:tl(5);const hh=b.bh||1,yo=(1-hh)*15.5;
     g.setTransform(15/16,-7.5/16,15/16,7.5/16,1,8.5+yo);g.drawImage(tl(2),0,0);
     g.setTransform(15/16,7.5/16,0,15.5/16*hh,1,8.5+yo);g.drawImage(front,0,(1-hh)*16,16,hh*16,0,0,16,16);g.fillStyle='rgba(0,0,0,.22)';g.fillRect(0,0,16,16);
-    g.setTransform(15/16,-7.5/16,0,15.5/16*hh,16,16+yo);g.drawImage(tl(0),0,(1-hh)*16,16,hh*16,0,0,16,16);g.fillStyle='rgba(0,0,0,.42)';g.fillRect(0,0,16,16)}
+    g.setTransform(15/16,-7.5/16,0,15.5/16*hh,16,16+yo);g.drawImage(tl(1),0,(1-hh)*16,16,hh*16,0,0,16,16);g.fillStyle='rgba(0,0,0,.42)';g.fillRect(0,0,16,16)}
   else{const src=b&&ITEM[id].block?tintTile(b.tex[0],tc):ITEM[id].icon;g.drawImage(src,0,0,32,32)}
+  ICONC[id]=c;return ICON[id]=c.toDataURL()}
+// ── 블록 아이템 아이콘을 블록 모양 그대로 (Agent 01): 계단 · 반 블록 · 울타리 · 담장 · 울타리 문 · 다락문 · 카펫 · 눈 · 상자 · 모루 · 버튼 · 압력판 …
+// 마크 GUI 처럼 위에서 30° 로 비스듬히 본 정사영. 위 1.0 · 왼쪽 0.78 · 오른쪽 0.58 밝기. 판유리 · 철창 · 레일 · 덩굴 · 레버 · 중계기 · 가마솥 · 화분 · 종 · 사슬 · 양초는 마크처럼 납작한 그림
+const ICON_SHADE={};function shadeTile(t,k){const key=t+'|'+k;if(ICON_SHADE[key])return ICON_SHADE[key];const c=cv(16,16),g=c.getContext('2d');g.drawImage(tileList[t],0,0);const im=g.getImageData(0,0,16,16),d=im.data;
+  for(let i=0;i<d.length;i+=4){d[i]*=k;d[i+1]*=k;d[i+2]*=k;if(d[i+3]>200&&d[i+3]<255)d[i+3]=255}g.putImageData(im,0,0);return ICON_SHADE[key]=c}
+function iconModel(id){const b=B[id];if(!b||!ITEM[id]||!ITEM[id].block)return null;const sh=b.shape,T=f=>b.tex[f],P16=a=>a.map(v=>v/16);
+  if(b.paneB||sh==='rail'||sh==='vine'||sh==='lever'||sh==='diode'||sh==='flat'||id===CAULDRON||id===FLOWER_POT||id===BELL||id===CHAIN||id===CANDLE)return {flat:b.paneB?b.tex[4]:b.tex[0]};
+  if(sh==='slab2')return {bx:[[0,0,0,1,.5,1]],t:T,v:0};
+  if(sh==='stairs')return {bx:[[0,0,0,1,.5,1],[.5,.5,0,1,1,1]],t:T,v:1};
+  if(sh==='fence')return {bx:[[.375,0,0,.625,1,.25],[.375,0,.75,.625,1,1],[.4375,.75,-.125,.5625,.9375,1.125],[.4375,.375,-.125,.5625,.5625,1.125]],t:T,v:1};
+  if(sh==='wall')return {bx:[[.25,0,.25,.75,1,.75],[.3125,0,0,.6875,.8125,1]],t:T,v:1};
+  if(b.gateB)return {bx:GATE_C.map(P16),t:T,v:2,k:24,dy:1};
+  if(sh==='carpet')return {bx:[[0,0,0,1,id===SNOW_LAYER?.125:.0625,1]],t:T,v:0};
+  if(sh==='chest')return {bx:[[.0625,0,.0625,.9375,.875,.9375],[.4375,.4375,0,.5625,.6875,.0625,1]],t:(f,j)=>j?TEX.chest_latch:f===5?TEX[b.face]:b.tex[f],v:0};
+  if(sh==='button')return {bx:[P16([5,6,6,11,10,10])],t:T,v:0};
+  if(sh==='plate')return {bx:[P16([1,0,1,15,1,15])],t:T,v:0};
+  if(sh==='boxes'&&b.boxes&&id!==OAK_TRAPDOOR&&id!==IRON_TRAPDOOR){const bb=typeof b.boxes==='function'?b.boxes(0):b.boxes;return {bx:bb,t:T,v:0}}
+  if(id===OAK_TRAPDOOR||id===IRON_TRAPDOOR)return {bx:[[0,0,0,1,.1875,1]],t:T,v:0};
+  return null}
+function iconModelURL(id){const q=iconModel(id);if(!q)return null;const c=cv(32,32),g=c.getContext('2d');g.imageSmoothingEnabled=false;
+  if(q.flat!=null){g.drawImage(tintTile(q.flat,ICON_TINT(id)),0,0,32,32)}
+  else{const s=Math.SQRT1_2,VH=[[-1,-1],[-1,1],[1,1]][q.v],vx=VH[0]*s,vz=VH[1]*s,rx=vz,rz=-vx,c30=Math.cos(Math.PI/6),s30=.5,k=q.k||21,oy=(q.dy||0)/16*k;
+    const pr=(x,y,z)=>{x-=.5;y-=.5;z-=.5;const h=x*vx+z*vz;return {x:16+k*(x*rx+z*rz),y:16+oy-k*(y*c30-h*s30),d:h*c30+y*s30}};
+    const F=[];q.bx.forEach((bx,j)=>{const [x0,y0,z0,x1,y1,z1]=bx;
+      const add=(f,n,A,Bp,D,sx,sy,sw,sh2)=>{if(n[0]*vx*c30+n[1]*s30+n[2]*vz*c30<=1e-6)return;if(sw<=0||sh2<=0)return;const t=q.t(f,bx[6]?1:0);if(t==null)return;
+        const a=pr(...A),b2=pr(...Bp),d=pr(...D),cx=(a.d+b2.d+d.d)/3;F.push({cx:cx+(n[1]>0?.001:0),a,b:b2,d,t,sh:n[1]>0?1:Math.abs(n[0]*rx+n[2]*rz)>.5&&(n[0]*rx+n[2]*rz)<0?.78:.58,sx,sy,sw,sh2})};
+      const U=v=>v*16;
+      add(2,[0,1,0],[x0,y1,z0],[x1,y1,z0],[x0,y1,z1],U(x0),U(z0),U(x1-x0),U(z1-z0));
+      add(4,[0,0,1],[x0,y1,z1],[x1,y1,z1],[x0,y0,z1],U(x0),U(1-y1),U(x1-x0),U(y1-y0));
+      add(5,[0,0,-1],[x1,y1,z0],[x0,y1,z0],[x1,y0,z0],U(1-x1),U(1-y1),U(x1-x0),U(y1-y0));
+      add(0,[1,0,0],[x1,y1,z1],[x1,y1,z0],[x1,y0,z1],U(1-z1),U(1-y1),U(z1-z0),U(y1-y0));
+      add(1,[-1,0,0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z0],U(z0),U(1-y1),U(z1-z0),U(y1-y0))});
+    F.sort((p,q2)=>p.cx-q2.cx);
+    for(const f of F){const sx=clamp(f.sx,0,16),sy=clamp(f.sy,0,16),sw=Math.min(f.sw,16-sx),shh=Math.min(f.sh2,16-sy);if(sw<=0||shh<=0)continue;
+      g.setTransform(f.b.x-f.a.x,f.b.y-f.a.y,f.d.x-f.a.x,f.d.y-f.a.y,f.a.x,f.a.y);g.drawImage(shadeTile(f.t,f.sh),sx,sy,sw,shh,0,0,1,1)}
+    g.setTransform(1,0,0,1,0,0)}
   ICONC[id]=c;return ICON[id]=c.toDataURL()}
 
 /* ═════════════ 월드 ═════════════ */
@@ -2693,7 +2729,7 @@ function buildChunk(ch){
       if(sh==='stairs'){for(const bx of stairBoxesB(MV,nbR,nmR))boxQ(bx,T6,null,f=>cullB(bx,f));continue}
       if(sh==='wall'){const s=wallStateB(nbR,nmR,0),T0=b.tex[0],bq=bx=>boxQ(bx,T0,null,f=>cullB(bx,f));   // (Agent 01) 담장: 기둥 · 낮은/높은 옆 (곧은 줄은 한 덩어리)
         if(!s[4]&&s[0]&&s[0]===s[1]&&!s[2]&&!s[3])bq([0,0,.3125,1,s[0]===2?1:.875,.6875]);else if(!s[4]&&s[2]&&s[2]===s[3]&&!s[0]&&!s[1])bq([.3125,0,0,.6875,s[2]===2?1:.875,1]);else for(const bx of wallBoxesB(s))bq(bx);continue}
-      if(sh==='pane'){const c=paneConnB(nbR),bars=b.paneB===2,TG=b.tex[4],TV=b.tex[2],TH=bars?TV:TEX.pane_edge_h,P0=[.4375,0,.4375,.5625,1,.5625];   // (Agent 01) 판유리 · 철창: 가는 기둥 + 이어진 쪽 판
+      if(sh==='pane'){const c=paneConnB(nbR),bars=b.paneB===2,TG=b.tex[4],TV=bars?b.tex[4]:TEX.glass_pane,TH=bars?TV:TEX.pane_edge_h,P0=[.4375,0,.4375,.5625,1,.5625];   // (Agent 01) 판유리 · 철창: 가는 기둥 + 이어진 쪽 판
         boxQ(P0,f=>f===2||f===3?TV:TG,null,f=>(f===0&&c[0])||(f===1&&c[1])||(f===4&&c[2])||(f===5&&c[3])||cullB(P0,f));
         const arm=(bx,ax)=>{boxQ(bx,f=>f===2||f===3?(ax?TH:TV):TG,null,f=>f<2?(ax||bars):f>3?(!ax||bars):cullB(bx,f));if(bars)boxQ(ax?[bx[0],0,.5,bx[3],1,.5]:[.5,0,bx[2],.5,1,bx[5]],TG,null,f=>ax?f<4:f>1)};
         if(c[0])arm([.5625,0,.4375,1,1,.5625],1);if(c[1])arm([0,0,.4375,.4375,1,.5625],1);if(c[2])arm([.4375,0,.5625,.5625,1,1],0);if(c[3])arm([.4375,0,0,.5625,1,.4375],0);continue}
