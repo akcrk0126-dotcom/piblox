@@ -7005,6 +7005,7 @@ function x6UUID(o){if(o===player)return myName();return o.uuid||(o.uuid=[8,4,4,4
 const holderOf=o=>cmdEntKind(o)==='player'||cmdEntKind(o)==='remote'?cmdEntName(o):x6UUID(o);   // 점수판 이름 (플레이어는 이름, 나머지는 UUID)
 const x6Num=v=>{const s=String(Math.round(v*1e5)/1e5);return s};
 const x6F2=v=>(Math.round(v*100)/100).toFixed(2);
+const cFbRed6=(c,k,...a)=>{if(!c.silent)chatLine(cmdMsg(k,...a),'#f55')};   // 마크 sendFailure: 빨간 글만 (오류로 멈추지 않고 결과 0)
 // 낱말 인수 (팀 · 목표 · 태그 이름): 마크 unquoted string 글자만
 CmdArg.word6=(sug)=>({parse(r){const st=r.i,t=r.unq();if(!t)throw r.err('expected','단어');return t},sug:sug?(b,c)=>cmdSugList(b,sug(c)):undefined});
 // ── 텍스트 컴포넌트: 26.3 처럼 SNBT (JSON 도 그대로 SNBT 예요) → 글 조각 [{t, c 색, b 굵게, i 기울임, u 밑줄, s 취소선, o 난독화, sh 그림자색, click, hover}] ──
@@ -7283,7 +7284,7 @@ CmdArg.obj6=()=>({parse(r){const st=r.i,t=r.unq();if(!t)throw r.err('expected','
 CmdArg.holders6=(single)=>({parse(r,ctx){const st=r.i;if(r.can()&&r.peek()==='@')return{sel:selParse(r,ctx?ctx.perm:4,{single}),st};if(!single&&r.can()&&r.peek()==='*'&&(r.i+1>=r.s.length||r.s[r.i+1]===' ')){r.skip();return{star:true,st}}
     let e=r.i;while(e<r.s.length&&r.s[e]!==' ')e++;const t=r.s.slice(r.i,e);if(!t)throw r.err('ent_bad');r.i=e;return{name:t,st}},
   sug:(b,ctx)=>{selSug(b,ctx);if(!single&&!b.rem)b.add('*');cmdSugList(b,scoreHolders())}});
-function scHolders(c,H,objFor){let L;if(H.star)L=objFor?Object.keys(objFor.s):scoreHolders();else if(H.sel){L=selFind(H.sel,c).map(holderOf)}else L=[H.name];if(!L.length)cFail('sh_empty');return L}
+function scHolders(c,H){let L;if(H.star)L=scoreHolders();else if(H.sel){L=selFind(H.sel,c).map(holderOf)}else L=[H.name];if(!L.length)cFail('sh_empty');return L}
 CmdArg.crit6=()=>({parse(r){const st=r.i;let e=r.i;while(e<r.s.length&&r.s[e]!==' ')e++;const t=r.s.slice(r.i,e);r.i=e;if(!scCritOk(t))throw r.at(st,'crit_bad',t);return t},
   sug:b=>{const q=b.rem;cmdSugList(b,SC_BASIC.concat(TXC_NAMES.map(c=>'teamkill.'+c),TXC_NAMES.map(c=>'killedByTeam.'+c)));const m=/^minecraft\.([a-z_]+):(.*)$/.exec(q);
     if(m&&SC_STAT[m[1]]){for(const id of SC_STAT[m[1]]())if(('minecraft.'+id.slice(10)).startsWith(m[2])||id.slice(10).startsWith(m[2]))b.add('minecraft.'+m[1]+':minecraft.'+id.slice(10))}else for(const k in SC_STAT)if(('minecraft.'+k+':').startsWith(q))b.add('minecraft.'+k+':')}});
@@ -7316,7 +7317,7 @@ function spMod(c,a,kind){const O=cObj(c,a.objective,true),L=scHolders(c,a.target
   const nm=objName(a.objective);if(kind==='set'){L.length===1?cFb(c,'sp_set1',nm,L[0],a.score):cFb(c,'sp_setN',nm,L.length,a.score);return a.score*L.length}
   if(L.length===1)cFb(c,kind==='add'?'sp_add1':'sp_rm1',a.score,nm,L[0],last);else cFb(c,kind==='add'?'sp_addN':'sp_rmN',a.score,nm,L.length);return sum}
 function spGet(c,a){const O=cObj(c,a.objective),h=scHolders(c,a.target)[0],v=scoreRaw(O,h);if(v==null)cFail('sp_get_null',a.objective,h);cFb(c,'sp_get',h,v,scDisp(O));return v}
-function spList(c,a){const D=SBD().o;if(!a.target){const L=scoreHolders();if(!L.length)cFail('sp_list0');cFb(c,'sp_list',L.length,L.join(', '));return L.length}
+function spList(c,a){const D=SBD().o;if(!a.target){const L=scoreHolders();if(!L.length){cFb(c,'sp_list0');return 0}cFb(c,'sp_list',L.length,L.join(', '));return L.length}
   const h=scHolders(c,a.target)[0],E=[];for(const n in D){const v=scoreRaw(D[n],h);if(v!=null)E.push([D[n],v])}if(!E.length){cFb(c,'sp_le0',h);return 0}
   cFb(c,'sp_le',h,E.length);for(const [O,v] of E)cFb(c,'sp_lee',scDisp(O),v);return E.length}
 function spOp(c,a){const O=cObj(c,a.targetObjective,true),S=cObj(c,a.sourceObjective),T=scHolders(c,a.targets),Src=scHolders(c,a.source);let sum=0,last=0;
@@ -7325,7 +7326,7 @@ function spOp(c,a){const O=cObj(c,a.targetObjective,true),S=cObj(c,a.sourceObjec
       else if(op==='=')x=y;else if(op==='<')x=Math.min(x,y);else if(op==='>')x=Math.max(x,y);else if(op==='><'){if(!scRO(S))scoreSet(S,s,x);x=y}
       if(S.s[s]==null&&!scRO(S)&&op!=='><')scoreSet(S,s,y);last=scoreSet(O,h,x)}sum+=last}
   T.length===1?cFb(c,'sp_op1',objName(a.targetObjective),T[0],last):cFb(c,'sp_opN',objName(a.targetObjective),T.length);return sum}
-function spReset(c,a){const D=SBD().o;if(a.objective){const O=cObj(c,a.objective),L=scHolders(c,a.targets,O);for(const h of L)delete O.s[h];L.length===1?cFb(c,'sp_rs1',objName(a.objective),L[0]):cFb(c,'sp_rsN',objName(a.objective),L.length);return L.length}
+function spReset(c,a){const D=SBD().o;if(a.objective){const O=cObj(c,a.objective),L=scHolders(c,a.targets);for(const h of L)delete O.s[h];L.length===1?cFb(c,'sp_rs1',objName(a.objective),L[0]):cFb(c,'sp_rsN',objName(a.objective),L.length);return L.length}
   const L=scHolders(c,a.targets);for(const h of L)for(const n in D)delete D[n].s[h];L.length===1?cFb(c,'sp_rsa1',L[0]):cFb(c,'sp_rsaN',L.length);return L.length}
 function spEnable(c,a){const O=cObj(c,a.objective);if(O.c!=='trigger')cFail('sp_en_bad');const L=scHolders(c,a.targets);let n=0;for(const h of L){const x=O.s[h]||(O.s[h]={v:0,lk:true});if(x.lk){x.lk=false;n++}}
   if(!n&&L.length===1)cFail('sp_en_same');L.length===1?cFb(c,'sp_en1',objName(a.objective),L[0]):cFb(c,'sp_enN',objName(a.objective),L.length);return n}
@@ -7337,7 +7338,7 @@ function spDispNF(c,a,kind){const O=cObj(c,a.objective),L=scHolders(c,a.targets)
   cmdReg(cLit('scoreboard',
     cLit('objectives',
       cLit('add',cArg('objective',CmdArg.word6(),cArg('criteria',CmdArg.crit6(),(c,a)=>soAdd(c,a),cArg('displayName',CmdArg.comp(),(c,a)=>soAdd(c,a))))),
-      cLit('list',c=>{const D=SBD().o,K=Object.keys(D);if(!K.length)cFail('so_list0');cFb(c,'so_list',K.length,K.map(k=>scDisp(D[k])).join(', '));return K.length}),
+      cLit('list',c=>{const D=SBD().o,K=Object.keys(D);if(!K.length){cFb(c,'so_list0');return 0}cFb(c,'so_list',K.length,K.map(k=>scDisp(D[k])).join(', '));return K.length}),
       cLit('modify',cArg('objective',O(),
         cLit('displayautoupdate',cArg('value',CmdArg.bool(),(c,a)=>{const o=cObj(c,a.objective);o.au=a.value;cFb(c,a.value?'so_au_on':'so_au_off',scDisp(o));return 0})),
         cLit('displayname',cArg('displayName',CmdArg.comp(),(c,a)=>{const o=cObj(c,a.objective);o.d=a.displayName;cFb(c,'so_dn',a.objective,scDisp(o));return 0})),
@@ -7517,7 +7518,7 @@ Object.assign(CMD_MSG,{cl_ok:'블록 %s개를 복제했어요',cl_none:'복제�
   fl_listN:'%2$s에서 강제로 불러오는 청크 %1$s개를 찾았어요: %3$s',fl_list1:'%s에서 강제로 불러오는 청크 하나를 찾았어요: %s',fl_q_fail:'%2$s의 %1$s 청크는 강제로 불러오게 표시되어 있지 않아요',fl_q:'%2$s의 %1$s 청크는 강제로 불러오게 표시되어 있어요',
   fl_rm_all:'%s의 강제로 불러오는 청크를 모두 풀었어요',fl_rm_fail:'강제로 불러오기에서 뺀 청크가 없어요',fl_rmN:'%2$s의 청크 %1$s개를 %3$s부터 %4$s까지 강제로 불러오기에서 뺐어요',fl_rm1:'%2$s의 청크 %1$s을(를) 강제로 불러오기에서 뺐어요',fl_big:'정한 범위에 청크가 너무 많아요 (최대 %s개인데 %s개예요)',
   spr_fe:'개체 %s개를 %s, %s 둘레에 퍼뜨리지 못했어요 (자리에 비해 개체가 너무 많아요 — 거리를 %s 이하로 해 보세요)',spr_ft:'팀 %s개를 %s, %s 둘레에 퍼뜨리지 못했어요 (자리에 비해 개체가 너무 많아요 — 거리를 %s 이하로 해 보세요)',
-  spr_fh:'잘못된 maxHeight %s예요. 세계의 가장 낮은 높이 %s보다 높아야 해요',spr_oe:'개체 %s개를 %s, %s 둘레에 평균 %s칸 떨어지게 퍼뜨렸어요',spr_ot:'팀 %s개를 %s, %s 둘레에 평균 %s칸 떨어지게 퍼뜨렸어요',
+  spr_fh:'잘못된 maxHeight %s(이)에요. 세계의 가장 낮은 높이 %s보다 높아야 해요',spr_oe:'개체 %s개를 %s, %s 둘레에 평균 %s칸 떨어지게 퍼뜨렸어요',spr_ot:'팀 %s개를 %s, %s 둘레에 평균 %s칸 떨어지게 퍼뜨렸어요',
   rd_already:'%s은(는) 이미 %s에 타고 있어요',rd_dis:'%s이(가) %s에서 내렸어요',rd_pl:'플레이어 위에는 탈 수 없어요',rd_fail:'%s이(가) %s에 타지 못했어요',rd_loop:'자기 자신이나 자기 위에 탄 개체에는 탈 수 없어요',rd_dim:'다른 차원에 있는 개체에는 탈 수 없어요',rd_ok:'%s이(가) %s에 탔어요',rd_not:'%s은(는) 아무것도 타고 있지 않아요',
   it_bset:'%s, %s, %s의 칸 하나를 %s(으)로 바꿨어요',it_brep:'%2$s, %3$s, %4$s의 칸 %1$s개를 바꿨어요',it_brepk:'%2$s, %3$s, %4$s의 칸 %1$s개를 %5$s(으)로 바꿨어요',
   it_eset1:'%s의 칸 하나를 %s(으)로 바꿨어요',it_esetN:'개체 %s개의 칸 하나를 %s(으)로 바꿨어요',it_erep1:'%2$s의 칸 %1$s개를 바꿨어요',it_erep1k:'%2$s의 칸 %1$s개를 %3$s(으)로 바꿨어요',it_erepN:'개체 %s개의 칸을 바꿨어요',it_erepNk:'개체 %s개의 칸을 %s(으)로 바꿨어요',
@@ -7723,7 +7724,7 @@ function flDo(c,a,add){const R=flRange(c,a.from,a.to),L=flList(),dn=c.dim;let n=
   if(!n)cFail(add?'fl_add_fail':'fl_rm_fail');if(n===1)cFb(c,add?'fl_add1':'fl_rm1',cpos(first[0],first[1]),dn);else cFb(c,add?'fl_addN':'fl_rmN',n,dn,cpos(R.x0,R.z0),cpos(R.x1,R.z1));return n}
 cmdReg(cLit('forceload',
   cLit('add',cArg('from',CmdArg.col6(),(c,a)=>flDo(c,a,true),cArg('to',CmdArg.col6(),(c,a)=>flDo(c,a,true)))),
-  cLit('query',c=>{const L=flList();if(!L.length){cFb(c,'fl_none',c.dim);return 0}const s=L.map(([x,z])=>cpos(x,z)).join(', ');L.length===1?cFb(c,'fl_list1',c.dim,s):cFb(c,'fl_listN',L.length,c.dim,s);return L.length},
+  cLit('query',c=>{const L=flList();if(!L.length){cFbRed6(c,'fl_none',c.dim);return 0}const s=L.map(([x,z])=>cpos(x,z)).join(', ');L.length===1?cFb(c,'fl_list1',c.dim,s):cFb(c,'fl_listN',L.length,c.dim,s);return L.length},
     cArg('pos',CmdArg.col6(),(c,a)=>{const P=x6Col2(a.pos,c),x=P.x>>4,z=P.z>>4,on=flList().some(([p,q])=>p===x&&q===z);if(!on)cFail('fl_q_fail',cpos(x,z),c.dim);cFb(c,'fl_q',cpos(x,z),c.dim);return 1})),
   cLit('remove',cLit('all',c=>{FLD()[DIM]=[];cFb(c,'fl_rm_all',c.dim);return 0}),cArg('from',CmdArg.col6(),(c,a)=>flDo(c,a,false),cArg('to',CmdArg.col6(),(c,a)=>flDo(c,a,false))))));
 function flTick(){const L=FLD()[DIM];if(!L||!L.length)return;for(const [x,z] of L)if(!chunks.has(ck(x,z))){try{genChunk(x,z)}catch(e){}break}}
