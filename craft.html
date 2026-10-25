@@ -2964,6 +2964,12 @@ function moveStats(p,dx,dy,dz,ladder){const cm=v=>Math.round(v*100);if(p.swimmin
 // 몹 넉백 (LivingEntity.knockback): 세기 × (1 − 넉백 저항) · 수평 속도는 반으로 줄이고 (dx,dz) 쪽으로 밀기 · 땅이면 위로 min(0.4, vy/2 + 세기) — 몹 속도는 블록/초라 ÷0.05
 const KB_RES={iron_golem:1,warden:1,hoglin:.6,dragon:1};
 function mobKnock(m,s,dx,dz){s*=1-((m.D&&m.D.kbres)??KB_RES[m.type]??0);const l=Math.hypot(dx,dz);if(s<=0||l<1e-6)return;const k=s/TICK;m.vel.x=m.vel.x/2+dx/l*k;m.vel.z=m.vel.z/2+dz/l*k;if(m.onGround)m.vel.y=Math.min(.4/TICK,(m.vel.y>0?m.vel.y:-1.568)/2+k)}
+// 방패로 막기 (LivingEntity.isDamageSourceBlocked): 들고 5틱 뒤부터 · 피해가 온 곳이 앞쪽 반 (바라보는 방향과 내적 < 0) · 위치가 있는 피해만 (몹 · 화살 · 폭발)
+// 피해 3 이상이면 내구도 1 + ⌊피해⌋ (방패 336) · 때린 몹은 0.5 넉백
+function shieldBlocks(d,src,why,o){const p=player;if(!p.blocking||!src||d<=0||o&&o.noArmor||/^(fall|void|starve|drown|wall|fire|lava|cactus|sonic|magic)$/.test(why))return false;
+  const dx=p.pos.x-src.x,dz=p.pos.z-src.z,l=Math.hypot(dx,dz);if(l<1e-6||(dx*-Math.sin(p.yaw)+dz*-Math.cos(p.yaw))/l>=0)return false;
+  const st=inv[sel];if(st&&d>=3&&!creative()){st.d=(st.d||0)+1+Math.floor(d);if(st.d>=336){inv[sel]=null;sfx('tbreak')}renderHotbar()}
+  const m=mobs.find(q=>q.pos===src);if(m)mobKnock(m,.5,m.pos.x-p.pos.x,m.pos.z-p.pos.z);sfx('place','wood');return true}
 // 먹고 마시는 시간 (consume_seconds): 꿀이 든 병 2초 · 나머지 1.6초 (32틱)
 const useSec=st=>st&&st.id===HONEY_BOTTLE?2:1.6;
 // 몸이 닿은 블록 (Entity.checkInsideBlocks: 상자를 1e-5 줄여서) — 거미줄 · 달콤한 열매 덤불 · 선인장
@@ -3007,7 +3013,8 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   p.sneak=sneakKey&&!p.fly;p.shiftKey=sneakKey;
   let fw=clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)-joy.y,-1,1),st=clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+joy.x,-1,1);
   if(p.pose==='crouch'||p.pose==='swim'&&!p.inWater){fw*=.3;st*=.3}   // 웅크리기 · 기기 (isMovingSlowly)
-  const using=eating||drawT>0;if(using){fw*=.2;st*=.2}
+  const shUse=!!(inv[sel]&&inv[sel].id===SHIELD&&mouseR&&!screenOpen&&!p.boat);p.shieldT=shUse?(p.shieldT||0)+1:0;p.blocking=p.shieldT>=5;   // 방패: 5틱 들고 있으면 막아요
+  const using=eating||drawT>0||shUse;if(using){fw*=.2;st*=.2}
   const fx=Math.floor(p.pos.x),fz=Math.floor(p.pos.z);
   const feet=getB(fx,Math.floor(p.pos.y+.1),fz),mid=getB(fx,Math.floor(p.pos.y+.9),fz);
   pFluidTick(p);if(p.inWater)p.fallDist=0;
@@ -3094,6 +3101,8 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   else if(dyM<0)p.fallDist-=dyM;
   if(p.inWater)p.fallDist=0;
   if(p.pos.y<-20){hurtPlayer(4,null,'void')}
+  // 벽 속 (Entity.isInWall): 눈 둘레 0.48 폭이 꽉 찬 불투명 블록 안이면 1 피해 (갑옷 무시)
+  if(!p.fly){const ey=Math.floor(p.pos.y+(POSE_EYE[p.pose]||1.62));for(const [ax,az] of [[-.24,-.24],[.24,-.24],[-.24,.24],[.24,.24]]){const b=getB(Math.floor(p.pos.x+ax),ey,Math.floor(p.pos.z+az));if(OP[b]&&SOLID[b]&&BH[b]===1&&!SHAPED[b]){hurtPlayer(1,null,'wall');break}}}
   // 선인장: 닿으면 1 · 달콤한 열매 덤불: 안에서 움직이면 1 (뾰족한 점적석은 닿아도 괜찮아요)
   {const x0=Math.floor(p.pos.x-PW-.05),x1=Math.floor(p.pos.x+PW+.05),z0=Math.floor(p.pos.z-PW-.05),z1=Math.floor(p.pos.z+PW+.05),y0=Math.floor(p.pos.y-.05),y1=Math.floor(p.pos.y+pH());let hit=false;for(let y=y0;y<=y1&&!hit;y++)for(let z=z0;z<=z1&&!hit;z++)for(let x=x0;x<=x1&&!hit;x++){const id=getB(x,y,z);if(id===CACTUS||(B[id]&&B[id].thorn&&id!==SWEET_BERRY&&id!==POINTED_DRIPSTONE))hit=true}
     if(!hit){pInside(p,id=>{if(id===SWEET_BERRY)hit=true});if(hit&&!(Math.abs(p.pos.x-ox)>=.003||Math.abs(p.pos.z-oz)>=.003))hit=false}if(hit)hurtPlayer(1,null,'cactus')}
@@ -3120,7 +3129,7 @@ let critFx=m=>{},sweepFx=m=>{};
 
 // 가시: 나를 때린 몹에게 되돌려 줘요
 function thornsHit(why){let t=0;armor.forEach(a=>{if(a&&a.e&&a.e.thorns)t=Math.max(t,a.e.thorns)});if(!t||!MOBDEF[why]||Math.random()>t*.15)return;let best=null,bd=5;for(const m of mobs)if(!m.dead&&m.type===why){const d=m.pos.distanceTo(player.pos);if(d<bd){bd=d;best=m}}if(best){best.hurtT=0;hurtMob(best,1+Math.floor(Math.random()*4),player.pos)}}
-function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void')return;if(p.dead)return;
+function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void')return;if(p.dead)return;if(shieldBlocks(d,src,why,o))return;
   // 무적 10틱 (LivingEntity.hurt): 그 사이엔 더 센 피해만 차이만큼 (넉백 · 흔들림 없이)
   let full=true;if(p.hurtT>0&&why!=='drown'&&why!=='starve'){if(d<=(p.lastHurt||0))return;const raw=d;d-=p.lastHurt||0;p.lastHurt=raw;full=false}else p.lastHurt=d;
   if(full)thornsHit(why);const raw0=d;
@@ -4880,7 +4889,8 @@ function updateHand(dt){const p=player,pt=PT;
     ps.t(f2+.64000005,f3-.6+eq*-.6,f4-.71999997).ry(45);const f5=Math.sin(sw*sw*Math.PI),f6=Math.sin(f1*Math.PI);ps.ry(f6*70).rz(f5*-20);
     ps.t(-1,3.6,3.5).rz(120).rx(200).ry(-135).t(5.6,0,0);
     ps.t(-5/16,2/16,0).rz(.1/DEG)}
-  else{const useEat=eating&&st===inv[sel],useBow=drawT>0&&st===inv[sel]&&(id===BOW||id===CROSSBOW);
+  else{const useEat=eating&&st===inv[sel],useBow=drawT>0&&st===inv[sel]&&(id===BOW||id===CROSSBOW),useSh=id===SHIELD&&p.shieldT>0&&st===inv[sel];
+    if(useSh){ps.t(.56,-.52+eq*-.6,-.72);const k=Math.min(1,(p.shieldT-1+pt)/5);ps.t(-.5*k,.2*k,.1*k).rz(-25*k).ry(25*k)}else   // 방패 들기 (Agent 09): 5틱에 걸쳐 가운데로 · 똑바로
     if(useEat){const dur=Math.round(useSec(st)*20),rem=dur-p.useTicks,f=rem-pt+1,f1=f/dur;if(f1<.8)ps.t(0,Math.abs(Math.cos(f/4*Math.PI)*.1),0);const f3=1-Math.pow(clamp(f1,0,1),27);
       ps.t(f3*.6,f3*-.5,0).ry(f3*90).rx(f3*10).rz(f3*30);ps.t(.56,-.52+eq*-.6,-.72)}
     else if(useBow){ps.t(.56,-.52+eq*-.6,-.72);ps.t(-.2785682,.18344387,.15731531).rx(-13.935).ry(35.3).rz(-9.785);
@@ -6739,8 +6749,10 @@ function sendHit(r,dmg,src,kb,fire){const ref=MPS.me.child('h').push({to:r.uid,d
 function arrowHitsRemote(p){if(!MPS)return false;for(const r of remotes.values()){if(!r.uid||!r.d||r.d.d||!r.S.g.visible)continue;const g=r.S.g.position;
   if(Math.abs(p.pos.x-g.x)<.4&&Math.abs(p.pos.z-g.z)<.4&&p.pos.y>g.y&&p.pos.y<g.y+1.85){r.hurtT=.35;sendHit(r,p.dmg,p.pos.clone().addScaledVector(p.vel,-.05),p.punch||0,p.flame?1.25:0);sfx('hurt');return true}}return false}
 function attackRemote(r){if(!MPS||!r.uid||r.d&&r.d.d)return;doSwing();if((r.cd||0)>0)return;r.cd=.5;r.hurtT=.35;
-  const st=inv[sel],tool=toolOf(st),E=st&&st.e||{};let dmg=(tool?tool.dmg:1)+(E.sharp?E.sharp*.5+.5:0);if(!player.onGround&&player.vel.y<0&&!player.inWater)dmg*=1.5;
-  sendHit(r,dmg,player.pos,E.knock||0,E.fire||0);
+  // 몹과 같은 공식 (Agent 09): 쿨타임 비율 0.2+0.8f² · 마법 ×f · 떨어지며 (달리기 · 물 · 사다리 아님) 꽉 찬 공격이면 치명타 1.5 · 달리며 친 넉백 +1
+  const st=inv[sel],tool=toolOf(st),E=st&&st.e||{},p=player,f2=atkScale(.5),strong=f2>.9,crit=strong&&p.fallDist>0&&!p.onGround&&!p.inWater&&!p.sprint&&!CLIMB(getB(Math.floor(p.pos.x),Math.floor(p.pos.y),Math.floor(p.pos.z)));
+  const dmg=(tool?tool.dmg:1)*(.2+f2*f2*.8)*(crit?1.5:1)+(E.sharp?E.sharp*.5+.5:0)*f2;const kb=(E.knock||0)+(p.sprint&&strong?1:0);if(p.sprint&&strong){p.vel.x*=.6;p.vel.z*=.6;p.sprint=false}if(crit){sfx('crit')}p.atkTicker=0;
+  sendHit(r,dmg,player.pos,kb,E.fire||0);
   sfx('hurt');if(tool)damageHeld(1);player.exh+=.1}
 function pvpHit(v){if(!MPS||player.dead||v.to!==MPS.uid||now()-(v.ts||0)>4000)return;player.pvpBy=v.n||'플레이어';const hp=player.hp;
   hurtPlayer(v.dmg,new V3(v.x,v.y,v.z),'pvp');if(player.hp<hp){if(v.kb){player.vel.x*=1+v.kb*.6;player.vel.z*=1+v.kb*.6}if(v.fire)player.burn=Math.max(player.burn||0,4*v.fire)}}
