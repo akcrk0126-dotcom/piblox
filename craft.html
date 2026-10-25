@@ -5772,8 +5772,27 @@ function darkFx(){const f=lerp(DARK_F0,DARK_F,ddAcc/.05);if(f<=.001){if(renderer
   const far=lerp(worldMat.uniforms.fogF.value,15,f);for(const m of [worldMat,waterMat]){m.uniforms.fogF.value=far;m.uniforms.fogN.value=far*.75;m.uniforms.fogC.value.multiplyScalar(1-f)}
   scene.fog.far=far;scene.fog.near=far*.75;scene.fog.color.multiplyScalar(1-f);skyDome.material.uniforms.top.value.multiplyScalar(1-f);skyDome.material.uniforms.hor.value.multiplyScalar(1-f);
   renderer.getClearColor(_darkCol);renderer.setClearColor(_darkCol.multiplyScalar(1-f));
-  const j=Math.max(0,Math.cos((ddTk+ddAcc/.05)*Math.PI*.025))*.45*f;if(tStopT>0)return;const bb=1-2*j;renderer.domElement.style.filter=j>.004?`contrast(${(1/bb).toFixed(3)}) brightness(${bb.toFixed(3)})`:''}
+  const j=Math.max(0,Math.cos((ddTk+ddAcc/.05)*Math.PI*.025))*.45*f;if(tStopT>0)return;const bb=1-j;renderer.domElement.style.filter=j>.004?`brightness(${bb.toFixed(3)})`:''}
 {const _us=updateSky;updateSky=function(dt){_us(dt);darkFx()}}
+// ── 효과 표시 (마크 HUD 오른쪽 위): 지금 걸린 효과마다 칸 하나 · 그림 · 이름 · 남은 시간 (10초 아래면 깜빡여요) · 이로운 줄 / 해로운 줄
+const FX_ICON={};{const mk=(k,f)=>{const c=cv(9,9),g=c.getContext('2d');f(g);FX_ICON[k]=c.toDataURL()},px=(g,col,pts)=>{g.fillStyle=col;for(const [x,y] of pts)g.fillRect(x,y,1,1)},heart=[[1,1],[2,1],[5,1],[6,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[2,5],[3,5],[4,5],[5,5],[3,6],[4,6]];
+  mk('darkness',g=>{g.fillStyle='#1a1a2a';g.fillRect(1,1,7,7);px(g,'#4a3a6a',[[2,4],[3,3],[4,3],[5,3],[6,4],[3,5],[4,5],[5,5]]);px(g,'#9fd8e0',[[4,4]])});
+  mk('regeneration',g=>px(g,'#e6407a',heart));mk('absorption',g=>px(g,'#f0c020',heart));
+  mk('resistance',g=>{px(g,'#9a9aa8',[[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[1,2],[7,2],[1,3],[7,3],[1,4],[7,4],[2,5],[6,5],[3,6],[5,6],[4,7]]);px(g,'#5c5c6a',[[2,2],[3,2],[4,2],[5,2],[6,2],[2,3],[3,3],[4,3],[5,3],[6,3],[2,4],[3,4],[4,4],[5,4],[6,4],[3,5],[4,5],[5,5],[4,6]])});
+  mk('fire_resistance',g=>{px(g,'#f08020',[[4,1],[3,2],[4,2],[5,2],[2,3],[3,3],[4,3],[5,3],[6,3],[2,4],[3,4],[5,4],[6,4],[2,5],[3,5],[4,5],[5,5],[6,5],[3,6],[4,6],[5,6]]);px(g,'#ffd040',[[4,4],[4,5]])});
+  mk('levitation',g=>px(g,'#c8a0ff',[[4,1],[3,2],[4,2],[5,2],[2,3],[4,3],[6,3],[4,4],[4,5],[4,6],[4,7]]));
+  mk('speed',g=>px(g,'#7cc8f0',[[1,2],[2,2],[3,2],[4,2],[5,3],[6,4],[5,5],[1,6],[2,6],[3,6],[4,6],[0,4],[1,4],[2,4],[3,4]]))}
+const FX_N={darkness:'어둠',regeneration:'재생',absorption:'흡수',resistance:'저항',fire_resistance:'화염 저항',levitation:'공중 부양',speed:'시간의 힘'};
+function activeFx(){const L=[];if(DARK_T>0)L.push(['darkness',DARK_T/20,1]);
+  if(typeof GAP!=='undefined'){if(GAP.regen>0)L.push(['regeneration',GAP.regen,0]);if(GAP.absT>0&&GAP.abs>0)L.push(['absorption',GAP.absT,0]);if(GAP.res>0)L.push(['resistance',GAP.res,0]);if(GAP.fire>0)L.push(['fire_resistance',GAP.fire,0])}
+  if(typeof levT!=='undefined'&&levT>0&&DIM==='end')L.push(['levitation',levT,1]);if(player.buffT>0)L.push(['speed',player.buffT,0]);return L}
+{const box=document.createElement('div');box.id='fxHud';box.style.cssText='position:absolute;top:6px;right:6px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:11px Galmuri11,monospace;color:#fff;text-shadow:1px 1px 0 #3f3f3f';
+  document.getElementById('hud').appendChild(box);let last='';
+  setInterval(()=>{if(!started||player.dead){if(last){box.innerHTML='';last=''}return}const L=activeFx(),blink=Math.floor(performance.now()/250)%2;
+    const row=bad=>L.filter(e=>e[2]===bad).map(([k,t])=>{const s=Math.max(0,Math.ceil(t)),tm=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'),dim=s<=10&&blink;
+      return `<div style="display:flex;flex-direction:column;align-items:center;min-width:44px;white-space:nowrap;opacity:${dim?.45:1}"><div style="width:24px;height:24px;background:#2b2b2b;border:2px solid ${bad?'#a04040':'#c6c6c6'};box-shadow:inset 1px 1px 0 #555;display:flex;align-items:center;justify-content:center"><img src="${FX_ICON[k]}" style="width:18px;height:18px;image-rendering:pixelated"></div><div>${FX_N[k]}</div><div style="color:#ddd">${tm}</div></div>`}).join('');
+    const h=`<div style="display:flex;gap:2px">${row(0)}</div><div style="display:flex;gap:2px">${row(1)}</div>`;if(h!==last){box.innerHTML=h;last=h}},250)}
+
 // ── 촉매 (마크 SculkCatalystBlockEntity): 8칸 안에서 경험치를 줄 몹이 죽으면 가장 가까운 촉매 하나가 경험치를 빨아들여 (구슬이 안 떨어져요)
 //    피어나고 (8틱) 죽은 자리에서 그만큼 충전된 스컬크가 퍼져요 (게임 안 퍼지기: 자라기 10 · 4칸 안은 안 자라요 · 비명체는 부를 수 없는 것). 플레이어가 잡았으면 발전 과제 '퍼져 나간다'.
 const CATS=new Map();let CAT_XP=null;
