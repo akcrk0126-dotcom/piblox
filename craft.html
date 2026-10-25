@@ -7689,12 +7689,15 @@ cmdReg(cLit('worldborder',
   cLit('set',cArg('distance',CmdArg.num(-WB_MAX,WB_MAX),(c,a)=>wbSetSize(c,a.distance,0),cArg('time',CmdArg.time(0),(c,a)=>wbSetSize(c,a.distance,a.time)))),
   cLit('warning',cLit('distance',cArg('distance',CmdArg.int(0),(c,a)=>{const W=WBD();if(W.wd===a.distance)cFail('wb_wd_same');W.wd=a.distance;cFb(c,'wb_wd',a.distance);return a.distance})),
     cLit('time',cArg('time',CmdArg.time(0),(c,a)=>{const W=WBD();if(W.wt===a.time)cFail('wb_wt_same');W.wt=a.time;cFb(c,'wb_wt',Math.floor(a.time/20));return Math.floor(a.time/20)})))));
-// 틱마다: 크기 바꾸기 · 경계에 막히기 (안에 있던 플레이어는 못 나가요) · 밖에 있으면 피해 (완충 거리 넘은 만큼 × 1칸당 피해, 갑옷 무시)
-let wbPrevIn=true;
-function wbTick(){const W=WBD();if(W.t>0){W.t--;W.s=W.b+(W.a-W.b)*(W.t/W.T);if(W.t<=0){W.s=W.b;W.T=0}}if(W.s>=WB_MAX&&W.x===0&&W.z===0)return;
-  const p=player;if(p.dead||!started)return;const B=wbNow(),h=B.s/2,x0=B.x-h+.3,x1=B.x+h-.3,z0=B.z-h+.3,z1=B.z+h-.3,inside=p.pos.x>=x0&&p.pos.x<=x1&&p.pos.z>=z0&&p.pos.z<=z1;
-  if(!inside&&wbPrevIn&&GAMEMODE!=='spectator'){const nx=Math.max(x0,Math.min(x1,p.pos.x)),nz=Math.max(z0,Math.min(z1,p.pos.z));if(nx!==p.pos.x){p.pos.x=nx;p.vel.x=0}if(nz!==p.pos.z){p.pos.z=nz;p.vel.z=0}}
-  else{wbPrevIn=inside;if(!inside){const d=wbDist(p.pos.x,p.pos.z)+W.buf;if(d<0&&W.dmg>0)hurtPlayer(Math.max(1,Math.floor(-d*W.dmg)),null,'border',{noArmor:1})}}}
+// 틱마다: 크기 바꾸기 · 움직여서 넘으려 하면 막기 (경계가 줄어들어 밖에 남았거나 순간 이동했으면 안 막아요 — 마크도 밖에서는 안 막아요)
+//   · 몸이 다 밖에 나가면 피해 (완충 거리 넘은 만큼 × 1칸당 피해, 갑옷 무시, 적어도 1)
+let wbPrev=null;
+{const _tpTo6=tpTo;tpTo=function(){wbPrev=null;return _tpTo6.apply(this,arguments)};const _cmdEntTp6=cmdEntTp;cmdEntTp=function(o){if(o===player)wbPrev=null;return _cmdEntTp6.apply(this,arguments)}}
+function wbTick(){const W=WBD();if(W.t>0){W.t--;W.s=W.b+(W.a-W.b)*(W.t/W.T);if(W.t<=0){W.s=W.b;W.T=0}}const p=player;if(W.s>=WB_MAX&&W.x===0&&W.z===0||p.dead||!started){wbPrev=null;return}
+  const B=wbNow(),h=B.s/2,x0=B.x-h+.3,x1=B.x+h-.3,z0=B.z-h+.3,z1=B.z+h-.3,inB=(x,z)=>x>=x0&&x<=x1&&z>=z0&&z<=z1,q=wbPrev;
+  if(q&&GAMEMODE!=='spectator'&&!inB(p.pos.x,p.pos.z)&&inB(q.x,q.z)&&Math.hypot(p.pos.x-q.x,p.pos.z-q.z)<8){const nx=Math.max(x0,Math.min(x1,p.pos.x)),nz=Math.max(z0,Math.min(z1,p.pos.z));if(nx!==p.pos.x){p.pos.x=nx;p.vel.x=0}if(nz!==p.pos.z){p.pos.z=nz;p.vel.z=0}}
+  const d=wbDist(p.pos.x,p.pos.z);if(d<=-.3){const k=d+W.buf;if(k<0&&W.dmg>0)hurtPlayer(Math.max(1,Math.floor(-k*W.dmg)),null,'border',{noArmor:1})}
+  wbPrev={x:p.pos.x,z:p.pos.z}}
 // 경계 벽 (마크 renderWorldBorder 처럼 시야 거리 안에서만 · 가까울수록 진하게 · 줄무늬가 흘러요 · 멈춤 파랑 / 줄어듦 빨강 / 늘어남 초록)
 const WB_TEX=(()=>{const c=cv(32,32),g=c.getContext('2d');for(let y=0;y<32;y++)for(let x=0;x<32;x++){const d=(x+y)%16;if(d<4){g.fillStyle=d===0||d===3?'rgba(255,255,255,.55)':'#fff';g.fillRect(x,y,1,1)}}
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.magFilter=t.minFilter=THREE.NearestFilter;return t})();
@@ -8028,7 +8031,7 @@ function fx6After(cam){if(FX6.amb){worldMat.uniforms.amb.value=FX6.amb[0];waterM
 // ── 세계마다 저장 · 불러오기: 점수판 · 팀 · 보스 바 · 경계 · 강제 불러오기 · 수열 · 스톱워치는 dimState 안에 그대로, 내 효과 · 흡수 · 태그 · 속성은 저장할 때 dimState 로 옮겨요 ──
 function cmdSync6(){if(typeof dimState==='undefined'||!dimState)return;const p=player;dimState.pe=p.eff&&Object.keys(p.eff).length?p.eff:undefined;dimState.pab=p.abs||undefined;dimState.ptag=p.tags&&p.tags.length?p.tags.slice():undefined;dimState.pat=p.attrB||p.attrM?{b:p.attrB||null,m:p.attrM||null}:undefined}
 function cmdLoad6(){const p=player,D=dimState||{};p.eff=D.pe||{};p.abs=D.pab||0;p.tags=Array.isArray(D.ptag)?D.ptag.slice():[];p.attrB=D.pat&&D.pat.b||null;p.attrM=D.pat&&D.pat.m||null;
-  Object.assign(TTL,{t:null,sub:null,fi:10,st:70,fo:20,time:0,ab:null,abT:0});P6.length=0;wbPrevIn=true;spin6=spin6o=0;randomTickSpeed=gameRule('random_tick_speed')}
+  Object.assign(TTL,{t:null,sub:null,fi:10,st:70,fo:20,time:0,ab:null,abT:0});P6.length=0;wbPrev=null;spin6=spin6o=0;randomTickSpeed=gameRule('random_tick_speed')}
 {const _save6=save;save=function(){cmdSync6();return _save6.apply(this,arguments)}}
 {const _enterWorld6=enterWorld;enterWorld=function(){const r=_enterWorld6.apply(this,arguments);cmdLoad6();return r}}
 {const _resetWorld6=resetWorld;resetWorld=function(){const r=_resetWorld6.apply(this,arguments);cmdLoad6();return r}}
