@@ -3050,12 +3050,17 @@ const REACH=4.5;let target=null,targetMob=null;
 const selBox=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:.55}));selBox.visible=false;scene.add(selBox);
 const crackTexs=crackTex.map(c=>{const t=new THREE.CanvasTexture(c);t.magFilter=t.minFilter=THREE.NearestFilter;return t});
 const crackM=new THREE.Mesh(new THREE.BoxGeometry(1.004,1.004,1.004),new THREE.MeshBasicMaterial({map:crackTexs[0],transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));crackM.visible=false;scene.add(crackM);
-function updateTarget(){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);target=raycast(o,d,REACH);targetMob=null;let best=target?target.t:REACH;
-  for(const m of mobs){if(m.dead)continue;const t=rayBox(o,d,{x:m.pos.x-m.hw,y:m.pos.y,z:m.pos.z-m.hw},{x:m.pos.x+m.hw,y:m.pos.y+m.h,z:m.pos.z+m.hw});if(t!==null&&t<best&&t<3.6){best=t;targetMob=m}}
-  targetBoat=null;targetRemote=null;
-  for(const b of boats){if(b.dm!==DIM||player.boat===b)continue;const t=rayBox(o,d,{x:b.pos.x-.65,y:b.pos.y,z:b.pos.z-.65},{x:b.pos.x+.65,y:b.pos.y+.6,z:b.pos.z+.65});if(t!==null&&t<best){best=t;targetBoat=b;targetMob=null}}
-  for(const r of remotes.values()){if(!r.d||r.d.d)continue;const g=r.S.g.position;const t=rayBox(o,d,{x:g.x-.35,y:g.y,z:g.z-.35},{x:g.x+.35,y:g.y+1.8,z:g.z+.35});if(t!==null&&t<best&&t<3.6){best=t;targetRemote=r;targetMob=null;targetBoat=null}}
-  if(targetMob||targetBoat||targetRemote)target=null;
+// 마크 LocalPlayer.pick (Agent 10): 눈에서 블록 모양까지 (없으면 최대 거리) 안에서 가장 가까운 엔티티 상자를 찾아요.
+// 엔티티가 블록보다 앞이면 블록은 못 고르고, 엔티티 거리 (생존 3 · 창작 5) 를 넘으면 아무것도 안 골라요 · 블록은 생존 4.5 · 창작 5
+function updateTarget(){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion),br=reachB(),er=reachE(),mx=Math.max(br,er);
+  target=hbClip(o,d,mx,true);targetMob=null;targetBoat=null;targetRemote=null;targetCrystal=null;targetProj=null;targetHit=null;let best=target?target.t:mx,he=null,hk=null;
+  const cand=(k,e,b,r)=>{const t=hbRay(o,d,r?[b[0]-r,b[1]-r,b[2]-r,b[3]+r,b[4]+r,b[5]+r]:b);if(t!==null&&t<best){best=t;he=e;hk=k}};
+  hbEach((k,e,b)=>{if(k!=='player'&&e!==player.boat)cand(k,e,b,0)});for(const t of tnts)cand('tnt',t,hbBoxAt(t.pos.x,t.pos.y,t.pos.z,.98,.98),0);
+  for(const p of projs)if(p.fire===2)cand('proj',p,hbBoxAt(p.pos.x,p.pos.y,p.pos.z,1,1),1);for(const t of throwns)if(t.kind==='wind')cand('proj',t,hbBoxAt(t.pos.x,t.pos.y,t.pos.z,.3125,.3125),1);   // 가스트 화염구 · 돌풍구 · 셜커 탄은 1칸 넓게 (마크 getPickRadius)
+  for(const s of SBUL){const q=s.m.position;cand('proj',s,hbBoxAt(q.x,q.y,q.z,.3125,.3125),1)}
+  if(he){target=null;if(best<er){targetHit={kind:hk,e:he,t:best};if(hk==='mob')targetMob=he;else if(hk==='boat')targetBoat=he;else if(hk==='remote')targetRemote=he;else if(hk==='crystal')targetCrystal=he;else if(hk==='proj')targetProj=he}}
+  else if(target&&target.t>=br)target=null;
+  if(target)targetHit={kind:'block',t:target.t,x:target.x,y:target.y,z:target.z};
   if(target){const bb=blockBox(target.id,getM(target.x,target.y,target.z));selBox.visible=true;selBox.scale.set(bb[0]+.004,bb[1]+.004,bb[2]+.004);selBox.position.set(target.x+bb[3],target.y+bb[4],target.z+bb[5])}else selBox.visible=false}
 
 /* ── 부수기 · 놓기 · 먹기 ── */
@@ -3341,16 +3346,15 @@ function tintMob(m,k){const red=m.hurtT>0||m.dead,burn=false,flash=m.fuse>0&&Mat
   m.g.traverse(o=>{if(o.isMesh&&o.userData.base)o.material.forEach((mt,i)=>{mt.color.copy(o.userData.base[i]).multiplyScalar(k);if(red){mt.color.r=mt.color.r*.7+.3*k;mt.color.g*=.7;mt.color.b*=.7}if(burn){mt.color.r=Math.min(1,mt.color.r+.4);mt.color.g=Math.min(1,mt.color.g+.15)}if(flash)mt.color.setRGB(1,1,1)})})}
 function los(a,b){const d=new V3().subVectors(b,a),l=d.length();d.normalize();const h=raycast(a,d,l);return !h||h.t>=l-.3}
 const projs=[];
-function shootArrow(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.6),new THREE.MeshLambertMaterial({color:0x8a6a3e}));scene.add(m);projs.push({pos:from.clone(),vel:dir.clone().multiplyScalar(speed),owner,dmg,m,life:0,stuck:false});sfx('bow')}
+function shootArrow(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.6),new THREE.MeshLambertMaterial({color:0x8a6a3e}));m.position.copy(from);scene.add(m);const sp=Math.max(.01,speed*TICK);
+  // 속도는 칸/초 · 기본 피해 base: 몹은 2 + 삼각분포 (마크 setBaseDamageFromMob · 보통 난이도), 플레이어는 dmg 에 맞춰요 (활 쪽에서 base · crit 을 고쳐 써도 돼요)
+  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(speed),owner,dmg,m,life:0,stuck:false,w:.5,tk:0,src:owner==='mob'?hbShooter(from):null,base:owner==='mob'?2+hbTri(.22,.57425):dmg/sp});sfx('bow')}
 function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(tStopT>0&&p.owner==='mob')continue;p.life+=dt;
-  if(!p.stuck){p.vel.y-=18*dt;const steps=Math.ceil(p.vel.length()*dt/.25);let gone=false;
-    for(let s=0;s<steps&&!gone;s++){p.pos.addScaledVector(p.vel,dt/steps);const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y),Math.floor(p.pos.z));if(SOLID[id]){p.stuck=true;p.life=0;sfx('dig','wood',.5);break}
-      if(p.owner==='player'){for(const m of mobs)if(!m.dead&&!m.D.deflect&&Math.abs(p.pos.x-m.pos.x)<m.hw+.1&&Math.abs(p.pos.z-m.pos.z)<m.hw+.1&&p.pos.y>m.pos.y&&p.pos.y<m.pos.y+m.h){const h0=m.hurtT<=0;hurtMob(m,p.dmg,p.pos.clone().addScaledVector(p.vel,-.05));if(h0&&!m.dead){if(p.flame)m.fireT=5;if(p.punch){m.vel.x+=p.vel.x/Math.hypot(p.vel.x,p.vel.z||1)*p.punch*4;m.vel.z+=p.vel.z/Math.hypot(p.vel.x,p.vel.z||1)*p.punch*4}}gone=true;break}if(!gone&&arrowHitsRemote(p)){gone=true;break}}
-      else if(!player.dead&&Math.abs(p.pos.x-player.pos.x)<PW+.1&&Math.abs(p.pos.z-player.pos.z)<PW+.1&&p.pos.y>player.pos.y&&p.pos.y<player.pos.y+PH){hurtPlayer(p.dmg,p.pos.clone().addScaledVector(p.vel,-.05),'skeleton');gone=true}}
+  if(!p.stuck){let gone=false;for(let n=hbTicks(p,dt);n>0&&!gone&&!p.stuck;n--)gone=hbArrowTick(p);   // 틱마다 움직이며 블록 · 엔티티 상자를 쓸어 봐요 (Agent 10)
     if(gone){scene.remove(p.m);projs.splice(i,1);continue}
-    p.m.position.copy(p.pos);p.m.lookAt(p.pos.x+p.vel.x,p.pos.y+p.vel.y,p.pos.z+p.vel.z)}
+    if(p.stuck)p.m.position.copy(p.pos);else{p.m.position.lerpVectors(p.prev,p.pos,p.acc/TICK);p.m.lookAt(p.m.position.x+p.vel.x,p.m.position.y+p.vel.y,p.m.position.z+p.vel.z)}}
   else if(p.owner==='player'&&!p.noPick&&p.life>.5&&p.pos.distanceTo(new V3(player.pos.x,player.pos.y+.8,player.pos.z))<1.5&&addItem({id:ARROW,n:1})===0){sfx('pop');renderHotbar();scene.remove(p.m);projs.splice(i,1);continue}
-  if(p.life>(p.stuck?30:10)){scene.remove(p.m);projs.splice(i,1)}}}
+  if(p.life>(p.stuck?60:10)){scene.remove(p.m);projs.splice(i,1)}}}
 function explode(x,y,z,r){sfx('boom');const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
     if(!id||id===BEDROCK||id===OBSIDIAN||B[id].liquid)continue;if(Math.random()<.3)dropFor(bx,by,bz,id,true);const te=tiles.get(tkey(bx,by,bz));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,bx+.5,by+.5,bz+.5)});tiles.delete(tkey(bx,by,bz))}setBlock(bx,by,bz,AIR,true)}
   for(let i=0;i<30;i++)smoke(x+(Math.random()-.5)*r*2,y+(Math.random()-.5)*r*2,z+(Math.random()-.5)*r*2);
@@ -3376,7 +3380,7 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     const br=D.brain?D.brain(m,dt,dx,dz,dist,dy):D.piglin?piglinBrain(m,dt,dist):null;
     if(br){dir=br.dir;sp=br.sp;face=br.face!=null?br.face:null}
     else if(target){dir=Math.atan2(dx,dz);face=dir;
-      if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&dist<16&&m.atk<=0){m.atk=2+Math.random();const from=new V3(m.pos.x,m.pos.y+1.5,m.pos.z),to=new V3(pp.x,pp.y+1.2,pp.z);const d=to.clone().sub(from);d.y+=dist*.08;d.normalize();d.x+=(Math.random()-.5)*.08;d.z+=(Math.random()-.5)*.08;(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,26,'mob',2+Math.floor(Math.random()*3))}}
+      if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&dist<16&&m.atk<=0){m.atk=2+Math.random();const from=new V3(m.pos.x,m.pos.y+hbEye(m)-.1,m.pos.z),d=hbAim(from,D.potion?8:6);(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,32,'mob',2+Math.floor(Math.random()*3))}}
       else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3.2){sp=0;if(m.fuse===0)sfx('fuse');m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
       else{sp=dist>1.1?D.sp:0;if(dist<1.5+m.hw&&Math.abs(dy)<1.6&&m.atk<=0){m.atk=1;hurtPlayer(D.melee,m.pos,m.type);if(D.toss&&!creative()&&!player.dead)player.vel.y=Math.max(player.vel.y,9)}}}
     else if(m.panic>0){m.fuse=0;if(m.ai.t<=0){m.ai.t=.6;m.ai.dir=Math.atan2(-dx,-dz)+(Math.random()-.5)*1.4}dir=m.ai.dir;sp=D.sp*2.2}
@@ -3393,7 +3397,6 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     if(sp&&(m.hitX||m.hitZ)){if(D.climb)m.vel.y=4;else if(m.onGround)m.vel.y=8.6}
     const fy=m.vel.y;moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,m.hw,m.h);
     if(m.onGround&&fy<-17)hurtMob(m,Math.floor((fy*fy/64)-3),null);
-    if(dist<m.hw+PW&&Math.abs(dy)<m.h){const l=dist||1;m.pos.x-=dx/l*dt*2;m.pos.z-=dz/l*dt*2}
     if(D.burn){const l=lightAt(m.pos.x,m.pos.y+1.7,m.pos.z);if(daylight>.65&&l[0]>=15&&!inW&&!isWet(m.pos.x,m.pos.y+1.7,m.pos.z))m.fireT=Math.max(m.fireT||0,8)}if(inW)m.fireT=0;
     m.snd-=dt;if(m.snd<=0){m.snd=6+Math.random()*10;if(dist<16)sfx(D.snd||'animal_'+m.type,null,Math.max(.1,1-dist/16))}
     const hs=Math.hypot(m.vel.x,m.vel.z);m.walk+=hs*dt*(m.type==='chicken'?6:3.2);const sw=Math.sin(m.walk)*Math.min(1,hs/1.5)*.8;
@@ -3409,6 +3412,163 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     const sc=(m.baby>0?.5:1)*(1+m.fuse*.12);m.g.scale.set(sc*(1+m.fuse*.05),sc,sc*(1+m.fuse*.05));
     m.g.position.copy(m.pos);if(m.yOff)m.g.position.y+=m.yOff;m.g.rotation.y=m.yaw;tintMob(m,lightK(m.pos.x,m.pos.y+m.h*.6,m.pos.z))}}
 function heart(x,y,z){const m=new THREE.Mesh(new THREE.PlaneGeometry(.3,.3),new THREE.MeshBasicMaterial({map:iconTexURL(hFull),transparent:true,depthWrite:false}));m.position.set(x+(Math.random()-.5),y+Math.random()*.5,z+(Math.random()-.5));scene.add(m);parts.push({m,v:new V3(0,1,0),life:1.2,smoke:true})}
+// ── 히트박스 · 겨냥 · 투사체 맞히기 · 밀치기 (Agent 10) ──
+// 크기: 마크 자바 26.3 EntityTypes 의 sized(너비, 높이) · eyeHeight (없으면 높이×0.85) 그대로 · [너비, 높이, 눈높이]
+const HB={player:[.6,1.8,1.62],
+  pig:[.9,.9,.765],cow:[.9,1.4,1.3],mooshroom:[.9,1.4,1.3],sheep:[.9,1.3,1.235],chicken:[.4,.7,.644],wolf:[.6,.85,.68],cat:[.6,.7,.35],ocelot:[.6,.7,.595],fox:[.6,.7,.4],rabbit:[.49,.6,.59],goat:[.9,1.3,1.105],
+  polar_bear:[1.4,1.4,1.19],panda:[1.3,1.25,1.0625],frog:[.5,.5,.425],tadpole:[.4,.3,.195],turtle:[1.2,.4,.34],axolotl:[.75,.42,.2751],bee:[.55,.5,.3],parrot:[.5,.9,.54],bat:[.5,.9,.45],
+  squid:[.8,.8,.4],glow_squid:[.8,.8,.4],dolphin:[.9,.6,.3],cod:[.5,.3,.195],salmon:[.7,.4,.26],pufferfish:[.7,.7,.455],tropical_fish:[.5,.4,.26],nautilus:[.875,.95,.2751],
+  horse:[1.3964844,1.6,1.52],donkey:[1.3964844,1.5,1.425],mule:[1.3964844,1.6,1.52],skeleton_horse:[1.3964844,1.6,1.52],zombie_horse:[1.3964844,1.6,1.52],llama:[.9,1.87,1.7765],trader_llama:[.9,1.87,1.7765],
+  camel:[1.7,2.375,2.275],sniffer:[1.9,1.75,1.05],armadillo:[.7,.65,.26],allay:[.35,.6,.36],strider:[.9,1.7,1.445],hoglin:[1.3964844,1.4,1.19],zoglin:[1.3964844,1.4,1.19],happy_ghast:[4,4,2.6],
+  villager:[.6,1.95,1.62],wandering_trader:[.6,1.95,1.62],iron_golem:[1.4,2.7,2.295],snow_golem:[.7,1.9,1.7],copper_golem:[.49,.98,.8125],
+  zombie:[.6,1.95,1.74],husk:[.6,1.95,1.74],drowned:[.6,1.95,1.74],zombie_villager:[.6,1.95,1.74],zombified_piglin:[.6,1.95,1.79],piglin:[.6,1.95,1.79],piglin_brute:[.6,1.95,1.79],giant:[3.6,12,10.44],
+  skeleton:[.6,1.99,1.74],stray:[.6,1.99,1.74],bogged:[.6,1.99,1.74],parched:[.6,1.99,1.74],wither_skeleton:[.7,2.4,2.1],creeper:[.6,1.7,1.445],spider:[1.4,.9,.65],cave_spider:[.7,.5,.45],
+  enderman:[.6,2.9,2.55],endermite:[.4,.3,.13],silverfish:[.4,.3,.13],witch:[.6,1.95,1.62],pillager:[.6,1.95,1.6575],vindicator:[.6,1.95,1.6575],evoker:[.6,1.95,1.6575],illusioner:[.6,1.95,1.6575],
+  ravager:[1.95,2.2,1.87],vex:[.4,.8,.51875],phantom:[.9,.5,.175],slime:[.52,.52,.325],magma_cube:[.52,.52,.325],ghast:[4,4,2.6],blaze:[.6,1.8,1.53],breeze:[.6,1.77,1.3452],creaking:[.9,2.7,2.3],
+  warden:[.9,2.9,2.465],shulker:[1,1,.5],guardian:[.85,.85,.425],elder_guardian:[1.9975,1.9975,.99875],wither:[.9,3.5,2.975],ender_dragon:[16,8,6.8],
+  item:[.25,.25,.2125],experience_orb:[.5,.5,.425],arrow:[.5,.5,.13],trident:[.5,.5,.13],snowball:[.25,.25,.2125],egg:[.25,.25,.2125],ender_pearl:[.25,.25,.2125],eye_of_ender:[.25,.25,.2125],
+  splash_potion:[.25,.25,.2125],fireball:[1,1,.85],small_fireball:[.3125,.3125,.2656],wind_charge:[.3125,.3125,0],breeze_wind_charge:[.3125,.3125,0],shulker_bullet:[.3125,.3125,.2656],
+  tnt:[.98,.98,.15],boat:[1.375,.5625,.5625],minecart:[.98,.7,.595],end_crystal:[2,2,1.7],falling_block:[.98,.98,.833],armor_stand:[.5,1.975,1.7775]};
+// 이 게임의 몹 이름 → 마크 이름 · 슬라임 크기 (0.52 × 크기: 작은 1 · 중간 2)
+const HB_ALIAS={zpiglin:'zombified_piglin',wskel:'wither_skeleton',magma:'magma_cube',slime_s:'slime',dragon:'ender_dragon',shadow:'player'},HB_SIZE={slime:2,magma:2,slime_s:1};
+// 새끼: 마크 26.x 의 BABY_DIMENSIONS · getAgeScale (없는 몹은 어른의 절반)
+const HB_BABY={cow:[.45,.7,.69],mooshroom:[.45,.7,.69],pig:[.45,.45,.40625],sheep:[.45,.65,.65625],chicken:[.3,.4,.28125],wolf:[.3,.425,.34375],cat:[.3,.35,.34375],goat:[.45,.65,.59375],
+  polar_bear:[.7,.7,.34375],rabbit:[.24,.4,.39],panda:[.65,.625,.28125],axolotl:[.375,.21,.09375],hoglin:[.75,.85,.625],strider:[.45,.85,.4375],fox:[.36,.42,.34375],dolphin:[.585,.39,.09375],
+  horse:[.9775391,1.12,1.064],turtle:[.36,.12,.102],villager:[.49,.98,.63],zombie:[.49,.98,.775],husk:[.49,.98,.775],drowned:[.49,.98,.775],zombie_villager:[.49,.98,.775],zombified_piglin:[.49,.98,.775],piglin:[.49,.98,.78]};
+function hbDim(t,baby){const k=HB_ALIAS[t]||t,a=HB[k];if(!a)return null;const s=HB_SIZE[t];if(s)return[a[0]*s,a[1]*s,a[2]*s];return baby?HB_BABY[k]||[a[0]/2,a[1]/2,a[2]/2]:a}
+// 몹이 생길 때 크기를 마크 값으로 (엔더 드래곤은 부위 상자를 따로 써서 그대로)
+function hbFit(m){if(!m||m.type==='dragon')return m;const D=m.D;if(!D._hb){D._hb=1;const a=hbDim(m.type,false);if(a){D.hw=a[0]/2;D.h=a[1]}}const d=hbDim(m.type,m.baby>0);if(d){m.hw=d[0]/2;m.h=d[1]}return m}
+{const _sm=spawnMob;spawnMob=function(t,x,y,z,b){return hbFit(_sm(t,x,y,z,b))}}
+const hbPH=()=>typeof pH==='function'?pH():player.sneak?1.5:PH;   // 플레이어 키 (서 있기 1.8 · 웅크리기 1.5)
+function hbEye(m){const d=hbDim(m.type,m.baby>0);return d?d[2]*hbH(m)/d[1]:m.h*.85}
+// 셜커는 껍데기를 열수록 위로 커져요 (이 게임 뚜껑은 0.42 칸까지 올라가요)
+const hbH=m=>m.type==='shulker'?m.h+.42*(m.peek||0):m.h;
+const hbBox=m=>[m.pos.x-m.hw,m.pos.y,m.pos.z-m.hw,m.pos.x+m.hw,m.pos.y+hbH(m),m.pos.z+m.hw];
+const hbPBox=()=>{const p=player.pos;return[p.x-PW,p.y,p.z-PW,p.x+PW,p.y+hbPH(),p.z+PW]};
+const hbOv=(a,b)=>a[0]<b[3]&&a[3]>b[0]&&a[1]<b[4]&&a[4]>b[1]&&a[2]<b[5]&&a[5]>b[2];
+// 엔더 드래곤: 몸통 상자 (16×8) 대신 부위 8개로 맞아요 (마크 EnderDragon 부위 크기 · 자리는 이 게임 모델에 맞춰요)
+const HB_DRAGON=[['head',1,1,0,2.7,7.2],['neck',3,3,0,1.5,4.8],['body',5,3,0,1,0],['tail1',2,2,0,1.6,-4.6],['tail2',2,2,0,1.6,-6.6],['tail3',2,2,0,1.6,-8.6],['wing1',4,2,4.5,2.2,.5],['wing2',4,2,-4.5,2.2,.5]];
+function hbParts(m){const c=Math.cos(m.yaw),s=Math.sin(m.yaw);return HB_DRAGON.map(([n,w,h,lx,ly,lz])=>{const x=m.pos.x+lx*c+lz*s,z=m.pos.z-lx*s+lz*c,y=m.pos.y+ly;return{n,box:[x-w/2,y,z-w/2,x+w/2,y+h,z+w/2]}})}
+// 맞을 수 있는 것들: f(종류, 엔티티, 상자, 부위)
+function hbEach(f){for(const m of mobs){if(m.dead)continue;if(m.type==='dragon'){for(const q of hbParts(m))f('mob',m,q.box,q.n);continue}f('mob',m,hbBox(m))}
+  if(!player.dead)f('player',player,hbPBox());
+  for(const b of boats)if(b.dm===DIM)f('boat',b,[b.pos.x-.6875,b.pos.y,b.pos.z-.6875,b.pos.x+.6875,b.pos.y+.5625,b.pos.z+.6875]);
+  for(const r of remotes.values()){if(!r.d||r.d.d||!r.S||!r.S.g.visible)continue;const g=r.S.g.position;f('remote',r,[g.x-.3,g.y,g.z-.3,g.x+.3,g.y+1.8,g.z+.3])}
+  for(const c of crystals){const q=c.m.position;f('crystal',c,[q.x-1,q.y-1,q.z-1,q.x+1,q.y+1,q.z+1])}}
+// 반직선 o+d·t 와 상자: 들어가는 t (o 가 안에 있으면 0) · 안 맞으면 null
+function hbRay(o,d,b){let t0=0,t1=1e9;for(let k=0;k<3;k++){const a=k?k>1?'z':'y':'x',dv=d[a],ov=o[a];if(Math.abs(dv)<1e-12){if(ov<b[k]||ov>b[k+3])return null;continue}let ta=(b[k]-ov)/dv,tb=(b[k+3]-ov)/dv;if(ta>tb){const q=ta;ta=tb;tb=q}if(ta>t0)t0=ta;if(tb<t1)t1=tb;if(t0>t1)return null}return t0}
+// 선분 a→b 와 상자 (여유 m 만큼 부풀려서): 들어가는 비율 t∈(0,1] · a 가 이미 안이면 null (마크 AABB.clip 처럼)
+function hbSeg(a,b,x,m){let t0=0,t1=1;for(let k=0;k<3;k++){const c=k?k>1?'z':'y':'x',lo=x[k]-m,hi=x[k+3]+m,av=a[c],dv=b[c]-av;if(Math.abs(dv)<1e-12){if(av<=lo||av>=hi)return null;continue}let ta=(lo-av)/dv,tb=(hi-av)/dv;if(ta>tb){const q=ta;ta=tb;tb=q}if(ta>t0)t0=ta;if(tb<t1)t1=tb;if(t0>t1)return null}return t0>0?t0:null}
+// 블록 겨냥 (마크 ClipContext.Block.OUTLINE): 칸 안의 실제 모양 (반 블록 · 계단 · 풀 · 횃불 …) 에 닿아야 해요. 물 · 용암은 지나가요
+function hbOutline(id,m){if(SHAPED[id])return shapeBoxes(id,m);const b=blockBox(id,m);return[[b[3]-b[0]/2,b[4]-b[1]/2,b[5]-b[2]/2,b[3]+b[0]/2,b[4]+b[1]/2,b[5]+b[2]/2]]}
+function hbCollide(id,m){return !SHAPED[id]&&BH[id]===1?[[0,0,0,1,1,1]]:SHAPED[id]?shapeBoxes(id,m):[[0,0,0,1,BH[id],1]]}
+// 칸을 차례로 지나가며 (DDA) 모양 상자에 맞대 봐요. outline: 겨냥용 / 아니면 충돌 모양 (투사체 · 마크 COLLIDER). 돌려줌 {x,y,z,id,face,t}
+function hbClip(o,d,max,outline){let x=Math.floor(o.x),y=Math.floor(o.y),z=Math.floor(o.z);const sx=Math.sign(d.x),sy=Math.sign(d.y),sz=Math.sign(d.z),tdx=sx?Math.abs(1/d.x):Infinity,tdy=sy?Math.abs(1/d.y):Infinity,tdz=sz?Math.abs(1/d.z):Infinity;
+  let tmx=sx>0?(x+1-o.x)*tdx:sx<0?(o.x-x)*tdx:Infinity,tmy=sy>0?(y+1-o.y)*tdy:sy<0?(o.y-y)*tdy:Infinity,tmz=sz>0?(z+1-o.z)*tdz:sz<0?(o.z-z)*tdz:Infinity;
+  for(let i=0;i<200;i++){const id=getB(x,y,z);if(id&&(outline?!B[id].liquid:SOLID[id])){let best=null;
+      for(const q of (outline?hbOutline:hbCollide)(id,getM(x,y,z))){const bx=[x+q[0],y+q[1],z+q[2],x+q[3],y+q[4],z+q[5]];
+        if(o.x>bx[0]&&o.x<bx[3]&&o.y>bx[1]&&o.y<bx[4]&&o.z>bx[2]&&o.z<bx[5]){const ax=Math.abs(d.x),ay=Math.abs(d.y),az=Math.abs(d.z);return{x,y,z,id,t:0,face:ax>=ay&&ax>=az?(d.x>0?1:0):ay>=az?(d.y>0?3:2):(d.z>0?5:4)}}   // 안에서 출발하면 바로 맞아요
+        const t=hbRay(o,d,bx);if(t===null||t>max||(best&&t>=best.t))continue;
+        const px=o.x+d.x*t,py=o.y+d.y*t,pz=o.z+d.z*t,e=1e-6;const face=Math.abs(px-bx[0])<e&&d.x>0?1:Math.abs(px-bx[3])<e&&d.x<0?0:Math.abs(py-bx[1])<e&&d.y>0?3:Math.abs(py-bx[4])<e&&d.y<0?2:Math.abs(pz-bx[2])<e&&d.z>0?5:Math.abs(pz-bx[5])<e&&d.z<0?4:-1;
+        best={x,y,z,id,t,face}}
+      if(best)return best}
+    let tn;if(tmx<tmy&&tmx<tmz){x+=sx;tn=tmx;tmx+=tdx}else if(tmy<tmz){y+=sy;tn=tmy;tmy+=tdy}else{z+=sz;tn=tmz;tmz+=tdz}if(tn>max)return null}return null}
+// 닿는 거리 (마크 26.3 속성: block_interaction_range 4.5 · entity_interaction_range 3, 창작 모드 +0.5 · +2)
+const reachB=()=>creative()?5:4.5,reachE=()=>creative()?5:3;
+let targetCrystal=null,targetProj=null,targetHit=null;
+// 화살 · 던진 것 · 화염구 · 돌풍구 공통 (틱 = 0.05초 단위 · 속도 p.vel 은 칸/초)
+// 여유 (마크 ProjectileUtil.computeMargin): 쏘고 2틱까지 0, 그다음 틱마다 0.05씩 늘어 0.3
+const hbMargin=p=>Math.max(0,Math.min(.3,((p.tk||0)-2)/20));
+// 쏜 이의 상자를 벗어났는지 (마크 Projectile.checkLeftOwner): 벗어나기 전엔 쏜 이를 못 맞혀요
+function hbLeft(p){if(p.left)return true;const s=p.owner==='player'?(player.dead?null:hbPBox()):p.src&&!p.src.dead?hbBox(p.src):null;if(!s)return p.left=true;
+  const w=(p.w||.25)/2,vx=p.vel.x*TICK,vy=p.vel.y*TICK,vz=p.vel.z*TICK,q=p.pos;
+  return p.left=!hbOv([q.x-w+Math.min(0,vx)-1,q.y+Math.min(0,vy)-1,q.z-w+Math.min(0,vz)-1,q.x+w+Math.max(0,vx)+1,q.y+2*w+Math.max(0,vy)+1,q.z+w+Math.max(0,vz)+1],s)}
+// 한 틱 동안 a→b 로 움직일 때 처음 닿는 것: 블록 충돌 모양 먼저, 그 앞에 엔티티 상자 (+여유) 가 있으면 엔티티
+function hbSweep(p,a,b,skip){const d=new V3().subVectors(b,a),L=d.length();let hit=null,end=1;
+  if(L>1e-9){const bh=hbClip(a,d.clone().divideScalar(L),L,false);if(bh){end=bh.t/L;hit={kind:'block',t:end,x:bh.x,y:bh.y,z:bh.z,id:bh.id,face:bh.face}}}
+  const mg=hbMargin(p),left=hbLeft(p);
+  hbEach((kind,e,box,part)=>{if(e===p.skip||skip&&skip(kind,e))return;if(!left&&(p.owner==='player'?e===player:e===p.src))return;const t=hbSeg(a,b,box,mg);if(t!==null&&t<=end&&(!hit||hit.kind==='block'||t<hit.t)){end=t;hit={kind,e,t,part}}});
+  if(hit)hit.pos=a.clone().lerp(b,hit.t);return hit}
+const hbTri=(c,s)=>c+s*(Math.random()-Math.random());   // 마크 random.triangle
+const hbInW=v=>getB(Math.floor(v.x),Math.floor(v.y),Math.floor(v.z))===WATER;
+// 보트: 화살이 맞으면 부서져요 (마크: 보트 피해 ×10 이 40 을 넘으면)
+function hbBoatHit(b,d){b.hurtT=.25;b.hp-=d>=4?4:1;sfx('dig','wood',.7);if(b.hp>0)return;const i=boats.indexOf(b);if(i>=0)boats.splice(i,1);scene.remove(b.m);if(player.boat===b)player.boat=null;if(!creative())spawnItem({id:BOAT,n:1},b.pos.x,b.pos.y+.5,b.pos.z)}
+// 화살 1틱 (마크 AbstractArrow.tick): 물이면 ×0.6 → 움직이며 맞히기 → 공기 ×0.99 → 중력 0.05. 다 쓰였으면 true
+function hbArrowTick(p){const v=p.vel,inW=hbInW(p.pos);p.prev.copy(p.pos);if(inW)v.multiplyScalar(.6);
+  const a=p.pos.clone(),b=a.clone().addScaledVector(v,TICK),h=hbSweep(p,a,b);p.tk=(p.tk||0)+1;
+  if(h&&h.kind==='block'){p.pos.copy(h.pos).sub(new V3(Math.sign(v.x),Math.sign(v.y),Math.sign(v.z)).multiplyScalar(.05));p.stuck=true;p.life=0;v.set(0,0,0);sfx('dig','wood',.5);return false}
+  if(h){p.pos.copy(h.pos);if(hbArrowHit(p,h))return true}else p.pos.copy(b);
+  if(!inW)v.multiplyScalar(.99);v.y-=.05/TICK;return false}
+// 화살이 엔티티에 맞음: 피해 = ⌈속도(칸/틱) × 기본 피해⌉ (+ 치명타면 0 ~ 피해/2+1) · 무적 시간이면 튕겨 나와요
+function hbArrowHit(p,h){const sp=p.vel.length()*TICK;let d=Math.ceil(Math.max(0,sp*(p.base!=null?p.base:2)));if(p.crit)d+=Math.floor(Math.random()*(Math.floor(d/2)+2));
+  const src=h.pos.clone().addScaledVector(p.vel.clone().normalize(),-1),bounce=()=>{p.vel.multiplyScalar(-.1);p.skip=h.e;return false};
+  if(h.kind==='mob'){const m=h.e;if(m.D.deflect){p.vel.multiplyScalar(-.5);p.skip=m;return false}   // 브리즈: 거꾸로 튕겨내요
+    if(m.D.ender){enderTP(m);p.skip=m;return false}   // 엔더맨: 순간 이동해 피하고 화살은 지나가요
+    if(m.hurtT>0)return bounce();hurtMob(m,d,src);if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
+  if(h.kind==='player'){if(creative()||player.hurtT>0)return bounce();hurtPlayer(d,src,p.owner==='mob'?'skeleton':'arrow');if(p.flame)player.burn=5;return true}
+  if(h.kind==='remote'){if(p.owner!=='player'||!MPS)return bounce();const r=h.e;r.hurtT=.35;sendHit(r,d,src,p.punch||0,p.flame?1.25:0);sfx('hurt');return true}
+  if(h.kind==='boat'){hbBoatHit(h.e,d);return true}
+  if(h.kind==='crystal'){breakCrystal(crystals.indexOf(h.e));return true}return true}
+// 몹이 쏠 때 겨냥 (마크 AbstractSkeleton.performRangedAttack): 목표 키의 1/3 높이 + 수평 거리 × 0.2 만큼 위로 · 흩어짐 14 - 난이도×4 (보통 = 6)
+function hbAim(from,inacc){const pp=player.pos,d=new V3(pp.x-from.x,pp.y+hbPH()/3-from.y,pp.z-from.z);d.y+=Math.hypot(d.x,d.z)*.2;d.normalize();const s=.0172275*(inacc==null?6:inacc);d.x+=hbTri(0,s);d.y+=hbTri(0,s);d.z+=hbTri(0,s);return d.normalize()}
+// 쏜 몹 찾기 (화살을 쏜 자리 가까이)
+function hbShooter(from){let best=null,bd=2.2;for(const m of mobs){if(m.dead)continue;const d=Math.hypot(m.pos.x-from.x,m.pos.z-from.z);if(d<bd&&from.y>=m.pos.y-.5&&from.y<=m.pos.y+m.h+.5){bd=d;best=m}}return best}
+// 던진 것 · 화염구 · 돌풍구 · 물약 1틱. k: 'throw' (눈덩이 · 엔더 진주: 중력 0.03 · 공기 0.99 · 물 0.8) · 'potion' (중력 0.05) · 'fire' (가속 0.1 · 0.95 · 물 0.8) · 'wind' (그대로 날아가요)
+// 돌려줌: 맞은 것 (없으면 null) · p.pos 는 맞은 자리로
+function hbFlyTick(p,k,skip){const v=p.vel,inW=hbInW(p.pos);p.prev.copy(p.pos);
+  if(k==='fire'){const l=v.length()||1;v.addScaledVector(v,.1/TICK/l).multiplyScalar(inW?.8:.95)}
+  else if(k!=='wind'){v.y-=(k==='potion'?.05:.03)/TICK;v.multiplyScalar(inW?.8:.99)}
+  const a=p.pos.clone(),b=a.clone().addScaledVector(v,TICK),h=hbSweep(p,a,b,skip);p.tk=(p.tk||0)+1;p.pos.copy(h?h.pos:b);return h}
+// 틱 넘기기: 프레임 시간을 모아 틱 수만큼 (한 프레임에 최대 5틱) · p.k = 틱 사이 보간 비율
+function hbTicks(p,dt){p.acc=(p.acc||0)+dt;let n=0;while(p.acc>=TICK&&n<5){p.acc-=TICK;n++}if(p.acc>=TICK)p.acc=0;return n}
+// 밀치기 (마크 Entity.push · LivingEntity.pushEntities): 틱마다 상자가 겹친 생물끼리 0.05 × 거리 비율 만큼 서로 밀어내요
+function hbPushable(m){return !m.dead&&m.type!=='dragon'&&m.type!=='shulker'&&!(m.D.climb&&(m.hitX||m.hitZ))}
+function hbAddV(e,x,z){e.vel.x+=x/TICK;e.vel.z+=z/TICK}   // 칸/틱 → 칸/초
+function hbImp(a,b,toA,toB){let x=a.pos.x-b.pos.x,z=a.pos.z-b.pos.z,d=Math.max(Math.abs(x),Math.abs(z));if(d<.01)return;d=Math.sqrt(d);x/=d;z/=d;const w=Math.min(1,1/d)*.05;x*=w;z*=w;if(toA)hbAddV(a,x,z);if(toB)hbAddV(b,-x,-z)}
+function hbPushTick(){const L=mobs.filter(m=>!m.dead&&m.type!=='dragon'),B2=L.map(hbBox),ok=L.map(hbPushable);
+  for(let i=0;i<L.length;i++){let n=0;for(let j=0;j<L.length;j++){if(i===j||!ok[j]||!hbOv(B2[i],B2[j]))continue;n++;hbImp(L[i],L[j],ok[i],true)}   // i 의 pushEntities: 겹친 j 마다 둘 다 (짝마다 두 번)
+    if(n>23&&Math.random()<.25&&!L[i].dead){L[i].hurtT=0;hurtMob(L[i],6,null)}}   // 몰림 피해 (maxEntityCramming 24)
+  const p=player;if(p.dead||p.boat||(!p.fly&&CLIMB(getB(Math.floor(p.pos.x),Math.floor(p.pos.y),Math.floor(p.pos.z)))))return;const P=hbPBox();
+  for(let i=0;i<L.length;i++)if(hbOv(P,B2[i])){hbImp(L[i],p,ok[i],true);hbImp(L[i],p,ok[i],false)}}   // 플레이어는 몹마다 한 번 · 몹은 두 번 (서버 쪽 두 번 · 내 쪽 한 번)
+let hbPushAcc=0;
+{const _um=updateMobs;updateMobs=function(dt){_um(dt);if(tStopT>0)return;hbPushAcc+=dt;let n=0;while(hbPushAcc>=TICK&&n++<5){hbPushAcc-=TICK;hbPushTick()}if(hbPushAcc>=TICK)hbPushAcc=0}}
+// F3 + B: 히트박스 보기 (마크 EntityHitboxDebugRenderer: 흰 상자 · 빨간 눈높이 · 파란 시선 2칸 · 드래곤 부위 연두 · 탄 자리 노랑)
+let showHitbox=false,f3Combo=false,hbF3Was=false;
+const hbGeo=new THREE.BufferGeometry(),hbLines=new THREE.LineSegments(hbGeo,new THREE.LineBasicMaterial({vertexColors:true}));hbLines.frustumCulled=false;hbLines.visible=false;scene.add(hbLines);
+let hbCap=0,hbN=0,hbP=null,hbC=null;
+function hbV(x,y,z,c){if(hbN>=hbCap){hbCap=Math.max(4096,hbCap*2);const P=new Float32Array(hbCap*3),C=new Float32Array(hbCap*3);if(hbP){P.set(hbP);C.set(hbC)}hbP=P;hbC=C;hbGeo.setAttribute('position',new THREE.BufferAttribute(hbP,3));hbGeo.setAttribute('color',new THREE.BufferAttribute(hbC,3))}
+  const i=hbN*3;hbP[i]=x;hbP[i+1]=y;hbP[i+2]=z;hbC[i]=c[0];hbC[i+1]=c[1];hbC[i+2]=c[2];hbN++}
+const hbL=(a,b,c,d,e,f,col)=>{hbV(a,b,c,col);hbV(d,e,f,col)};
+function hbCube(b,c){const[x0,y0,z0,x1,y1,z1]=b;hbL(x0,y0,z0,x1,y0,z0,c);hbL(x1,y0,z0,x1,y0,z1,c);hbL(x1,y0,z1,x0,y0,z1,c);hbL(x0,y0,z1,x0,y0,z0,c);hbL(x0,y1,z0,x1,y1,z0,c);hbL(x1,y1,z0,x1,y1,z1,c);hbL(x1,y1,z1,x0,y1,z1,c);hbL(x0,y1,z1,x0,y1,z0,c);
+  hbL(x0,y0,z0,x0,y1,z0,c);hbL(x1,y0,z0,x1,y1,z0,c);hbL(x1,y0,z1,x1,y1,z1,c);hbL(x0,y0,z1,x0,y1,z1,c)}
+const HBW=[1,1,1],HBR=[1,0,0],HBB=[0,0,1],HBG=[.25,1,0],HBY=[1,1,0];
+// 엔티티 하나: 상자 · 자리 점 · (생물이면) 눈높이 · 시선 (yaw/pitch: 마크 각도처럼 보는 방향)
+function hbShow(box,x,y,z,eye,dx,dy,dz,live){hbCube(box,HBW);const s=.05;hbL(x-s,y,z,x+s,y,z,HBW);hbL(x,y,z-s,x,y,z+s,HBW);
+  if(live)hbCube([box[0],y+eye-.01,box[2],box[3],y+eye+.01,box[5]],HBR);
+  const ey=y+eye,ex=x+dx*2,eyy=ey+dy*2,ez=z+dz*2;hbL(x,ey,z,ex,eyy,ez,HBB);
+  const l=Math.hypot(dx,dz)||1,px=-dz/l*.12,pz=dx/l*.12;hbL(ex,eyy,ez,ex-dx*.25+px,eyy-dy*.25,ez-dz*.25+pz,HBB);hbL(ex,eyy,ez,ex-dx*.25-px,eyy-dy*.25,ez-dz*.25-pz,HBB)}
+const hbBoxAt=(x,y,z,w,h)=>[x-w/2,y,z-w/2,x+w/2,y+h,z+w/2];
+const hbVel=(v,d)=>{const l=v.length();return l>1e-6?[v.x/l,v.y/l,v.z/l]:d||[0,0,1]};
+function hbDraw(){hbN=0;if(!showHitbox||!started||phase!=='play'){hbLines.visible=false;return}
+  for(const m of mobs){const dm=hbDim(m.type,m.baby>0),y=m.pos.y,box=m.type==='dragon'?hbBoxAt(m.pos.x,y,m.pos.z,dm[0],dm[1]):hbBox(m),ya=m.yaw+(m.hy||0),pi=m.hx||0;
+    hbShow(box,m.pos.x,y,m.pos.z,m.type==='dragon'?dm[2]:hbEye(m),Math.sin(ya)*Math.cos(pi),-Math.sin(pi),Math.cos(ya)*Math.cos(pi),true);if(m.type==='dragon')for(const q of hbParts(m))hbCube(q.box,HBG)}
+  const p=player;if(viewMode&&!p.dead){const x=lerp(p.prev.x,p.pos.x,PT),y=lerp(p.prev.y,p.pos.y,PT),z=lerp(p.prev.z,p.pos.z,PT),cp=Math.cos(p.pitch);hbShow([x-PW,y,z-PW,x+PW,y+hbPH(),z+PW],x,y,z,eyeH(),-Math.sin(p.yaw)*cp,Math.sin(p.pitch),-Math.cos(p.yaw)*cp,true);
+    if(p.boat){const b=p.boat,w=.3;hbCube([b.pos.x-w,b.pos.y+.3,b.pos.z-w,b.pos.x+w,b.pos.y+.3625,b.pos.z+w],HBY)}}
+  for(const r of remotes.values()){if(!r.d||r.d.d||!r.S||!r.S.g.visible)continue;const g=r.S.g.position,ry=r.S.g.rotation.y;hbShow(hbBoxAt(g.x,g.y,g.z,.6,1.8),g.x,g.y,g.z,1.62,Math.sin(ry),0,Math.cos(ry),true)}
+  for(const b of boats)if(b.dm===DIM)hbShow(hbBoxAt(b.pos.x,b.pos.y,b.pos.z,1.375,.5625),b.pos.x,b.pos.y,b.pos.z,.5625,-Math.sin(b.yaw),0,-Math.cos(b.yaw),false);
+  for(const e of ents){const q=e.pos;hbShow(hbBoxAt(q.x,q.y,q.z,.25,.25),q.x,q.y,q.z,.2125,Math.sin(e.spin||0),0,Math.cos(e.spin||0),false)}
+  for(const o of xpOrbs){const q=o.pos;if(q)hbShow(hbBoxAt(q.x,q.y,q.z,.5,.5),q.x,q.y,q.z,.425,0,0,1,false)}
+  for(const t of tnts){const q=t.pos;hbShow(hbBoxAt(q.x,q.y,q.z,.98,.98),q.x,q.y,q.z,.15,0,0,1,false)}
+  for(const pr of projs){const q=pr.m.position,big=pr.fire===2,w=pr.fire?pr.fire===3?.25:big?1:.3125:.5,d=hbVel(pr.vel);hbShow(hbBoxAt(q.x,q.y,q.z,w,w),q.x,q.y,q.z,pr.fire?w*.85:.13,d[0],d[1],d[2],false)}
+  for(const t of throwns){const q=t.m.position,w=t.kind==='wind'?.3125:.25,d=hbVel(t.vel);hbShow(hbBoxAt(q.x,q.y,q.z,w,w),q.x,q.y,q.z,t.kind==='wind'?0:.2125,d[0],d[1],d[2],false)}
+  for(const s of SBUL){const q=s.m.position,d=hbVel(s.vel);hbShow(hbBoxAt(q.x,q.y,q.z,.3125,.3125),q.x,q.y,q.z,.2656,d[0],d[1],d[2],false)}
+  for(const c of crystals){const q=c.m.position;hbShow(hbBoxAt(q.x,q.y-1,q.z,2,2),q.x,q.y-1,q.z,1.7,0,0,1,false)}
+  hbGeo.setDrawRange(0,hbN);if(hbP){hbGeo.attributes.position.needsUpdate=true;hbGeo.attributes.color.needsUpdate=true}hbLines.visible=hbN>0}
+{const _ob=scene.onBeforeRender;scene.onBeforeRender=function(r,s,c,t){_ob.call(this,r,s,c,t);hbDraw()}}
+// F3 을 누른 채 B: 히트박스 켜고 끄기 (F3 화면은 그대로 · 마크처럼 채팅에 알려 줘요)
+addEventListener('keydown',e=>{if(e.code==='F3'&&!e.repeat){hbF3Was=showDebug;f3Combo=false}},true);
+addEventListener('keydown',e=>{if(e.code!=='KeyB'||e.repeat||!keys.F3||chatOpen||screenOpen||menuOpen||!started)return;showHitbox=!showHitbox;f3Combo=true;
+  if(showDebug!==hbF3Was){showDebug=hbF3Was;$('debug').classList.toggle('hide',!showDebug)}chatLine('[디버그]: 히트박스: '+(showHitbox?'보이기':'숨기기'),'#ffff55');e.preventDefault()});
 const _itx={};function iconTexURL(u){if(_itx[u])return _itx[u];const img=new Image();img.src=u;const t=new THREE.Texture(img);img.onload=()=>t.needsUpdate=true;t.magFilter=t.minFilter=THREE.NearestFilter;return _itx[u]=t}
 function feedMob(m){if(m.D.villager){openTrade(m);return true}if(useOnMob(m))return true;const st=inv[sel];if(st&&m.D.tame&&!m.tamed&&st.id===BONE){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;m.angry=0;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('늑대를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}if(!st||st.id!==m.D.food||m.baby>0||m.breedCD>0||m.love>0)return false;m.love=30;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}for(let k=0;k<4;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);sfx('eat');return true}
 let spawnT=0;const pendingAnimals=[];
@@ -3827,18 +3987,16 @@ const throwns=[];
 function throwThing(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion),o=camera.position.clone().addScaledVector(d,.4);const kind=ITEM[st.id].throw;
   const m=itemMesh(st.id,.25);m.position.copy(o);scene.add(m);
   if(kind==='eye'){const s=nearestStronghold(o.x,o.z);if(DIM!=='over'||!s){scene.remove(m);toast('엔더의 눈이 아무 데로도 날아가지 않아요');return}const dx=s.x-o.x,dz=s.z-o.z,l=Math.hypot(dx,dz)||1;throwns.push({kind,m,pos:o.clone(),vel:new V3(dx/l*8,4,dz/l*8),t:0,near:l<14})}
-  else throwns.push({kind,m,pos:o.clone(),vel:d.multiplyScalar(kind==='pearl'?22:20),t:0});
+  else throwns.push({kind,owner:'player',m,pos:o.clone(),prev:o.clone(),vel:d.multiplyScalar(30),t:0,w:.25,tk:0});   // 마크: 1.5칸/틱
   if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}sfx('bow');doSwing()}
 function updateThrowns(dt){for(let i=throwns.length-1;i>=0;i--){const t=throwns[i];t.t+=dt;
   if(t.kind==='eye'){if(t.t<1.6){t.pos.addScaledVector(t.vel,dt);t.vel.y*=Math.exp(-dt*2)}else{if(t.near)t.pos.y-=dt*3;}
     t.m.position.copy(t.pos);t.m.rotation.y+=dt*4;if(Math.random()<.5)smoke(t.pos.x,t.pos.y,t.pos.z);
     if(t.t>2.6){scene.remove(t.m);throwns.splice(i,1);if(Math.random()<.8)spawnItem({id:ENDER_EYE,n:1},t.pos.x,t.pos.y,t.pos.z);else{sfx('break','glass');for(let k=0;k<10;k++)smoke(t.pos.x,t.pos.y,t.pos.z)}}continue}
-  t.vel.y-=18*dt;const steps=Math.ceil(t.vel.length()*dt/.3);let hit=null;
-  for(let s=0;s<steps&&!hit;s++){t.pos.addScaledVector(t.vel,dt/steps);if(SOLID[getB(Math.floor(t.pos.x),Math.floor(t.pos.y),Math.floor(t.pos.z))])hit='block';else for(const m of mobs)if(!m.dead&&Math.abs(t.pos.x-m.pos.x)<m.hw+.15&&Math.abs(t.pos.z-m.pos.z)<m.hw+.15&&t.pos.y>m.pos.y&&t.pos.y<m.pos.y+m.h){hit=m;break}}
-  t.m.position.copy(t.pos);
+  let hit=null;for(let n=hbTicks(t,dt);n>0&&!hit;n--)hit=hbFlyTick(t,'throw');t.m.position.lerpVectors(t.prev,t.pos,hit?1:t.acc/TICK);   // 틱마다: 중력 0.03 · 공기 0.99 · 블록 · 상자 (Agent 10)
   if(hit||t.t>8){scene.remove(t.m);throwns.splice(i,1);if(!hit)continue;
     if(t.kind==='pearl'){const back=t.pos.clone().addScaledVector(t.vel.clone().normalize(),-.6);player.pos.set(back.x,Math.floor(back.y)+.01,back.z);if(boxHits(player.pos.x,player.pos.y,player.pos.z,PW,PH))player.pos.y+=1;player.vel.set(0,0,0);hurtPlayer(5,null,'fall');sfx('portal')}
-    else{for(let k=0;k<6;k++)smoke(t.pos.x,t.pos.y,t.pos.z);if(hit!=='block')hurtMob(hit,hit.type==='blaze'?3:0.01,t.pos)}}}}
+    else{for(let k=0;k<6;k++)smoke(t.pos.x,t.pos.y,t.pos.z);if(hit.kind==='mob')hurtMob(hit.e,hit.e.type==='blaze'?3:0.01,t.pos);else if(hit.kind==='crystal')breakCrystal(crystals.indexOf(hit.e))}}}}
 function chorusTP(){const p=player.pos;for(let k=0;k<16;k++){const x=Math.floor(p.x+(Math.random()-.5)*16),z=Math.floor(p.z+(Math.random()-.5)*16);for(let y=Math.floor(p.y)+8;y>Math.floor(p.y)-8;y--){if(SOLID[getB(x,y-1,z)]&&!SOLID[getB(x,y,z)]&&!SOLID[getB(x,y+1,z)]&&getB(x,y,z)!==LAVA){p.set(x+.5,y+.01,z+.5);player.vel.set(0,0,0);sfx('portal');return}}}}
 
 // ── 경험치
@@ -3897,23 +4055,27 @@ Object.assign(MOBDEF,{
   dragon:{n:'엔더 드래곤',hp:200,hw:3,h:3,sp:14,hostile:1,fly:1,fireproof:1,boss:1,drops:()=>[],snd:'dragon',build:buildDragon,custom:dragonAI}});
 
 // ── 화염구
-function shootFire(from,dir,speed,big){const m=new THREE.Mesh(new THREE.BoxGeometry(big?.9:.35,big?.9:.35,big?.9:.35),new THREE.MeshBasicMaterial({color:big?0xff6a10:0xffa030}));m.position.copy(from);scene.add(m);projs.push({pos:from.clone(),vel:dir.clone().multiplyScalar(speed),owner:'mob',dmg:big?6:5,m,life:0,stuck:false,fire:big?2:1});sfx('blaze')}
+function shootFire(from,dir,speed,big){const m=new THREE.Mesh(new THREE.BoxGeometry(big?.9:.35,big?.9:.35,big?.9:.35),new THREE.MeshBasicMaterial({color:big?0xff6a10:0xffa030}));m.position.copy(from);scene.add(m);projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(2),owner:'mob',src:hbShooter(from),dmg:big?6:5,m,life:0,stuck:false,fire:big?2:1,w:big?1:.3125,tk:0});sfx('blaze')}   // 마크: 0.1칸/틱으로 떠나 틱마다 0.1씩 빨라져요 (끝 속도 1.9칸/틱)
 // 화살 처리에 화염구 추가
 const _updateProjs=updateProjs;
 updateProjs=function(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(!p.fire)continue;if(tStopT>0&&p.owner==='mob')continue;p.life+=dt;let gone=p.life>8;
-    const steps=Math.ceil(p.vel.length()*dt/.3);for(let s=0;s<steps&&!gone;s++){p.pos.addScaledVector(p.vel,dt/steps);const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y),Math.floor(p.pos.z));
-      if(SOLID[id]){gone=true;if(p.fire===2)explode(p.pos.x,p.pos.y,p.pos.z,1);else for(let k=0;k<4;k++)smoke(p.pos.x,p.pos.y,p.pos.z);break}
-      if(p.owner==='mob'&&!player.dead&&Math.abs(p.pos.x-player.pos.x)<PW+.3&&Math.abs(p.pos.z-player.pos.z)<PW+.3&&p.pos.y>player.pos.y-.2&&p.pos.y<player.pos.y+PH+.2){hurtPlayer(p.dmg,p.pos.clone().addScaledVector(p.vel,-.05),p.fire===3?'witch':'fire');if(p.fire!==3)player.burn=4;gone=true;if(p.fire===2)explode(p.pos.x,p.pos.y,p.pos.z,1)}
-      if(p.owner==='player')for(const m of mobs)if(!m.dead&&p.pos.distanceTo(new V3(m.pos.x,m.pos.y+m.h/2,m.pos.z))<m.hw+.8){hurtMob(m,1000,p.pos);gone=true;break}}
-    p.m.position.copy(p.pos);p.m.rotation.x+=dt*5;p.m.rotation.y+=dt*4;if(Math.random()<.5)smoke(p.pos.x,p.pos.y,p.pos.z);
+    for(let n=hbTicks(p,dt);n>0&&!gone;n--){const h=hbFlyTick(p,p.fire===3?'potion':'fire');if(!h)continue;const c=p.pos;gone=true;   // 틱마다 날아가며 블록 · 상자에 맞혀 봐요 (Agent 10)
+      if(h.kind==='player'){if(!creative()){hurtPlayer(p.dmg,c.clone().addScaledVector(p.vel,-.05),p.fire===3?'witch':'fire');if(p.fire===1)player.burn=5}}
+      else if(h.kind==='mob'){const m=h.e;if(m.D.ender&&p.fire!==2){enderTP(m);p.skip=m;gone=false;continue}hurtMob(m,p.fire===2&&p.owner==='player'&&m.type==='ghast'?1000:p.dmg,c);if(p.fire===1&&!m.D.fireproof)m.fireT=5}   // 되받아친 화염구는 가스트를 한 번에
+      else if(h.kind==='crystal')breakCrystal(crystals.indexOf(h.e));else if(h.kind==='boat')hbBoatHit(h.e,p.dmg);
+      if(p.fire===2)explode(c.x,c.y,c.z,1);else for(let k=0;k<4;k++)smoke(c.x,c.y,c.z)}
+    p.m.position.lerpVectors(p.prev,p.pos,gone?1:p.acc/TICK);p.m.rotation.x+=dt*5;p.m.rotation.y+=dt*4;if(Math.random()<.5)smoke(p.m.position.x,p.m.position.y,p.m.position.z);
     if(gone){scene.remove(p.m);projs.splice(i,1)}}
   const keep=projs.filter(p=>p.fire);for(const k of keep)projs.splice(projs.indexOf(k),1);_updateProjs(dt);projs.push(...keep)};
 // 가스트 공격 튕겨내기
-function deflectFire(){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);for(const p of projs){if(!p.fire||p.owner!=='mob')continue;const t=p.pos.clone().sub(o);if(t.length()<4&&t.normalize().dot(d)>.85){p.vel.copy(d).multiplyScalar(p.vel.length()*1.3);p.owner='player';sfx('click');return true}}return false}
+// 겨냥한 가스트 화염구 · 돌풍구 · 셜커 탄 · 엔드 수정 치기 (Agent 10): 화염구 · 돌풍구는 보는 쪽으로 1칸/틱 (마크 AIM_DEFLECT · 가속은 처음부터) · 탄은 터지고 · 수정은 폭발
+function deflectFire(){const p=targetProj,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);if(targetCrystal){breakCrystal(crystals.indexOf(targetCrystal));player.missTime=0;return true}if(!p)return false;
+  if(SBUL.includes(p)){scene.remove(p.m);SBUL.splice(SBUL.indexOf(p),1);for(let k=0;k<3;k++)smoke(p.m.position.x,p.m.position.y,p.m.position.z)}else{p.vel.copy(d).multiplyScalar(20);p.owner='player';p.left=true;p.src=null}
+  player.missTime=0;targetProj=null;sfx('click');return true}
 
 // ── 날아다니는 몹 공통
 function flyMove(m,tx,ty,tz,sp,dt){const dx=tx-m.pos.x,dy=ty-m.pos.y,dz=tz-m.pos.z,l=Math.hypot(dx,dy,dz)||1;const k=1-Math.exp(-dt*2);
-  m.vel.x+=(dx/l*sp-m.vel.x)*k;m.vel.y+=(dy/l*sp-m.vel.y)*k;m.vel.z+=(dz/l*sp-m.vel.z)*k;moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,Math.min(m.hw,1.2),Math.min(m.h,2))}
+  m.vel.x+=(dx/l*sp-m.vel.x)*k;m.vel.y+=(dy/l*sp-m.vel.y)*k;m.vel.z+=(dz/l*sp-m.vel.z)*k;if(m.type==='dragon')m.pos.addScaledVector(m.vel,dt);else moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,m.hw,m.h)}
 function mobCommon(m,dt){if(m.hurtT>0)m.hurtT-=dt;if(m.atk>0)m.atk-=dt;m.g.position.copy(m.pos);m.g.rotation.y=m.yaw;tintMob(m,DIM==='over'?lightK(m.pos.x,m.pos.y+m.h*.6,m.pos.z):1);
   const pp=player.pos;if(Math.hypot(pp.x-m.pos.x,pp.z-m.pos.z)>120&&!m.D.boss){scene.remove(m.g);mobs.splice(mobs.indexOf(m),1);return false}return true}
 function ghastAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,d=Math.hypot(dx,dz);m.ai.t-=dt;
@@ -4031,7 +4193,8 @@ function phantomAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,A=m.ai;A
   if(A.dive&&!player.dead&&!creative()){flyMove(m,pp.x,pp.y+1,pp.z,14,dt);if(m.pos.distanceTo(new V3(pp.x,pp.y+1,pp.z))<1.6&&m.atk<=0){m.atk=2;hurtPlayer(4,m.pos,'phantom');A.dive=false;A.t=6}if(A.t<-4)A.dive=false}
   else{flyMove(m,pp.x+Math.cos(A.ang)*14,pp.y+16,pp.z+Math.sin(A.ang)*14,9,dt);if(A.t<=0){A.dive=true;A.t=0}}
   if(Math.hypot(m.vel.x,m.vel.z)>.3)m.yaw=Math.atan2(m.vel.x,m.vel.z);m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*Math.sin(performance.now()/150)*.5)}
-function shootPotion(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.25,.3,.25),new THREE.MeshBasicMaterial({color:0x9a3ad0}));m.position.copy(from);scene.add(m);dir=dir.clone();dir.y+=.15;projs.push({pos:from.clone(),vel:dir.multiplyScalar(14),owner,dmg:4,m,life:0,stuck:false,fire:3});sfx('bow')}
+function shootPotion(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.25,.3,.25),new THREE.MeshBasicMaterial({color:0x9a3ad0}));m.position.copy(from);scene.add(m);const near=Math.hypot(player.pos.x-from.x,player.pos.z-from.z)<=2;
+  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(near?9:15),owner,src:owner==='mob'?hbShooter(from):null,dmg:4,m,life:0,stuck:false,fire:3,w:.25,tk:0});sfx('bow')}   // 마크 마녀: 0.75칸/틱 (2칸 안이면 0.45) · 중력 0.05
 function spongeAbsorb(x,y,z){let n=0;for(let dy=-4;dy<=4;dy++)for(let dz=-4;dz<=4;dz++)for(let dx=-4;dx<=4;dx++){if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)>6)continue;if(getB(x+dx,y+dy,z+dz)===WATER){setBlock(x+dx,y+dy,z+dz,AIR,true);n++}}if(n)setBlock(x,y,z,WET_SPONGE)}
 /* ═════════════ 몹 추가 3: 박쥐 · 오징어 · 발광 오징어 · 돌고래 · 거북 · 고양이 · 말 · 무시룸 · 동굴 거미 · 좀벌레 · 아홀로틀 ═════════════ */
 // 물속 몹: 물 안에서만 둥둥 헤엄쳐요 (물 밖이면 퍼덕이다 떨어져요)
@@ -5823,8 +5986,8 @@ function shulkerAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,dx=pp.x-
 function shulkerShoot(m){const g=new THREE.Mesh(new THREE.BoxGeometry(.32,.32,.32),sbulMat);g.position.set(m.pos.x,m.pos.y+.8,m.pos.z);scene.add(g);SBUL.push({m:g,vel:new V3(0,2,0),life:9});sfx('bow')}
 function clearSbul(){for(const b of SBUL)scene.remove(b.m);SBUL.length=0}
 function sbulTick(dt){if(tStopT>0)return;const tg=new V3(player.pos.x,player.pos.y+1,player.pos.z);
-  for(let i=SBUL.length-1;i>=0;i--){const b=SBUL[i],p=b.m.position;b.life-=dt;const d=tg.clone().sub(p),L=d.length();d.multiplyScalar(4.5/(L||1));b.vel.lerp(d,Math.min(1,dt*1.8));p.addScaledVector(b.vel,dt);b.m.rotation.x+=dt*6;b.m.rotation.y+=dt*5;
-    let hit=false;if(L<.9&&!player.dead){hit=true;hurtPlayer(4,p,'shulker');if(!creative())levT=Math.max(levT,3.5)}
+  for(let i=SBUL.length-1;i>=0;i--){const b=SBUL[i],p=b.m.position;b.life-=dt;const d=tg.clone().sub(p),L=d.length();d.multiplyScalar(4.5/(L||1));b.vel.lerp(d,Math.min(1,dt*1.8));const p0=p.clone();p.addScaledVector(b.vel,dt);b.m.rotation.x+=dt*6;b.m.rotation.y+=dt*5;
+    let hit=false;const pb=hbPBox();if(!player.dead&&(hbSeg(p0,p,pb,.3)!==null||p.x>pb[0]-.3&&p.x<pb[3]+.3&&p.y>pb[1]-.3&&p.y<pb[4]+.3&&p.z>pb[2]-.3&&p.z<pb[5]+.3)){hit=true;hurtPlayer(4,p,'shulker');if(!creative())levT=Math.max(levT,3.5)}
     if(hit||b.life<=0||SOLID[getB(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))]){if(!hit)for(let k=0;k<2;k++)smoke(p.x,p.y,p.z);scene.remove(b.m);SBUL.splice(i,1)}}
   if(levT>0){levT-=dt;if(!player.fly&&!player.dead){player.vel.y=Math.max(player.vel.y,2.2);player.fallStart=null}}}
 // 매 프레임: 셜커 탄 · 공중 부양 · 관문 빛줄기 · 관문 들어가기
@@ -6424,8 +6587,8 @@ UNDEAD.add('bogged');
 
 // ── 돌풍구: 던지면 곧게 날아가 터지며 둘레를 밀어내요 (발밑에 던지면 높이 뛰어올라요) · 브리즈도 쏴요
 function shootWind(from,dir,speed,owner){const m=itemMesh(WIND_CHARGE,.3);m.position.copy(from);scene.add(m);let d=dir.clone();
-  if(owner==='mob')d=new V3(player.pos.x,player.pos.y+1,player.pos.z).sub(from).normalize();
-  throwns.push({kind:'wind',owner:owner||'player',m,pos:from.clone(),vel:d.multiplyScalar(owner==='mob'?12:20),t:0});sfx('wind',null,.5)}
+  if(owner==='mob'){d=new V3(player.pos.x,player.pos.y+hbPH()*.3,player.pos.z).sub(from).normalize();const s=.0172275*3;d.x+=hbTri(0,s);d.y+=hbTri(0,s);d.z+=hbTri(0,s);d.normalize()}   // 브리즈: 흩어짐 |5-난이도×4| (보통 3)
+  throwns.push({kind:'wind',owner:owner||'player',src:owner==='mob'?hbShooter(from):null,m,pos:from.clone(),prev:from.clone(),vel:d.normalize().multiplyScalar(owner==='mob'?14:30),t:0,w:.3125,tk:0});sfx('wind',null,.5)}   // 마크: 플레이어 1.5칸/틱 · 브리즈 0.7칸/틱
 function windBurst(c,owner,direct){sfx('wind');
   for(let i=0;i<22;i++){const a=Math.random()*6.283,b=Math.random()*2-1,q=Math.sqrt(1-b*b),v=.12+Math.random()*.1;spriteP({x:c.x,y:c.y,z:c.z,xd:Math.cos(a)*q*v,yd:b*v,zd:Math.sin(a)*q*v,grav:0,fric:.82,col:1,rgb:WIND_C,bright:true,s:.12+Math.random()*.1,life:8+Math.floor(Math.random()*8),frames:8,row:0,phys:false})}
   const p=player;if(!p.dead){const dv=new V3(p.pos.x,p.pos.y+.9,p.pos.z).sub(c),dd=dv.length();
@@ -6438,14 +6601,10 @@ function windTick(dt){const p=player;if(p.windY==null)return;p.windT-=dt;if(p.wi
 const _updThrowns=updateThrowns;
 updateThrowns=function(dt){let any=false;
   for(let i=throwns.length-1;i>=0;i--){const t=throwns[i];if(t.kind!=='wind')continue;any=true;const mob=t.owner==='mob';if(mob&&tStopT>0)continue;t.t+=dt;
-    const steps=Math.max(1,Math.ceil(t.vel.length()*dt/.25));let hit=null;
-    for(let s=0;s<steps&&!hit;s++){t.pos.addScaledVector(t.vel,dt/steps);const id=getB(Math.floor(t.pos.x),Math.floor(t.pos.y),Math.floor(t.pos.z));
-      if(SOLID[id]||(B[id]&&B[id].liquid))hit='block';
-      else if(mob){if(!player.dead&&Math.abs(t.pos.x-player.pos.x)<PW+.25&&Math.abs(t.pos.z-player.pos.z)<PW+.25&&t.pos.y>player.pos.y-.2&&t.pos.y<player.pos.y+PH+.2)hit='player'}
-      else for(const m of mobs)if(!m.dead&&!m.D.windImmune&&Math.abs(t.pos.x-m.pos.x)<m.hw+.2&&Math.abs(t.pos.z-m.pos.z)<m.hw+.2&&t.pos.y>m.pos.y-.1&&t.pos.y<m.pos.y+m.h+.1){hit=m;break}}
-    t.m.position.copy(t.pos);t.m.rotation.y+=dt*12;t.m.rotation.z+=dt*7;
-    if(Math.random()<.5)spriteP({x:t.pos.x,y:t.pos.y,z:t.pos.z,xd:0,yd:0,zd:0,grav:0,fric:.9,col:1,rgb:WIND_C,bright:true,s:.07,life:6,frames:8,row:0,phys:false});
-    if(hit||t.t>6){scene.remove(t.m);throwns.splice(i,1);const c=hit==='block'?t.pos.clone().addScaledVector(t.vel.clone().normalize(),-.3):t.pos.clone();windBurst(c,mob?'mob':'player',hit&&hit!=='block'&&hit!=='player'?hit:null)}}
+    let hit=null;for(let n=hbTicks(t,dt);n>0&&!hit;n--)hit=hbFlyTick(t,'wind',(k,e)=>k==='crystal'||k==='mob'&&e.D.windImmune);   // 틱마다 곧게 · 물은 지나가요 · 수정 · 브리즈는 안 맞아요 (Agent 10)
+    t.m.position.lerpVectors(t.prev,t.pos,hit?1:t.acc/TICK);t.m.rotation.y+=dt*12;t.m.rotation.z+=dt*7;const q=t.m.position;
+    if(Math.random()<.5)spriteP({x:q.x,y:q.y,z:q.z,xd:0,yd:0,zd:0,grav:0,fric:.9,col:1,rgb:WIND_C,bright:true,s:.07,life:6,frames:8,row:0,phys:false});
+    if(hit||t.t>6){scene.remove(t.m);throwns.splice(i,1);const n=hit&&hit.kind==='block'&&FACES[hit.face]?FACES[hit.face].d:[0,0,0],c=t.pos.clone().add(new V3(n[0],n[1],n[2]).multiplyScalar(.25));windBurst(c,mob?'mob':'player',hit&&hit.kind==='mob'?hit.e:null)}}
   if(!any){_updThrowns(dt);return}
   const keep=throwns.filter(t=>t.kind==='wind');for(const k of keep)throwns.splice(throwns.indexOf(k),1);_updThrowns(dt);throwns.push(...keep)};
 
