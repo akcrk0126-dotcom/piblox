@@ -347,6 +347,7 @@ function achCheck(){
 const bonusText = b => b ? Object.entries(b).map(([k, v]) => `${STN[k]} ${fmtStat(k, v)}`).join(' · ') : '';
 function grantTitle(id, def){
   if (def && !TITLES[id]) TITLES[id] = def;
+  if (def){ S.titles.defs = S.titles.defs || {}; S.titles.defs[id] = { n: def.n, d: def.d, b: def.b, c: def.c, icon: def.icon }; }
   const t = TITLES[id]; if (!t || S.titles.own.includes(id)) return false;
   S.titles.own.push(id); BUS.emit('title', { id }); X.sfx('level');
   bnr('NEW TITLE', `「${t.n}」`, `칭호 획득 · ${bonusText(t.b)} — 가방(I) → 칭호 탭`, false, 3.2);
@@ -1540,6 +1541,7 @@ X.KEYH.push(code => {
 });
 
 // ───────────────────────── 매 프레임 ─────────────────────────
+const autoPend = {};
 let slowT = 0, layT = 0, buffT = 0, restOn = restLeft() > 0, botT = 200 + R() * 200;
 G.hooks.push((dt, rdt) => {
   UT.value = G.time; updBanner(rdt);
@@ -1553,7 +1555,8 @@ G.hooks.push((dt, rdt) => {
   if (goldDirty) renderGold();
   if (!F.inField){ if (navEl.style.display !== 'none') navEl.style.display = 'none'; return; }
   updLoot(dt); updGather(dt); updChests(dt); updSpirits(dt); updNodes(dt);
-  if ((slowT -= rdt) <= 0){ slowT = 0.5; checkInstant(); updMarks(); if (S.q.daily && S.q.daily.day !== today()) ensureDaily(); }
+  if ((slowT -= rdt) <= 0){ slowT = 0.5; checkInstant(); updMarks();
+    for (const id in S.q.act){ const q = getQ(id); if (q && q.auto && qReady(id) && !autoPend[id]){ autoPend[id] = 1; completeQuest(id); } } if (S.q.daily && S.q.daily.day !== today()) ensureDaily(); }
   if ((markForceT -= rdt) <= 0){ markForceT = 3; refreshMarks(true); } else if (marksDirty) refreshMarks();
   if (trkDirty){ renderTracker(); updMarks(); }
   if ((layT -= rdt) <= 0){ layT = 1; layoutTrk(); }
@@ -1578,6 +1581,7 @@ const T0 = performance.now();
 try { buildNodes(); } catch (e){ console.error('[rpg] gather nodes', e); }
 try { buildChests(); } catch (e){ console.error('[rpg] chests', e); }
 try { buildSpirits(); } catch (e){ console.error('[rpg] spirits', e); }
+for (const id in (S.titles.defs || {})) if (!TITLES[id]) TITLES[id] = S.titles.defs[id];
 applyBonus(); renderCardTitle(); renderBuff(); updPotHud(true);
 console.log(`[rpg] 채집물 ${NODES.length} · 상자 ${CHESTS.length} · 룬 정령 ${SPIRITS.length}/${W.seeds} · 퀘스트 메인 ${MAIN.length} · 의뢰 ${Object.keys(QD).length - MAIN.length} · ${Math.round(performance.now() - T0)}ms`);
 Object.assign(F, { gearScore, makeGear, RARITY: RAR, ITEMS, itemName: gName, rpgWindowOpen: () => !!OPEN, closeRpgWindow: closeWin });

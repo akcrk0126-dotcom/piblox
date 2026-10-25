@@ -1681,6 +1681,7 @@ function setupRaid(id, exit, retry){
   const e = X.spawnMon('raid_' + id, def.boss[0], def.boss[1], false, { cfg, boss: true, lv: RS.blv, name: r.name, ai: bossAI, data: { enraged: true, raidBoss: true } });
   e.spdMul = 1; e.under = true; e.g.rotation.y = 0; envK(e.g, def.mood.env);
   for (const k of ['stun', 'frz']) Object.defineProperty(e, k, { get: () => 0, set(){}, configurable: true });
+  { let dot = null; Object.defineProperty(e, 'dot', { get: () => dot, set(v){ dot = v && RS && RS.phase === 'fight' && !(e.B && e.B.dying) ? v : null; }, configurable: true }); }
   e.B = { t: 0, bp: 1, cds: {}, cd: 2.2, prefT: 4, pref: 'tank', focus: ME, act: null, trans: null, pin: null, moving: false };
   RS.boss = e;
   // 파티
@@ -1733,12 +1734,12 @@ function wipe(){
   X.sfx('die'); document.body.classList.remove('rfight');
   wipeEl.innerHTML = `<div class="a">PARTY WIPED</div><div class="b">전 멸</div><div class="c">${RS.r.name} 남은 체력 <b>${pct}%</b> · 전투 시간 <b>${fmtT(RS.t)}</b>${RS.enr ? ' · <b style="color:#ff8a8a">광폭화</b>' : ''}<br>💡 ${pick(RS.m.tips)}</div>
     <div class="bt"><button class="pri" data-a="retry">⚔ 다시 도전</button><button data-a="leave">입구로 나가기</button></div>`;
-  setTimeout(() => wipeEl.classList.add('on'), 1200);
-  wipeEl.querySelectorAll('button').forEach(b => b.onclick = () => { X.sfx('ui'); hidePanels(); if (b.dataset.a === 'retry'){ X.revive(); enterRaid(RS.id, { retry: true, force: true }); } else exitRaid(); });
+  const rs = RS; setTimeout(() => { if (RS === rs && RS.phase === 'wipe') wipeEl.classList.add('on'); }, 1200);
+  wipeEl.querySelectorAll('button').forEach(b => b.onclick = () => { X.sfx('ui'); hidePanels(); if (!RS) return; if (b.dataset.a === 'retry'){ X.revive(); enterRaid(RS.id, { retry: true, force: true }); } else exitRaid(); });
 }
 function bossDown(e){
   if (!RS || RS.phase !== 'fight') return;
-  RS.phase = 'victory'; RS.vt = 0; RS.vgt = 0; RS.time = RS.t; const B = e.B; B.dying = true; B.act = null; B.trans = null; e.under = true; e.tongueL = 0.01;
+  RS.phase = 'victory'; RS.vt = 0; RS.vgt = 0; RS.time = RS.t; const B = e.B; B.dying = true; e.dot = null; B.act = null; B.trans = null; e.under = true; e.tongueL = 0.01;
   clearHz(false); for (const w of RINGS) FXG.remove(w.g); RINGS.length = 0; if (B.shield){ e.g.remove(B.shield.dome); for (const bm of B.shield.beams) FXG.remove(bm); B.shield = null; }
   for (const o of X.ENEMIES.slice()) if (o !== e && live(o)) X.killEnemy(o, true);
   G.hitStop = 0.85; flash(); X.sfx('crit'); X.sfx('boom'); G.shake = 1.6; document.body.classList.remove('rfight');
@@ -2024,6 +2025,7 @@ function update(dt, rdt){
     if (live(e)){ const d = e.cfg.top * 1.2 + 5.5, a = camAngle(e.pos.x, e.pos.z, RS.va + RS.vt * 0.22, d); RS.cam.pos.set(e.pos.x + Math.sin(a) * d, e.cfg.top * 0.7 + 1.6, e.pos.z + Math.cos(a) * d); RS.cam.look.set(e.pos.x, e.pos.y * 0.5 + e.cfg.top * 0.42, e.pos.z);
       if (K.death(e, RS.vgt, dt)){ e.B.pin = null; e.pos.y = 0; X.killEnemy(e); RS.killedAt = RS.vt; } }
     if (RS.vt > 0.7 && !RS.vb){ RS.vb = true; X.banner('RAID CLEAR', `${RS.r.name} 격파!`, `클리어 시간 ${fmtT(RS.time)}${RS.first ? ' · 첫 클리어!' : RS.newBest ? ' · 최고 기록!' : ''}`, false, 4.2); X.sfx('level'); }
+    if (!live(e) && RS.killedAt == null) RS.killedAt = RS.vt;
     if (RS.killedAt != null && RS.vt > RS.killedAt + 1.4) toLoot();
   }
   if (!RS) return;

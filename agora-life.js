@@ -373,7 +373,7 @@ function fbSpawnPhysical(){
 }
 function fbEnd(state, by){
   const fb = FB.cur && FB.cur.fb; if (!fb) return;
-  if (FB.e && live(FB.e)){ if (state !== 'dead') quietRemove(FB.e); }
+  if (FB.e && live(FB.e) && (state !== 'dead' || by === 'bot' || !FB.e._won)) quietRemove(FB.e);
   if (FB.bar){ X.bossBar(null); FB.bar = false; }
   for (const m of FB.minions) if (live(m)) later(state === 'dead' ? 4 : 0, () => quietRemove(m));
   FB.minions = []; FB.e = null; FB.cur = null;
@@ -592,7 +592,7 @@ const EMOTES = [
   { id: 'wave', n: '손 흔들기', icon: '👋', dur: 2.2 }, { id: 'bow', n: '인사', icon: '🙇', dur: 1.6 }, { id: 'dance', n: '춤', icon: '💃', dur: 9, loop: true }, { id: 'sit', n: '앉기', icon: '🪑', dur: 999, loop: true },
   { id: 'cheer', n: '환호', icon: '🎉', dur: 2.0 }, { id: 'clap', n: '박수', icon: '👏', dur: 2.2 }, { id: 'think', n: '생각', icon: '🤔', dur: 3.0 }, { id: 'point', n: '손가락질', icon: '👉', dur: 2.0 },
 ];
-const EMO_BY = {}; for (const e of EMOTES){ EMO_BY[e.id] = e; EMO_BY[e.n] = e; EMO_BY[e.n.replace(/ /g, '')] = e; }
+const EMO_BY = Object.create(null); for (const e of EMOTES){ EMO_BY[e.id] = e; EMO_BY[e.n] = e; EMO_BY[e.n.replace(/ /g, '')] = e; }
 function emoPose(id, t, tp){
   const s = Math.sin, p = Object.assign({}, tp || PZ({}));
   switch (id){
@@ -763,7 +763,7 @@ function campFor(b){
   return wpick(L.map(o => { const d = Math.hypot(o.c.c[0] - b.x, o.c.c[1] - b.z), dp = dP(o.c.c[0], o.c.c[1]); return [o, 1 / (60 + d) + (b.floater ? 4 / (40 + dp) : 0)]; }));
 }
 function setAct(b, act, x, z, dur, extra = {}){
-  b.act = act; b.st = 'go'; b.actT = dur; b.tx = x; b.tz = z; Object.assign(b, { camp: null, fire: null, fish: null, sight: null, tgt: null, sub: null, subT: rr(2, 5), loot: 0 }, extra);
+  b.act = act; b.st = 'go'; b.actT = dur; b.tx = x; b.tz = z; Object.assign(b, { atk: null, skill: null, roll: null, camp: null, fire: null, fish: null, sight: null, tgt: null, sub: null, subT: rr(2, 5), loot: 0 }, extra);
   b.path = planPath(b.x, b.z, x, z, b.lane); b.pi = 0;
   if (b.afk){ b.afk = false; refreshLabel(b); }
 }
@@ -896,7 +896,7 @@ function botHit(b, e, mul = 1){
   e._bot = b; e._botT = T;
   if (e.aggro){ X.hitEnemy(e, dmg, dx / dd, dz / dd, 1.5, crit); return; }   // 플레이어와 싸우는 중이면 파티 지원 (막타 보상은 플레이어에게)
   if (e.fboss || e.boss){ const floor = e.max * 0.35; dmg = Math.min(dmg, Math.max(0, e.hp - floor)); if (dmg <= 0) dmg = 0; }
-  e.hp -= dmg; e.flash = 1; if (!e.boss){ e.vel.x += dx / dd * 1.2; e.vel.z += dz / dd * 1.2; }
+  e.hp -= dmg; e.flash = 1; if (!e.boss){ e.pos.x += dx / dd * 0.12; e.pos.z += dz / dd * 0.12; }
   if (d < 32){ X.dmgNum(new V3(e.pos.x + rr(-0.3, 0.3), (e.cfg.top || 1) + 0.2 + (e.fly ? e.pos.y - e.fly : 0), e.pos.z), Math.round(dmg) + (crit ? '!' : ''), 'bot'); X.burst(new V3(e.pos.x, (e.boss ? (e.cfg.top || 2) * 0.45 : 0.6) + (e.boss ? 0 : e.fly), e.pos.z), crit ? 0xffe08a : 0xffffff, crit ? 9 : 5, 3, 0.14, 0.35, -5, 1); if (d < 9 && R() < 0.2) X.sfx('hit'); }
   if (e.hp <= 0){ X.killEnemy(e, true); if (d < 60){ X.burst(new V3(e.pos.x, 0.6 + e.fly, e.pos.z), 0xfff3a0, 16, 3.5, 0.22, 0.9, -2, 2.5); X.burst(new V3(e.pos.x, 0.5 + e.fly, e.pos.z), 0x8aff7a, 10, 3, 0.3, 0.9, -4, 2); if (d < 22) X.sfx('pop'); }
     b.kills = (b.kills || 0) + 1; b.loot = rr(2, 4.5); b.tgt = null; if (R() < 0.25) later(0.4, () => botEmote(b, pick(['cheer', 'point', 'clap']))); }
@@ -920,6 +920,7 @@ function fight(b, dt, detail){
   if (!b.tgt && b.retT <= 0){ b.tgt = pickTarget(b); b.retT = 0.6; }
   const e = b.tgt;
   if (!e){ // 사냥감 기다리기: 캠프 안을 어슬렁
+    b.atk = b.skill = b.roll = null;
     b.subT -= dt; if (b.subT <= 0 || !b.wp){ b.subT = rr(3, 7); const a = R() * TAU, r = rr(2, 9); b.wp = [b.tx + Math.cos(a) * r, b.tz + Math.sin(a) * r]; }
     if (!b.atk) moveTo(b, b.wp[0], b.wp[1], dt, 2.6); return;
   }
@@ -1371,7 +1372,7 @@ G.hooks.push((dt, rdt) => {
   guard('bots', () => updBots(rdt));
   guard('bot fx', () => updBotFx(rdt));
   guard('engaged', () => { for (const e of X.ENEMIES){ if (e.aggro || !e._bot || e.state === 'dying' || T - (e._botT || -9) > 1.2) continue; const b = e._bot; e.wp = null; e.wt = Math.max(e.wt || 0, 0.6); X.turn(e, Math.atan2(b.x - e.pos.x, b.z - e.pos.z), dt * 6);
-    e._bat = (e._bat ?? rr(1, 2)) - dt; if (e._bat <= 0 && Math.hypot(b.x - e.pos.x, b.z - e.pos.z) < 4 + e.cfg.rad){ e._bat = rr(1.4, 2.4); const dd = Math.hypot(b.x - e.pos.x, b.z - e.pos.z) || 1; e.vel.x += (b.x - e.pos.x) / dd * 3; e.vel.z += (b.z - e.pos.z) / dd * 3; later(0.18, () => { b.hurt = 0.25; }); } } });
+    e._bat = (e._bat ?? rr(1, 2)) - dt; if (e._bat <= 0 && Math.hypot(b.x - e.pos.x, b.z - e.pos.z) < 4 + e.cfg.rad){ e._bat = rr(1.4, 2.4); const dd = Math.hypot(b.x - e.pos.x, b.z - e.pos.z) || 1; e.pos.x += (b.x - e.pos.x) / dd * 0.35; e.pos.z += (b.z - e.pos.z) / dd * 0.35; later(0.18, () => { b.hurt = 0.25; }); } } });
   guard('fires', () => updFires(rdt));
   guard('critters', () => updCritters(rdt));
   guard('emote', () => updPlayerEmote(rdt));

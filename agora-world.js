@@ -909,6 +909,7 @@ for (const k in WPV) styleWp(WPV[k]);
 let pendFace = null;
 const enemiesNear = (x, z, r = 34) => X.ENEMIES.some(e => e.aggro && X.liveE(e) && Math.hypot(e.pos.x - x, e.pos.z - z) < r);
 function travelTo(id){
+  if (LIFT) return;
   const v = WPV[id]; if (!v || !wpOn(id)) return false;
   if (enemiesNear(X.player.pos.x, X.player.pos.z)){ X.toast('빠른 이동 불가', '주변에 나를 노리는 적이 있어요'); X.sfx('buzz'); return false; }
   closeMap(); const a = hash(id.length, 3, 9) * TAU, x = v.w.c[0] + Math.cos(a) * 5.5, z = v.w.c[1] + Math.sin(a) * 5.5;
@@ -989,9 +990,12 @@ F.bound = p => {
   let mx = p.x - lastX, mz = p.z - lastZ; const md = Math.hypot(mx, mz);
   if (md < 1e-6) return;
   if (md > 4){ lastX = p.x; lastZ = p.z; return; }
-  const ok = (x, z, d) => { const g = groundAt(x, z), rise = g - p.y; if (rise <= 0.3) return true;
-    const ht = H(x, z); if (g > ht + 0.05) return rise <= 0.7;   // 발판(마루 · 계단 · 물 위)은 한 칸씩 올라서요
-    return X.player.ground && (ht - H(lastX, lastZ)) / Math.max(d, 1e-4) <= MAXS; };
+  // 경사는 프레임과 상관없이 "거리당 오르막" 으로 재요. 공중에서는 머리 위 가파른 벽으로 파고들 수 없어요 (점프로 절벽 오르기 막기)
+  const steep = (x, z) => { const e = 0.8; return Math.hypot(H(x + e, z) - H(x - e, z), H(x, z + e) - H(x, z - e)) / (2 * e) > MAXS; };
+  const ok = (x, z, d) => { const g = groundAt(x, z), ht = H(x, z), g0 = groundAt(lastX, lastZ), gr = X.player.ground;
+    if (g > ht + 0.05) return g - (gr ? g0 : Math.max(g0, p.y)) <= 0.7;   // 발판(마루 · 계단 · 물 위)은 한 칸씩 올라서요
+    if (gr){ const rise = g - g0; return rise <= 0.12 || rise / Math.max(d, 1e-4) <= MAXS; }
+    return g <= p.y - 0.05 || !steep(x, z); };
   if (!ok(p.x, p.z, md)){
     const e = 0.6, gx = groundAt(p.x + e, p.z) - groundAt(p.x - e, p.z), gz = groundAt(p.x, p.z + e) - groundAt(p.x, p.z - e), gl = Math.hypot(gx, gz) || 1, ux = gx / gl, uz = gz / gl, up = mx * ux + mz * uz;
     if (up > 0){ mx -= ux * up; mz -= uz * up; }
@@ -1041,7 +1045,9 @@ function startLift(o, up){
   LIFT = { t: 0, T: up ? 3.6 : 2.9, sx: pp.x, sy: pp.y, sz: pp.z, tx, ty, tz, cx: l.to[0], cz: l.to[1], up };
   G.lock = true; boundOff = true; gliding = false; X.sfx('rune'); X.sfx('puff'); X.burst(new V3(pp.x, 0.3, pp.z), 0xc8fff0, 40, 6, 0.35, 0.9, -1, 3);
 }
+function cancelLift(){ if (!LIFT) return; LIFT = null; boundOff = false; lastX = null; if (!X.dead) G.lock = false; }
 function updateLift(dt){
+  if (X.dead){ cancelLift(); return; }
   const L = LIFT, p = X.player.pos; L.t += dt; const k = Math.min(1, L.t / L.T), e = k * k * (3 - 2 * k);
   const a0 = Math.atan2(L.sz - L.cz, L.sx - L.cx), r0 = Math.hypot(L.sx - L.cx, L.sz - L.cz), a1 = Math.atan2(L.tz - L.cz, L.tx - L.cx), r1 = Math.hypot(L.tx - L.cx, L.tz - L.cz);
   const da = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0)) + (L.up ? TAU : -TAU), a = a0 + da * e, r = lerp(r0, r1, e) + Math.sin(k * Math.PI) * 9;
@@ -1269,7 +1275,7 @@ function drawWorldMap(){
     MV2.hits.push({ x, y, r: 14 * fz, kind: 'wp', o: w }); }
   // 퀘스트 표시 · 필드 보스
   for (const m of G.mapMarkers || []){ const [x, y] = toS(m.x, m.z), r = 7 + Math.sin(t * 4) * 1.5; c.save(); c.translate(x, y); c.rotate(Math.PI / 4); c.shadowColor = '#ffd36a'; c.shadowBlur = 14; c.fillStyle = m.c || '#ffd36a'; c.fillRect(-r / 1.4, -r / 1.4, r * 1.41, r * 1.41); c.restore(); }
-  const wb = F.worldBoss; if (wb && wb.pos && (!wb.state || wb.state !== 'dying')){ const [x, y] = toS(wb.pos.x, wb.pos.z); c.font = `${Math.round(18 * fz)}px sans-serif`; c.fillText('💀', x, y); }
+  const wb = F.worldBoss; if (wb && wb.alive !== false){ const [x, y] = toS(wb.e ? wb.e.pos.x : wb.x, wb.e ? wb.e.pos.z : wb.z); c.font = `${Math.round(18 * fz)}px sans-serif`; c.fillText('💀', x, y); }
   // 플레이어
   if (F.inField){ const p = X.player.pos, [x, y] = toS(p.x, p.z), a = X.fig.root.rotation.y; c.save(); c.translate(x, y); c.rotate(-a + Math.PI); c.shadowColor = '#7ff3ff'; c.shadowBlur = 14; c.fillStyle = '#7ff3ff'; c.strokeStyle = '#06303a'; c.lineWidth = 1.5;
     c.beginPath(); c.moveTo(0, -13); c.lineTo(9, 9); c.lineTo(0, 4); c.lineTo(-9, 9); c.closePath(); c.fill(); c.stroke(); c.restore();
@@ -1384,7 +1390,7 @@ function playerTick(dt){
   else { if (wasAir && peakY != null && !swimming && !X.dead){ const drop = peakY - p.y; if (drop > 14){ const d = X.D(), dmg = d.maxHp * Math.min(0.45, 0.04 + (drop - 14) * 0.022); X.hurtPlayer(dmg, null, 0); F.note(`💥 낙하 피해 · ${Math.round(drop)}m`); X.burst(new V3(p.x, 0.2, p.z), 0xc8b090, 24, 4, 0.3, 0.6, -6, 1); G.shake = Math.max(G.shake, 0.9); } } wasAir = false; peakY = p.y; }
   // 너무 가파른 곳: 미끄러져 내려가요
   if (pl.ground && !swimming && !gliding && gy < h + 0.05){ const e = 0.8, gx = H(p.x + e, p.z) - H(p.x - e, p.z), gz = H(p.x, p.z + e) - H(p.x, p.z - e), s = Math.hypot(gx, gz) / (2 * e);
-    if (s > 1.4){ slideT += dt; const k = Math.min(7, 2 + slideT * 6) * dt, gl = Math.hypot(gx, gz); p.x -= gx / gl * k; p.z -= gz / gl * k; G.collide(p, 0.36); } else slideT = 0; }
+    if (s > 1.4){ slideT += dt; const k = Math.min(7, 2 + slideT * 6) * dt, gl = Math.hypot(gx, gz); p.x -= gx / gl * k; p.z -= gz / gl * k; G.collide(p, 0.36); lastX = p.x; lastZ = p.z; } else slideT = 0; }
 }
 G.hooks.push((dt, rdt) => {
   TIMEU.value = G.time;
@@ -1416,7 +1422,7 @@ G.hooks.push((dt, rdt) => {
   for (const u of UPDRAFTS){ if (u.sw) u.sw.rotation.y += dt * 0.4; if (u.wr) u.wr.rotation.y -= dt * 0.25; }
   if (MV2.open){ mapT -= rdt; if (mapT <= 0){ mapT = 0.07; drawWorldMap(); } }
 });
-BUS.on('enterField', d => { lastX = null; peakY = null; wasAir = false; vegX = 1e9; gcx = 1e9; chT = 0; if (d && (d.warp || d.revive)){ gliding = false; } if (d && d.warp && pendFace != null){ X.fig.root.rotation.y = pendFace; G.setCam(pendFace + Math.PI, 0.3); } pendFace = null; fogReveal(d ? d.x : X.player.pos.x, d ? d.z : X.player.pos.z); });
+BUS.on('enterField', d => { if (d && (d.warp || d.revive)) cancelLift(); lastX = null; peakY = null; wasAir = false; vegX = 1e9; gcx = 1e9; chT = 0; if (d && (d.warp || d.revive)){ gliding = false; } if (d && d.warp && pendFace != null){ X.fig.root.rotation.y = pendFace; G.setCam(pendFace + Math.PI, 0.3); } pendFace = null; fogReveal(d ? d.x : X.player.pos.x, d ? d.z : X.player.pos.z); });
 BUS.on('leaveField', () => { gliding = false; GLIDER.visible = false; closeMap(); if (fogChanged) fogSave(); if (G.camera.fov !== 55){ G.camera.fov = 55; G.camera.updateProjectionMatrix(); } });
 BUS.on('discover', d => { if (d && d.kind === 'landmark'){ const l = byId('landmarks', d.id); if (l) fogReveal(l.c[0], l.c[1], l.r + 50); } });
 

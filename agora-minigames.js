@@ -35,6 +35,7 @@ const MG_TITLES = {
   mg_archer: { n: '백발백중', d: '과녁 맞히기 4,000점', b: { crit: 0.015 } },
   mg_echo: { n: '룬의 기억', d: '룬 메아리 12단계', b: { mp: 20 } },
 };
+if (F.title && F.title.list){ const T = F.title.list(); for (const id in MG_TITLES) if (!T[id]) T[id] = MG_TITLES[id]; if (S.titles && MG_TITLES[S.titles.cur] && typeof F.title === 'function') F.title(S.titles.cur); }
 function grant(id){
   const t = MG_TITLES[id]; if (!t) return false;
   if (F.title && F.title.grant) return F.title.grant(id, t);
@@ -610,15 +611,15 @@ function rollFish(sp){
 function rollSize(f){ const k = Math.pow(R(), 1.6 - Math.min(0.6, S.fish.lv * 0.02)); return Math.round(lerp(f.cm[0], f.cm[1], k) * 10) / 10; }
 
 // ── 시작 / 끝 ──
-let heldWeapons = [], prevEmote = null, myCam = null;
+let heldWeapons = [], prevEmote = null, myCam = null; const RODG = {};
 function startFishing(id){
   if (FS){ if (FS.st === 'ready') cast(); return true; }
   const sp = spotById(id || nearestSpotId()); if (!canFish(sp)) return false;
   ac();
-  const tier = S.fish.rod | 0, rodG = mkRod(tier);
+  const tier = S.fish.rod | 0, rodG = RODG[tier] || (RODG[tier] = mkRod(tier));
   rodG.position.set(0, -0.36, 0.02); rodG.rotation.x = Math.PI / 2 + 0.3; X.fig.elR.add(rodG);
   heldWeapons = []; for (const b of [X.fig.elR, X.fig.elL]) for (const c of b.children) if (c !== rodG){ heldWeapons.push([c, c.visible]); c.visible = false; }
-  FS = { sp, st: 'idle', t: 0, rod: rodG, x0: pp.x, z0: pp.z, tx: 0, tz: 0, ty: 0, yaw: 0, bob: new V3(), fish: null, nib: [], nibT: -9, idleT: 0, strike: 0 };
+  FS = { mode: X.mode, sp, st: 'idle', t: 0, rod: rodG, x0: pp.x, z0: pp.z, tx: 0, tz: 0, ty: 0, yaw: 0, bob: new V3(), fish: null, nib: [], nibT: -9, idleT: 0, strike: 0 };
   prevEmote = X.emotePose; X.emotePose = fishPose;
   document.body.classList.add('mgfish'); hud.querySelector('.sp').textContent = (sp.plaza ? 'RUNE PLAZA' : (F.regionById(sp.region) || {}).en || 'FISHING').toUpperCase() + ' · ' + sp.name;
   hudLv(); BOB.visible = false; LINE.visible = false;
@@ -628,7 +629,7 @@ function startFishing(id){
 function stopFishing(msg){
   if (!FS) return; const s = FS; FS = null;
   if (s.rod.parent) s.rod.parent.remove(s.rod);
-  for (const [c, v] of heldWeapons) c.visible = v; heldWeapons = [];
+  for (const [c, v] of heldWeapons) c.visible = s.mode === X.mode ? v : (v || (X.inStory && (c === X.sword || c.parent === X.fig.elL))); heldWeapons = [];
   // 스토리의 광장 poseMod 는 X.emotePose 를 감싸 부르므로, 빈 자리로 두지 않고 null 을 돌려주는 함수로 되돌려요
   if (X.emotePose === fishPose) X.emotePose = prevEmote || NOPOSE; prevEmote = null;
   document.body.classList.remove('mgfish'); BOB.visible = LINE.visible = JUMP.visible = HELD.visible = HELDGLOW.visible = false; bang.style.display = 'none';
@@ -1134,7 +1135,7 @@ function loop(t){
   if (!GM) return;
   try { if (!paused) GM.frame(dt); GM.draw(cx, dt); } catch (e){ console.error('[minigames]', e); arcadeClose(); }
 }
-arc.querySelector('.cl').onclick = e => { e.stopPropagation(); X.sfx('ui'); if (GM && GM.quit) GM.quit(); else arcadeClose(); };
+arc.querySelector('.cl').onclick = e => { e.stopPropagation(); X.sfx('ui'); if (paused){ paused = false; if (AC){ AC._paused = false; AC.resume && AC.resume(); } } if (GM && GM.quit) GM.quit(); else arcadeClose(); };
 arc.querySelector('.ps').onclick = e => { e.stopPropagation(); setPause(!paused); };
 // 키: 열려 있는 동안 엔진으로 안 넘겨요 (WASD 이동 · F/J 공격 방지)
 addEventListener('keydown', e => { if (!arcOpen || e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.code)) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.repeat) return;

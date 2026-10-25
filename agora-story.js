@@ -1724,7 +1724,7 @@ function setObj(q, p, target){
   markerTarget = target || null;
 }
 function clearObj(){ objEl.classList.remove('on'); markerTarget = null; }
-const TIMERS = [];
+const TIMERS = [], PTIMERS = [];   // PTIMERS: 모듈용 (텔레포트 · 전투 정리에도 남아요)
 const later = (s, fn) => TIMERS.push({ t: s, fn });
 const wait = s => new Promise(r => later(s, r));
 async function chapterCard(a, b, c, r, btn){
@@ -3024,6 +3024,7 @@ function fieldDeath(){
 }
 G.hooks.push((dt, rdt) => {
   for (let i = TIMERS.length - 1; i >= 0; i--){ const t = TIMERS[i]; t.t -= rdt; if (t.t <= 0){ TIMERS.splice(i, 1); t.fn(); } }
+  for (let i = PTIMERS.length - 1; i >= 0; i--){ const t = PTIMERS[i]; t.t -= rdt; if (t.t <= 0){ PTIMERS.splice(i, 1); try { t.fn(); } catch (e){ console.error(e); } } }
   if (inStory){
     updateCombat(dt);
     if (MODE === 'field') gOffInstall();
@@ -3105,7 +3106,7 @@ var X = {
   // 지형 · 소품 재사용
   treeGeo, plant, TREEMAT, smat, TX, noiseTex, MATS2, MOOD, water,
   // UI
-  mk, hud, banner, hint, toast: (h, s2) => G.toast(h, s2), say, NAMES, SPK, setObj, clearObj, sfx, later, wait, sleep, teleport, closeMap,
+  mk, hud, banner, hint, toast: (h, s2) => G.toast(h, s2), say, NAMES, SPK, setObj, clearObj, sfx, later: (s2, fn) => PTIMERS.push({ t: s2, fn }), wait: s2 => new Promise(r => PTIMERS.push({ t: s2, fn: r })), sleep, teleport, closeMap,
   openStats: () => toggleStats(true), openJob: () => toggleJob(true), openWardrobe: () => toggleShop(true), get anyWindow(){ return statOpen || jobOpen || shopOpen || wmap.classList.contains('on') || dialogOpen; },
   // 모드 전환
   setMode, enterCombat, enterInstance, leaveToPlaza: () => leaveForest(), disposeStage, cleanupBattle, clearSkillFx,
