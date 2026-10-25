@@ -6162,11 +6162,45 @@ function nvTick(dt){if(!started||!player)return;const p=player;nvT-=dt;nvMT+=dt;
       if((m.type==='piglin'||m.type==='piglin_brute'||m.type==='hoglin')&&DIM!=='nether'){m.zomb=(m.zomb||0)+st;m.shake=1;m.yOff=(Math.random()-.5)*.06;if(m.zomb>=15)nvZombify(m)}
       // 몹이 불에 닿으면
       if(!m.D.fireproof){const id=getB(Math.floor(m.pos.x),Math.floor(m.pos.y+.2),Math.floor(m.pos.z));if(id===FIRE||id===SOUL_FIRE){m.fireT=Math.max(m.fireT||0,8);m.hurtT=0;hurtMob(m,id===SOUL_FIRE?2:1,null)}}}}
-  nvStructAdv(dt);if(nvT>0)return;nvT=1;
+  nvStructAdv(dt);nvAmbTick(dt);if(nvT>0)return;nvT=1;
   if(DIM==='nether'&&WORLD&&!p.dead){const bm=nBio(p.pos.x,p.pos.z),k='bc_nbio_'+WORLD.id;let v=0;try{v=+(localStorage.getItem(k)||0)}catch(e){}if(!(v&(1<<bm))){v|=1<<bm;try{localStorage.setItem(k,v)}catch(e){}if(v===31&&typeof advGrant==='function')advGrant('minecraft:nether/explore_nether')}}}
 // 좀비화: 피글린 · 피글린 야수 → 좀비 피글린, 호글린 → 조글린 (자리 · 방향 · 새끼 그대로)
 function nvZombify(m){const t=m.type==='hoglin'?'zoglin':'zpiglin',i=mobs.indexOf(m);if(i<0)return;scene.remove(m.g);mobs.splice(i,1);if(m.barter>0&&m.held)spawnItem({id:m.held,n:1},m.pos.x,m.pos.y+1,m.pos.z);
   const z=spawnMob(t,m.pos.x,m.pos.y,m.pos.z,m.baby>0);if(z){z.yaw=m.yaw;z.keep=m.keep;if(m.baby>0)z.baby=1e9}for(let k=0;k<8;k++)smoke(m.pos.x,m.pos.y+1,m.pos.z);sfx('zhurt')}
+// ── 네더 바이옴 분위기 (Agent 03): 공기 알갱이 · 바이옴 소리
+//    알갱이: 마크 ambient_particle 그대로 (영혼 모래 골짜기 재 0.00625 · 진홍빛 숲 포자 0.025 · 뒤틀린 숲 포자 0.01428 · 현무암 삼각주 흰 재 0.118, 그림은 generic_0 = 가장 작은 점)
+//    마크는 틱마다 둘레 16칸 · 32칸에서 667자리씩 뽑아요 → 여기서는 가까운 8칸 안에서 같은 빽빽함으로 100자리만 뽑아요
+const NV_AMB=[0,.00625,.025,.01428,.118];
+const nvPV=(xd,yd,zd)=>{const a=xd+(Math.random()*2-1)*.4,b=yd+(Math.random()*2-1)*.4,c=zd+(Math.random()*2-1)*.4,f=(Math.random()+Math.random()+1)*.15,l=Math.hypot(a,b,c)||1;return [a/l*f*.4,b/l*f*.4+.1,c/l*f*.4]};   // Particle(…xd,yd,zd) 처음 속도
+function nvAmbParticles(){const p=player,px=Math.floor(p.pos.x),py=Math.floor(p.pos.y+1),pz=Math.floor(p.pos.z);
+  for(let i=0;i<100&&SP.length<1200;i++){const x=px+Math.floor(Math.random()*17)-8,y=py+Math.floor(Math.random()*17)-8,z=pz+Math.floor(Math.random()*17)-8;if(y<1||y>=NV_H-1)continue;
+    const bm=nBio(x,z),pr=NV_AMB[bm];if(!pr||Math.random()>=pr)continue;const id=getB(x,y,z);if(SOLID[id]&&BH[id]===1)continue;
+    const fx=x+Math.random(),fy=y+Math.random(),fz=z+Math.random(),k=Math.max(.36,lightK(fx,fy,fz)),qs=.1*(Math.random()*.5+.5)*2;let o;
+    if(bm===2||bm===3){const v=nvPV(0,bm===3?Math.random()*-1.9*Math.random()*.1:0,0);   // 포자 (SuspendedParticle: 마찰 없음 · 중력 없음)
+      o={x:fx,y:fy-.125,z:fz,xd:v[0],yd:v[1],zd:v[2],grav:0,fric:1,s:qs*(Math.random()*.6+.6),life:Math.floor(16/(Math.random()*.8+.2)),phys:false,rgb:bm===2?[.9,.4,.5]:[.1,.1,.3]}}
+    else{const v=nvPV(0,0,0),w=bm===4,c=Math.random()*.5;   // 재 (AshParticle · WhiteAshParticle: 속도 ×0.1 · 아래로)
+      o={x:fx,y:fy,z:fz,xd:v[0]*.1,yd:-v[1]*.1+(w?Math.random()*-1.9*Math.random()*.1:0),zd:v[2]*.1,grav:w?.0125:.1,fric:.96,s:qs*.75,life:Math.max(1,Math.floor(20/(Math.random()*.8+.2))),phys:!w,rgb:w?[.7294,.6941,.7608]:[c,c,c]}}
+    o.rgb=o.rgb.map(v=>v*k);o.s*=1.25;o.bright=true;o.row=0;o.fr=7;spriteP(o)}}
+// 바이옴 소리 (소리 파일 없이 만든 소리): 늘 깔리는 낮은 소리 (거른 잡음 + 느린 흔들림, 바이옴이 바뀌면 천천히) · 가끔 나는 소리 (마크 additions 처럼 틱마다 0.0111)
+const NV_LOOP=[[150,.7,.11],[480,4,.05],[230,1.5,.1],[700,6,.035],[320,.9,.1]];   // 바이옴마다 [거르는 주파수, Q, 크기]
+let nvSnd=null,nvAmbAcc=0;
+function nvSndStop(){const s=nvSnd;if(!s)return;nvSnd=null;clearInterval(s.iv);try{s.g.gain.setTargetAtTime(0,s.a.currentTime,.3)}catch(e){}setTimeout(()=>{try{s.src.stop();s.lfo.stop()}catch(e){}},2000)}
+function nvAmbSound(){const a=AC;if(muted||!a||a.state!=='running'||!NOISE||player.dead){nvSndStop();return}const bm=nBio(player.pos.x,player.pos.z),t=a.currentTime;
+  if(!nvSnd){const src=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain(),lfo=a.createOscillator(),lg=a.createGain();src.buffer=NOISE;src.loop=true;fl.type='lowpass';g.gain.value=0;lfo.frequency.value=.07;
+    lfo.connect(lg);lg.connect(fl.frequency);src.connect(fl);fl.connect(g);g.connect(a.destination);src.start();lfo.start();
+    nvSnd={a,src,fl,g,lfo,lg,bm:-1,at:0,iv:setInterval(()=>{if(nvSnd&&performance.now()-nvSnd.at>1500)nvSndStop()},500)}}   // 멈춤 화면 · 타이틀로 가면 저절로 꺼져요
+  nvSnd.at=performance.now();
+  if(bm!==nvSnd.bm){nvSnd.bm=bm;const L=NV_LOOP[bm];nvSnd.fl.frequency.setTargetAtTime(L[0],t,1);nvSnd.lg.gain.setTargetAtTime(L[0]*.3,t,1);nvSnd.fl.Q.setTargetAtTime(L[1],t,1);nvSnd.g.gain.setTargetAtTime(L[2],t,1)}
+  if(Math.random()<.0111)nvAddition(bm)}
+function nvAddition(bm){const M=musInit();if(!M)return;const a=M.a,t=a.currentTime,out=a.createGain(),pan=a.createStereoPanner?a.createStereoPanner():null;out.gain.value=.5;if(pan){pan.pan.value=(Math.random()*2-1)*.7;out.connect(pan);pan.connect(M.bus)}else out.connect(M.bus);
+  const osc=(ty,f0,f1,v,at,d,st)=>{const o=a.createOscillator(),g=a.createGain();o.type=ty;o.frequency.setValueAtTime(f0,t+st);o.frequency.exponentialRampToValueAtTime(f1,t+st+d);g.gain.setValueAtTime(0,t+st);g.gain.linearRampToValueAtTime(v,t+st+at);g.gain.exponentialRampToValueAtTime(.001,t+st+d);o.connect(g);g.connect(out);o.start(t+st);o.stop(t+st+d+.05)};
+  const nz=(ty,f,q,v,at,d,st)=>{const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=NOISE;s.loop=true;fl.type=ty;fl.frequency.value=f;fl.Q.value=q;g.gain.setValueAtTime(0,t+st);g.gain.linearRampToValueAtTime(v,t+st+at);g.gain.exponentialRampToValueAtTime(.001,t+st+d);s.connect(fl);fl.connect(g);g.connect(out);s.start(t+st,Math.random());s.stop(t+st+d+.05)};
+  if(bm===0){osc('sine',70,52,.09,.8,3,0);osc('triangle',105,78,.04,.8,2.6,.1)}   // 황무지: 멀리서 낮게 우는 소리
+  else if(bm===1){osc('sine',520,360,.035,.9,2.6,0);osc('sine',531,366,.03,.9,2.6,.05)}   // 영혼 모래 골짜기: 흐느끼는 바람
+  else if(bm===2){nz('lowpass',110,1,.5,.3,1.8,0);osc('sine',48,40,.08,.3,1.6,0)}   // 진홍빛 숲: 낮게 그르렁
+  else if(bm===3){osc('triangle',1250,1050,.03,.02,1.8,0);osc('sine',1870,1600,.02,.02,1.4,.15)}   // 뒤틀린 숲: 으스스한 울림
+  else for(let i=0;i<8;i++)nz('highpass',1800,.7,.12,.003,.06,i*.13+Math.random()*.1)}   // 현무암 삼각주: 타닥타닥
+function nvAmbTick(dt){if(DIM!=='nether'){if(nvSnd)nvSndStop();nvAmbAcc=0;return}nvAmbAcc+=dt;let g=0;while(nvAmbAcc>=TICK&&g++<3){nvAmbAcc-=TICK;nvAmbParticles();nvAmbSound()}if(nvAmbAcc>=TICK)nvAmbAcc=0}
 // ── 조합법 (마크 26.3): 형판 복제 · 뒤틀린 균 낚싯대 · 영혼 모닥불 · 균사 · 자석석 (철괴)
 rc(['DTD','DND','DDD'],{D:[DIAMOND],T:[NETHERITE_UPGRADE],N:[NETHERRACK]},NETHERITE_UPGRADE,2);rc(['DTD','DND','DDD'],{D:[DIAMOND],T:[SNOUT_TRIM],N:[BLACKSTONE]},SNOUT_TRIM,2);rc(['DTD','DND','DDD'],{D:[DIAMOND],T:[RIB_TRIM],N:[NETHERRACK]},RIB_TRIM,2);
 rc(['F ',' W'],{F:[FISHING_ROD],W:[WARPED_FUNGUS]},WARPED_STICK);rc([' S ','SCS','LLL'],{S:[STICK],C:[SOUL_SAND,SOUL_SOIL],L:[LOG,BIRCH_LOG,SPRUCE_LOG,DARK_OAK_LOG,CHERRY_LOG,CRIMSON_STEM,WARPED_STEM]},SOUL_CAMPFIRE);
