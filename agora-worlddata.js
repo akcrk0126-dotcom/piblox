@@ -46,6 +46,7 @@ export const WORLD = {
     { id: 'swamp3', name: '늪 웅덩이', c: [412, 118], rx: 22, rz: 18, depth: 1.5 },
     { id: 'swamp4', name: '늪 웅덩이', c: [298, 232], rx: 18, rz: 16, depth: 1.4 },
     { id: 'swamp5', name: '늪 웅덩이', c: [486, 186], rx: 20, rz: 18, depth: 1.5 },
+    { id: 'stiltpool', name: '말뚝 마을 물웅덩이', c: [424, 330], rx: 22, rz: 16, depth: 1.5 },
     { id: 'springpool', name: '속삭이는 샘', c: [-482, 160], rx: 14, rz: 12, depth: 2.2 },
     { id: 'weeppool', name: '울음바위 웅덩이', c: [326, -196], rx: 18, rz: 10, depth: 1.8 },
     { id: 'icelake', name: '얼음 호수', c: [20, -612], rx: 26, rz: 18, depth: 2.4, frozen: true },
@@ -124,6 +125,11 @@ export const WORLD = {
     { id: 'swampcanyon', name: '늪지 샛길', w: 5, pts: [[330, 228], [430, 140], [446, 20], [430, -110], [400, -228]] },
     { id: 'windmill', name: '바람개비 오솔길', w: 4, pts: [[0, 470], [-70, 480], [-140, 488]] },
     { id: 'oak', name: '떡갈나무 오솔길', w: 4, pts: [[8, 380], [80, 400], [138, 418]] },
+    { id: 'farm', name: '농원길', w: 4, pts: [[-28, 556], [-70, 552], [-112, 548], [-128, 516], [-140, 488]] },
+    { id: 'leaf', name: '잎새 오솔길', w: 4, pts: [[-330, 268], [-345, 300], [-332, 350], [-302, 392]] },
+    { id: 'stilt', name: '말뚝 판자길', w: 4, pts: [[330, 228], [372, 270], [404, 304]] },
+    { id: 'dust', name: '광차길', w: 5, pts: [[396, -228], [424, -212], [452, -186], [466, -176]] },
+    { id: 'abbey', name: '수도원 길', w: 4, pts: [[2, -546], [28, -552], [52, -556]] },
   ],
   // 다리 (길이 강을 건너는 곳)
   bridges: [
@@ -154,6 +160,20 @@ export const WORLD = {
     { id: 'wp_blight', name: '침식의 문', c: [12, -252] },
     { id: 'wp_frost', name: '얼음 고개', c: [14, -496] },
     { id: 'wp_basin', name: '서리 분지', c: [-14, -584] },
+  ],
+
+  // ── 정착지 (사람이 사는 곳) ────────────────────────────────────
+  // agora-towns.js 가 집 · 소품 · 주민을 세워요 (주민 · 이야기는 lore/*.js). flat = 지형을 반경 r 안에서 고르게 다져요.
+  // style: farm 농가 · treehouse 나무 위 마을 · fishing 어촌 · stilt 말뚝 마을 · mining 광산촌 · dig 발굴 야영지 · fort 요새 · monastery 수도원
+  settlements: [
+    { id: 't_farm',  name: '볕드는 농원',      en: 'Sunny Farmstead',   c: [-112, 548], r: 30, region: 'greenhill', style: 'farm',      flat: true },
+    { id: 't_leaf',  name: '잎새 마을',        en: 'Leafhollow',        c: [-345, 300], r: 28, region: 'woods',     style: 'treehouse', flat: true },
+    { id: 't_mist',  name: '물안개 나루',      en: 'Mistferry',         c: [92, 200],   r: 26, region: 'lake',      style: 'fishing',   flat: true, ground: 4.6, dock: [92, 166] },
+    { id: 't_stilt', name: '갈대 말뚝 마을',   en: 'Reedstilt',         c: [410, 315],  r: 28, region: 'swamp',     style: 'stilt',     flat: false },
+    { id: 't_dust',  name: '붉은 먼지 광산촌', en: 'Reddust Camp',      c: [424, -212], r: 24, region: 'canyon',    style: 'mining',    flat: true },
+    { id: 't_star',  name: '별지기 야영지',    en: 'Starkeepers\' Camp', c: [-318, -216], r: 24, region: 'plateau',  style: 'dig',       flat: true },
+    { id: 't_fort',  name: '가시 파수대',      en: 'Thornwatch',        c: [8, -206],   r: 26, region: 'blight',    style: 'fort',      flat: true },
+    { id: 't_frost', name: '서리 수도원',      en: 'Frostvigil Abbey',  c: [52, -556],  r: 24, region: 'frost',     style: 'monastery', flat: true },
   ],
 
   // ── 랜드마크 (이름 붙은 장소) ──────────────────────────────────
@@ -217,7 +237,7 @@ export const WORLD = {
     { id: 'c_mole',     name: '두더지 둔덕',       region: 'swamp',     c: [472, 192],   r: 26, lv: [12, 14], mobs: [['mole', 6]] },
     { id: 'c_mossgolem',name: '이끼 골렘 습지',    region: 'swamp',     c: [420, 80],    r: 28, lv: [13, 15], mobs: [['golem', 3], ['snail', 3]] },
     { id: 'c_owl',      name: '부엉이 고목지',     region: 'swamp',     c: [300, 140],   r: 24, lv: [14, 16], mobs: [['owl', 5]] },
-    { id: 'c_redboar',  name: '붉은 멧돼지 협곡',  region: 'canyon',    c: [382, -200],  r: 30, lv: [16, 18], mobs: [['boar', 6]] },
+    { id: 'c_redboar',  name: '붉은 멧돼지 협곡',  region: 'canyon',    c: [372, -192],  r: 30, lv: [16, 18], mobs: [['boar', 6]] },
     { id: 'c_hedgehog', name: '고슴도치 바위길',   region: 'canyon',    c: [470, -262],  r: 26, lv: [17, 19], mobs: [['hedgehog', 6]] },
     { id: 'c_bandit',   name: '너구리 도적단',     region: 'canyon',    c: [420, -362],  r: 26, lv: [18, 20], mobs: [['raccoon', 6]] },
     { id: 'c_minegate', name: '광산 입구',         region: 'canyon',    c: [458, -150],  r: 22, lv: [19, 21], mobs: [['mole', 4], ['golem', 2]] },

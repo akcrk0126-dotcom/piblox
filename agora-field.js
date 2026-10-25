@@ -1,6 +1,6 @@
 // 룬 아고라 — 모험의 대지 (필드) 코어
 // 지역(area) 등록 · 입장/퇴장 · 공간 격자(충돌 · 상호작용) · 지역 감지 · 공용 UI(라벨 · 알림) · 모듈 로더
-// 기능 모듈: agora-world / agora-landmarks / agora-rpg / agora-life / agora-raid / agora-minigames
+// 기능 모듈: agora-world / agora-landmarks / agora-towns / agora-props / agora-life / agora-rpg / agora-saga / agora-raid / agora-minigames
 // 계약서: docs/agora-modules.md
 import { WORLD, byId } from './agora-worlddata.js';
 
@@ -239,13 +239,14 @@ G.hooks.push((dt, rdt) => {
 // ── 기능 모듈 불러오기 ──
 // ?mods=world,rpg 로 일부만, ?nomods 로 코어만 띄울 수 있어요 (모듈별 테스트용)
 const qs = new URLSearchParams(location.search);
-const LIST = ['world', 'landmarks', 'life', 'rpg', 'raid', 'minigames'];
+const LIST = ['world', 'landmarks', 'towns', 'props', 'life', 'rpg', 'saga', 'raid', 'minigames'];
 const want = qs.has('nomods') ? [] : qs.get('mods') ? qs.get('mods').split(',') : LIST;
 F.modules = {};
 for (const name of LIST){
   if (!want.includes(name)) continue;
   try {
     const m = await import(`./agora-${name}.js`);
+    if (typeof m.init !== 'function') continue;
     const t0 = performance.now();
     F.modules[name] = (await m.init(G, X, F)) || true;
     console.log(`[field] ${name} ready ${Math.round(performance.now() - t0)}ms`);

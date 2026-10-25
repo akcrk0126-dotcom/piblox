@@ -68,6 +68,7 @@ function regW(x, z){
 }
 // 피해야 할 곳 (지형 장식 · 식생)
 const LMS = W.landmarks, CAMPS = W.camps, WPS = W.waypoints;
+const TOWNS = W.settlements || [];
 function nearList(list, x, z, pad, rk = 'r'){ for (const o of list){ const r = (o[rk] || 0) + pad, dx = x - o.c[0], dz = z - o.c[1]; if (dx * dx + dz * dz < r * r) return o; } return null; }
 
 const ROADS = W.roads.map(r => Object.assign(poly(r.pts), { w: r.w, id: r.id, name: r.name }));
@@ -121,7 +122,7 @@ async function buildHeights(){
       const cw = (bA === 5 ? t : 0) + (bB === 5 ? 1 - t : 0);
       if (cw > 0.02){
         let sup = sst(14, 34, RDD[k]);
-        if (sup > 0){ const c = nearList(CAMPS, x, z, 12) || nearList(LMS, x, z, 10) || nearList(WPS, x, z, 22, 'none'); if (c) sup = 0; }
+        if (sup > 0){ const c = nearList(CAMPS, x, z, 12) || nearList(LMS, x, z, 10) || nearList(TOWNS, x, z, 14) || nearList(WPS, x, z, 22, 'none'); if (c) sup = 0; }
         if (sup > 0){
           const rf = ridged(x * 0.0105 + 3.1, z * 0.0105 - 7.7, 3), bl = fbm(x * 0.006 - 11, z * 0.006 + 4, 2);
           h += (sst(0.66, 0.86, rf) * 21 + sst(0.2, 0.34, bl) * 15) * cw * sup;
@@ -168,7 +169,7 @@ async function buildHeights(){
       const a = Math.atan2(z - p.c[1], x - p.c[0]), d = Math.hypot(x - p.c[0], z - p.c[1]), rr = p.rAt(a);
       if (d > rr + 22) return;
       const base = HG[k]; let top = p.h + fbm(x * 0.011, z * 0.011, 3) * 4.6 + pn(x * 0.06, z * 0.06) * 0.5;
-      if (d < rr - 14){ let sup = sst(6, 18, RDD[k]); if (sup > 0 && (nearList(CAMPS, x, z, 8) || nearList(LMS, x, z, 6) || nearList(WPS, x, z, 14, 'none'))) sup = 0; top += sst(0.64, 0.82, ridged(x * 0.019 + 2, z * 0.019 - 5, 3)) * 8 * sup * sst(rr - 14, rr - 40, d); }
+      if (d < rr - 14){ let sup = sst(6, 18, RDD[k]); if (sup > 0 && (nearList(CAMPS, x, z, 8) || nearList(LMS, x, z, 6) || nearList(TOWNS, x, z, 10) || nearList(WPS, x, z, 14, 'none'))) sup = 0; top += sst(0.64, 0.82, ridged(x * 0.019 + 2, z * 0.019 - 5, 3)) * 8 * sup * sst(rr - 14, rr - 40, d); }
       const kk = sst(rr + p.edge * 0.5, rr - p.edge * 0.5, d), ledge = sst(rr + p.edge * 0.5 + 3, rr + p.edge * 0.5, d) * 0.06;
       const tal = sst(rr + 20, rr + 1, d) * 0.13 * Math.max(0, top - base);
       const v = base + tal + (top - base - tal) * Math.min(1, kk + ledge * kk); if (v > HG[k]) HG[k] = v; }); }
@@ -250,6 +251,10 @@ async function buildHeights(){
   for (const w of WPS){ let s = 0; for (let a = 0; a < TAU; a += 0.8) s += gridH(HG, w.c[0] + Math.cos(a) * 3, w.c[1] + Math.sin(a) * 3); w.y = pad(w.c[0], w.c[1], 4.5, Math.max(WL + 0.6, s / 8)); }
   for (const l of W.lifts){ l.y0 = pad(l.from[0], l.from[1], 4); l.y1 = gridH(HG, l.to[0], l.to[1]); }
   { const g = byId('landmarks', 'runegate'); if (g) pad(g.c[0], g.c[1], 10, VY + 0.4); }
+  // 정착지: 가운데 반쯤은 고르게, 바깥으로 갈수록 원래 땅으로 (집이 비탈에 뜨지 않게)
+  for (const t of TOWNS){ if (!t.flat){ t.y = gridH(HG, t.c[0], t.c[1]); continue; } let s = 0, n = 0; for (let r = 0; r <= t.r * 0.6; r += t.r * 0.2) for (let a = 0; a < TAU; a += 0.5){ s += gridH(HG, t.c[0] + Math.cos(a) * r, t.c[1] + Math.sin(a) * r); n++; }
+    const yy = t.ground ?? Math.max(WL + 0.9, s / n), x0 = t.c[0], z0 = t.c[1], R = t.r; t.y = yy;
+    box(x0 - R * 1.3, z0 - R * 1.3, x0 + R * 1.3, z0 + R * 1.3, (k, x, z) => { const d = Math.hypot(x - x0, z - z0); if (d < R * 1.3 && !(HG[k] < WL + 0.4 && d > R * 0.62)) HG[k] = lerp(HG[k], yy, (1 - sst(R * 0.62, R * 1.3, d)) * 0.97); }); }
 }
 const FORDS = [];
 const TB = performance.now();
@@ -696,14 +701,14 @@ function addVeg(k, x, z, s, rot, col, sy = 1, y){
 // 바이옴별 식생 표: t = 나무 밀도(7m 칸당), s = 작은 것 밀도(5m 칸당)
 const FLORA = [
   { t: 0.03, tm: [['oak', 3], ['cypress', 2], ['tint', 1.2]], s: 0.08, sm: [['flowerbush', 3], ['bush', 2], ['stump', 0.6]] },
-  { t: 0.11, tm: [['oak', 5], ['birch', 2], ['cypress', 1.3], ['tint', 1.2]], s: 0.38, sm: [['bush', 3], ['flowerbush', 2.6], ['berry', 1], ['boulder', 1.3], ['sunflower', 1.1], ['rockflat', 1], ['stump', 0.4]] },
+  { t: 0.14, tm: [['oak', 5], ['birch', 2], ['cypress', 1.3], ['tint', 1.2]], s: 0.48, sm: [['bush', 3], ['flowerbush', 2.6], ['berry', 1], ['boulder', 1.3], ['sunflower', 1.1], ['rockflat', 1], ['stump', 0.4]] },
   { t: 0.74, tm: [['pine', 5], ['oak', 3], ['birch', 1.6], ['tint', 0.8], ['shroomT', 0.12]], s: 0.42, sm: [['fern', 4], ['bush', 2.4], ['mushroom', 1.6], ['boulder', 1.1], ['log', 0.7], ['stump', 0.8], ['berry', 0.8]] },
-  { t: 0.08, tm: [['willow', 3], ['birch', 2], ['oak', 1.4], ['tint', 0.5]], s: 0.24, sm: [['bush', 2], ['flowerbush', 1.6], ['boulder', 1], ['rockflat', 1.2]] },
+  { t: 0.11, tm: [['willow', 3], ['birch', 2], ['oak', 1.4], ['tint', 0.5]], s: 0.32, sm: [['bush', 2], ['flowerbush', 1.6], ['boulder', 1], ['rockflat', 1.2]] },
   { t: 0.26, tm: [['willow', 3], ['bare', 3], ['shroomT', 0.5]], s: 0.42, sm: [['mushroom', 2], ['log', 1.2], ['bramble', 0.9], ['stump', 1.1], ['fern', 1.2], ['bush', 0.8]] },
-  { t: 0.045, tm: [['cactus', 3], ['redrock', 3], ['bare', 0.7]], s: 0.17, sm: [['redrock', 1.4], ['boulder', 2], ['rockflat', 1.6], ['bush', 0.5]] },
-  { t: 0.085, tm: [['pine', 2.4], ['cypress', 1], ['bare', 0.8], ['oak', 0.6]], s: 0.3, sm: [['boulder', 3], ['rockflat', 2.2], ['bush', 1.6], ['flowerbush', 0.6], ['stump', 0.3]] },
+  { t: 0.06, tm: [['cactus', 3], ['redrock', 3], ['bare', 0.7]], s: 0.23, sm: [['redrock', 1.4], ['boulder', 2], ['rockflat', 1.6], ['bush', 0.5]] },
+  { t: 0.105, tm: [['pine', 2.4], ['cypress', 1], ['bare', 0.8], ['oak', 0.6]], s: 0.38, sm: [['boulder', 3], ['rockflat', 2.2], ['bush', 1.6], ['flowerbush', 0.6], ['stump', 0.3]] },
   { t: 0.13, tm: [['deadtree', 4], ['bare', 1.4]], s: 0.4, sm: [['thorn', 3], ['bramble', 3], ['crystalP', 0.5], ['boulder', 0.6]] },
-  { t: 0.12, tm: [['snowpine', 6], ['bare', 0.3]], s: 0.17, sm: [['icerock', 3], ['crystal', 0.6], ['rockflat', 1]] },
+  { t: 0.14, tm: [['snowpine', 6], ['bare', 0.3]], s: 0.22, sm: [['icerock', 3], ['crystal', 0.6], ['rockflat', 1]] },
 ];
 const pickW = (mix, r) => { let tot = 0; for (const m of mix) tot += m[1]; r *= tot; for (const m of mix){ r -= m[1]; if (r <= 0) return m[0]; } return mix[mix.length - 1][0]; };
 const TINTS = { 1: [0xffb8d0, 0xfff0f4, 0xffc8e0], 2: [0xe8803a, 0xd04a2a, 0xe8c040, 0xf0a040], 3: [0xffd8e8, 0xfff4b0], 0: [0xffb8d0, 0xfff0f4] };
@@ -713,6 +718,7 @@ const UPDRAFTS = [{ x: -168, z: 452, r: 9, top: 52, name: '바람개비 언덕' 
 for (const u of UPDRAFTS){ u.y = terrainH(u.x, u.z); u.top = Math.max(u.top, u.y + 30); }
 F.updrafts = UPDRAFTS;
 function blocked(x, z, pad){
+  for (const t of TOWNS) if ((x - t.c[0]) ** 2 + (z - t.c[1]) ** 2 < (t.r * 0.86 + pad) ** 2) return true;
   for (const l of LMS){ const r = l.r * (l.type === 'village' ? 0.72 : l.type === 'mesa_mark' ? 0.3 : 0.62) + pad; if ((x - l.c[0]) ** 2 + (z - l.c[1]) ** 2 < r * r) return true; }
   for (const w of WPS) if ((x - w.c[0]) ** 2 + (z - w.c[1]) ** 2 < (9 + pad) ** 2) return true;
   for (const n of W.npcs) if ((x - n.c[0]) ** 2 + (z - n.c[1]) ** 2 < (5 + pad) ** 2) return true;

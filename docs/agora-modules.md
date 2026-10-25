@@ -1,6 +1,6 @@
 # 룬 아고라 — 모험의 대지 모듈 계약서
 
-`agora.html`(엔진) → `agora-story.js`(전투 · 스토리 · 직업 · 의상) → `agora-field.js`(필드 코어) → 기능 모듈 6개.
+`agora.html`(엔진) → `agora-story.js`(전투 · 스토리 · 직업 · 의상) → `agora-field.js`(필드 코어) → 기능 모듈 9개.
 기능 모듈은 각자 **자기 파일 하나만** 고쳐요. 다른 파일에 바꿀 게 있으면 최종 보고의 `NEEDS:` 에 적어요.
 
 | 파일 | 맡는 일 |
@@ -13,8 +13,12 @@
 | `agora-life.js` | 사냥터 몬스터 스폰/리스폰 · 새 몬스터(wolf · frostgolem · yeti · wraith) · 필드 보스 · NPC 피규어 · 봇 모험가(가짜 플레이어) · 채팅창 · 감정표현(T) |
 | `agora-raid.js` | 레이드 게시판 · 레이드 3종(그롬 · 그라녹 · 크라이오스) 인스턴스 · 보스 AI · 파티원 봇 · 보상 |
 | `agora-minigames.js` | 낚시(필드 낚시터 + 광장) · 광장 미니게임 메뉴(🎲 미니 게임) · 룬 리듬 · 과녁 맞히기 |
+| `lore/*.js` | 지역별 이야기 데이터 (장 · 정착지 주민 · 읽을거리 · 셋피스 · 수호석 · 이야기 보스 · 퀘스트). `lore/index.js` 의 `LORE` 로 모아요. 형식: docs/agora-story-bible.md §6 · docs/agora-lore-guide.md |
+| `agora-towns.js` | 정착지 8곳 건물 · 주민을 `WORLD.npcs` 에 넣기 · 읽을거리 물체 · 룬 수호석 물체 · 정착지 지도 표시 · 정착지 쪽 세상 변화 |
+| `agora-props.js` | lore 셋피스(이야기 장면 소품) · 길가 소품 · 빈 땅을 채우는 작은 장면(모닥불 자리 · 폐허 · 돌무덤 …) · 셋피스 쪽 세상 변화 |
+| `agora-saga.js` | 장(chapter) 진행 · 장 시작/끝 연출 · 연대기 창(N) · 읽기 창 · 수호석 의식 · 줍기 · 이야기 보스 · 주민 장별 대사(`F.greet`) · 세상 변화 적용 |
 
-각 모듈은 `export async function init(G, X, F)` 하나를 내보내요. 불러오는 순서: world → landmarks → life → rpg → raid → minigames.
+각 모듈은 `export async function init(G, X, F)` 하나를 내보내요. 불러오는 순서: world → landmarks → towns → props → life → rpg → saga → raid → minigames.
 `agora-field.js` 가 하나씩 `try/catch` 로 불러서, 한 모듈이 깨져도 나머지는 떠요.
 테스트할 때 `agora.html?mods=world,life` 처럼 일부만, `?nomods` 로 코어만 띄울 수 있어요.
 
@@ -97,6 +101,9 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 - **life**: `F.npcs[id] = { fig, pos, label }` (label 은 F.label 핸들 — rpg 가 `label.set(name, title, '!')` 로 퀘스트 표시), `F.bots[]`, `F.chat(...)` 교체, `F.say(text)` (말풍선), `F.emote(name)`, `F.spawnCamp(id)`, `F.worldBoss`
 - **raid**: `F.openRaidBoard()`, `F.enterRaid(id)`, `S.raid.clears`
 - **minigames**: `F.startFishing(spotId)`, `F.openMinigames()`
+- **towns**: `F.towns = { obj(id), pos(id) → [x, y, z], show(id, on), setChange(key, on, instant), settlementAt(x, z) }` — id 는 정착지 · 읽을거리(r_…) · 수호석(ks_…). 수호석 obj 에는 `setLit(0~1)` 이 있어요. init 맨 처음에 lore 주민을 `WORLD.npcs` 에 `{ role: 'resident', resident: true, region, idle, lines }` 로 넣어요 (그래서 life 가 피규어를, rpg 가 대화를 맡아요).
+- **props**: `F.props = { obj(id), pos(id), show(id, on), setChange(key, on, instant) }` — id 는 셋피스(sp_…). `pickup: true` 셋피스는 처음엔 숨겨 두고 saga 가 켜요.
+- **saga**: `F.greet(id) → 대사 | null` (주민 · 기존 NPC 의 장별 인사), `F.saga = { chapterState(n) → 'before'|'during'|'after', openCodex(), target(o) → {x, z, label} | null, playIntro(n) }`
 
 ## BUS 이벤트
 
@@ -126,10 +133,15 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 | `worldBoss` | { id, state:'spawn'\|'dead' } | life |
 | `glider` | — (글라이더 얻음) | world |
 | `npcsReady` | F.npcs | life |
+| `read` | { id } (읽을거리를 처음 읽음) | saga |
+| `cleanse` | { id } (수호석에 룬을 새김) | saga |
+| `collect` | { id } (이야기 물건 주움) | saga |
+| `storyBoss` | { id, state:'spawn'\|'dead' } | saga |
+| `chapter` | { n, state:'start'\|'done' } | saga |
 
 ## 저장 (X.S 아래 이름 공간)
 
-`S.field`(코어 · world: disc, wps, lastWp, pos, glider) · `S.lm`(landmarks) · `S.inv`, `S.q`, `S.titles`, `S.ach`(rpg) · `S.life`(life) · `S.raid`(raid) · `S.mini`, `S.fish`(minigames).
+`S.field`(코어 · world: disc, wps, lastWp, pos, glider) · `S.lm`(landmarks) · `S.saga`(saga: ch, read, cleansed, picked, sboss, met) · `S.inv`, `S.q`, `S.titles`, `S.ach`(rpg) · `S.life`(life) · `S.raid`(raid) · `S.mini`, `S.fish`(minigames).
 골드는 `S.gold`, 레벨/경험치는 `S.lv`/`S.exp` (X.gainExp 로만 올려요). 바꾸면 `X.save()`.
 
 ## 키 배정 (겹치지 않게)
@@ -137,6 +149,7 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 이미 씀: WASD · Shift · Space · E(상호작용) · J/F/클릭(공격) · K/우클릭(구르기) · R/Q(룬) · 1~4(스킬) · C(스탯) · V(직업) · B(의상실) · M(지도) · Esc
 - world: **M**(필드 월드맵) · **Space 공중에서 길게**(글라이더)
 - rpg: **I**(인벤토리 · 장비) · **L**(퀘스트 로그) · **H**(체력 물약) · **G**(마나 물약)
+- saga: **N**(연대기)
 - life: **T**(감정표현) · **Enter**(채팅) · **/**(채팅)
 - minigames: 낚시 중 Space/클릭 · 리듬 D F J K
 - raid: 없음 (게시판 / NPC)
@@ -145,7 +158,7 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 ## 맡는 NPC · 상호작용 (겹치지 않게)
 
 - NPC 피규어 · 이름표 · E 상호작용(→ `F.talk(id)`)은 **life** 가 만들어요. `object: true` (의뢰 게시판)는 피규어 없이 **landmarks** 가 게시판 모양을, **rpg** 가 상호작용을 만들어요.
-- 대화 내용: quest_main · quest · smith · shop · inn · board → **rpg**, raid → **raid**, fish → **minigames**, glider → **world**, wardrobe → 코어(의상실 열기).
+- 대화 내용: quest_main · quest · resident · smith · shop · inn · board → **rpg** (인사말은 `F.greet(id)` 가 있으면 그걸 먼저), raid → **raid**, fish → **minigames**, glider → **world**, wardrobe → 코어(의상실 열기).
 - 레이드 입구(가라앉은 신전 · 버려진 광산 · 얼어붙은 제단): 모양은 **landmarks**, 입장 상호작용은 **raid**.
 - 룬 비석: 모양 · 상호작용 · 빠른 이동 모두 **world**. 룬의 관문(광장 귀환): 모양 **landmarks**, 상호작용도 **landmarks** (→ `F.leave()`).
 - 사냥터 표지판(이름 · 레벨): **landmarks**. 사냥터 몬스터: **life**.

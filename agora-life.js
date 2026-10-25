@@ -427,6 +427,10 @@ function mkMug(){ const g = new THREE.Group(); mesh(TM(new THREE.CylinderGeometr
 function mkBook(){ const g = new THREE.Group(); mesh(TM(new THREE.BoxGeometry(0.26, 0.04, 0.2), 0.02, 0, 0.05), sm(0x7a2a3a), g); mesh(TM(new THREE.BoxGeometry(0.24, 0.045, 0.19), 0.02, 0.005, 0.05), sm(0xf4ecd4), g); return g; }
 function mkPinwheel(){ const g = new THREE.Group(); mesh(TM(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 5), 0, 0.2, 0), M_WOOD, g);
   const w = new THREE.Group(); w.position.set(0, 0.55, 0.03); g.add(w); ['#ff6a8a', '#ffd36a', '#6ad8ff', '#8aff9a'].forEach((c, i) => { const m = mesh(TM(new THREE.ConeGeometry(0.1, 0.2, 3), 0, 0.09, 0, 0, 0, 0, 1, 1, 0.15), sm(new THREE.Color(c).getHex(), { emissive: new THREE.Color(c).getHex(), emissiveIntensity: 0.25 }), w); m.rotation.z = i * Math.PI / 2; }); g.userData.w = w; return g; }
+function mkHoe(){ const g = new THREE.Group(); mesh(TM(new THREE.CylinderGeometry(0.022, 0.028, 1.5, 6), 0, 0.3, 0), M_WOOD, g); mesh(TM(new THREE.BoxGeometry(0.2, 0.04, 0.16), 0, 1.04, 0.07, 0.3, 0, 0), M_IRON, g); return g; }
+function mkBroom(){ const g = new THREE.Group(); mesh(TM(new THREE.CylinderGeometry(0.02, 0.025, 1.3, 6), 0, 0.25, 0), M_WOOD, g); mesh(TM(new THREE.ConeGeometry(0.16, 0.42, 8), 0, 1.02, 0, Math.PI, 0, 0, 1, 1, 0.45), sm(0xc8a050, { roughness: 0.95 }), g); return g; }
+function mkSpear(){ const g = new THREE.Group(); mesh(TM(new THREE.CylinderGeometry(0.022, 0.026, 2.3, 6), 0, 0.55, 0), M_WOOD, g); mesh(TM(new THREE.ConeGeometry(0.05, 0.28, 6), 0, 1.84, 0), M_IRON, g); return g; }
+function mkLantern(){ const g = new THREE.Group(); mesh(TM(new THREE.BoxGeometry(0.14, 0.18, 0.14), 0, -0.12, 0), sm(0xffd27a, { emissive: 0xffb040, emissiveIntensity: 0.9 }), g); mesh(TM(new THREE.ConeGeometry(0.11, 0.08, 4), 0, -0.01, 0, 0, Math.PI / 4, 0), M_IRON, g); return g; }
 function mkBeard(){ const g = new THREE.Group(); mesh(TM(new THREE.ConeGeometry(0.12, 0.3, 8), 0, -0.07, 0.15, Math.PI + 0.25, 0, 0, 1, 1, 0.6), sm(0xf4f0e8, { roughness: 0.9 }), g); return g; }
 function anvilAt(x, z, ry){ const g = new THREE.Group(); g.position.set(x, F.H(x, z), z); g.rotation.y = ry; mesh(once('anvil', () => merge([TM(new THREE.BoxGeometry(0.5, 0.5, 0.5), 0, 0.25, 0), TM(new THREE.BoxGeometry(0.3, 0.2, 0.62), 0, 0.6, 0), TM(new THREE.BoxGeometry(0.42, 0.14, 0.78), 0, 0.77, 0), TM(new THREE.ConeGeometry(0.09, 0.32, 6), 0, 0.77, 0.52, Math.PI / 2, 0, 0)])), M_IRON, g);
   const hot = mesh(TM(new THREE.BoxGeometry(0.1, 0.04, 0.3), 0, 0.86, 0), new THREE.MeshBasicMaterial({ color: 0xff7a2a, toneMapped: false }), g, false); FW.add(g); return { g, hot }; }
@@ -460,7 +464,7 @@ function buildNpcs(){
       const role = n.role, pr = o.props;
       if (n.id === 'smith'){ av.setArmed(false); pr.hammer = handProp(f, mkHammer()); const ax = x + Math.sin(o.face0) * 0.95, az = z + Math.cos(o.face0) * 0.95; pr.anvil = anvilAt(ax, az, o.face0 + Math.PI / 2); }
       else if (n.id === 'herbalist'){ pr.ladle = handProp(f, mkLadle()); pr.pot = cauldronAt(x + Math.sin(o.face0) * 0.9, z + Math.cos(o.face0) * 0.9); }
-      else if (n.id === 'fisher' || role === 'fish'){ pr.rod = handProp(f, mkRod()); pr.rod.rotation.x = Math.PI / 2 + 0.35;
+      else if (n.id === 'fisher' || role === 'fish' || n.idle === 'fish'){ pr.rod = handProp(f, mkRod()); pr.rod.rotation.x = Math.PI / 2 + 0.35;
         const bob = new THREE.Mesh(once('bobG', () => merge([TM(new THREE.SphereGeometry(0.07, 8, 6), 0, 0.04, 0), TM(new THREE.SphereGeometry(0.072, 8, 4, 0, TAU, 0, Math.PI / 2), 0, 0.045, 0)])), sm(0xff4a3a, { emissive: 0x401010 }));
         FW.add(bob); pr.bob = bob; const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)); pr.line = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xf0f0f0, transparent: true, opacity: 0.6 })); pr.line.frustumCulled = false; FW.add(pr.line);
         let spot = null; for (let r = 4; r <= 16 && !spot; r += 1.5) for (const da of [0, 0.3, -0.3, 0.6, -0.6]){ const a = o.face0 + da, bx = x + Math.sin(a) * r, bz = z + Math.cos(a) * r; if (F.isWater(bx, bz)){ spot = [bx, bz]; break; } }
@@ -471,6 +475,14 @@ function buildNpcs(){
       else if (n.id === 'hermit'){ pr.stick = handProp(f, mkStick()); pr.stick.rotation.x = 0.25; }
       else if (n.id === 'innkeeper'){ pr.mug = handProp(f, mkMug()); pr.mug.rotation.x = 0; }
       else if (n.id === 'chief'){ const b = mkBeard(); f.head.add(b); }
+      else if (n.resident){ const id = n.idle;
+        if (id === 'farm'){ av.setArmed(false); pr.tool = handProp(f, mkHoe()); }
+        else if (id === 'sweep'){ av.setArmed(false); pr.tool = handProp(f, mkBroom()); }
+        else if (id === 'hammer'){ av.setArmed(false); pr.hammer = handProp(f, mkHammer()); }
+        else if (id === 'read'){ av.setArmed(false); pr.book = handProp(f, mkBook(), 'L'); pr.book.rotation.set(0.2, 0, 0); pr.book.position.set(0.02, -0.38, 0.12); }
+        else if (id === 'cook'){ av.setArmed(false); pr.ladle = handProp(f, mkLadle()); pr.pot = cauldronAt(x + Math.sin(o.face0) * 0.9, z + Math.cos(o.face0) * 0.9); }
+        else if (id === 'guard' && !n.job){ pr.tool = handProp(f, mkSpear()); pr.tool.rotation.x = Math.PI / 2 - 0.05; }
+        else if (id === 'pray' || id === 'sit' || id === 'play' || id === 'stand') { if (!n.job) av.setArmed(false); if (id === 'pray' && R() < 0.5) pr.lamp = handProp(f, mkLantern(), 'L'); } }
       FW.add(f.root);
       o.label = F.label({ obj: f.root, text: n.name, sub: n.title, cls: 'npc', max: 34, y: 2.45 });
       o.it = F.addInteract({ x, z, r: 2.8, title: `${n.name} · 대화`, action: () => F.talk(n.id) });
@@ -507,8 +519,27 @@ function npcPose(o, dt){
       return PZ({ laz: 0.75, raz: -0.75, le: -0.5, re: -0.5, lax: -0.35, rax: -0.35, llx: -0.15, rlx: 0.1, lk: 0.35, rk: 0.25, hd: 0.1, hy: 0.86 + br }); }
     case 'hermit': return PZ({ rax: -0.55, re: -0.4, raz: -0.15, lax: 0.2, le: -0.4, sp: 0.38, hd: -0.1 + s(t * 0.5) * 0.06, hdy: look * 0.5, hy: 0.82 + br, lk: 0.15, rk: 0.15 });
   }
+  if (n.idle) return idlePose2(o, n.idle, t, br, look);
   return PZ({ hy: 0.86 + br, hdy: look, laz: 0.1, raz: -0.1 });
 }
+// 이야기 주민의 하는 일 (lore 의 idle) — 밭일 · 비질 · 망치질 · 책 · 요리 · 보초 · 기도 · 앉기 · 놀기 · 낚시
+function idlePose2(o, id, t, br, look){
+  const s = Math.sin, ph = (o.ph = o.ph ?? R() * 6), tt = t + ph;
+  switch (id){
+    case 'farm': { const cyc = (tt % 1.6) / 1.6, up = cyc < 0.6 ? ease(cyc / 0.6) : 1 - ease((cyc - 0.6) / 0.4); return PZ({ rax: -0.5 - 1.5 * up, re: -0.6 - 0.4 * up, lax: -0.6 - 1.3 * up, le: -0.7, laz: 0.15, sp: 0.35 - 0.15 * up, hd: 0.4, llx: -0.25, rlx: 0.2, hy: 0.84 + br }); }
+    case 'sweep': { const w = s(tt * 2.2); return PZ({ rax: -0.7, raz: -0.1 + w * 0.3, re: -0.4, lax: -0.9, laz: 0.2 + w * 0.3, le: -0.9, sp: 0.3, sz: w * 0.08, hd: 0.35, hdy: w * 0.2, hy: 0.85 + br }); }
+    case 'hammer': { const cyc = (tt % 1.1) / 1.1, up = cyc < 0.65 ? ease(cyc / 0.65) : 1 - ease((cyc - 0.65) / 0.35); if (cyc < (o.c0 ?? 1) && o.d < 12) X.sfx('clang'); o.c0 = cyc; return PZ({ rax: -0.6 - 1.8 * up, re: -0.5 - 0.7 * up, raz: -0.1, lax: -0.6, le: -0.9, sp: 0.3, hd: 0.4, hy: 0.85 + br }); }
+    case 'read': { const pg = Math.pow(Math.max(0, s(tt * 0.4)), 20); return PZ({ lax: -1.2, laz: 0.05, le: -1.25, rax: -0.7 - pg * 0.6, raz: 0.3, re: -1.1, sp: 0.1, hd: 0.45 - pg * 0.3, hdy: -0.15, hy: 0.86 + br }); }
+    case 'cook': { const a = tt * 2.4; return PZ({ rax: -0.85 + s(a) * 0.18, raz: -0.15 + Math.cos(a) * 0.2, re: -0.9, lax: -0.2, laz: 0.3, le: -0.6, sp: 0.28, hd: 0.3, hdy: s(tt * 0.4) * 0.2, hy: 0.86 + br }); }
+    case 'guard': return PZ({ rax: -0.25, re: -1.35, raz: -0.08, lax: 0.05, laz: 0.12, le: -0.15, sp: -0.04, hd: -0.05, hdy: look * 0.7, hy: 0.87 + br });
+    case 'pray': return PZ({ lax: -1.05, rax: -1.05, laz: -0.42, raz: 0.42, le: -1.35, re: -1.35, sp: 0.18, hd: 0.42 + s(tt * 0.5) * 0.04, hdy: 0, hy: 0.85 + br });
+    case 'sit': return PZ({ hy: 0.3, llx: -1.45, rlx: -1.4, lk: 1.05, rk: 1.15, llz: 0.12, rlz: -0.12, lax: -0.65, rax: -0.6, laz: 0.12, raz: -0.12, le: -0.75, re: -0.8, sp: 0.16, hd: 0.06 + s(tt * 0.7) * 0.03, hdy: look });
+    case 'play': { const k = Math.abs(s(tt * 4.2)), hop = Math.max(0, s(tt * 4.2)); return PZ({ laz: 0.6 + k * 0.9, raz: -0.6 - k * 0.9, le: -0.4, re: -0.4, llx: -0.3 * hop, rlx: 0.3 * hop, lk: hop * 0.5, rk: hop * 0.5, sp: -0.05, hd: -0.15, hdy: s(tt * 0.9) * 0.3, hy: 0.86 + hop * 0.12 + br }); }
+    case 'fish': { const tug = Math.pow(Math.max(0, s(tt * 0.21)), 30); return PZ({ rax: -0.55 - tug * 1.0, raz: -0.08, re: -0.95, lax: -0.55, laz: 0.25, le: -1.05, sp: 0.05 - tug * 0.1, hd: 0.15, hdy: s(tt * 0.27) * 0.12, hy: 0.86 + br }); }
+  }
+  return PZ({ hy: 0.86 + br, hdy: look, laz: 0.1, raz: -0.1 });
+}
+const BUSYIDLE = { farm: 1, sweep: 1, hammer: 1, cook: 1, fish: 1, sit: 1 };
 const _w = new V3();
 const f2w = (bone, x, y, z) => _w.set(x, y, z).applyMatrix4(bone.matrixWorld);
 function updNpcs(dt){
@@ -522,7 +553,7 @@ function updNpcs(dt){
     const want = d < 7 && !X.dialogOpen ? Math.atan2(P.x - o.x, P.z - o.z) : X.dialogOpen && d < 7 ? o.f.root.rotation.y : o.face0;
     o.f.root.rotation.y += angDiff(want, o.f.root.rotation.y) * Math.min(1, dt * 3);
     let tp = npcPose(o, dt);
-    if (d < 7 && !['smith', 'herbalist', 'fisher', 'brick'].includes(o.n.id)) tp.hdy = 0;
+    if (d < 7 && !['smith', 'herbalist', 'fisher', 'brick'].includes(o.n.id) && !BUSYIDLE[o.n.idle]) tp.hdy = 0;
     if (o.wave > 0){ o.wave -= dt; tp = emoPose('wave', 1.2 - o.wave, tp); }
     o.f.set(tp); o.f.blend(dt, 7);
     if (d < 30) o.av.upd(dt, 0, false);
@@ -532,7 +563,7 @@ function updNpcs(dt){
       const a = o.props.line.geometry.attributes.position; a.setXYZ(0, tip.x, tip.y, tip.z); a.setXYZ(1, bx, bob.position.y + 0.08, bz); a.needsUpdate = true; }
     // 인사 말풍선
     o.hiT -= dt;
-    if (d < 9 && !o.near && o.hiT <= 0 && !X.dialogOpen){ o.hiT = 45; bubble(o.f.root, pick(NPC_HI[o.n.id] || ['좋은 하루예요!']), 4, 'npcb', 2.95); if (R() < 0.5) o.wave = 1.2; }
+    if (d < 9 && !o.near && o.hiT <= 0 && !X.dialogOpen){ o.hiT = 45; let g = null; try { g = F.greet && F.greet(o.n.id); } catch (e){} bubble(o.f.root, g || pick(NPC_HI[o.n.id] || ['좋은 하루예요!']), 4.5, 'npcb', o.n.idle === 'sit' ? 2.2 : 2.95); if (R() < 0.5) o.wave = 1.2; }
     o.near = d < 9;
   }
 }
@@ -687,7 +718,10 @@ function planPath(x0, z0, x1, z1, lane){
 // ── 장소 ──
 const VC = (F.regionById('village') || { c: [0, 560] }).c;
 const AVOID = [...W.npcs.map(n => [n.c[0], n.c[1], 3.4]), [-24, 553, 7.5], [26, 559, 3], [-52, 536, 6], [47.5, 541, 3.5], [55, 533, 4.5], [58, 554, 1.5], [51, 554, 1.6]];
-function villageSpot(){
+const TOWNS = W.settlements || [];
+function villageSpot(b){
+  // 정착지에 놀러 온 봇: 광장(반경의 35%) 안에서, 주민 자리는 비켜서
+  const tw = b && b.town; if (tw){ for (let t = 0; t < 20; t++){ const a = R() * TAU, r = tw.r * (0.12 + R() * 0.26), x = tw.c[0] + Math.cos(a) * r, z = tw.c[1] + Math.sin(a) * r; if (W.npcs.some(n => Math.hypot(n.c[0] - x, n.c[1] - z) < 2.6) || F.isWater(x, z)) continue; return [x, z]; } return [tw.c[0] + rr(-3, 3), tw.c[1] + rr(-3, 3)]; }
   for (let t = 0; t < 30; t++){ const x = VC[0] + rr(-42, 42), z = 551 + rr(-11, 11); if (((x - VC[0]) / 46) ** 2 + ((z - 551) / 14) ** 2 > 1) continue; if (AVOID.some(([ax, az, r]) => Math.hypot(x - ax, z - az) < r)) continue; return [x, z]; }
   return [VC[0] + rr(-8, 8), 549];
 }
@@ -763,7 +797,7 @@ function campFor(b){
   return wpick(L.map(o => { const d = Math.hypot(o.c.c[0] - b.x, o.c.c[1] - b.z), dp = dP(o.c.c[0], o.c.c[1]); return [o, 1 / (60 + d) + (b.floater ? 4 / (40 + dp) : 0)]; }));
 }
 function setAct(b, act, x, z, dur, extra = {}){
-  b.act = act; b.st = 'go'; b.actT = dur; b.tx = x; b.tz = z; Object.assign(b, { atk: null, skill: null, roll: null, camp: null, fire: null, fish: null, sight: null, tgt: null, sub: null, subT: rr(2, 5), loot: 0 }, extra);
+  b.act = act; b.st = 'go'; b.actT = dur; b.tx = x; b.tz = z; Object.assign(b, { atk: null, skill: null, roll: null, camp: null, fire: null, fish: null, sight: null, tgt: null, sub: null, subT: rr(2, 5), loot: 0, town: null }, extra);
   b.path = planPath(b.x, b.z, x, z, b.lane); b.pi = 0;
   if (b.afk){ b.afk = false; refreshLabel(b); }
 }
@@ -772,8 +806,11 @@ function nextAct(b){
   if (b.fire){ b.fire.seats = Math.max(0, b.fire.seats - 1); }
   // 필드 보스!
   if (FB.cur && b.lv >= FB.cur.fb.lv - 5 && R() < 0.6 && Math.hypot(FB.cur.fb.c[0] - b.x, FB.cur.fb.c[1] - b.z) < 420 && BOTS.filter(o => o.act === 'boss').length < (LOW ? 5 : 8)){ const [x, z] = FB.cur.fb.c; return setAct(b, 'boss', x + rr(-6, 6), z + rr(-6, 6), 400); }
-  const vill = BOTS.filter(o => o.act === 'village').length;
-  const a = wpick([['hunt', 46], ['village', vill < 6 ? 30 : b.lv < 8 ? 14 : 8], ['rest', 9], ['fish', FISHS.length ? 8 : 0], ['sight', 7], ['glide', b.lv >= 3 && b.lv <= 16 ? 6 : 1], ['afk', 3]]);
+  const vill = BOTS.filter(o => o.act === 'village' && !o.town).length;
+  const a = wpick([['hunt', 46], ['village', vill < 6 ? 30 : b.lv < 8 ? 14 : 8], ['town', TOWNS.length ? 13 : 0], ['rest', 9], ['fish', FISHS.length ? 8 : 0], ['sight', 7], ['glide', b.lv >= 3 && b.lv <= 16 ? 6 : 1], ['afk', 3]]);
+  if (a === 'town'){ // 레벨에 맞는 정착지 (가까운 것 먼저)에 들러 쉬고 수다 떨어요
+    const L = TOWNS.filter(t => { const r = F.regionById(t.region); return r && b.lv >= r.lv[0] - 3 && b.lv <= r.lv[1] + 3 && BOTS.filter(o => o.town === t).length < 5; }).sort((p, q) => Math.hypot(p.c[0] - b.x, p.c[1] - b.z) - Math.hypot(q.c[0] - b.x, q.c[1] - b.z));
+    const t = L[R() < 0.7 ? 0 : ri(0, Math.max(0, L.length - 1))]; if (t){ b.town = t; const [x, z] = villageSpot(b); return setAct(b, 'village', x, z, rr(50, 130), { town: t }); } }
   if (a === 'hunt'){ const o = campFor(b); if (o){ const a2 = R() * TAU, r = o.c.r * 0.4; return setAct(b, 'hunt', o.c.c[0] + Math.cos(a2) * r, o.c.c[1] + Math.sin(a2) * r, rr(70, 200), { camp: o.c.id }); } }
   if (a === 'rest' && fireSpots.length){ const f = fireSpots.slice().sort((p, q) => Math.hypot(p.x - b.x, p.z - b.z) - Math.hypot(q.x - b.x, q.z - b.z)).slice(0, 3).filter(f => f.seats < 5)[0];
     if (f){ f.seats++; const k = f.seats * 1.25 + R() * 0.4, sx = f.x + Math.sin(k) * 2.0, sz = f.z + Math.cos(k) * 2.0; return setAct(b, 'rest', sx, sz, rr(40, 90), { fire: f }); } }
@@ -990,7 +1027,7 @@ function updBot(b, dt, detail, t){
     b.subT -= dt;
     if (b.sub === 'walk'){ if (moveTo(b, b.wp[0], b.wp[1], dt, 2.2)) { b.sub = null; b.subT = rr(3, 8); } }
     else if (b.subT <= 0){ b.subT = rr(4, 11); const r = R();
-      if (r < 0.28){ b.wp = villageSpot(); if (Math.hypot(b.wp[0] - b.x, b.wp[1] - b.z) < 30) b.sub = 'walk'; }
+      if (r < 0.28){ b.wp = villageSpot(b); if (Math.hypot(b.wp[0] - b.x, b.wp[1] - b.z) < 30) b.sub = 'walk'; }
       else if (r < 0.48 && detail) botEmote(b, pick(['wave', 'dance', 'cheer', 'clap', 'think', 'bow', 'sit', 'point']), rr(2, 6));
       else if (r < 0.72){ const o = BOTS.find(o => o !== b && o.act === 'village' && o.st === 'at' && !o.sub && Math.hypot(o.x - b.x, o.z - b.z) < 9); if (o){ b.want = Math.atan2(o.x - b.x, o.z - b.z); o.want = Math.atan2(b.x - o.x, b.z - o.z); b.faceP = o.faceP = 0; b.talk = o.talk = 5; o.subT = Math.max(o.subT, 6); if (detail && b.d < 30 && R() < 0.6) convo(b, o); } }
       else b.want += rr(-1.2, 1.2); }
