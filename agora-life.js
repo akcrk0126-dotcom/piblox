@@ -294,6 +294,7 @@ function onSlam(e, d){
 }
 
 // ═════════════════════════ 2. 사냥터 (스폰 · 리스폰) ═════════════════════════
+const CALM = {};   // 진정된 사냥터 id → true (F.campCalm)
 const AGG = { slime: 8, sprout: 9, bee: 10, ladybug: 8, flower: 11, shroom: 8, squirrel: 10, boar: 10, raccoon: 10, frog: 8, snail: 8, mole: 9, golem: 9, owl: 11, hedgehog: 9, wolf: 12, frostgolem: 9, yeti: 11, wraith: 12 };
 const CAMPS = W.camps.map(c => ({ c, on: false, mem: c.mobs.flatMap(([k, n]) => (X.MON[k] || X.BOSS[k]) ? Array.from({ length: LOW ? Math.max(1, Math.round(n * 0.75)) : n }, () => ({ k, e: null, at: 0 })) : []) }));
 const CAMP_BY = Object.fromEntries(CAMPS.map(o => [o.c.id, o]));
@@ -310,7 +311,7 @@ function spawnMember(o, m){
   if (!ok){ m.at = T + 2; return null; }
   const lv = ri(c.lv[0], c.lv[1]), elite = !!(c.elite && R() < c.elite);
   MYSPAWN = true;
-  try { m.e = X.spawnMon(m.k, x, z, elite, { lv, fld: { hx: c.c[0] + rr(-0.3, 0.3) * c.r, hz: c.c[1] + rr(-0.3, 0.3) * c.r, aggro: AGG[m.k] || 9, leash: c.r + 18, wr: c.r * 0.6 }, data: { camp: c.id } }); }
+  try { m.e = X.spawnMon(m.k, x, z, elite, { lv, fld: { hx: c.c[0] + rr(-0.3, 0.3) * c.r, hz: c.c[1] + rr(-0.3, 0.3) * c.r, aggro: AGG[m.k] || 9, leash: c.r + 18, wr: c.r * 0.6, passive: !!CALM[c.id] }, data: { camp: c.id } }); }
   finally { MYSPAWN = false; }
   return m.e;
 }
@@ -494,6 +495,8 @@ function buildNpcs(){
   }
   BUS.emit('npcsReady', F.npcs);
 }
+// 이야기로 진정된 사냥터 (예: 6장 끝 고대 골렘 회랑 — 왕실 인장을 알아봐요): 먼저 때리기 전엔 덤비지 않아요
+F.campCalm = (id, on = true) => { CALM[id] = !!on; for (const e of X.ENEMIES) if (e.camp === id && e.fld) e.fld.passive = !!on; };
 // 이야기에 따라 NPC 가 자리를 옮겨요 (예: 리나가 뿌리 터널에서 잎새 마을 집으로) — saga 가 불러요
 F.moveNpc = (id, x, z, face) => {
   const o = NPCL.find(q => q.n.id === id); if (!o) return false;
