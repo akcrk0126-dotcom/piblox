@@ -1,12 +1,14 @@
 // 룬 아고라 — 모험의 대지: rpg (agora-rpg.js)
 // 성장하는 재미: 아이템 · 드랍(빛기둥) · 가방/장비(I) · 강화(대장간) · 물약(H/G) · 상점 · 여관 · 의뢰 게시판 · 채집 · 보물 상자 · 룬 정령 ·
-//               퀘스트(메인 21 · 지역 의뢰 21 · 일일 3) · 추적 HUD · 목표 나침반 · 퀘스트 로그(L) · 칭호/업적
+//               퀘스트(메인 = lore/*.js 의 장 순서 사슬 · 지역 의뢰 · 일일 3) · 추적 HUD · 목표 나침반 · 퀘스트 로그(L) · 칭호/업적
 // 계약서: docs/agora-modules.md — 필드 물체는 F.FW 에 절대 y (= F.H), 전투 레이어(X.burst · X.dmgNum …)는 지면 기준 y
+// 이야기: lore/index.js 의 LORE (장 · 주민 · 퀘스트 · 칭호). 읽기 · 줍기 · 정화 · 이야기 보스 목표는 agora-saga 가 F.questEvent 로 알려 줘요.
 // F 에 올리는 것: F.addItem(id, n, opt) · F.hasItem(id, n) · F.takeItem(id, n) · F.giveLoot(levelOrTable, pos) · F.questEvent(type, data)
 //                F.openInventory(tab) · F.openQuests(id) · F.gold(n) · F.title(id?) (+ F.title.grant(id, def)) · F.ITEMS
 //                (+ F.openShop · F.openSmith · F.openBoard · F.gearScore() · F.makeGear(opt) · F.RARITY)
 // BUS 로 쏘는 것: 'gather' { kind, item } · 'loot' { item, n } · 'quest' { id, state } · 'enhance' { item, ok, lvl } · 'title' { id } · 'ach' { id }
 // 저장: S.inv (가방 · 장비 · 상자 · 정령 · 휴식) · S.q (퀘스트) · S.titles · S.ach
+import { LORE } from './lore/index.js';
 export async function init(G, X, F){
 const { THREE, V3, BUS, TAU } = X;
 const W = F.WORLD, S = X.S, FW = F.FW, byId = F.byId, WL = W.water, HALF = W.half;
@@ -38,7 +40,7 @@ let saveT = 0; const dirty = () => { saveT = 0.8; };
 const BQ = []; let bqT = 0;
 const bnr = (a, b, c, red, dur = 2.6) => { if (BQ.length < 6) BQ.push([a, b, c, red, dur]); };
 const busyEl = ['fregion', 'lmfound', 'banner'].map(id => () => document.getElementById(id));
-function updBanner(rdt){ if (bqT > 0){ bqT -= rdt; return; } if (!BQ.length) return; for (const f of busyEl){ const e = f(); if (e && e.classList.contains('on')) return; } const o = BQ.shift(); X.banner(...o); bqT = o[4] + 0.2; }
+function updBanner(rdt){ if (bqT > 0){ bqT -= rdt; return; } if (!BQ.length || (F.saga && F.saga.busy && F.saga.busy())) return; for (const f of busyEl){ const e = f(); if (e && e.classList.contains('on')) return; } const o = BQ.shift(); X.banner(...o); bqT = o[4] + 0.2; }
 
 // ───────────────────────── 등급 · 능력치 ─────────────────────────
 const RAR = [
@@ -639,6 +641,7 @@ const qBtn = F.menu.add('📜', '퀘스트', () => toggleQuests(), 'L');
 let qSel = null;
 function toggleQuests(id){ if (OPEN === QW && !id){ closeWin(); return; } if (id) qSel = id; qBtn.classList.remove('dot'); openWin(QW, renderQ); }
 F.openQuests = id => toggleQuests(id);
+const chLabel = q => q.ch == null ? '' : q.ch === 0 ? ' · 서장' : ` · 제 ${q.ch} 장`;
 const KC = { main: '#ffd36a', side: '#7ff3ff', daily: '#9aff7a' }, KN = { main: '메인', side: '지역 의뢰', daily: '일일 의뢰' }, KE = { main: 'MAIN QUEST', side: 'SIDE QUEST', daily: 'DAILY QUEST' };
 const sortQ = (a, b) => { const A = getQ(a), B = getQ(b), o = { main: 0, side: 1, daily: 2 }; return o[A.kind] - o[B.kind] || A.lv - B.lv; };
 function availForLog(){
@@ -649,9 +652,9 @@ function availForLog(){
 }
 function rwHTML(q){
   const r = q.rw || {}, s = [`<span>✨ 경험치 ${fmt(qXP(q))}</span>`, `<span>🪙 ${fmt(qGold(q))}</span>`];
-  for (const [id, n] of r.items || []) s.push(`<span style="color:${ITEMS[id].c}">${ITEMS[id].icon} ${ITEMS[id].n} ×${n}</span>`);
-  if (r.gear) s.push(`<span style="color:${RAR[r.gear.r].c}">${r.gear.s === 'wpn' ? JOBW[myJob()].icon : SLOT[r.gear.s].icon} ${RAR[r.gear.r].n} ${SLOT[r.gear.s].n} (Lv.${r.gear.il})</span>`);
-  if (r.title) s.push(`<span style="color:#ffd36a">🎖 칭호 「${TITLES[r.title].n}」</span>`);
+  for (const [id, n] of r.items || []) if (ITEMS[id]) s.push(`<span style="color:${ITEMS[id].c}">${ITEMS[id].icon} ${ITEMS[id].n} ×${n}</span>`);
+  if (r.gear && RAR[r.gear.r] && SLOT[r.gear.s]) s.push(`<span style="color:${RAR[r.gear.r].c}">${r.gear.s === 'wpn' ? JOBW[myJob()].icon : SLOT[r.gear.s].icon} ${RAR[r.gear.r].n} ${SLOT[r.gear.s].n} (Lv.${r.gear.il})</span>`);
+  if (r.title && TITLES[r.title]) s.push(`<span style="color:#ffd36a">🎖 칭호 「${TITLES[r.title].n}」</span>`);
   if (r.loot) s.push('<span style="color:#ffd36a">🎁 보너스 상자</span>');
   return `<div class="rrw">${s.join('')}</div>`;
 }
@@ -668,7 +671,7 @@ function renderQ(){
   let det = '<div class="none">왼쪽에서 퀘스트를 골라 주세요.</div>';
   const q = qSel && getQ(qSel);
   if (q){ const a = S.q.act[qSel], tr = S.q.track.includes(qSel), reg = q.giver !== 'auto' && byId('npcs', q.giver) ? F.regionAt(...byId('npcs', q.giver).c) : null;
-    det = `<div class="qd" style="--c:${KC[q.kind]}"><div class="k">${KE[q.kind]} · LV.${q.lv}</div><h3>${esc(q.name)}</h3>
+    det = `<div class="qd" style="--c:${KC[q.kind]}"><div class="k">${KE[q.kind]}${chLabel(q)} · LV.${q.lv}</div><h3>${esc(q.name)}</h3>
       <div class="gv">${q.kind === 'daily' ? '의뢰 게시판 (새싹 마을)' : `의뢰인 ${q.giver === 'auto' ? '— 이야기 흐름' : NPCN(q.giver)}${reg ? ` (${reg.name})` : ''}`} · ${q.auto ? '목표를 이루면 바로 완료' : `보고: ${q.kind === 'daily' ? '의뢰 게시판' : NPCN(q.to)}`}</div>
       <div class="ds">${esc(q.desc)}</div><h4>목표</h4>${objHTML(q, a)}<h4>보상</h4>${rwHTML(q)}
       ${!a && !qLvOk(q) ? `<p class="note" style="color:#ff9a8a;margin-top:10px">Lv.${q.lv} 부터 받을 수 있어요.</p>` : ''}
@@ -808,121 +811,33 @@ BDW.querySelector('.bd').addEventListener('click', e => {
 
 // ───────────────────────── 퀘스트 데이터 ─────────────────────────
 // o (목표) 종류: kill{key,n,reg,at} · elite{n,reg} · fboss{key} · gather{item,n,reg} · discover{id} · talk{npc,say} · raid{id} · fish{n} · glider · enh{lvl} · enhtry{n} · seed{n} · chest{n} · level{lvl} · custom{id}
+//   + 이야기(saga): read{id} 읽을거리 · collect{id | [ids], n} 이야기 물건 줍기 · cleanse{id} 수호석에 룬 새기기 · sboss{id} 이야기 보스 · reach{c:[x,z], r} 그 자리에 가기
 // giver 'auto' = 앞 퀘스트가 끝나면 저절로 시작 / auto: true = 목표를 이루면 바로 완료 / rw.xp = 그 레벨 필요 경험치의 몇 배
+// 메인 사슬 = LORE 의 장 순서(chapter.n) → 파일 안 순서. 곁가지는 그 장이 시작돼야(첫 메인을 받아야) 받을 수 있어요 (gate).
 const QD = {}, MAIN = [];
 const kill = (key, n, reg, at, d) => ({ t: 'kill', key, n, reg, at, d }), gat = (item, n, reg, d) => ({ t: 'gather', item, n, reg, d }), disc = (id, d) => ({ t: 'discover', id, d });
 const talk = (npc, d, say) => ({ t: 'talk', npc, d, say }), raid = (id, d) => ({ t: 'raid', id, d }), fboss = (key, d) => ({ t: 'fboss', key, d });
 function defQ(kind, list){ for (const q of list){ q.kind = kind; q.to = q.to || q.giver; q.rw = q.rw || {}; if (kind === 'main'){ q.prev = MAIN[MAIN.length - 1] || null; if (q.prev) QD[q.prev].next = q.id; MAIN.push(q.id); } QD[q.id] = q; } }
-defQ('main', [
-  { id: 'm1', giver: 'chief', lv: 1, name: '새싹 마을의 새 얼굴', desc: '촌장 하몬은 마을 사람들과 인사부터 나누라고 한다. 모험가에게 대장장이와 약초상만큼 든든한 이웃은 없다.',
-    intro: [['chief', '허허, 룬의 관문이 번쩍이길래 누군가 했더니! 자네가 광장에서 왔다는 그 모험가로군. 새싹 마을에 온 걸 환영하네.'], ['chief', '아르카디아는 넓고도 넓은 땅이지. 남쪽 풀밭은 순하지만, 북쪽으로 갈수록… 흠, 그건 차차 알게 될 걸세.'], ['chief', '우선 마을 사람들과 인사부터 하게나. 대장장이 도른은 무뚝뚝해도 솜씨는 대륙 제일이고, 약초상 미라의 물약 없이는 하루도 못 버틸 테니.']],
-    o: [talk('smith', '대장장이 도른에게 인사하기', [['smith', '…흠. 하몬 영감이 보냈군. 난 도른. 쇠를 두드리는 게 일이지.'], ['smith', '쓸 만한 장비를 주워 오면 가져와. 강화석만 있으면 더 날카롭게 벼려 주지. 실패해도 울지 말고.']]),
-      talk('herbalist', '약초상 미라에게 인사하기', [['herbalist', '어머, 새 얼굴이네요! 저는 약초상 미라예요~ 물약이 필요하면 언제든 오세요!'], ['herbalist', '들판에서 반짝이는 풀이 보이면 E 키로 캐 보세요. 약초를 가져오면 물약으로 달여 드릴게요!']])],
-    mid: ['chief', '도른은 마을 동쪽 대장간에, 미라는 서쪽 약초 가게에 있다네. 둘 다 광장 바로 옆이야.'],
-    end: [['chief', '허허, 인사는 잘 나눴는가? 좋아, 좋아. 이건 마을에서 주는 작은 선물일세. 첫 무기는 모험가의 얼굴이니까!'], ['chief', '가방(I)을 열어 장착해 보게. 장비가 좋아지면 몸이 먼저 안다네.']],
-    rw: { xp: 1.4, gold: 80, items: [['hp1', 5]], gear: { s: 'wpn', il: 2, r: 1 }, title: 'rookie' } },
-  { id: 'm2', giver: 'chief', lv: 1, name: '말랑 웅덩이 소동', desc: '말랑 웅덩이에서 슬라임이 넘쳐흘러 밭의 새싹을 핥아 먹고 있다. 수를 좀 줄여야 한다.',
-    intro: [['chief', '큰일일세. 마을 북쪽 말랑 웅덩이에서 슬라임이 자꾸 솟아나서, 밭의 새싹을 다 핥아 먹고 있어.'], ['chief', '말랑말랑해서 귀엽긴 한데… 녀석들 수를 좀 줄여 주겠나? 여덟 마리면 당분간 잠잠할 걸세.']],
-    o: [kill('slime', 8, 'greenhill', 'c_slime', '말랑 웅덩이의 슬라임 처치')], mid: ['chief', '말랑 웅덩이는 새싹길을 따라 북쪽으로 가다 서쪽으로 빠지면 있네. 지도(M)를 보게나.'],
-    end: [['chief', '허허허! 밭이 조용해졌다고 다들 난리일세. 이건 내가 젊을 적 입던 갑옷인데… 자네한테 더 잘 어울리겠군.']],
-    rw: { xp: 0.9, gold: 120, items: [['hp1', 3], ['mp1', 3]], gear: { s: 'arm', il: 3, r: 1 } } },
-  { id: 'm3', giver: 'chief', lv: 3, auto: true, name: '바람을 타는 법', desc: '바람개비 언덕의 바람 상인 제피가 하늘을 나는 글라이더를 판다. 넓은 아르카디아를 누비려면 꼭 필요하다.',
-    intro: [['chief', '이 땅을 걸어서만 다니면 수염이 땅에 닿을 걸세. 서쪽 바람개비 언덕에 제피라는 바람 상인이 있지.'], ['chief', '그 친구한테 글라이더를 얻으면 절벽에서 뛰어내려도 사뿐히 날 수 있다네. 꼭 들러 보게나!']],
-    o: [disc('windmill', '바람개비 언덕 찾아가기'), { t: 'glider', d: '바람 상인 제피에게서 글라이더 얻기' }], rw: { xp: 0.8, gold: 150, items: [['hp1', 3]] } },
-  { id: 'm4', giver: 'auto', to: 'rowan', lv: 4, name: '숲의 사냥꾼', desc: '매의 절벽에서 글라이더로 뛰어내리면 속삭이는 숲이다. 숲 입구 사냥꾼 야영지의 로완이 솜씨 좋은 모험가를 찾는다는 소문이다.',
-    o: [disc('hawkcliff', '매의 절벽에서 숲 내려다보기'), disc('huntercamp', '사냥꾼 야영지 찾아가기'), talk('rowan', '사냥꾼 로완 만나기', [['rowan', '…쉿. 발소리가 너무 커. 숲이 다 듣고 있다고.'], ['rowan', '로완이다. 하몬 영감이 글라이더 탄 모험가가 올 거라더니, 너였군.']])],
-    end: [['rowan', '좋아. 숲은 지금 이상해. 버섯들이 미쳐 날뛰고, 밤엔 속삭임이 더 커졌지. 네 손이 필요하다.'], ['rowan', '이걸 받아. 사냥꾼들이 쓰는 부적이야. 운이 조금은 따를 거다.']],
-    rw: { xp: 0.7, gear: { s: 'acc', il: 5, r: 1 } } },
-  { id: 'm5', giver: 'rowan', lv: 5, name: '포자의 속삭임', desc: '버섯 숲의 버섯돌이들이 포자를 뿜으며 날뛴다. 로완은 원인을 알아내려 빛버섯 표본도 원한다.',
-    intro: [['rowan', '버섯 숲 쪽으로 가 봐. 버섯돌이들이 포자를 뿜으면서 사람을 공격하고 있어.'], ['rowan', '열 마리쯤 쓰러뜨리고, 오는 길에 빛버섯 몇 개만 따다 줘. 뭐가 녀석들을 미치게 하는지 봐야겠어.']],
-    o: [kill('shroom', 10, 'woods', 'c_shroom', '버섯 숲의 버섯돌이 처치'), gat('mushroom', 3, null, '빛버섯 채집')], mid: ['rowan', '버섯 숲은 야영지에서 북쪽이야. 빛버섯은 나무 그늘 아래 반짝이는 걸 찾아.'],
-    end: [['rowan', '…이 버섯, 검게 물든 가시가 박혀 있어. 대륙 북쪽 끝에서나 보던 건데. 불길해.'], ['rowan', '고맙다. 수고비야. 그리고… 조심해. 숲이 끝이 아닐지도 몰라.']],
-    rw: { xp: 0.6, items: [['hp2', 3]], gear: { s: 'wpn', il: 7, r: 1 } } },
-  { id: 'm6', giver: 'rowan', lv: 7, auto: true, name: '은빛 호수의 소문', desc: '로완은 은빛 호수의 낚시꾼 노아가 호수 밑에서 검은 그림자를 보았다고 전한다. 호숫가를 따라 달빛 다리까지 살펴보자.',
-    intro: [['rowan', '호수 남쪽에 노아라는 낚시꾼이 있어. 며칠 전에 호수 밑바닥에서 검은 그림자를 봤다더군.'], ['rowan', '가서 얘기 좀 들어 봐. 그리고 호숫가 길을 따라 달빛 다리까지 둘러봐 줘. 난 숲을 지켜야 하니까.']],
-    o: [talk('fisher', '낚시꾼 노아와 이야기하기'), { t: 'fish', n: 1, d: '은빛 호수에서 물고기 낚기' }, disc('moonbridge', '달빛 다리 건너 보기'), { t: 'level', lvl: 9, d: 'Lv.9 달성 — 숲과 호숫가 사냥터에서 실력 키우기' }], rw: { xp: 0.6, items: [['hp2', 2], ['mp2', 2]] } },
-  { id: 'm7', giver: 'auto', to: 'morgana', lv: 10, name: '안개 속의 오두막', desc: '달빛 다리에서 동쪽을 보면 안개가 짙게 깔린 늪이 보인다. 늪지 마녀 모르가나라면 검은 그림자에 대해 알고 있을지도 모른다.',
-    o: [disc('witchhut', '마녀의 오두막 찾아가기'), talk('morgana', '늪지 마녀 모르가나 만나기', [['morgana', '이히히히! 손님이네, 손님이야! 내 오두막 다리를 보고 도망 안 간 건 네가 처음이란다.'], ['morgana', '호수의 검은 그림자? 알지, 알고말고. 그건 늪에서 흘러간 거야. 가라앉은 신전에서 말이지.']])],
-    end: [['morgana', '늪의 왕 그롬이 깨어났어. 그 두꺼비 녀석이 신전 밑에서 독을 뿜어 대니, 늪이 썩고 호수까지 물드는 거지.'], ['morgana', '하지만 지금 네 실력으론 어림없어. 이히히, 우선 몸부터 풀어 보자고.']],
-    rw: { xp: 0.6, gear: { s: 'arm', il: 11, r: 1 } } },
-  { id: 'm8', giver: 'morgana', lv: 11, name: '늪의 독', desc: '모르가나는 해독약을 끓이려면 늪 개구리들과 늪의 빛버섯이 필요하다고 한다.',
-    intro: [['morgana', '해독약을 끓여야 해. 그롬의 독에 맞서려면 말이야.'], ['morgana', '늪 두꺼비 웅덩이의 개구리들을 열 마리 잡아 오렴. 아, 그리고 늪의 빛버섯 다섯 개! 싱싱한 걸로~']],
-    o: [kill('frog', 10, 'swamp', 'c_toad', '늪 두꺼비 웅덩이의 개구리 처치'), gat('mushroom', 5, 'swamp', '늪의 빛버섯 채집')], mid: ['morgana', '개구리는 판자길 북쪽 웅덩이에 바글바글해. 버섯은 늪 그늘 아무 데나~'],
-    end: [['morgana', '부글부글… 보글보글… 이히히, 완성! 이 냄새 맡고도 멀쩡하면 그롬 독쯤이야 우습지.'], ['morgana', '자, 받아. 이제 신전으로 갈 준비는 된 셈이야.']],
-    rw: { xp: 0.55, items: [['hp2', 5], ['mp2', 3]] } },
-  { id: 'm9', giver: 'morgana', lv: 12, name: '늪의 왕 그롬', desc: '가라앉은 신전 깊은 곳의 늪의 왕 그롬을 쓰러뜨려야 한다. 신전 입구나 마을의 레이드 대장 카엘에게서 레이드에 들어갈 수 있다.',
-    intro: [['morgana', '때가 됐어. 가라앉은 신전 입구에서 그롬에게 도전해. 혼자 가지 말고, 동료들과 함께!'], ['morgana', '그 녀석이 독 웅덩이를 뿌리면 밟지 마. 내 해독약도 무한하진 않거든. 이히히.']],
-    o: [raid('grom', '레이드: 늪의 왕 그롬 처치')], mid: ['morgana', '가라앉은 신전은 늪 동쪽이야. 입구에서 레이드에 들어갈 수 있어.'],
-    end: [['morgana', '이히히히히! 해냈구나! 늪이 숨을 쉬기 시작했어. 들리니? 개구리들이 노래를 불러!'], ['morgana', '그런데 이상해… 그롬의 등에도 검은 가시가 박혀 있었어. 이건 시작일 뿐이야.']],
-    rw: { xp: 0.8, gear: { s: 'wpn', il: 13, r: 2 }, title: 'grom' } },
-  { id: 'm10', giver: 'morgana', to: 'brick', lv: 14, name: '붉은 바위의 광부', desc: '검은 가시의 흔적이 북쪽 붉은 협곡의 광산에서도 나왔다고 한다. 광부 브릭을 찾아가자.',
-    intro: [['morgana', '북쪽 붉은 협곡에 브릭이라는 시끄러운 광부가 있어. 광산에서 이상한 게 나왔다고 사방에 소리치고 다니더라.'], ['morgana', '늪지 샛길을 따라 북쪽으로 가렴. 눈물 흘리는 절벽이 보이면 다 온 거야.']],
-    o: [disc('weeping', '울음바위 절벽 지나기'), disc('mine', '버려진 광산 찾아가기'), talk('brick', '광부 브릭 만나기', [['brick', '쾅! 어이, 거기! 그래 너! 늪에서 왔다고? 냄새로 알았지! 하하하!'], ['brick', '내 광산이 엉망이 됐어! 두더지 놈들이 미쳐서 갱도를 다 헤집고 다닌다고!']])],
-    end: [['brick', '광산 맨 밑바닥에서 바위 거인 그라녹이 깨어났어. 그 녀석 발소리에 두더지들까지 미친 거고!'], ['brick', '자, 이거 받아! 광부의 행운 부적이야. 쾅! 하하!']],
-    rw: { xp: 0.55, gear: { s: 'acc', il: 15, r: 2 } } },
-  { id: 'm11', giver: 'brick', lv: 16, name: '광산의 그림자', desc: '광산 입구까지 밀려 나온 광부 두더지들을 물리치고, 갱도를 받칠 철광석을 모아야 한다.',
-    intro: [['brick', '두더지 놈들을 열 마리만 혼내 줘! 그리고 오는 길에 철광석 여섯 개! 갱도 받침대가 다 무너졌거든!'], ['brick', '광석은 바위벽에 반짝이는 줄무늬가 보이면 거기야. 곡괭이질은 E 키! 쾅!']],
-    o: [kill('mole', 10, 'canyon', 'c_minegate', '광산 입구의 광부 두더지 처치'), gat('ore', 6, null, '철광석 채집')], mid: ['brick', '두더지들은 광산 입구 근처에 바글바글해! 광석은 협곡 어디서나!'],
-    end: [['brick', '훌륭해! 이 광석이면 받침대 열 개는 세우겠어! 이제 남은 건… 그 녀석뿐이야.']],
-    rw: { xp: 0.5, items: [['stone', 4], ['hp3', 3]] } },
-  { id: 'm12', giver: 'brick', lv: 18, name: '바위 거인 그라녹', desc: '버려진 광산 바닥에서 깨어난 바위 거인 그라녹. 천장이 무너지기 전에 쓰러뜨려야 한다.',
-    intro: [['brick', '그라녹. 산만 한 바위 덩어리야. 녀석이 한 번 발을 구르면 천장이 와르르!'], ['brick', '광산 입구에서 레이드로 들어가. 머리 위를 잘 보라고! 돌이 떨어지면 그림자가 먼저 생기니까!']],
-    o: [raid('granok', '레이드: 바위 거인 그라녹 처치')],
-    end: [['brick', '쾅! 쾅쾅! 해냈어! 광산이 조용해졌어! 하하하하!'], ['brick', '그런데 말이야… 녀석 심장 자리에 검은 가시가 박혀 있었어. 서쪽 고원의 학자라면 뭔가 알지도 몰라.']],
-    rw: { xp: 0.8, gear: { s: 'arm', il: 19, r: 2 } } },
-  { id: 'm13', giver: 'brick', to: 'elin', lv: 19, name: '거인의 계단', desc: '검은 가시의 정체를 알기 위해, 거인의 고원 별의 관측소에 사는 학자 엘린을 찾아가자.',
-    intro: [['brick', '서쪽 고원 꼭대기에 별을 보는 학자가 산대. 엘린이라고. 책을 산더미처럼 쌓아 두고 산다더라.'], ['brick', '거인의 계단만 오르면 돼! 계단이 좀… 아니, 많이 길지만! 하하!']],
-    o: [disc('titanstairs', '거인의 계단 오르기'), disc('observatory', '별의 관측소 찾아가기'), talk('elin', '학자 엘린 만나기', [['elin', '어머, 손님이라니! 아, 잠깐만요, 이 책 더미 좀… 아앗!'], ['elin', '검은 가시요? …역시. 별자리가 일그러진 게 우연이 아니었어요.']])],
-    end: [['elin', '고원의 옛 왕국은 이 가시 때문에 무너졌어요. 기록이 맞다면, 근원은 대륙 북쪽 「가시 심장」이에요.'], ['elin', '도와주신다면 기록을 더 찾아볼게요. 이건 제 연구비… 아니, 감사의 표시예요!']],
-    rw: { xp: 0.5, items: [['mp3', 3]], gear: { s: 'wpn', il: 20, r: 2 } } },
-  { id: 'm14', giver: 'elin', lv: 20, name: '별이 기억하는 왕국', desc: '엘린은 잊힌 왕의 성채와 부서진 거상에 남은 비문을 찾아 달라고 한다. 고대 골렘들이 아직도 길을 막고 있다.',
-    intro: [['elin', '잊힌 왕의 성채와 부서진 거상. 두 곳에 옛 왕국의 비문이 남아 있을 거예요.'], ['elin', '다만 고대 골렘들이 아직도 성을 지키고 있어요. 여덟 기 정도만 멈춰 주시면 제가 비문을 옮겨 적을 수 있어요!']],
-    o: [disc('citadel', '잊힌 왕의 성채 조사'), disc('colossus', '부서진 거상 조사'), kill('golem', 8, 'plateau', 'c_ancient', '고원의 고대 골렘 처치')], mid: ['elin', '성채는 관측소 남동쪽, 거상은 그보다 더 동쪽이에요. 골렘 회랑을 조심하세요!'],
-    end: [['elin', '비문에 이렇게 적혀 있어요. 「가시는 심장에서 자라고, 심장은 군주를 낳는다」…'], ['elin', '침식의 문에 룬 지기 엘드라 님이 계세요. 그분께 이 사실을 전해 주세요.']],
-    rw: { xp: 0.5, items: [['stone', 5], ['crystal', 2]] } },
-  { id: 'm15', giver: 'elin', to: 'eldra', lv: 23, name: '침식의 문', desc: '대륙 북쪽, 검은 가시가 땅을 먹어 들어가는 침식의 문. 룬 지기 엘드라에게 엘린의 기록을 전하자.',
-    intro: [['elin', '침식의 문은 가시 고갯길을 따라 북쪽이에요. 그곳부터는… 정말 위험해요.'], ['elin', '엘드라 님께 이 기록을 전해 주세요. 꼭 살아서 돌아오셔야 해요!']],
-    o: [disc('blightgate', '침식의 문 도착'), talk('eldra', '룬 지기 엘드라에게 기록 전하기', [['eldra', '…룬의 빛을 지닌 자로군요. 오래 기다렸습니다.'], ['eldra', '엘린의 기록… 그래요. 가시 군주가 다시 깨어나려 하고 있어요.']])],
-    end: [['eldra', '저는 이 문을 백 년째 지키고 있습니다. 하지만 가시가 문 너머까지 넘쳐 나기 시작했어요.'], ['eldra', '당신의 힘을 빌려 주세요. 이 룬의 가호가 당신을 지킬 겁니다.']],
-    rw: { xp: 0.5, gear: { s: 'acc', il: 24, r: 2 } } },
-  { id: 'm16', giver: 'eldra', lv: 24, name: '가시를 걷어내라', desc: '검은 가시 들판의 망령들을 쉬게 하고, 가시 틈에서 자란 룬 수정을 모아 문의 결계를 보강하자.',
-    intro: [['eldra', '가시 들판의 망령들은 가시에 삼켜진 숲의 친구들이에요. 쉬게 해 주세요. 열두 기.'], ['eldra', '그리고 가시 틈에서 자란 룬 수정 네 개. 결계를 다시 세우는 데 필요합니다.']],
-    o: [kill('wraith', 12, 'blight', 'c_thorn', '가시 들판의 망령 처치'), gat('crystal', 4, 'blight', '침식지의 룬 수정 채집')], mid: ['eldra', '망령은 들판과 가시 덩굴 숲에 있어요. 정예는 특히 조심하세요.'],
-    end: [['eldra', '결계가 다시 빛나네요. 이제 남은 건 단 하나… 가시 심장에서 깨어나는 군주입니다.']],
-    rw: { xp: 0.5, items: [['hp4', 3], ['stone', 6]] } },
-  { id: 'm17', giver: 'eldra', lv: 26, name: '가시 군주', desc: '가시 심장에서 깨어나는 필드 보스 「가시 군주」를 쓰러뜨려야 한다. 깨어나면 온 대륙에 소식이 퍼진다. 다른 모험가들과 힘을 합치자.',
-    intro: [['eldra', '가시 군주는 가시 심장에서 때때로 깨어납니다. 깨어나면 대륙 전체에 소식이 퍼질 거예요.'], ['eldra', '그때 심장으로 가세요. 혼자가 아닐 겁니다. 이 땅의 모든 모험가가 모일 테니까요.']],
-    o: [fboss('treant', '필드 보스: 가시 군주 처치')],
-    end: [['eldra', '…느껴지나요? 땅이 숨을 쉬어요. 가시가 물러나고 있습니다.'], ['eldra', '당신은 가시를 꺾은 자. 이 이름을 자랑스러워하세요.']],
-    rw: { xp: 0.8, gear: { s: 'wpn', il: 27, r: 3 }, title: 'thornbreaker' } },
-  { id: 'm18', giver: 'eldra', to: 'hermit', lv: 26, name: '얼음 고개 너머', desc: '가시 군주의 힘은 북쪽 서리 봉우리에서 흘러왔다. 얼음 고개의 은둔자 오크를 찾아가자.',
-    intro: [['eldra', '가시 군주는 쓰러졌지만, 그 뿌리는 더 북쪽… 서리 봉우리의 얼어붙은 제단으로 이어져 있었어요.'], ['eldra', '얼음 고개에 오크라는 은둔자가 삽니다. 말수는 적지만, 서리의 땅을 누구보다 잘 알아요.']],
-    o: [disc('icepass', '얼음 고개 넘기'), talk('hermit', '은둔자 오크 만나기', [['hermit', '…'], ['hermit', '…엘드라가 보냈나. 앉아라. 불 쬐고.']])],
-    end: [['hermit', '제단. 크라이오스. 서리 거룡이 봉인을 깨고 있다.'], ['hermit', '추위부터 견뎌라. 이거 입고.']],
-    rw: { xp: 0.5, gear: { s: 'arm', il: 27, r: 2 } } },
-  { id: 'm19', giver: 'hermit', lv: 27, name: '서리의 시련', desc: '오크는 서리의 땅에서 살아남을 수 있는지 증명하라고 한다. 얼음 늑대와 서리 골렘을 쓰러뜨리자.',
-    intro: [['hermit', '증명해라. 늑대 열. 골렘 넷.'], ['hermit', '…추위는 망설이는 자부터 먹는다.']],
-    o: [kill('wolf', 10, 'frost', 'c_wolf', '얼음 늑대 처치'), kill('frostgolem', 4, 'frost', 'c_frostgolem', '서리 골렘 처치')], mid: ['hermit', '늑대는 서쪽 골짜기. 골렘은 동쪽 빙원.'],
-    end: [['hermit', '…좋다. 넌 버틴다.'], ['hermit', '(오크가 처음으로 희미하게 웃는다) 제단으로 가라.']],
-    rw: { xp: 0.5, items: [['hp4', 4], ['crystal', 3]] } },
-  { id: 'm20', giver: 'hermit', lv: 28, name: '서리 거룡 크라이오스', desc: '얼어붙은 제단에 봉인된 서리 거룡 크라이오스. 동료들과 함께 레이드로 봉인을 지켜내자.',
-    intro: [['hermit', '크라이오스는 하늘에서 숨을 뿜는다. 그림자를 봐라. 숨이 닿기 전에 움직여라.'], ['hermit', '…돌아와라. 불은 꺼뜨리지 않겠다.']],
-    o: [raid('cryos', '레이드: 서리 거룡 크라이오스 처치')],
-    end: [['hermit', '…'], ['hermit', '돌아왔군. (불 위에 고기를 하나 더 얹는다)'], ['hermit', '하늘 끝 봉우리에 올라 봐라. 네가 지킨 땅이 다 보인다.']],
-    rw: { xp: 0.8, gear: { s: 'acc', il: 29, r: 3 } } },
-  { id: 'm21', giver: 'hermit', to: 'chief', lv: 28, name: '하늘 끝에서', desc: '대륙에서 가장 높은 하늘 끝 봉우리에 올라 아르카디아를 내려다본 뒤, 새싹 마을의 촌장 하몬에게 돌아가자.',
-    intro: [['hermit', '하늘길을 따라 올라가라. 꼭대기에서 보면… 알게 된다.'], ['hermit', '그다음엔 고향에 가라. 기다리는 사람이 있을 거다.']],
-    o: [disc('summit', '하늘 끝 봉우리 정상에 오르기'), talk('chief', '새싹 마을의 촌장 하몬에게 돌아가기', [['chief', '…허허. 허허허! 이게 누군가! 바람이 전해 주더군. 서리 거룡을 쓰러뜨린 모험가가 있다고!']])],
-    end: [['chief', '처음 이 마을에 왔을 땐 슬라임 여덟 마리에 쩔쩔매던 자네가… 이제 아르카디아의 영웅이 되었구먼.'], ['chief', '이건 마을이 대대로 지켜 온 보물일세. 자네가 아니면 누가 들겠나. 허허, 그리고… 언제든 돌아오게. 여긴 자네 고향이니까.']],
-    rw: { xp: 1, gear: { s: 'wpn', il: 30, r: 4 }, title: 'hero' } },
-]);
+// 정착지 주민: agora-towns 가 WORLD.npcs 에 넣어요. towns 가 없거나 빠뜨린 주민은 여기서 채워 퀘스트가 막히지 않게 (피규어는 saga 가 대신 세워요)
+for (const L of LORE){ try { const st = L.settlement; for (const r of (st && st.residents) || []){ if (!r || !r.id || byId('npcs', r.id)) continue;
+  W.npcs.push({ id: r.id, name: r.name, title: r.title, role: 'resident', resident: true, region: L.region, settlement: st.id, c: r.c, face: r.face || 0, look: r.look || {}, job: r.job, idle: r.idle, lines: r.lines, away: r.away }); } } catch (e){ console.error('[rpg] lore residents', L && L.region, e); } }
+// 이야기 퀘스트 (lore/*.js) — 메인은 장 순서대로 한 줄, 곁가지는 따로. 칭호도 합쳐요.
+const LQ = { main: [], side: [] };
+for (const L of LORE){ try { const ch = L.chapter ? L.chapter.n : null, mains = (L.quests || []).filter(q => q && q.kind === 'main'), gate = mains[0] ? mains[0].id : null;
+  for (const q of L.quests || []){ if (!q || !q.id || !LQ[q.kind] || QD[q.id] || LQ.main.some(x => x.id === q.id) || LQ.side.some(x => x.id === q.id)) continue;
+    LQ[q.kind].push(Object.assign({}, q, { ch, reg: L.region, o: (q.o || []).slice() }, q.kind === 'side' && gate ? { gate } : {})); }
+  if (L.titles) for (const id in L.titles) if (!TITLES[id]) TITLES[id] = L.titles[id]; } catch (e){ console.error('[rpg] lore quests', L && L.region, e); } }
+defQ('main', LQ.main);
+// 이야기 물체 색인 (목표 글 · 위치의 기본값 — saga 가 있으면 F.saga.target 이 먼저예요)
+const LIDX = {};
+const spName = sp => { const n = String(sp.note || '').split(/[(—,·]/)[0].trim(); return n && n.length <= 16 ? n : ({ windmill_gear: '풍차 톱니', black_seeds: '검은 씨앗', torn_cloak: '찢긴 망토', lost_toy: '잃어버린 장난감' })[sp.kind] || '이야기 물건'; };
+for (const L of LORE){ try { for (const r of L.readables || []) LIDX[r.id] = { name: r.title, c: r.c }; for (const sp of L.setpieces || []) LIDX[sp.id] = { name: spName(sp), c: sp.c };
+  if (L.keystone) LIDX[L.keystone.id] = { name: L.keystone.name, c: L.keystone.c }; for (const b of L.bosses || []) LIDX[b.id] = { name: b.name, c: b.c }; } catch (e){} }
+const SAGA_K = { read: 'read', collect: 'picked', cleanse: 'cleansed', sboss: 'sboss' };
+const sagaHas = (t, id) => !!(S.saga && S.saga[SAGA_K[t]] && S.saga[SAGA_K[t]][id]);
 defQ('side', [
-  { id: 's_bee', giver: 'chief', lv: 4, name: '벌꿀 언덕의 말썽꾼', desc: '벌꿀 언덕의 벌들이 잔뜩 날이 서서 양봉가가 꿀을 뜨러 가지 못한다.', o: [kill('bee', 8, 'greenhill', 'c_bee', '벌꿀 언덕의 꿀벌 처치')],
-    intro: [['chief', '벌꿀 언덕 벌들이 요즘 신경이 곤두섰어. 양봉가가 꿀을 뜨러 가질 못한다네.'], ['chief', '여덟 마리쯤 얌전히 만들어 주게. 꿀 한 단지는 내가 보장하지! 허허.']], end: [['chief', '오오, 이 향기! 꿀이 다시 돌기 시작했어. 고맙네!']], rw: { items: [['hp1', 4], ['mp1', 2]] } },
   { id: 's_fish', giver: 'chief', lv: 3, name: '낚시 입문', desc: '모험만 하다 보면 마음이 메마른다. 연못이나 호수에서 낚시를 해 보자.', o: [{ t: 'fish', n: 1, d: '물고기 한 마리 낚기' }],
     intro: [['chief', '모험만 하다 보면 마음이 메마르지. 마을 연못에서 낚시나 한번 해 보게.'], ['chief', '한 마리만 낚아 와도 대단한 거야! 낚시는 기다림의 예술이거든.']], end: [['chief', '허허, 손맛을 봤구먼! 그 표정이면 충분하네.']], rw: { items: [['hp1', 3]] } },
-  { id: 's_king', giver: 'chief', lv: 6, name: '말랑대왕', desc: '말랑 웅덩이에서 가끔 집채만 한 왕슬라임 「말랑대왕」이 솟아난다. 나타나면 다른 모험가들과 함께 혼내 주자.', o: [fboss('kingSlime', '필드 보스: 말랑대왕 처치')],
-    intro: [['chief', '…자네, 혹시 「말랑대왕」 이야기 들어 봤나? 말랑 웅덩이에서 가끔 집채만 한 슬라임이 솟아난다네.'], ['chief', '나타나면 마을 전체가 흔들려. 다른 모험가들과 힘을 합쳐 혼쭐을 내 주게!']], end: [['chief', '말랑대왕을 쓰러뜨렸다고? 허허허! 오늘 저녁은 내가 사지!']], rw: { gear: { s: 'wpn', il: 7, r: 2 } } },
   { id: 's_temper', giver: 'smith', lv: 2, name: '첫 담금질', desc: '도른은 장비를 직접 강화해 보라고 한다. +3 까지는 반드시 성공한다.', o: [{ t: 'enh', lvl: 3, d: '아무 장비나 +3 까지 강화하기' }],
     intro: [['smith', '…장비는 두드릴수록 강해져. 너도 그렇고.'], ['smith', '아무 장비나 +3 까지 강화해 와. +3 까진 실패 안 해. 겁먹지 말고.']], mid: ['smith', '강화석이 모자라면 장비를 분해하거나 광석을 가져와.'], end: [['smith', '흠. 불꽃 보는 눈이 있군. 강화석 몇 개 챙겨 가. 다음부턴 확률 싸움이다.']], rw: { xp: 0.6, items: [['stone', 5]] } },
   { id: 's_herbs', giver: 'herbalist', lv: 2, name: '약초 심부름', desc: '미라는 초록 언덕의 약초를 캐다 달라고 한다. 반짝이는 풀이 약초다.', o: [gat('herb', 5, null, '약초 채집')],
@@ -960,6 +875,11 @@ defQ('side', [
   { id: 's_icefish', giver: 'hermit', lv: 26, name: '얼음 호수의 물고기', desc: '오크의 저녁거리를 낚아 오자.', o: [{ t: 'fish', n: 3, d: '물고기 세 마리 낚기' }],
     intro: [['hermit', '얼음 호수. 구멍 뚫고 낚아라. 셋.'], ['hermit', '…저녁거리다.']], end: [['hermit', '좋은 생선이다. (오크가 생선 하나를 건넨다… 아니, 다시 가져간다)']], rw: { items: [['mp4', 3]] } },
 ]);
+defQ('side', LQ.side.filter(q => !QD[q.id]));
+// 옛 저장: 없어진 퀘스트(옛 메인 m1~m21 · s_bee · s_king)는 진행 목록에서 걷어요 (완료 기록 S.q.done 은 그대로)
+for (const id of Object.keys(S.q.act)) if (!QD[id] && !id.startsWith('d_')) delete S.q.act[id];
+S.q.track = S.q.track.filter(id => QD[id] || id.startsWith('d_'));
+{ const a = ACH.find(x => x.id === 'main'); if (a) a.goal = Math.max(1, MAIN.length); }
 // NPC 인사말 (성격)
 const GREET = {
   chief: ['허허, 오늘도 바람이 좋구먼.', '모험은 순조로운가? 무리하지 말게나.', '이 마을 슬라임들도 원래는 착했다네. 허허.'],
@@ -974,10 +894,10 @@ const LATER = { chief: '허허, 마음이 바뀌면 언제든 오게.', smith: '
 
 // ───────────────────────── 퀘스트 엔진 ─────────────────────────
 const getQ = id => QD[id] || (S.q.daily && S.q.daily.list.find(q => q.id === id)) || null;
-const objN = o => o.n || 1;
+const objN = o => o.n || (o.t === 'collect' && Array.isArray(o.id) ? o.id.length : 1);
 const objDone = (q, a, i) => (a.p[i] || 0) >= objN(q.o[i]);
 const qReady = id => { const q = getQ(id), a = S.q.act[id]; return !!(q && a && q.o.every((o, i) => objDone(q, a, i))); };
-const qAvail = id => { const q = QD[id]; return !!q && !S.q.act[id] && !S.q.done[id] && (!q.prev || !!S.q.done[q.prev]); };
+const qAvail = id => { const q = QD[id]; return !!q && !S.q.act[id] && !S.q.done[id] && (!q.prev || !!S.q.done[q.prev]) && (!q.gate || !!S.q.act[q.gate] || !!S.q.done[q.gate]); };
 const qLvOk = q => S.lv >= q.lv;
 const nextMain = () => MAIN.find(id => !S.q.done[id]) || null;
 const qXP = q => Math.round(need(Math.max(1, q.lv)) * (q.rw.xp ?? (q.kind === 'main' ? 0.55 : q.kind === 'side' ? 0.4 : 0.2)));
@@ -986,10 +906,14 @@ const monName = k => k === '*' ? '몬스터' : (X.MON[k] && X.MON[k].name) || (X
 function objText(o){
   if (o.d) return o.d;
   switch (o.t){
-    case 'kill': return `${o.at ? byId('camps', o.at).name + '의 ' : ''}${monName(o.key)} 처치`; case 'elite': return '정예 몬스터 처치'; case 'gather': return `${ITEMS[o.item].n} 채집`;
+    case 'kill': return `${o.at && byId('camps', o.at) ? byId('camps', o.at).name + '의 ' : ''}${monName(o.key)} 처치`; case 'elite': return '정예 몬스터 처치'; case 'gather': return `${(ITEMS[o.item] || { n: '재료' }).n} 채집`;
     case 'discover': return `${(byId('landmarks', o.id) || {}).name} 찾아가기`; case 'talk': return `${NPCN(o.npc)}와 이야기하기`; case 'fish': return '물고기 낚기'; case 'seed': return '룬 정령 찾기';
     case 'chest': return '보물 상자 열기'; case 'enhtry': return '대장간에서 장비 강화하기'; case 'enh': return `장비를 +${o.lvl} 까지 강화하기`; case 'level': return `Lv.${o.lvl} 달성`;
     case 'raid': return `레이드 클리어`; case 'fboss': return '필드 보스 처치'; case 'glider': return '글라이더 얻기';
+    // 이야기 목표 (d 가 없을 때) — 이름은 lore 에서
+    case 'read': { const t = LIDX[o.id]; return t ? `「${t.name}」 읽기` : '기록 읽기'; } case 'collect': return '이야기 물건 줍기';
+    case 'cleanse': { const t = LIDX[o.id]; return t ? `${t.name}에 룬 새기기` : '수호석에 룬 새기기'; } case 'sboss': { const t = LIDX[o.id]; return t ? `${t.name} 진정시키기` : '이야기 보스 처치'; }
+    case 'reach': return '목적지에 가기';
   }
   return '목표';
 }
@@ -1036,6 +960,8 @@ function match(o, d){
     case 'fboss': return o.key === '*' || d.key === o.key;
     case 'gather': return (o.item === '*' || o.item === d.item) && (!o.reg || d.reg === o.reg);
     case 'discover': return d.id === o.id; case 'talk': return d.npc === o.npc; case 'raid': return d.id === o.id; case 'custom': return d.id === o.id;
+    case 'read': case 'cleanse': case 'sboss': return d.id === o.id;
+    case 'collect': return Array.isArray(o.id) ? o.id.includes(d.id) : d.id === o.id;
     case 'enh': return (d.lvl || 0) >= o.lvl;
     case 'fish': case 'seed': case 'chest': case 'enhtry': return true;
   }
@@ -1062,12 +988,19 @@ function checkInstant(){
       else if (o.t === 'level') ok = S.lv >= o.lvl; else if (o.t === 'enh') ok = maxE >= o.lvl;
       else if (o.t === 'raid') ok = !!S.ach.c['r_' + o.id] || raidCleared(o.id) || modGone('raid');
       else if (o.t === 'fish') ok = modGone('minigames'); else if (o.t === 'fboss') ok = modGone('life');
+      else if (o.t === 'reach') ok = fieldOn() && !!o.c && Math.hypot(pp.x - o.c[0], pp.z - o.c[1]) < (o.r || 8);
+      else if (SAGA_K[o.t]){ // 이야기 목표: saga 가 이미 기록해 둔 것 (퀘스트 받기 전에 읽은 비석 등) — 줍기는 주운 개수만큼
+        if (o.t === 'collect'){ const ids = Array.isArray(o.id) ? o.id : [o.id], n = Math.min(objN(o), ids.filter(x => sagaHas('collect', x)).length); if (n > (a.p[i] || 0)){ const was = qReady(id); a.p[i] = n; trkDirty = marksDirty = true; dirty(); if (!was && qReady(id)) onReady(id); } return; }
+        ok = sagaHas(o.t, o.id); }
       if (!ok) return; const was = qReady(id); a.p[i] = objN(o); trkDirty = marksDirty = true; dirty();
       F.note(`<span style="color:${KC[q.kind]}">${esc(objText(o))} ✔</span>`, 2.2); if (!was && qReady(id)) onReady(id); }); }
 }
 // 퀘스트 목표 위치 (지도 표시 · 나침반)
 function objTarget(o){
+  if (SAGA_K[o.t]){ try { const t = F.saga && F.saga.target && F.saga.target(o); if (t) return t; } catch (e){}
+    const ids = Array.isArray(o.id) ? o.id : [o.id]; for (const id of ids){ const t = LIDX[id]; if (t && t.c && !(o.t === 'collect' && sagaHas('collect', id))) return { x: t.c[0], z: t.c[1], label: t.name }; } return null; }
   switch (o.t){
+    case 'reach': return o.c ? { x: o.c[0], z: o.c[1], label: o.d || '목적지' } : null;
     case 'kill': case 'elite': { let c = o.at && byId('camps', o.at);
       if (!c){ let bd = 1e9; for (const cp of W.camps){ if (o.reg && cp.region !== o.reg) continue; if (o.t === 'kill' && o.key !== '*' && !cp.mobs.some(m => m[0] === o.key)) continue; const d = Math.hypot(cp.c[0] - pp.x, cp.c[1] - pp.z); if (d < bd){ bd = d; c = cp; } } }
       if (c) return { x: c.c[0], z: c.c[1], label: c.name }; if (o.reg){ const r = F.regionById(o.reg); return { x: r.c[0], z: r.c[1], label: r.name }; } return null; }
@@ -1111,34 +1044,43 @@ function ensureDaily(){
 }
 
 // ───────────────────────── NPC 대화 (퀘스트 · 대장간 · 상점 · 여관) ─────────────────────────
-async function npcTalk(n){
-  const id = n.id; spk(id);
+// 인사말: 이야기(saga)의 장별 대사 → 성격 인사 → 기본
+const greetOf = (id, def) => { let g = null; try { g = F.greet && F.greet(id); } catch (e){} return g || pick(GREET[id] || [def || '좋은 하루예요, 모험가님.']); };
+// svc = 다른 모듈이 맡은 NPC(글라이더 · 낚시 · 레이드 · 의상실)의 본래 대화 { label, fn } — 퀘스트 일이 없으면 그 대화로 바로 넘겨요
+async function npcTalk(n, svc){
+  const id = n.id; spk(id); let did = false;
   // ① 이 사람과 이야기하기 목표
   for (const qid of Object.keys(S.q.act)){ const q = getQ(qid), a = S.q.act[qid]; if (!q) continue;
     for (let i = 0; i < q.o.length; i++){ const o = q.o[i]; if (o.t !== 'talk' || o.npc !== id || a.p[i]) continue;
-      if (o.say) await X.say(o.say); const was = qReady(qid); a.p[i] = 1; trkDirty = marksDirty = true; F.note(`<span style="color:${KC[q.kind]}">${esc(objText(o))} ✔</span>`, 2.2); if (!was && qReady(qid)) onReady(qid, q.to === id); } }
-  // ② 보고
-  for (const qid of Object.keys(S.q.act)){ const q = getQ(qid); if (!q || q.kind === 'daily' || q.auto || q.to !== id || !qReady(qid)) continue; if (q.end) await X.say(q.end); completeQuest(qid); await X.sleep(350); }
+      if (o.say) await X.say(o.say); did = true; const was = qReady(qid); a.p[i] = 1; trkDirty = marksDirty = true; F.note(`<span style="color:${KC[q.kind]}">${esc(objText(o))} ✔</span>`, 2.2); BUS.emit('quest', { id: qid, state: 'progress' }); if (!was && qReady(qid)) onReady(qid, q.to === id); } }
+  // ② 보고 (장의 마지막 이야기면 saga 가 장 끝 연출을 보여 준 뒤에 이어가요)
+  for (const qid of Object.keys(S.q.act)){ const q = getQ(qid); if (!q || q.kind === 'daily' || q.auto || q.to !== id || !qReady(qid)) continue; if (q.end) await X.say(q.end); completeQuest(qid); did = true;
+    if (F.saga && F.saga.afterQuest){ try { await F.saga.afterQuest(qid); } catch (e){ console.error('[rpg] saga afterQuest', e); } } await X.sleep(350); }
   // ③ 새 퀘스트 · 진행 중 대화 · 서비스
   const nm = nextMain(), opts = [];
   const avail = Object.keys(QD).filter(qid => QD[qid].giver === id && qAvail(qid) && (QD[qid].kind !== 'main' || qid === nm));
   for (const qid of avail.filter(x => qLvOk(QD[x])).slice(0, 2)) opts.push([`❗ ${QD[qid].name}`, () => offerQuest(qid)]);
   const prog = Object.keys(S.q.act).find(qid => { const q = getQ(qid); return q && q.giver === id && q.mid && !qReady(qid); });
   if (prog) opts.push([`💬 ${getQ(prog).name}`, () => X.say([getQ(prog).mid])]);
+  const locked = avail.filter(x => !qLvOk(QD[x])).sort((a, b) => QD[a].lv - QD[b].lv)[0];
+  if (svc){ if (!opts.length){ if (!did) await svc.fn(); else marksDirty = true; if (locked) X.hint(`📜 ${n.name}의 다음 이야기는 <b>Lv.${QD[locked].lv}</b> 부터`, 3.5); return; } opts.push([svc.label, svc.fn]); }
   if (n.role === 'smith') opts.push(['⚒ 장비 강화', () => F.openSmith('enh')], ['🔥 제련 · 분해', () => F.openSmith('smelt')]);
   if (n.role === 'shop') opts.push(['🧪 물약 사고팔기', () => F.openShop('buy')], ['⚗ 물약 조합', () => F.openShop('craft')]);
   if (n.role === 'inn') opts.push([`🛏 쉬어 가기 (🪙 ${restCost()})`, () => innRest(n)]);
   if ((id === 'chief' || id === 'elin') && spiritPts() > 0) opts.push(['✨ 룬 정령 보답', () => spiritExchange(id)]);
-  const locked = avail.filter(x => !qLvOk(QD[x])).sort((a, b) => QD[a].lv - QD[b].lv)[0];
-  if (!opts.length){ await X.say([[id, pick(GREET[id] || ['좋은 하루예요, 모험가님.'])]]); if (locked) X.hint(`📜 ${n.name}의 다음 이야기는 <b>Lv.${QD[locked].lv}</b> 부터`, 3.5); return; }
+  if (!opts.length){ if (!did) await X.say([[id, greetOf(id)]]); if (locked) X.hint(`📜 ${n.name}의 다음 이야기는 <b>Lv.${QD[locked].lv}</b> 부터`, 3.5); marksDirty = true; return; }
   opts.push(['잘 있어요', null]);
-  const r = await X.say([[id, pick(GREET[id] || ['무엇을 도와 드릴까요?']), opts.map(o => o[0])]]);
+  const r = await X.say([[id, greetOf(id, '무엇을 도와 드릴까요?'), opts.map(o => o[0])]]);
   if (opts[r] && opts[r][1]) await opts[r][1]();
   marksDirty = true;
 }
 async function offerQuest(qid){
   const q = QD[qid], L = (q.intro || [[q.giver, q.desc]]).map(l => l.slice(0, 2)); L[L.length - 1] = [L[L.length - 1][0], L[L.length - 1][1], ['수락한다', '나중에']];
-  const r = await X.say(L); if (r === 0) acceptQuest(qid); else await X.say([[q.giver, LATER[q.giver] || '…그래요.']]);
+  const r = await X.say(L);
+  if (r === 0){ acceptQuest(qid);
+    // 글라이더 목표를 바람 상인이 직접 주는 이야기면 받는 순간 건네줘요
+    const gv = byId('npcs', q.giver); if (gv && gv.role === 'glider' && q.o.some(o => o.t === 'glider') && F.unlockGlider && !(S.field && S.field.glider)) X.later(0.4, () => F.unlockGlider()); }
+  else await X.say([[q.giver, LATER[q.giver] || '알겠어요. 마음이 바뀌면 언제든 다시 와요.']]);
 }
 const restCost = () => 15 + S.lv * 6;
 async function innRest(n){
@@ -1442,12 +1384,18 @@ function findSpirit(s){
 }
 
 // ───────────────────────── 의뢰 게시판 상호작용 · NPC 이름 · 퀘스트 표시 ─────────────────────────
-const RPG_ROLE = { quest_main: 1, quest: 1, smith: 1, shop: 1, inn: 1, board: 1 };
+const RPG_ROLE = { quest_main: 1, quest: 1, smith: 1, shop: 1, inn: 1, board: 1, resident: 1 };
 function spk(id){ const n = byId('npcs', id); if (!n) return; if (!X.NAMES[id]) X.NAMES[id] = n.name;
   if (!X.SPK[id]) X.SPK[id] = () => { const o = F.npcs && F.npcs[id]; if (!o || !o.fig) return null; const f = o.fig.root ? o.fig : o.fig.fig; return f && f.root ? f : null; }; }
 for (const n of W.npcs) spk(n.id);
-for (const r of ['quest_main', 'quest', 'smith', 'shop', 'inn']) F.roleTalkers[r] = n => npcTalk(n);
+for (const r of ['quest_main', 'quest', 'smith', 'shop', 'inn', 'resident']) F.roleTalkers[r] = n => npcTalk(n);
 F.roleTalkers.board = () => F.openBoard();
+// 다른 모듈이 대화를 맡은 NPC (글라이더 제피 · 낚시꾼 노아 · 레이드 대장 · 재봉사)도 이야기 퀘스트를 주고받을 수 있게:
+// 퀘스트 일(이야기하기 목표 · 보고 · 새 퀘스트)이 있으면 rpg 가 먼저 묻고, 없으면 원래 대화(F.roleTalkers[role])로 그대로 넘겨요
+const SVC = { glider: '🪂 바람 이야기 · 글라이더', fish: '🎣 낚시 · 물고기', raid: '⚔ 레이드', wardrobe: '👗 의상실' };
+const WRAPPED = {};
+for (const n of W.npcs){ if (n.object || RPG_ROLE[n.role] || F.talkers[n.id]) continue; WRAPPED[n.id] = 1;
+  F.talkers[n.id] = async nn => { const role = F.roleTalkers[nn.role]; await npcTalk(nn, role ? { label: SVC[nn.role] || '💬 이야기 나누기', fn: () => role(nn) } : null); }; }
 const BOARD = byId('npcs', 'board'), FALLBACK = {};
 let boardLabel = null;
 function npcLabel(id){ if (id === 'board') return boardLabel; const o = F.npcs && F.npcs[id]; return (o && o.label) || (FALLBACK[id] && FALLBACK[id].label) || null; }
@@ -1511,12 +1459,12 @@ BUS.on('kill', e => {
   if (!e) return; achAdd('kill', 1); achAdd('k_' + e.key, 1); if (e.elite) achAdd('elite', 1);
   if (e.chestGuard){ const c = CHESTS.find(c => c.id === e.chestGuard); if (c) c.killed = (c.killed || 0) + 1; }
   if (X.mode === 'stage') return;   // 스토리(튜토리얼) 스테이지는 퀘스트 · 드랍 없음
-  if (e.fboss){ achAdd('fboss', 1); qProgress('fboss', { key: e.key }); }
+  if (e.fboss && (!e.sbId || e.fbId)){ achAdd('fboss', 1); qProgress('fboss', { key: e.key }); }   // 이야기 보스(saga)는 필드 보스 목표 · 업적에 안 쳐요
   qProgress('kill', { e }); if (e.elite) qProgress('elite', { e });
   if (fieldOn()) dropFromKill(e);
 });
 BUS.on('discover', d => { if (d && d.id) qProgress('discover', d); achT = Math.min(achT, 0.4); marksDirty = true; });
-BUS.on('talk', d => { const n = d && byId('npcs', d.npc); if (n && !RPG_ROLE[n.role]) qProgress('talk', { npc: n.id }); });
+BUS.on('talk', d => { const n = d && byId('npcs', d.npc); if (n && !RPG_ROLE[n.role] && !WRAPPED[n.id]) qProgress('talk', { npc: n.id }); });
 BUS.on('glider', () => checkInstant());
 BUS.on('fish', () => { achAdd('fish', 1); qProgress('fish', {}); });
 BUS.on('raidClear', d => { if (!d) return; S.ach.c['r_' + d.id] = 1; qProgress('raid', { id: d.id }); achT = Math.min(achT, 0.4); X.save(); });
@@ -1529,7 +1477,7 @@ BUS.on('mode', () => { updPotHud(true); if (X.mode !== 'field') endGather(); });
 BUS.on('leaveField', () => { endGather(); navEl.style.display = 'none'; });
 BUS.on('npcsReady', () => { removeFallback(); marksDirty = true; refreshMarks(true); });
 BUS.on('enterField', d => { marksDirty = trkDirty = true; ensureDaily(); checkAutoMain(); updPotHud(true);
-  if (!(d && (d.warp || d.revive))) X.later(2.2, () => { if (!S.q.done.m1 && !S.q.act.m1) X.hint('❗ <b>촌장 하몬</b>에게 말을 걸어 보세요 — 머리 위 느낌표가 퀘스트예요', 6); else { const t = trkList()[0]; if (t) X.hint(`📜 ${getQ(t).name} — <b>L</b> 퀘스트 · <b>I</b> 가방 · <b>H/G</b> 물약`, 4.5); } }); });
+  if (!(d && (d.warp || d.revive))) X.later(2.2, () => { const m0 = MAIN[0]; if (F.saga && F.saga.busy && F.saga.busy()) return; if (m0 && !S.q.done[m0] && !S.q.act[m0]) X.hint(`❗ <b>${NPCN(QD[m0].giver)}</b>에게 말을 걸어 보세요 — 머리 위 느낌표가 퀘스트예요`, 6); else { const t = trkList()[0]; if (t) X.hint(`📜 ${getQ(t).name} — <b>L</b> 퀘스트 · <b>I</b> 가방 · <b>H/G</b> 물약`, 4.5); } }); });
 X.KEYH.push(code => {
   const ae = document.activeElement; if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
   if (OPEN && code === 'Escape'){ closeWin(); return true; }
@@ -1589,5 +1537,6 @@ F.addItem = (id, n = 1, o) => { let ok = true; if (SLOT[id]){ for (let i = 0; i 
 F.hasItem = (id, n = 1) => SLOT[id] ? S.inv.bag.filter(g => g.s === id).length >= n : cnt(id) >= n;
 F.takeItem = (id, n = 1) => { const ok = takeStack(id, n); if (ok) X.save(); return ok; };
 F.gold = (n = 0) => { n = Math.round(n); if (n < 0 && (S.gold || 0) < -n) return false; if (n) { addGold(n, true); X.save(); X.refreshHud(); } return S.gold || 0; };
-return { ITEMS, RAR, QD, MAIN, TITLES, ACH, NODES, CHESTS, SPIRITS, LOOT, makeGear, giveLoot: F.giveLoot, questEvent: F.questEvent, openInventory: F.openInventory, openQuests: F.openQuests, acceptQuest, completeQuest, gearScore, applyBonus };
+return { ITEMS, RAR, QD, MAIN, TITLES, ACH, NODES, CHESTS, SPIRITS, LOOT, makeGear, giveLoot: F.giveLoot, questEvent: F.questEvent, openInventory: F.openInventory, openQuests: F.openQuests, acceptQuest, completeQuest, gearScore, applyBonus,
+  getQ, objN, qReady, qAvail, nextMain, npcTalk, offerQuest, LIDX };
 }

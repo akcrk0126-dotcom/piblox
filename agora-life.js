@@ -494,6 +494,16 @@ function buildNpcs(){
   }
   BUS.emit('npcsReady', F.npcs);
 }
+// 이야기에 따라 NPC 가 자리를 옮겨요 (예: 리나가 뿌리 터널에서 잎새 마을 집으로) — saga 가 불러요
+F.moveNpc = (id, x, z, face) => {
+  const o = NPCL.find(q => q.n.id === id); if (!o) return false;
+  o.x = x; o.z = z; o.gy = null; if (face != null) o.face0 = face;
+  o.f.root.position.set(x, gnd(x, z), z); o.f.root.rotation.y = o.face0;
+  o.n.c = [x, z]; if (o.props.pot) o.props.pot.g.visible = false;
+  F.removeInteract(o.it); o.it = F.addInteract({ x, z, r: 2.8, title: `${o.n.name} · 대화`, action: () => F.talk(o.n.id) });
+  if (o.col){ F.removeCollider(o.col); o.col = F.circle(x, z, 0.5); }
+  o.vis = null; return true;
+};
 const PZ = G.pose;
 function npcPose(o, dt){
   const n = o.n, t = o.t, s = Math.sin, br = s(t * 1.8) * 0.006, look = s(t * 0.33) * 0.35 + s(t * 0.71) * 0.15, pr = o.props;
