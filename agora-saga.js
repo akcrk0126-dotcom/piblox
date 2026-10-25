@@ -107,13 +107,13 @@ css.textContent = `
   #sagaCine .card .ln { width:min(460px, 70vw); height:1px; margin:12px auto; background:linear-gradient(90deg, transparent, #e9c87e, transparent); position:relative; }
   #sagaCine .card .ln::after { content:''; position:absolute; left:50%; top:-4px; width:8px; height:8px; transform:translateX(-50%) rotate(45deg); background:#ffe9b0; box-shadow:0 0 10px #ffd36a; }
   #sagaCine .card .en { font:700 clamp(10px, 1.6vw, 13px) 'Cinzel'; letter-spacing:.55em; padding-left:.55em; color:#d6eef2; }
-  #sagaCine .card.sm { top:24%; } #sagaCine .card.sm .ti { font-size:clamp(22px, 4.6vw, 40px); }
+  #sagaCine .card.sm { top:17%; } #sagaCine .card.sm .ti { font-size:clamp(22px, 4.6vw, 40px); }
   #sagaCine .nar { position:absolute; left:50%; bottom:calc(13vh + 26px); transform:translateX(-50%); width:min(760px, 92vw); text-align:center; }
   #sagaCine .nar p { margin:2px 0; font:400 clamp(15px, 2.3vw, 20px)/1.7 'Gowun Batang'; color:#fbf3df; text-shadow:0 2px 10px rgba(0,0,0,.95), 0 0 3px #000; transition:opacity .9s; min-height:1.7em; }
   #sagaCine .nar p.old { opacity:.5; }
   #sagaCine .skip { position:absolute; right:16px; bottom:calc(13vh + 8px); font:500 11px 'Noto Sans KR'; color:#e8dcc0; opacity:.55; letter-spacing:.06em; }
   body.saga-cine.cine .lb { height:13vh; }
-  body.saga-cine #fregion, body.saga-cine #lmfound, body.saga-cine #prompt, body.saga-cine #hud { opacity:0 !important; pointer-events:none !important; } body.saga-intro #banner { opacity:0 !important; }
+  body.saga-cine #fregion, body.saga-cine #lmfound, body.saga-cine #prompt, body.saga-cine #hud, body.saga-cine #banner { opacity:0 !important; pointer-events:none !important; }
   #sagaCine .shade { position:absolute; left:0; right:0; bottom:13vh; height:34vh; background:linear-gradient(180deg, transparent, rgba(0,0,0,.42)); pointer-events:none; }
   .sagw { position:fixed; left:50%; top:50%; transform:translate(-50%,-48%) scale(.97); z-index:27; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
   .sagw.on { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
