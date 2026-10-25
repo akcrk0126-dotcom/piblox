@@ -4603,7 +4603,7 @@ function stampAncient(b,ox,oz,c){const put=(x,y,z,id)=>{const lx=x-ox,lz=z-oz;if
     if(e&&!(dz===2&&dx===0)){put(x,Y+1,z,DEEPSLATE_BRICKS);put(x,Y+2,z,dx===0||dz===0?DEEPSLATE_TILES:DEEPSLATE_BRICKS)}if(!e)put(x,Y+3,z,DEEPSLATE_TILES);
     if(dx===0&&dz===0){put(x,Y,z,chest?CHEST:LANTERN);put(x,Y+4,z,SHRIEKER)}}}
 // 전리품
-function lootOf(kind){const r=Math.random,L=[];const add=(id,a,b2,ch,e)=>{if(r()<(ch||1))L.push({id,n:a+Math.floor(r()*(b2-a+1)),d:0,e})};
+function lootOf(kind){const r=Math.random,L=[];const add=(id,a,b2,ch,e,d)=>{if(r()<(ch||1))L.push({id,n:a+Math.floor(r()*(b2-a+1)),d:d||0,e})};
   const book=()=>{const k=BOOK_ENCH[Math.floor(r()*BOOK_ENCH.length)];return {[k]:1+Math.floor(r()*ENCH_MAX[k])}};
   if(kind==='ancient'){add(ECHO_SHARD,1,3,.6);add(ENCH_BOOK,1,1,.5,book());add(GOLDEN_APPLE,1,2,.3);add(XP_BOTTLE,1,3,.5);add(CATALYST,1,2,.25);add(AMETHYST_SHARD,1,15,.4);add(toolId(3,4),1,1,.2);add(SADDLE,1,1,.2);add(BONE,1,15,.6);add(SCULK,4,10,.4);
     if(r()<.12)L.push({id:ARMOR_ID(3,2),n:1,d:0,e:{prot:1+Math.floor(r()*4)}})}
@@ -6162,7 +6162,7 @@ function nvTick(dt){if(!started||!player)return;const p=player;nvT-=dt;nvMT+=dt;
       if((m.type==='piglin'||m.type==='piglin_brute'||m.type==='hoglin')&&DIM!=='nether'){m.zomb=(m.zomb||0)+st;m.shake=1;m.yOff=(Math.random()-.5)*.06;if(m.zomb>=15)nvZombify(m)}
       // 몹이 불에 닿으면
       if(!m.D.fireproof){const id=getB(Math.floor(m.pos.x),Math.floor(m.pos.y+.2),Math.floor(m.pos.z));if(id===FIRE||id===SOUL_FIRE){m.fireT=Math.max(m.fireT||0,8);m.hurtT=0;hurtMob(m,id===SOUL_FIRE?2:1,null)}}}}
-  if(nvT>0)return;nvT=1;
+  nvStructAdv(dt);if(nvT>0)return;nvT=1;
   if(DIM==='nether'&&WORLD&&!p.dead){const bm=nBio(p.pos.x,p.pos.z),k='bc_nbio_'+WORLD.id;let v=0;try{v=+(localStorage.getItem(k)||0)}catch(e){}if(!(v&(1<<bm))){v|=1<<bm;try{localStorage.setItem(k,v)}catch(e){}if(v===31&&typeof advGrant==='function')advGrant('minecraft:nether/explore_nether')}}}
 // 좀비화: 피글린 · 피글린 야수 → 좀비 피글린, 호글린 → 조글린 (자리 · 방향 · 새끼 그대로)
 function nvZombify(m){const t=m.type==='hoglin'?'zoglin':'zpiglin',i=mobs.indexOf(m);if(i<0)return;scene.remove(m.g);mobs.splice(i,1);if(m.barter>0&&m.held)spawnItem({id:m.held,n:1},m.pos.x,m.pos.y+1,m.pos.z);
@@ -6173,6 +6173,246 @@ rc(['F ',' W'],{F:[FISHING_ROD],W:[WARPED_FUNGUS]},WARPED_STICK);rc([' S ','SCS'
 rc(['SS','SS'],{S:[CRIMSON_STEM]},CRIMSON_HYPHAE,3);rc(['SS','SS'],{S:[WARPED_STEM]},WARPED_HYPHAE,3);rc(['SS','SS'],{S:[STRIPPED[CRIMSON_STEM]]},STR_CRIMSON_HYPHAE,3);rc(['SS','SS'],{S:[STRIPPED[WARPED_STEM]]},STR_WARPED_HYPHAE,3);
 sl([CRIMSON_HYPHAE],CRIMSON_PLANKS,4);sl([WARPED_HYPHAE],WARPED_PLANKS,4);sl([STR_CRIMSON_HYPHAE],CRIMSON_PLANKS,4);sl([STR_WARPED_HYPHAE],WARPED_PLANKS,4);
 fixR(LODESTONE,R=>{if(R.key&&R.key.N)R.key.N=[IRON]});B[SOUL_CAMPFIRE].icon2d=1;
+// ── 네더 구조물 자리 (structure_set nether_complexes: 간격 27청크 · 띄움 4 · 요새 2 : 보루 3, 보루가 현무암 삼각주면 요새) · 옛 구역에 닿으면 안 지어요
+const NV_SP=27,NV_SEP=4,NV_ST=new Map();
+function nvStructAt(rx,rz){const k=SEED+':'+rx+','+rz;if(NV_ST.has(k))return NV_ST.get(k);const r=nvRng(rx,rz,30084232);
+  const cx=rx*NV_SP+Math.floor(r()*(NV_SP-NV_SEP)),cz=rz*NV_SP+Math.floor(r()*(NV_SP-NV_SEP)),seed=Math.floor(r()*2147483647);let type=r()*5<3?'bastion':'fortress';
+  let s=null;if(type==='bastion'&&nBiomeV(cx*16+8,cz*16+8)===4)type='fortress';
+  if(type==='fortress'){const L=nvFortLayout(cx,cz,seed);s={type,cx,cz,seed,P:L.P,bb:L.bb}}else{s=nvBastionPlan(cx,cz,seed)}
+  if(s&&(GEN<=4||WORLD&&WORLD.mp)){const [x0,,z0,x1,,z1]=s.bb;outer:for(let a=x0>>4;a<=x1>>4;a++)for(let c=z0>>4;c<=z1>>4;c++)if(nLegacy(a,c)){s=null;break outer}}
+  if(NV_ST.size>400)NV_ST.clear();NV_ST.set(k,s);return s}
+function nvStructsNear(x0,z0,x1,z1,fn){const r0x=Math.floor((x0>>4)/NV_SP)-1,r1x=Math.floor((x1>>4)/NV_SP)+1,r0z=Math.floor((z0>>4)/NV_SP)-1,r1z=Math.floor((z1>>4)/NV_SP)+1;
+  for(let rx=r0x;rx<=r1x;rx++)for(let rz=r0z;rz<=r1z;rz++){const s=nvStructAt(rx,rz);if(s&&s.bb[0]<=x1&&s.bb[3]>=x0&&s.bb[2]<=z1&&s.bb[5]>=z0)fn(s)}}
+// 청크에 걸치는 구조물 찍기 (nvFinish 에서): 요새 · 보루 · 네더 화석
+function nvStructs(b,cx,cz){const ox=cx*16,oz=cz*16;nvStructsNear(ox,oz,ox+15,oz+15,s=>{if(s.type==='fortress')nvFortStamp(b,ox,oz,s);else nvBastionStamp(b,ox,oz,s)});nvFossils(b,cx,cz)}
+// ── 네더 요새 (NetherFortressPieces · cubiomes 와 같은 배치 규칙): [크기 (끝−처음), 오프셋, 무게, 최대, 연속 가능, 조각 난수]
+const NV_FP=[[[18,9,18],[0,0,0],0,0,0,0],[[4,9,18],[-1,-3,0],30,0,1,0],[[18,9,18],[-8,-3,0],10,4,0,0],[[6,8,6],[-2,0,0],10,4,0,0],[[6,10,6],[-2,0,0],10,3,0,0],[[6,7,8],[-2,0,0],5,2,0,0],[[12,13,12],[-5,-3,0],5,1,0,0],
+  [[4,6,4],[-1,0,0],25,0,1,0],[[4,6,4],[-1,0,0],15,5,0,0],[[4,6,4],[-1,0,0],5,10,0,1],[[4,6,4],[-1,0,0],5,10,0,1],[[4,13,9],[-1,-7,0],10,3,1,0],[[8,6,8],[-3,0,0],7,2,0,0],[[12,13,12],[-5,-3,0],5,2,0,0],[[4,9,7],[-1,-3,0],0,0,0,1]];
+// 0 시작 (다리 교차로) · 1 다리 · 2 다리 교차로 · 3 요새화 교차로 · 4 계단방 · 5 블레이즈 왕좌 · 6 성 입구 · 7 복도 · 8 복도 교차 · 9 오른쪽 꺾임 · 10 왼쪽 꺾임 · 11 복도 계단 · 12 T자 발코니 · 13 사마귀 방 · 14 다리 끝
+function nvFortLayout(cx,cz,seed){const r=mulberry(seed),P=[],Q=[],ntyp=new Array(15).fill(0);let typlast=0;
+  const add=(typ,x,y,z,depth,f,pending)=>{const [d1x,d1y,d1z]=NV_FP[typ][0],[d0x,d0y,d0z]=NV_FP[typ][1],b0=[x,y+d0y,z],b1=[x,y+d0y+d1y,z];
+    if(f===0){b0[0]+=d0x;b0[2]+=d0z-d1z;b1[0]+=d0x+d1x;b1[2]+=d0z}else if(f===1){b0[0]+=d0z;b0[2]+=d0x;b1[0]+=d0z+d1z;b1[2]+=d0x+d1x}
+    else if(f===2){b0[0]+=d0x;b0[2]+=d0z;b1[0]+=d0x+d1x;b1[2]+=d0z+d1z}else{b0[0]+=d0z-d1z;b0[2]+=d0x;b1[0]+=d0z;b1[2]+=d0x+d1x}
+    for(const q of P)if(q.b1[0]>=b0[0]&&q.b0[0]<=b1[0]&&q.b1[2]>=b0[2]&&q.b0[2]<=b1[2]&&q.b1[1]>=b0[1]&&q.b0[1]<=b1[1])return null;
+    const p={typ,b0,b1,rot:f,depth,rs:NV_FP[typ][5]?Math.floor(r()*2147483647):0};if(pending){P.push(p);ntyp[typ]++;if(typ!==14)typlast=typ;Q.push(p)}return p};
+  const ext=(p,oh,ov,turn,cor)=>{const depth=p.depth+1;let f=p.rot,x,z;const y=p.b0[1]+ov;
+    if(turn===0){if(f===0){x=p.b0[0]+oh;z=p.b0[2]-1}else if(f===1){x=p.b1[0]+1;z=p.b0[2]+oh}else if(f===2){x=p.b0[0]+oh;z=p.b1[2]+1}else{x=p.b0[0]-1;z=p.b0[2]+oh}}
+    else if(turn<0){if(f&1){x=p.b0[0]+oh;z=p.b0[2]-1;f=0}else{x=p.b0[0]-1;z=p.b0[2]+oh;f=3}}
+    else{if(f&1){x=p.b0[0]+oh;z=p.b1[2]+1;f=2}else{x=p.b1[0]+1;z=p.b0[2]+oh;f=1}}
+    const t0=cor?7:1,t1=t0+(cor?7:6);let valid=-1,tot=0;
+    if(Math.abs(x-P[0].b0[0])<=112&&Math.abs(z-P[0].b0[2])<=112){valid=0;for(let t=t0;t<t1;t++){const mx=NV_FP[t][3];if(mx>0&&ntyp[t]>=mx)continue;if(mx>0)valid=1;tot+=NV_FP[t][2]}
+      if(valid&&tot>0&&depth<=30)for(let i=0;i<5;i++){let n=Math.floor(r()*tot);for(let t=t0;t<t1;t++){const mx=NV_FP[t][3];if(mx>0&&ntyp[t]>=mx)continue;n-=NV_FP[t][2];if(n>=0)continue;if(typlast===t&&!NV_FP[t][4])break;if(add(t,x,y,z,depth,f,1))return}}}
+    add(14,x,y,z,depth,f,valid>=0)};
+  const grow=p=>{const t=p.typ;
+    if(t===1)ext(p,1,3,0,0);else if(t===2||t===0){ext(p,8,3,0,0);ext(p,8,3,-1,0);ext(p,8,3,1,0)}else if(t===3){ext(p,2,0,0,0);ext(p,2,0,-1,0);ext(p,2,0,1,0)}else if(t===4)ext(p,2,6,1,0);
+    else if(t===6)ext(p,5,3,0,1);else if(t===7)ext(p,1,0,0,1);else if(t===8){ext(p,1,0,0,1);ext(p,1,0,-1,1);ext(p,1,0,1,1)}else if(t===9)ext(p,1,0,1,1);else if(t===10)ext(p,1,0,-1,1);else if(t===11)ext(p,1,0,0,1);
+    else if(t===12){const h=p.rot===0||p.rot===3?5:1;ext(p,h,0,-1,Math.floor(r()*8)!==0);ext(p,h,0,1,Math.floor(r()*8)!==0)}else if(t===13){ext(p,5,3,0,1);ext(p,5,11,0,1)}};
+  const st={typ:0,b0:[cx*16+2,64,cz*16+2],b1:[cx*16+20,73,cz*16+20],rot:Math.floor(r()*4),depth:0,rs:0};P.push(st);ntyp[0]=1;grow(st);
+  while(Q.length){const i=Math.floor(r()*Q.length),p=Q.splice(i,1)[0];grow(p)}
+  // 높이 맞추기 (마크 moveInsideHeights 48~70 → ×0.75)
+  let lo=1e9,hi=-1e9;for(const p of P){lo=Math.min(lo,p.b0[1]);hi=Math.max(hi,p.b1[1])}const ylo=nY(48),yhi=nY(70),room=yhi-ylo+1-(hi-lo+1),ny=room>1?ylo+Math.floor(r()*room):ylo,dy=ny-lo;
+  const bb=[1e9,1e9,1e9,-1e9,-1e9,-1e9];for(const p of P){p.b0[1]+=dy;p.b1[1]+=dy;for(let k=0;k<3;k++){bb[k]=Math.min(bb[k],p.b0[k]);bb[k+3]=Math.max(bb[k+3],p.b1[k])}}return{P,bb}}
+// 조각 붓: 조각 좌표 (x 너비 · y 높이 · z 앞쪽) → 세상 좌표 (마크 getWorldX/Z) · 청크 밖은 버려요
+function nvPieceCtx(b,ox,oz,p){const [x0,y0,z0]=p.b0,[x1,,z1]=p.b1,f=p.rot,meta=b.__meta||(b.__meta=new Map());
+  const W=(x,z)=>f===0||f===2?[x0+x,f===0?z1-z:z0+z]:[f===3?x1-z:x0+z,z0+x];
+  const S=(x,y,z,id,m)=>{const [wx,wz]=W(x,z),lx=wx-ox,lz=wz-oz,wy=y0+y;if(lx<0||lz<0||lx>15||lz>15||wy<1||wy>=NV_H-1)return;const i=bi(lx,wy,lz);b[i]=id;if(m)meta.set(i,m);else meta.delete(i)};
+  const G=(x,y,z)=>{const [wx,wz]=W(x,z),lx=wx-ox,lz=wz-oz,wy=y0+y;if(lx<0||lz<0||lx>15||lz>15||wy<0||wy>=NV_H)return -1;return b[bi(lx,wy,lz)]};
+  // 계단: 조각 방향 (z 앞) 기준으로 오르는 쪽 → 이 게임 메타 (HDIRS: +x 0 · −x 1 · +z 2 · −z 3)
+  const stair=d=>{const v=d==='-z'?[0,-1]:d==='+z'?[0,1]:d==='+x'?[1,0]:[-1,0],[ax,az]=f===0?[v[0],-v[1]]:f===2?[v[0],v[1]]:f===1?[v[1],v[0]]:[-v[1],v[0]];return ax>0?0:ax<0?1:az>0?2:3};
+  return{S,G,f,
+    B(xa,ya,za,xb,yb,zb,id,m){for(let y=ya;y<=yb;y++)for(let x=xa;x<=xb;x++)for(let z=za;z<=zb;z++)S(x,y,z,id,m)},
+    D(x,y,z){for(let k=y;k>=-y0;k--){const v=G(x,k,z);if(v<0||(v!==AIR&&v!==LAVA&&v!==WATER&&!(B[v]&&B[v].cross)))return;S(x,k,z,NETHER_BRICKS)}},
+    chest(x,y,z,kind){const [wx,wz]=W(x,z);if(wx-ox<0||wz-oz<0||wx-ox>15||wz-oz>15)return;S(x,y,z,CHEST);VCHEST.set(tkey(wx,y0+y,wz),kind)},
+    spawner(x,y,z,t){const [wx,wz]=W(x,z);if(wx-ox<0||wz-oz<0||wx-ox>15||wz-oz>15)return;S(x,y,z,SPAWNER);SPAWNERS.set(tkey(wx,y0+y,wz),t)},
+    stair}}
+const NB_=()=>NETHER_BRICKS;
+const NV_FB=[
+  // 0 시작 = 2 다리 교차로
+  c=>NV_FB[2](c),
+  // 1 다리 직선 (아래 받침 기둥 · 가장자리 울타리 창)
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,3,0,4,4,18,N);c.B(1,5,0,3,7,18,AIR);c.B(0,5,0,0,5,18,N);c.B(4,5,0,4,5,18,N);c.B(0,2,0,4,2,5,N);c.B(0,2,13,4,2,18,N);c.B(0,0,0,4,1,3,N);c.B(0,0,15,4,1,18,N);
+    for(let i=0;i<=4;i++)for(let j=0;j<=2;j++){c.D(i,-1,j);c.D(i,-1,18-j)}for(const x of [0,4]){c.B(x,1,1,x,4,1,F);c.B(x,3,4,x,4,4,F);c.B(x,3,14,x,4,14,F);c.B(x,1,17,x,4,17,F)}},
+  // 2 다리 교차로 (열십자)
+  c=>{const N=NETHER_BRICKS;c.B(7,3,0,11,4,18,N);c.B(0,3,7,18,4,11,N);c.B(8,5,0,10,7,18,AIR);c.B(0,5,8,18,7,10,AIR);c.B(7,5,0,7,5,7,N);c.B(7,5,11,7,5,18,N);c.B(11,5,0,11,5,7,N);c.B(11,5,11,11,5,18,N);
+    c.B(0,5,7,7,5,7,N);c.B(11,5,7,18,5,7,N);c.B(0,5,11,7,5,11,N);c.B(11,5,11,18,5,11,N);c.B(7,2,0,11,2,5,N);c.B(7,2,13,11,2,18,N);c.B(7,0,0,11,1,3,N);c.B(7,0,15,11,1,18,N);
+    for(let i=7;i<=11;i++)for(let j=0;j<=2;j++){c.D(i,-1,j);c.D(i,-1,18-j)}c.B(0,2,7,5,2,11,N);c.B(13,2,7,18,2,11,N);c.B(0,0,7,3,1,11,N);c.B(15,0,7,18,1,11,N);for(let k=0;k<=2;k++)for(let l=7;l<=11;l++){c.D(k,-1,l);c.D(18-k,-1,l)}},
+  // 3 요새화 교차로 (사방 문 · 울타리 아치)
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,0,0,6,1,6,N);c.B(0,2,0,6,7,6,AIR);for(const [a,b2] of [[0,1],[5,6]]){c.B(a,2,0,b2,6,0,N);c.B(a,2,6,b2,6,6,N)}for(const [a,b2] of [[0,1],[5,6]]){c.B(0,2,a,0,6,b2,N);c.B(6,2,a,6,6,b2,N)}
+    c.B(2,6,0,4,6,0,N);c.S(2,5,0,F);c.S(4,5,0,F);c.B(2,6,6,4,6,6,N);c.S(2,5,6,F);c.S(4,5,6,F);c.B(0,6,2,0,6,4,N);c.S(0,5,2,F);c.S(0,5,4,F);c.B(6,6,2,6,6,4,N);c.S(6,5,2,F);c.S(6,5,4,F);for(let i=0;i<=6;i++)for(let j=0;j<=6;j++)c.D(i,-1,j)},
+  // 4 계단방 (오른쪽 위로 나가요)
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,0,0,6,1,6,N);c.B(0,2,0,6,10,6,AIR);c.B(0,2,0,1,8,0,N);c.B(5,2,0,6,8,0,N);c.B(0,2,1,0,8,6,N);c.B(6,2,1,6,8,6,N);c.B(1,2,6,5,8,6,N);c.B(0,3,2,0,5,4,F);c.B(6,3,2,6,5,2,F);c.B(6,3,4,6,5,4,F);
+    c.S(5,2,5,N);c.B(4,2,5,4,3,5,N);c.B(3,2,5,3,4,5,N);c.B(2,2,5,2,5,5,N);c.B(1,2,5,1,6,5,N);c.B(1,7,1,5,7,4,N);c.B(6,8,2,6,8,4,AIR);c.B(2,6,0,4,8,0,N);c.B(2,5,0,4,5,0,F);for(let i=0;i<=6;i++)for(let j=0;j<=6;j++)c.D(i,-1,j)},
+  // 5 블레이즈 왕좌 (계단 단 위 생성기 · 울타리 난간)
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,2,0,6,7,7,AIR);c.B(1,0,0,5,1,7,N);c.B(1,2,1,5,2,7,N);c.B(1,3,2,5,3,7,N);c.B(1,4,3,5,4,7,N);c.B(1,2,0,1,4,2,N);c.B(5,2,0,5,4,2,N);c.B(1,5,2,1,5,3,N);c.B(5,5,2,5,5,3,N);
+    c.B(0,5,3,0,5,8,N);c.B(6,5,3,6,5,8,N);c.B(1,5,8,5,5,8,N);c.S(1,6,3,F);c.S(5,6,3,F);c.B(0,6,3,0,6,8,F);c.B(6,6,3,6,6,8,F);c.B(1,6,8,5,7,8,F);c.B(2,8,8,4,8,8,F);c.spawner(3,5,5,'blaze');for(let i=0;i<=6;i++)for(let j=0;j<=6;j++)c.D(i,-1,j)},
+  // 6 성 입구 (가운데 용암 우물)
+  c=>{NV_FB.room(c,false);const N=NETHER_BRICKS;c.B(5,5,5,7,5,7,N);c.B(6,1,6,6,4,6,AIR);c.S(6,0,6,N);c.S(6,5,6,LAVA);for(let y=1;y<=4;y++)c.S(6,y,6,LAVA,8)},
+  // 7 복도
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,0,0,4,1,4,N);c.B(0,2,0,4,5,4,AIR);c.B(0,2,0,0,5,4,N);c.B(4,2,0,4,5,4,N);for(const x of [0,4])for(const z of [1,3])c.B(x,3,z,x,4,z,F);c.B(0,6,0,4,6,4,N);for(let i=0;i<=4;i++)for(let j=0;j<=4;j++)c.D(i,-1,j)},
+  // 8 복도 교차
+  c=>{const N=NETHER_BRICKS;c.B(0,0,0,4,1,4,N);c.B(0,2,0,4,5,4,AIR);c.B(0,2,0,0,5,0,N);c.B(4,2,0,4,5,0,N);c.B(0,2,4,0,5,4,N);c.B(4,2,4,4,5,4,N);c.B(0,6,0,4,6,4,N);for(let i=0;i<=4;i++)for(let j=0;j<=4;j++)c.D(i,-1,j)},
+  // 9 오른쪽 꺾임 (1/3 상자)
+  c=>NV_FB.turn(c,1),
+  // 10 왼쪽 꺾임
+  c=>NV_FB.turn(c,-1),
+  // 11 복도 계단 (내려가요)
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB,sm=c.stair('-z');for(let i=0;i<=9;i++){const j=Math.max(1,7-i),k=Math.min(Math.max(j+5,14-i),13);c.B(0,0,i,4,j,i,N);c.B(1,j+1,i,3,k-1,i,AIR);if(i<=6)for(let x=1;x<=3;x++)c.S(x,j+1,i,ST_NB,sm);
+    c.B(0,k,i,4,k,i,N);c.B(0,j+1,i,0,k-1,i,N);c.B(4,j+1,i,4,k-1,i,N);if((i&1)===0){c.B(0,j+2,i,0,j+3,i,F);c.B(4,j+2,i,4,j+3,i,F)}for(let x=0;x<=4;x++)c.D(x,-1,i)}},
+  // 12 T자 발코니
+  c=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,0,0,8,1,8,N);c.B(0,2,0,8,5,8,AIR);c.B(0,6,0,8,6,5,N);c.B(0,2,0,2,5,0,N);c.B(6,2,0,8,5,0,N);c.B(1,3,0,1,4,0,F);c.B(7,3,0,7,4,0,F);c.B(0,2,4,8,2,8,N);c.B(1,1,4,2,2,4,AIR);c.B(6,1,4,7,2,4,AIR);
+    c.B(0,3,8,8,3,8,F);c.B(0,3,6,0,3,7,F);c.B(8,3,6,8,3,7,F);c.B(0,3,4,0,5,5,N);c.B(8,3,4,8,5,5,N);c.B(1,3,5,2,5,5,N);c.B(6,3,5,7,5,5,N);c.B(1,4,5,1,5,5,F);c.B(7,4,5,7,5,5,F);for(let i=0;i<=8;i++)for(let j=0;j<=5;j++)c.D(i,-1,j)},
+  // 13 사마귀 방 (영혼 모래 밭 두 줄 · 가운데 계단으로 위층)
+  c=>{NV_FB.room(c,true);const N=NETHER_BRICKS,F=FENCE_NB,sn=c.stair('+z'),se=c.stair('+x'),sw=c.stair('-x');
+    for(let j=0;j<=6;j++){const k=j+4;for(let l=5;l<=7;l++)c.S(l,5+j,k,ST_NB,sn);if(k>=5&&k<=8)c.B(5,5,k,7,j+4,k,N);else if(k>=9&&k<=10)c.B(5,8,k,7,j+4,k,N);if(j>=1)c.B(5,6+j,k,7,9+j,k,AIR)}
+    for(let l=5;l<=7;l++)c.S(l,12,11,ST_NB,sn);c.B(5,6,7,5,7,7,F);c.B(7,6,7,7,7,7,F);c.B(5,13,12,7,13,12,AIR);c.B(2,5,2,3,5,3,N);c.B(2,5,9,3,5,10,N);c.B(9,5,2,10,5,3,N);c.B(9,5,9,10,5,10,N);c.B(10,5,4,10,5,8,N);
+    for(const z of [2,3,9,10]){c.S(4,5,z,ST_NB,sw);c.S(8,5,z,ST_NB,se)}c.B(3,4,4,4,4,8,SOUL_SAND);c.B(8,4,4,9,4,8,SOUL_SAND);const r=mulberry(c.rs|7);for(const [a,b2] of [[3,4],[8,9]])for(let x=a;x<=b2;x++)for(let z=4;z<=8;z++)c.S(x,5,z,r()<.5?NWART1:NWART0)},
+  // 14 다리 끝 (무너진 끝: 조각 난수로 길이가 들쭉날쭉)
+  c=>{const N=NETHER_BRICKS,r=mulberry(c.rs);for(let i=0;i<=4;i++)for(let j=3;j<=4;j++)c.B(i,j,0,i,j,Math.floor(r()*8),N);c.B(0,5,0,0,5,Math.floor(r()*8),N);c.B(4,5,0,4,5,Math.floor(r()*8),N);
+    for(let l=0;l<=4;l++)c.B(l,2,0,l,2,Math.floor(r()*5),N);for(let l=0;l<=4;l++)for(let j=0;j<=1;j++)c.B(l,j,0,l,j,Math.floor(r()*3),N)}];
+// 큰 방 껍데기 (성 입구 · 사마귀 방 공통): 13×14×13 · 울타리 창 · 지붕 난간 · 받침 기둥
+NV_FB.room=(c,stalk)=>{const N=NETHER_BRICKS,F=FENCE_NB;c.B(0,3,0,12,4,12,N);c.B(0,5,0,12,13,12,AIR);c.B(0,5,0,1,12,12,N);c.B(11,5,0,12,12,12,N);c.B(2,5,11,4,12,12,N);c.B(8,5,11,10,12,12,N);c.B(5,9,11,7,12,12,N);c.B(2,5,0,4,12,1,N);c.B(8,5,0,10,12,1,N);c.B(5,9,0,7,12,1,N);
+  c.B(2,11,2,10,12,10,N);if(!stalk)c.B(5,8,0,7,8,0,F);
+  for(let i=1;i<=11;i+=2){c.B(i,10,0,i,11,0,F);c.B(i,10,12,i,11,12,F);c.B(0,10,i,0,11,i,F);c.B(12,10,i,12,11,i,F);c.S(i,13,0,N);c.S(i,13,12,N);c.S(0,13,i,N);c.S(12,13,i,N);if(i!==11){c.S(i+1,13,0,F);c.S(i+1,13,12,F);c.S(0,13,i+1,F);c.S(12,13,i+1,F)}}
+  for(const [x,z] of [[0,0],[0,12],[12,0],[12,12]])c.S(x,13,z,F);for(let j=3;j<=9;j+=2){c.B(1,7,j,1,8,j,F);c.B(11,7,j,11,8,j,F)}
+  c.B(4,2,0,8,2,12,N);c.B(0,2,4,12,2,8,N);c.B(4,0,0,8,1,3,N);c.B(4,0,9,8,1,12,N);c.B(0,0,4,3,1,8,N);c.B(9,0,4,12,1,8,N);
+  for(let k=4;k<=8;k++)for(let l=0;l<=2;l++){c.D(k,-1,l);c.D(k,-1,12-l)}for(let i=0;i<=2;i++)for(let j=4;j<=8;j++){c.D(i,-1,j);c.D(12-i,-1,j)}};
+// 꺾인 복도: 바깥 벽 울타리 창 · 1/3 확률 상자 (nether_bridge 표)
+NV_FB.turn=(c,dir)=>{const N=NETHER_BRICKS,F=FENCE_NB,R=dir>0;c.B(0,0,0,4,1,4,N);c.B(0,2,0,4,5,4,AIR);const w=R?0:4,o=R?4:0;c.B(w,2,0,w,5,4,N);c.B(w,3,1,w,4,1,F);c.B(w,3,3,w,4,3,F);c.B(o,2,0,o,5,0,N);
+  if(R)c.B(1,2,4,4,5,4,N);else c.B(0,2,4,3,5,4,N);c.B(1,3,4,1,4,4,F);c.B(3,3,4,3,4,4,F);if(mulberry(c.rs)()*3<1)c.chest(R?1:3,2,3,'nether_bridge');c.B(0,6,0,4,6,4,N);for(let i=0;i<=4;i++)for(let j=0;j<=4;j++)c.D(i,-1,j)};
+function nvFortStamp(b,ox,oz,s){for(const p of s.P){if(p.b1[0]<ox||p.b0[0]>ox+15||p.b1[2]<oz||p.b0[2]>oz+15)continue;const c=nvPieceCtx(b,ox,oz,p);c.rs=p.rs;NV_FB[p.typ](c)}}
+// 요새 조각 안인지 (스폰 · 발전 과제)
+function nvFortAt(x,y,z){let hit=false;nvStructsNear(x,z,x,z,s=>{if(hit||s.type!=='fortress')return;for(const p of s.P)if(x>=p.b0[0]&&x<=p.b1[0]&&z>=p.b0[2]&&z<=p.b1[2]&&y>=p.b0[1]-1&&y<=p.b1[1]+1){hit=true;break}});return hit}
+// ── 보루 잔해 (bastion_remnant): 네 가지 (주거 구역 · 호글린 우리 · 보물 방 · 다리) 를 마크 조각 생김새 · 크기 · 상자 · 몹 수를 보고 직접 지었어요
+//    (마크 템플릿은 쓰지 않아요). 시작 높이 y33 (×0.75) · 윤나는 흑암 벽돌 (30% 금 감) · 흑암 · 금 박힌 흑암 · 현무암 · 금 블록 · 용암
+//    한 번 계획 (상자 · 블록 무리 목록) 을 세워 두고 청크마다 걸치는 것만 찍어요. 부서진 곳은 자리마다 같은 해시라 청크 경계에서 끊기지 않아요
+const NV_BK={};
+function nvBastionPlan(cx,cz,seed){const r=mulberry(seed^0x5bd1e995),kind=['units','stable','treasure','bridge'][Math.floor(r()*4)],rot=Math.floor(r()*4),O=[],y0=nY(33)+1;
+  const C={r,O,kind,seed,
+    box(x0,y0,z0,x1,y1,z1,id,m){O.push([0,Math.min(x0,x1),Math.min(y0,y1),Math.min(z0,z1),Math.max(x0,x1),Math.max(y0,y1),Math.max(z0,z1),id,m||0])},
+    hollow(x0,y0,z0,x1,y1,z1,id){C.box(x0,y0,z0,x1,y1,z0,id);C.box(x0,y0,z1,x1,y1,z1,id);C.box(x0,y0,z0,x0,y1,z1,id);C.box(x1,y0,z0,x1,y1,z1,id)},
+    set(x,y,z,id,m){C.box(x,y,z,x,y,z,id,m)},chest(x,y,z,k){O.push([1,x,y,z,x,y,z,k])},spawner(x,y,z,t){O.push([2,x,y,z,x,y,z,t])},mob(x,y,z,t){O.push([3,x,y,z,x,y,z,t])},
+    legs(x0,z0,x1,z1,y){O.push([4,x0,0,z0,x1,y,z1])}};
+  NV_BK[kind](C);let sx=0,sz=0;for(const o of O){sx=Math.max(sx,o[4]+1);sz=Math.max(sz,o[6]+1)}
+  const w=rot&1?sz:sx,d=rot&1?sx:sz,X0=cx*16+8-(w>>1),Z0=cz*16+8-(d>>1),T=(x,z)=>rot===0?[X0+x,Z0+z]:rot===1?[X0+sz-1-z,Z0+x]:rot===2?[X0+sx-1-x,Z0+sz-1-z]:[X0+z,Z0+sx-1-x];
+  for(const o of O){const [a,c]=T(o[1],o[3]),[e,f]=T(o[4],o[6]);o.wb=[Math.min(a,e),o[2]+y0,Math.min(c,f),Math.max(a,e),o[5]+y0,Math.max(c,f)]}
+  let top=0;for(const o of O)top=Math.max(top,o[5]);return{type:'bastion',kind,cx,cz,seed,rot,T,y0,O,sx,sz,bb:[X0,0,Z0,X0+w-1,y0+top,Z0+d-1]}}
+// 벽돌 고르기 (bastion_generic_degradation 느낌): -1 윤나는 흑암 벽돌 (금 간 것 섞임) · -2 흑암 (금 박힌 것 조금) · -3 윤나는 흑암 · -4 부서진 벽 (빈 곳 15%) · -5 현무암
+function nvBPal(id,x,y,z,s){if(id>=0)return id;const h=hash3(x,y,z,s);
+  if(id===-1||id===-4){if(id===-4&&h<.15)return -9;return h<.3?CRACKED_PB:h<.33?BLACKSTONE:PB_BRICKS}
+  if(id===-2)return h<.012?GILDED_BS:h<.1?POL_BLACKSTONE:BLACKSTONE;if(id===-3)return h<.08?CHISELED_PB:POL_BLACKSTONE;if(id===-5)return h<.3?POL_BASALT:BASALT;return id}
+function nvBastionStamp(b,ox,oz,s){const meta=b.__meta||(b.__meta=new Map()),inv={};for(const o of s.O){const w=o.wb;if(w[3]<ox||w[0]>ox+15||w[5]<oz||w[2]>oz+15)continue;
+  const kind=o[0];if(kind===4){for(let x=Math.max(w[0],ox);x<=Math.min(w[3],ox+15);x++)for(let z=Math.max(w[2],oz);z<=Math.min(w[5],oz+15);z++)for(let y=s.y0-1;y>1;y--){const i=bi(x-ox,y,z-oz),v=b[i];if(v!==AIR&&v!==LAVA&&!(B[v]&&B[v].cross))break;b[i]=nvBPal(-2,x,y,z,s.seed)}continue}
+  for(let lx=o[1];lx<=o[4];lx++)for(let lz=o[3];lz<=o[6];lz++){const [x,z]=s.T(lx,lz);if(x<ox||z<oz||x>ox+15||z>oz+15)continue;for(let ly=o[2];ly<=o[5];ly++){const y=s.y0+ly;if(y<1||y>=NV_H-2)continue;const i=bi(x-ox,y,z-oz);
+    if(kind===0){const id=nvBPal(o[7],x,y,z,s.seed);if(id===-9)continue;b[i]=id;const st=B[id]&&B[id].shape==='stairs';if(st||o[8])meta.set(i,st?nvRotStair(o[8],s.rot):o[8]);else meta.delete(i)}
+    else if(kind===1){b[i]=CHEST;meta.delete(i);VCHEST.set(tkey(x,y,z),o[7])}else if(kind===2){b[i]=SPAWNER;SPAWNERS.set(tkey(x,y,z),o[7])}
+    else if(kind===3)smobAt('bv'+x+','+y+','+z,o[7],x+.5,y,z+.5,1,'nether')}}}}
+// 계단 메타 돌리기 (HDIRS 순서 +x −x +z −z 를 보루 회전만큼)
+function nvRotStair(m,rot){const d=m&3,up=m&4,v=[[1,0],[-1,0],[0,1],[0,-1]][d];let [ax,az]=v;for(let k=0;k<rot;k++){const t=ax;ax=-az;az=t}return(ax>0?0:ax<0?1:az>0?2:3)|up}
+// 몹 무리: 쇠뇌/칼 피글린 · 피글린 야수 (piglin_melee 풀) · 호글린 (2:1 빈칸)
+const nvBPig=(C,x,y,z,brute)=>{const q=C.r();if(brute){C.mob(x,y,z,q<.85?'piglin_brute':'piglin')}else if(q<.9)C.mob(x,y,z,'piglin')};
+// 주거 구역: 커다란 성벽 (ㄱ자, 높이 24) + 2×2 집 (13×13, 2~3층 · 층마다 방 · 계단 · 상자) + 둘째 층 잇는 길
+NV_BK.units=C=>{const r=C.r;C.box(5,1,5,47,20,47,AIR);
+  C.box(0,-2,0,47,0,5,-2);C.box(0,1,0,47,22,4,-4);C.box(0,1,0,4,22,47,-4);C.box(0,-2,0,5,0,47,-2);C.legs(0,0,47,5,0);C.legs(0,0,5,47,0);
+  for(let i=0;i<48;i+=2){C.set(i,23,0,-1);C.set(0,23,i,-1)}C.box(1,18,1,46,18,4,-3);C.box(1,18,1,4,46,-3);C.box(1,19,1,46,22,3,AIR);C.box(1,19,1,3,22,46,AIR);   // 성벽 위 길
+  for(let k=0;k<4;k++){nvBPig(C,10+k*9,19,2,false);nvBPig(C,2,19,10+k*9,k===2)}
+  for(let i=0;i<4;i++){const ux=10+(i&1)*19,uz=10+(i>>1)*19,fl=2+Math.floor(r()*2);
+    C.box(ux-1,-2,uz-1,ux+13,0,uz+13,-2);C.legs(ux,uz,ux+12,uz+12,0);
+    C.box(ux,1,uz,ux+12,2+fl*6,uz+12,AIR);for(let f=0;f<fl;f++){const y=1+f*6;C.box(ux,y,uz,ux+12,y,uz+12,-1);C.hollow(ux,y+1,uz,ux+12,y+5,uz+12,-4);C.box(ux+5,y+1,uz,ux+7,y+3,uz,AIR);C.box(ux,y+1,uz+5,ux,y+3,uz+7,AIR);
+      C.box(ux+1,y+1,uz+6,ux+11,y+4,uz+6,-1);C.box(ux+6,y+1,uz+1,ux+6,y+4,uz+11,-1);C.box(ux+3,y+1,uz+6,ux+3,y+3,uz+6,AIR);C.box(ux+6,y+1,uz+9,ux+6,y+3,uz+9,AIR);C.box(ux+9,y+1,uz+6,ux+9,y+3,uz+6,AIR);
+      if(f+1<fl)for(let k=0;k<5;k++)C.set(ux+2+k,y+1+k,uz+10,SST.pb_bricks,0);
+      if(r()<.6)C.chest(ux+2+Math.floor(r()*3),y+1,uz+2+Math.floor(r()*3),'bastion_other');if(r()<.35)C.set(ux+10,y+1,uz+2,GOLD_BLOCK);
+      nvBPig(C,ux+9,y+1,uz+9,f===0&&i===3);if(r()<.7)nvBPig(C,ux+3,y+1,uz+9,false)}
+    C.box(ux,1+fl*6,uz,ux+12,1+fl*6,uz+12,-1);for(let k=0;k<13;k+=2){C.set(ux+k,2+fl*6,uz,-1);C.set(ux+k,2+fl*6,uz+12,-1);C.set(ux,2+fl*6,uz+k,-1);C.set(ux+12,2+fl*6,uz+k,-1)}}
+  // 둘째 층 길 (집 사이 · 성벽까지) · 가운데 광장 금 블록
+  C.box(23,7,15,28,7,17,-1);C.box(23,7,34,28,7,36,-1);C.box(15,7,23,17,7,28,-1);C.box(34,7,23,36,7,28,-1);C.box(5,7,15,9,7,17,-1);C.box(15,7,5,17,7,9,-1);
+  C.box(23,0,23,28,0,28,-3);C.set(25,1,25,GOLD_BLOCK);C.set(26,1,26,GILDED_BS);C.chest(25,1,26,'bastion_other')};
+// 호글린 우리: 네모 성 (40×40, 높이 26) 안을 따라 내려가는 넓은 비탈 (층 4개) · 가운데 마당 우리 6칸 (호글린 · 상자)
+NV_BK.stable=C=>{const r=C.r,S=39;C.box(0,1,0,S,26,S,AIR);C.box(0,-2,0,S,0,S,-2);C.legs(0,0,S,S,0);C.hollow(0,1,0,S,25,S,-4);C.hollow(1,1,1,S-1,25,S-1,-1);for(let i=0;i<=S;i+=2){C.set(i,26,0,-1);C.set(i,26,S,-1);C.set(0,26,i,-1);C.set(S,26,i,-1)}
+  C.box(17,1,0,22,5,1,AIR);   // 정문
+  // 벽을 따라 도는 길 (폭 6) — 층마다 높이 6 차이, 한쪽 변에서 비탈로 이어져요
+  for(let lv=1;lv<4;lv++){const y=lv*6;C.box(2,y,2,S-2,y,7,-1);C.box(2,y,S-7,S-2,y,S-2,-1);C.box(2,y,2,7,y,S-2,-1);C.box(S-7,y,2,S-2,y,S-2,-1);
+    for(let k=8;k<S-8;k+=3){C.set(k,y+1,8,BLACKSTONE_WALL_ID());C.set(k,y+1,S-8,BLACKSTONE_WALL_ID());C.set(8,y+1,k,BLACKSTONE_WALL_ID());C.set(S-8,y+1,k,BLACKSTONE_WALL_ID())}
+    nvBPig(C,4,y+1,20,lv===2);nvBPig(C,S-4,y+1,20,false);if(r()<.6)C.chest(S-4,y+1,4,'bastion_hoglin_stable')}
+  for(let k=0;k<6;k++){const y=k+1;C.box(S-7,y,8+k*2,S-2,y,9+k*2,-1);C.set(S-7+Math.floor(r()*6),y+1,8+k*2,SST.pb_bricks,3)}   // 땅 → 1층 비탈
+  for(let lv=1;lv<3;lv++)for(let k=0;k<6;k++){const y=lv*6+k+1,z=S-9-k*2;C.box(2,y,z,7,y,z+1,-1);C.box(2,y+1,z,7,y+3,z+1,AIR)}
+  // 가운데 마당: 우리 6칸 (흑암 담 · 문 틈) · 호글린 · 상자
+  C.box(9,0,9,S-9,0,S-9,-2);for(let i=0;i<6;i++){const px=10+(i%3)*7,pz=i<3?10:S-16;C.hollow(px,1,pz,px+5,2,pz+5,BLACKSTONE_WALL_ID());C.box(px+2,1,pz+(i<3?5:0),px+3,2,pz+(i<3?5:0),AIR);
+    C.mob(px+2,1,pz+2,'hoglin');if(r()<.5)C.mob(px+3,1,pz+3,'hoglin');if(r()<.4)C.chest(px+1,1,pz+1,'bastion_hoglin_stable');if(r()<.25)C.set(px+4,1,pz+4,GOLD_BLOCK)}
+  C.chest(19,1,19,'bastion_hoglin_stable');nvBPig(C,20,1,22,true);nvBPig(C,17,1,25,false)};
+const BLACKSTONE_WALL_ID=()=>WALL.blackstone;
+// 보물 방: 큰 네모 성 (38×38, 높이 40) · 바닥 용암 · 가운데 기둥 (금 블록 심) 위 보물 상자 · 마그마 큐브 생성기 둘 · 네 다리 · 모서리 방 상자
+NV_BK.treasure=C=>{const r=C.r,S=37,M=18;C.box(0,-3,0,S,0,S,-2);C.legs(0,0,S,S,0);C.hollow(0,1,0,S,39,S,-1);C.hollow(1,1,1,S-1,39,S-1,-1);C.hollow(2,1,2,S-2,36,S-2,-4);
+  for(let i=0;i<=S;i+=2){C.set(i,40,0,-1);C.set(i,40,S,-1);C.set(0,40,i,-1);C.set(S,40,i,-1)}C.box(3,4,3,S-3,38,S-3,AIR);C.box(3,1,3,S-3,3,S-3,LAVA);C.box(3,0,3,S-3,0,S-3,-2);   // 용암 바닥
+  C.box(3,4,3,S-3,4,6,-1);C.box(3,4,S-6,S-3,4,S-3,-1);C.box(3,4,3,6,4,S-3,-1);C.box(S-6,4,3,S-3,4,S-3,-1);   // 둘레 길
+  C.box(M-3,1,0,M+3,7,2,AIR);C.box(M-3,4,0,M+3,4,2,-1);   // 정문
+  // 가운데 기둥 9×9: 바깥 벽돌 · 안쪽 금 블록 · 꼭대기 단 (y20) 보물 상자
+  C.box(M-4,1,M-4,M+4,20,M+4,-1);C.box(M-2,6,M-2,M+2,18,M+2,GOLD_BLOCK);C.box(M-1,7,M-1,M+1,17,M+1,-1);C.box(M-5,20,M-5,M+5,20,M+5,-3);C.chest(M,21,M,'bastion_treasure');
+  for(const [dx,dz] of [[-2,0],[2,0],[0,-2],[0,2]])C.set(M+dx,21,M+dz,GOLD_BLOCK);for(const [dx,dz] of [[-2,-2],[2,2],[-2,2],[2,-2]])C.set(M+dx,21,M+dz,GILDED_BS);
+  C.box(M-5,6,M-1,M-5,8,M+1,AIR);C.box(M+5,6,M-1,M+5,8,M+1,AIR);C.spawner(M-5,7,M,'magma');C.spawner(M+5,7,M,'magma');   // 기둥 양옆 마그마 큐브 생성기
+  // 네 다리 (y20, 폭 3) · 사슬
+  C.box(M-1,20,3,M+1,20,M-5,-1);C.box(M-1,20,M+5,M+1,20,S-3,-1);C.box(3,20,M-1,M-5,20,M+1,-1);C.box(M+5,20,M-1,S-3,20,M+1,-1);for(const k of [8,12,S-8,S-12]){C.box(M,5,k,M,19,k,CHAIN);C.box(k,5,M,k,19,M,CHAIN)}
+  // 위층 회랑 (y20 · y30) · 모서리 방 상자
+  for(const y of [20,30]){C.box(3,y,3,S-3,y,6,-1);C.box(3,y,S-6,S-3,y,S-3,-1);C.box(3,y,3,6,y,S-3,-1);C.box(S-6,y,3,S-3,y,S-3,-1)}
+  for(const [x,z] of [[4,4],[S-5,4],[4,S-5],[S-5,S-5]]){C.chest(x,21,z,'bastion_other');if(r()<.5)C.set(x+(x<M?1:-1),21,z,GOLD_BLOCK)}
+  for(let k=0;k<4;k++){nvBPig(C,M-3+k*2,21,M+3,true);nvBPig(C,[4,S-4][k&1],k<2?5:31,[10,S-10][k>>1],true)}for(let k=0;k<6;k++)nvBPig(C,4+k*5,31,4,false)};
+// 다리: 문 성채 (24×15, 높이 34, 꼭대기 상자) → 긴 다리 (용암 위 다리 둘) → 성벽 (24×12, 높이 26) · 금 블록
+NV_BK.bridge=C=>{const r=C.r;C.box(0,-3,0,23,0,14,-2);C.legs(0,0,23,14,0);C.hollow(0,1,0,23,33,14,-4);C.box(1,1,1,22,33,13,-1);C.box(8,1,0,15,12,14,AIR);C.box(9,13,0,14,14,14,-3);   // 아치 문
+  C.box(1,16,1,22,16,13,-1);C.box(2,17,2,21,32,12,AIR);C.box(2,24,2,21,24,12,-1);C.box(1,34,1,22,34,13,-1);for(let i=0;i<24;i+=2){C.set(i,35,0,-1);C.set(i,35,14,-1)}for(let i=0;i<15;i+=2){C.set(0,35,i,-1);C.set(23,35,i,-1)}
+  for(let k=0;k<8;k++)C.set(3+k,17+k,7,SST.pb_bricks,0);for(let k=0;k<8;k++)C.set(20-k,25+k,7,SST.pb_bricks,1);   // 계단
+  C.chest(12,35,7,'bastion_bridge');C.set(10,35,7,GOLD_BLOCK);C.set(14,35,7,GOLD_BLOCK);C.set(12,25,10,GOLD_BLOCK);
+  // 다리 (폭 5 · y16) 와 다리 받침
+  C.box(8,17,15,15,22,46,AIR);C.box(9,15,15,14,16,46,-1);C.box(9,17,15,9,17,46,-4);C.box(14,17,15,14,17,46,-4);for(const z of [24,36]){C.box(9,0,z-1,14,14,z+1,-1);C.legs(9,z-1,14,z+1,0)}
+  for(let z=18;z<46;z+=6)if(r()<.5)C.set(r()<.5?10:13,17,z,GOLD_BLOCK);
+  // 끝 성벽
+  C.box(0,-3,47,23,0,58,-2);C.legs(0,47,23,58,0);C.hollow(0,1,47,23,26,58,-4);C.box(1,1,48,22,15,57,-1);C.box(9,16,47,14,19,47,AIR);C.box(1,16,48,22,16,57,-3);C.box(2,17,49,21,25,56,AIR);C.box(1,26,48,22,26,57,-1);
+  for(let i=0;i<24;i+=2){C.set(i,27,47,-1);C.set(i,27,58,-1)}C.chest(3,17,55,'bastion_bridge');C.chest(20,17,55,'bastion_bridge');
+  for(let k=0;k<5;k++)nvBPig(C,4+k*4,17,52,k===2);for(let k=0;k<4;k++)nvBPig(C,3+k*5,35,3,false);nvBPig(C,11,17,30,false);if(r()<.6)C.mob(12,1,52,'hoglin')};
+// 보루 찾기 (발전 과제 · /locate)
+function nvBastionAt(x,y,z){let hit=false;nvStructsNear(x,z,x,z,s=>{if(s.type==='bastion'&&x>=s.bb[0]&&x<=s.bb[3]&&z>=s.bb[2]&&z<=s.bb[5]&&y>=s.y0-4&&y<=s.bb[4])hit=true});return hit}
+function nvNearest(type,x,z){let best=null,bd=1e18;const rx=Math.floor((x>>4)/NV_SP),rz=Math.floor((z>>4)/NV_SP);for(let a=-6;a<=6;a++)for(let c=-6;c<=6;c++){const s=nvStructAt(rx+a,rz+c);if(!s||s.type!==type)continue;const sx=(s.bb[0]+s.bb[3])>>1,sz=(s.bb[2]+s.bb[5])>>1,d=Math.hypot(sx-x,sz-z);if(d<bd){bd=d;best={x:sx,z:sz,y:s.type==='fortress'?s.P[0].b0[1]+5:s.y0+2}}}return best}
+// ── 네더 화석 (nether_fossil: 영혼 모래 골짜기만, 간격 2청크 · 띄움 1): 바닥 위 빈칸에 뼈 블록 뼈대 (등뼈 · 갈비 · 머리) · 크기 여러 가지
+function nvFossils(b,cx,cz){const ox=cx*16,oz=cz*16;for(let rx=Math.floor(cx/2)-1;rx<=Math.floor(cx/2)+1;rx++)for(let rz=Math.floor(cz/2)-1;rz<=Math.floor(cz/2)+1;rz++){
+  const r=nvRng(rx,rz,14357921),fcx=rx*2+Math.floor(r()*1),fcz=rz*2+Math.floor(r()*1),x=fcx*16+Math.floor(r()*16),z=fcz*16+Math.floor(r()*16),seed=Math.floor(r()*1e9);
+  if(Math.abs(x-ox-8)>24||Math.abs(z-oz-8)>24||nBiomeV(x,z)!==1)continue;if(GEN<=4&&nLegacy(fcx,fcz))continue;
+  // 높이: y32 (×0.75) ~ 꼭대기−2 에서 아래로 내려가며 빈칸 + 아래가 단단한 곳 (용암 바다 위)
+  const ncx=Math.floor(x/16),ncz=Math.floor(z/16),raw=nRaw(ncx,ncz),o=(x-ncx*16)|((z-ncz*16)<<4),fr=mulberry(seed);let y=nY(32)+Math.floor(fr()*(NV_H-3-nY(32)));
+  while(y>N_LAVA+1){const a=raw[o|y<<8],c=raw[o|(y-1)<<8];if(a===0&&(c===1||c===3))break;y--}if(y<=N_LAVA+1)continue;nvFossil(b,ox,oz,x,y,z,mulberry(seed))}}
+function nvFossil(b,ox,oz,x,y,z,r){const set=(X,Y,Z)=>{const lx=X-ox,lz=Z-oz;if(lx<0||lz<0||lx>15||lz>15||Y<1||Y>=NV_H-1)return;b[bi(lx,Y,lz)]=BONE_BLOCK},kind=Math.floor(r()*4),ax=r()<.5,L=4+Math.floor(r()*7),P=(u,v,h)=>ax?set(x+u,y+h,z+v):set(x+v,y+h,z+u);
+  if(kind===0){for(let u=0;u<L;u++){P(u,0,0);if(u%2===0)for(let v=1;v<=2;v++){P(u,v,v===2?1:0);P(u,-v,v===2?1:0);P(u,v,2);P(u,-v,2)}}}   // 갈비뼈 등뼈
+  else if(kind===1){for(let h=0;h<L;h++){P(0,0,h);if(h%3===1){P(1,0,h);P(-1,0,h)}}P(0,1,L-1);P(0,-1,L-1)}   // 서 있는 큰 뼈
+  else if(kind===2){for(let u=0;u<3;u++)for(let v=-1;v<=1;v++)for(let h=0;h<3;h++)if(!(u===1&&v===0&&h===1)&&!(h===2&&Math.abs(v)===1&&u===2))P(u,v,h);for(let u=3;u<3+L;u++)P(u,0,0)}   // 머리 + 등뼈
+  else{for(let u=0;u<L;u++){P(u,0,Math.floor(Math.sin(u*.6)*1.5)+1);if(r()<.4)P(u,0,0)}}}   // 휜 뼈
+// ── 보루 · 요새 상자 보물 (마크 26.3 loot_table 그대로: 풀 · 뽑는 횟수 · 무게 · 개수 · 손상 · 마법)
+//    게임에 없는 것 → 비슷한 것: 분광 화살 → 화살 · 다이아 창 → 다이아 검 · 마법 황금 사과 → 황금 사과 · 음반 Pigstep → 금괴 · 피글린 깃발 무늬 → 깃발 · 구리/철/다이아/금 말 갑옷 → 말 갑옷
+const nvDur=id=>ITEM[id]&&(ITEM[id].tool?ITEM[id].tool.dur:ITEM[id].armor?ITEM[id].armor.dur:0)||0;
+function nvEnch(id,only){if(only)return{[only]:1+Math.floor(Math.random()*ENCH_MAX[only])};const c=enchCands({id,n:1});if(!c.length)return undefined;const k=c[Math.floor(Math.random()*c.length)];return{[k]:1+Math.floor(Math.random()*ENCH_MAX[k])}}
+// 풀 하나: rolls [최소, 최대] · 항목 [id (0 = 빈칸), 최소, 최대, 무게, 마법 (1 = 아무거나 · 'soul' 영혼 가속), 남은 내구 [a,b]]
+function nvPool(add,rolls,L){const n=rolls[0]+Math.floor(Math.random()*(rolls[1]-rolls[0]+1));let t=0;for(const e of L)t+=e[3];
+  for(let i=0;i<n;i++){let q=Math.random()*t;for(const e of L){if((q-=e[3])>=0)continue;const [id,a,b,,en,dm]=e;if(!id)break;const st={id,n:a+Math.floor(Math.random()*(b-a+1)),d:0};
+    if(dm){const D=nvDur(id),f=dm[0]+Math.random()*(dm[1]-dm[0]);st.d=Math.floor(D*(1-f))}const ench=en?nvEnch(id,en===1?null:en):undefined;add(id,st.n,st.n,1,ench,st.d);break}}}
+const NV_TRIM=add=>{nvPool(add,[1,1],[[0,0,0,11],[SNOUT_TRIM,1,1,1]])};
+Object.assign(LOOT2,{
+  bastion_treasure:a=>{const D=[.8,1];nvPool(a,[3,3],[[NETHERITE_INGOT,1,1,15],[ANCIENT_DEBRIS,1,1,10],[NETHERITE_SCRAP,1,1,8],[ANCIENT_DEBRIS,2,2,4],[toolId(3,3),1,1,6,1,D],[toolId(3,3),1,1,6,1,D],[ARMOR_ID(3,1),1,1,6,1,D],[ARMOR_ID(3,0),1,1,6,1,D],[ARMOR_ID(3,2),1,1,6,1,D],[ARMOR_ID(3,3),1,1,6,1,D],
+      [toolId(3,3),1,1,6],[toolId(3,3),1,1,6],[ARMOR_ID(3,1),1,1,5],[ARMOR_ID(3,0),1,1,5],[ARMOR_ID(3,3),1,1,5],[ARMOR_ID(3,2),1,1,5],[DIAMOND,2,6,5],[GOLDEN_APPLE,1,1,2]]);
+    nvPool(a,[3,4],[[ARROW,12,25,1],[GOLD_BLOCK,2,5,1],[IRON_BLOCK,2,5,1],[GOLD,3,9,1],[IRON,3,9,1],[CRYING_OBSIDIAN,3,5,1],[QUARTZ,8,23,1],[GILDED_BS,5,15,1],[MAGMA_CREAM,3,8,1]]);NV_TRIM(a);a(NETHERITE_UPGRADE,1,1,1);nvLootAdv()},
+  bastion_other:a=>{nvPool(a,[1,1],[[toolId(3,0),1,1,6,1],[toolId(3,2),1,1,6],[CROSSBOW,1,1,6,1],[ANCIENT_DEBRIS,1,1,12],[NETHERITE_SCRAP,1,1,4],[ARROW,10,22,10],[BANNER,1,1,9],[GOLD,1,1,5],[GOLDEN_CARROT,6,17,12],[GOLDEN_APPLE,1,1,9],[ENCH_BOOK,1,1,10,'soul']]);
+    nvPool(a,[2,2],[[toolId(2,3),1,1,2,1,[.1,.9]],[IRON_BLOCK,1,1,2],[ARMOR_ID(1,3),1,1,1,'soul'],[toolId(4,1),1,1,1,1],[GOLD_BLOCK,1,1,2],[CROSSBOW,1,1,1],[GOLD,1,6,2],[IRON,1,6,2],[toolId(4,3),1,1,1],[ARMOR_ID(1,1),1,1,1],[ARMOR_ID(1,0),1,1,1],[ARMOR_ID(1,2),1,1,1],[ARMOR_ID(1,3),1,1,1],[CRYING_OBSIDIAN,1,5,2]]);
+    nvPool(a,[3,4],[[GILDED_BS,1,5,2],[CHAIN,2,10,1],[MAGMA_CREAM,2,6,2],[BONE_BLOCK,3,6,1],[IRON_NUGGET,2,8,1],[OBSIDIAN,4,6,1],[GOLD_NUGGET,2,8,1],[STRING,4,6,1],[ARROW,5,17,2],[COOKED_PORK,1,1,1]]);NV_TRIM(a);nvPool(a,[1,1],[[0,0,0,9],[NETHERITE_UPGRADE,1,1,1]]);nvLootAdv()},
+  bastion_bridge:a=>{a(LODESTONE,1,1,1);nvPool(a,[1,2],[[CROSSBOW,1,1,1,1,[.1,.5]],[ARROW,10,28,1],[GILDED_BS,8,12,1],[CRYING_OBSIDIAN,3,8,1],[GOLD_BLOCK,1,1,1],[GOLD,4,9,1],[IRON,4,9,1],[toolId(4,3),1,1,1],[ARMOR_ID(1,1),1,1,1,1],[ARMOR_ID(1,0),1,1,1,1],[ARMOR_ID(1,2),1,1,1,1],[ARMOR_ID(1,3),1,1,1,1],[toolId(4,1),1,1,1,1]]);
+    nvPool(a,[2,4],[[STRING,1,6,1],[LEATHER,1,3,1],[ARROW,5,17,1],[IRON_NUGGET,2,6,1],[GOLD_NUGGET,2,6,1]]);NV_TRIM(a);nvPool(a,[1,1],[[0,0,0,9],[NETHERITE_UPGRADE,1,1,1]]);nvLootAdv()},
+  bastion_hoglin_stable:a=>{nvPool(a,[1,1],[[toolId(3,2),1,1,15,1,[.15,.8]],[toolId(3,0),1,1,12,1,[.15,.95]],[NETHERITE_SCRAP,1,1,8],[ANCIENT_DEBRIS,1,1,12],[ANCIENT_DEBRIS,2,2,5],[SADDLE,1,1,12],[GOLD_BLOCK,2,4,16],[GOLDEN_CARROT,8,17,10],[GOLDEN_APPLE,1,1,10]]);
+    nvPool(a,[3,4],[[toolId(4,1),1,1,1,1],[CRYING_OBSIDIAN,1,5,1],[GLOWSTONE,3,6,1],[GILDED_BS,2,5,1],[SOUL_SAND,2,7,1],[CRIMSON_NYLIUM,2,7,1],[GOLD_NUGGET,2,8,1],[LEATHER,1,3,1],[ARROW,5,17,1],[STRING,3,8,1],[PORK,2,5,1],[COOKED_PORK,2,5,1],[CRIMSON_FUNGUS,2,7,1],[CRIMSON_ROOTS,2,7,1]]);
+    NV_TRIM(a);nvPool(a,[1,1],[[0,0,0,9],[NETHERITE_UPGRADE,1,1,1]]);nvLootAdv()},
+  nether_bridge:a=>{nvPool(a,[2,4],[[DIAMOND,1,3,5],[IRON,1,5,5],[GOLD,1,3,15],[toolId(4,3),1,1,5],[ARMOR_ID(1,1),1,1,5],[FLINT_STEEL,1,1,5],[NWART_ITEM,3,7,5],[SADDLE,1,1,10],[HORSE_ARMOR,1,1,8],[HORSE_ARMOR,1,1,5],[HORSE_ARMOR,1,1,5],[HORSE_ARMOR,1,1,3],[OBSIDIAN,2,4,2]]);
+    nvPool(a,[1,1],[[0,0,0,14],[RIB_TRIM,1,1,1]])}});
+function nvLootAdv(){if(typeof advGrant==='function')advGrant('minecraft:nether/loot_bastion')}
+// 구조물에 들어가면 (발전 과제): 요새 · 보루
+let nvSAT=0;function nvStructAdv(dt){nvSAT-=dt;if(nvSAT>0||DIM!=='nether'||typeof advGrant!=='function')return;nvSAT=1.5;const p=player.pos,x=Math.floor(p.x),y=Math.floor(p.y),z=Math.floor(p.z);
+  if(nvFortAt(x,y,z))advGrant('minecraft:nether/find_fortress');if(nvBastionAt(x,y,z))advGrant('minecraft:nether/find_bastion')}
+// /locate: 새 요새 · 보루 (옛 구역 안이면 예전 것)
+LOCATORS.fortress.find=function(x,z){let best=null,bd=1e18;const rx=Math.floor(x/160),rz=Math.floor(z/160);for(let a=-20;a<=20;a++)for(let c=-20;c<=20;c++){const f=fortressAt(rx+a,rz+c);if(!f||!nLegacy(f.x>>4,f.z>>4))continue;const d=Math.hypot(f.x-x,f.z-z);if(d<bd){bd=d;best={x:f.x,y:N_FY,z:f.z}}}
+  const n=nvNearest('fortress',x,z);if(n&&Math.hypot(n.x-x,n.z-z)<bd)best=n;return best};
+LOCATORS.bastion_remnant.find=function(x,z){let best=null,bd=1e18;const o=nearestOf(BASTION,x,z);if(o&&nLegacy(o.x>>4,o.z>>4)){best={x:o.x,y:o.y+1,z:o.z};bd=Math.hypot(o.x-x,o.z-z)}const n=nvNearest('bastion',x,z);if(n&&Math.hypot(n.x-x,n.z-z)<bd)best=n;return best};
 
 /* ═════════════ 엔드 더하기: 엔드 도시 (집 · 나선 계단 탑 · 넓은 방 · 다리) · 엔드 배 (겉날개) · 셜커 · 엔드 관문 · 가지 뻗는 후렴초 · 작은 엔드 섬 ═════════════ */
 // 후렴초 (마크 ChorusFlowerBlock.generatePlant 를 따라): 줄기가 1~4칸 오르고 옆으로 가지를 뻗어요 · 가지 끝은 후렴화
