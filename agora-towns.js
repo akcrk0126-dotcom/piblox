@@ -259,7 +259,7 @@ for (const L of LORE){ const st = L && L.settlement; if (st && st.id && st.c && 
 function keepFor(t){
   const out = [], add = (c, r) => { if (!c || !isFinite(c[0])) return; const x = c[0] - t.x, z = c[1] - t.z; if (Math.hypot(x, z) < t.r + 30) out.push([x, z, r]); };
   for (const L of LORE){ if (!L) continue;
-    for (const r of (L.settlement && L.settlement.residents) || []) add(r.c, 3.1);
+    for (const r of (L.settlement && L.settlement.residents) || []){ add(r.c, 3.1); if (r.home) add(r.home, 3.1); }
     for (const r of L.readables || []) add(r.c, 2.6);
     for (const sp of L.setpieces || []) add(sp.c, 2.5 + (SPR[sp.kind] || 0.6) * (sp.s || 1));
     if (L.keystone) add(L.keystone.c, L.keystone.small ? 3.2 : 4.6);
@@ -270,6 +270,10 @@ function keepFor(t){
   for (const l of W.lifts || []) add(l.from, 5);
   return out;
 }
+
+// 그 정착지 안(반경 + pad)에 이 종류 셋피스가 있나 (있으면 내 것과 겹치지 않게 빼요)
+const spNear = (t, kinds, pad = 6) => LORE.some(L => L && (L.setpieces || []).some(sp => kinds.includes(sp.kind) && sp.c && Math.hypot(sp.c[0] - t.x, sp.c[1] - t.z) < t.r + pad));
+const spList = (t, kinds, pad = 6) => { const out = []; for (const L of LORE) for (const sp of (L && L.setpieces) || []) if (kinds.includes(sp.kind) && sp.c && Math.hypot(sp.c[0] - t.x, sp.c[1] - t.z) < t.r + pad) out.push([sp.c[0] - t.x, sp.c[1] - t.z, 2.5 + (SPR[sp.kind] || 0.6)]); return out; };
 
 // ───────────────────────── 짓기 틀 ─────────────────────────
 // 현재: K (G.Kit), B (LB), OX/OZ (정착지 중심 = 그룹 원점), CUR (정착지). 좌표는 그룹 로컬 x, z · 절대 y
@@ -977,11 +981,13 @@ function bStilt(t){
   const NODES = { e: [re[0], re[1], gy(re[0], re[1])], a: [...tw(-0.62, -0.62), DY], b: [...tw(-0.3, -0.18), DY], c: [...tw(0.12, 0.22), DY], d: [...tw(0.35, 1.1), DY], f: [...tw(0.6, -0.05), DY], g: [...tw(-0.78, 0.25), DY], h: [...tw(-1.12, 0.3), 0] };
   for (const k in NODES){ const n = NODES[k]; if (!isW(OX + n[0], OZ + n[1]) && k !== 'e') n[2] = Math.max(n[2], gy(n[0], n[1]) + 0.25); }
   const EDGES = [['e', 'a'], ['a', 'b'], ['b', 'c'], ['c', 'd'], ['c', 'f'], ['b', 'g'], ['g', 'h']];
-  const segs = [];
-  for (const [i, j] of EDGES){ const A = NODES[i], Bn = NODES[j]; walkFollow(A, Bn, 1.9, (segs.length % 2) ? 1 : -1); segs.push([A, Bn]); for (let k = 0.2; k < 1; k += 0.2) occupy(lerp(A[0], Bn[0], k), lerp(A[1], Bn[1], k), 1.4); }
-  for (const k of ['a', 'b', 'c', 'f', 'g']){ const n = NODES[k]; walkPad(n[0], n[1], n[2], 1.4); occupy(n[0], n[1], 2.0); }
+  const segs = [], big = spList(t, ['dock', 'drowned_house', 'nets', 'sunken_boat', 'shrine', 'offering'], 8);
+  const blocked = (A, Bn) => big.some(([x, z, kr]) => { const ex = Bn[0] - A[0], ez = Bn[1] - A[1], l2 = ex * ex + ez * ez || 1, tt = clamp(((x - A[0]) * ex + (z - A[1]) * ez) / l2, 0, 1); return Math.hypot(x - A[0] - ex * tt, z - A[1] - ez * tt) < kr - 1.2; });
+  const used = new Set(['e']);
+  for (const [i, j] of EDGES){ const A = NODES[i], Bn = NODES[j]; if (!used.has(i) || blocked(A, Bn)) continue; used.add(j); walkFollow(A, Bn, 1.9, (segs.length % 2) ? 1 : -1); segs.push([A, Bn]); for (let k = 0.2; k < 1; k += 0.2) occupy(lerp(A[0], Bn[0], k), lerp(A[1], Bn[1], k), 1.4); }
+  for (const k of ['a', 'b', 'c', 'f', 'g']){ if (!used.has(k)) continue; const n = NODES[k]; walkPad(n[0], n[1], n[2], 1.4); occupy(n[0], n[1], 2.0); }
   // 말뚝집: 물 위 넷 + 둑 위 둘 — 툇마루에서 가까운 갈림목까지 판자길
-  const nearNode = (x, z) => { let b = null, bd = 1e9; for (const k of ['a', 'b', 'c', 'd', 'f', 'g']){ const n = NODES[k], d = Math.hypot(n[0] - x, n[1] - z); if (d < bd){ bd = d; b = n; } } return b; };
+  const nearNode = (x, z) => { let b = null, bd = 1e9; for (const k of ['a', 'b', 'c', 'd', 'f', 'g']){ if (!used.has(k)) continue; const n = NODES[k], d = Math.hypot(n[0] - x, n[1] - z); if (d < bd){ bd = d; b = n; } } return b; };
   const want = [[...tw(-0.05, -0.55), 1], [...tw(0.25, 0.62), 1], [...tw(0.95, -0.2), 1], [...tw(-0.62, 0.72), 1], [...tw(-1.15, -0.3), 0], [...tw(0.55, -1.25), 0], [...tw(-0.5, -1.35), 0]];
   let nets = 0;
   for (const [x, z, wet] of want){ const nn = nearNode(x, z), s = site(x, z, 5.2, 6.4, { water: true, max: 7, face: [nn[0], nn[1]], maxR: R0 + 6, k: 0.78 }); if (!s) continue;
@@ -989,14 +995,14 @@ function bStilt(t){
     if (d > 1.2 && d < 16) walkFollow([hs.front[0], hs.front[1], hs.y], n2, 1.5, 0);
     P.lamp(hs.front[0] + Math.cos(s.ry) * 1.5, hs.front[1] - Math.sin(s.ry) * 1.5, 'swamp', s.ry, { y: hs.y, col: false }); }
   // 반쯤 잠긴 집
-  { const s = site(...tw(0.75, 0.55), 5, 4.4, { water: true, wet: true, max: 8, plaza: true, maxR: R0 + 8 }); if (s) sunkenHouse(s.x, s.z, s.ry + 0.7); }
+  if (!spNear(t, ['drowned_house'])){ const s = site(...tw(0.75, 0.55), 5, 4.4, { water: true, wet: true, max: 8, plaza: true, maxR: R0 + 8 }); if (s) sunkenHouse(s.x, s.z, s.ry + 0.7); }
   // 판자길 등불 (늪 등불 — 이야기가 진행되면 켜져요)
   for (let i = 0; i < segs.length; i++){ const [A, Bn] = segs[i], L = Math.hypot(Bn[0] - A[0], Bn[1] - A[1]); if (L < 4) continue; const ux = (Bn[0] - A[0]) / L, uz = (Bn[1] - A[1]) / L, x = (A[0] + Bn[0]) / 2 - uz * 1.05, z = (A[1] + Bn[1]) / 2 + ux * 1.05; P.lamp(x, z, 'swamp', Math.atan2(-uz, ux), { y: (A[2] + Bn[2]) / 2, col: false }); }
   for (const [x, z] of [[re[0] - 2.5, re[1] + 1], [-14, -6], [10, -12]]){ p = prop(x, z, 0.5, { roadPad: 0.2 }); if (p) P.lamp(p[0], p[1], 'swamp', faceTo(p[0], p[1])); }
   // 갈대 · 연잎 · 배 · 개구리 토템 · 짐
   for (let i = 0; i < (LOW ? 22 : 40); i++){ const a = R() * TAU, k = rr(0.85, 1.12), x = pc[0] + Math.cos(a) * prx * k, z = pc[1] + Math.sin(a) * prz * k; if (segs.some(([A, Bn]) => { const ex = Bn[0] - A[0], ez = Bn[1] - A[1], l2 = ex * ex + ez * ez, tt = clamp(((x - A[0]) * ex + (z - A[1]) * ez) / l2, 0, 1); return Math.hypot(x - A[0] - ex * tt, z - A[1] - ez * tt) < 2.6; })) continue; if (!free(x, z, 0.8, { water: true, plaza: true, maxR: R0 + 12, keepK: 0.6 })) continue; reeds(x, z, LOW ? 5 : 8, 1.1, Math.max(gy(x, z), WL - 0.3)); }
   for (let i = 0; i < 26; i++){ const a = R() * TAU, k = Math.sqrt(R()) * 0.8, x = pc[0] + Math.cos(a) * prx * k, z = pc[1] + Math.sin(a) * prz * k; if (!isW(OX + x, OZ + z) || !free(x, z, 0.6, { water: true, plaza: true, maxR: R0 + 12, keepK: 0.4 })) continue; K.geo('leafA', new THREE.CircleGeometry(rr(0.35, 0.6), 9, 0.3, TAU - 0.6).rotateX(-Math.PI / 2), x, WL + 0.03, z, 0, R() * TAU, 0); if (R() < 0.3) K.geo('fabricW', cone(0.14, 0.2, 5), x + 0.12, WL + 0.12, z); }
-  { const b = NODES.c, bx = b[0] + 2.4, bz = b[1] + 0.8; if (isW(OX + bx, OZ + bz)) bobbers(boatGeo(), [[bx, WL - 0.18, bz, 0.4]], 0.04, 0.05); }
+  if (used.has('c')){ const b = NODES.c, bx = b[0] + 2.4, bz = b[1] + 0.8; if (isW(OX + bx, OZ + bz)) bobbers(boatGeo(), [[bx, WL - 0.18, bz, 0.4]], 0.04, 0.05); }
   p = prop(-18, -2, 0.9); if (p) frogTotem(p[0], p[1], faceTo(p[0], p[1]));
   for (const [x, z] of [[-10, -18], [16, -6]]){ p = prop(x, z, 1.0); if (p) P.clutter(p[0], p[1], 2); }
   p = prop(-20, 14, 2.0, { water: true }); if (p) netRack(p[0], p[1], faceTo(p[0], p[1]) + Math.PI / 2);
@@ -1063,7 +1069,7 @@ function bDust(t){
   // 술집 · 판잣집 · 물탱크
   s = site(-12, 12, 8, 8.5, { maxDh: 3, face: 'road', max: 10 }); if (s) saloon(s.x, s.z, s.ry, t);
   for (const [x, z, w] of [[8, -14, 5], [-16, -8, 4.6], [-2, 17, 5], [18, -4, 4.4], [12, 16, 4.6]]){ s = site(x, z, w + 0.6, 6, { maxDh: 2.6, face: 'road', max: 9 }); if (s) shack(s.x, s.z, s.ry, { w, d: 4, roof: R() < 0.6 ? 'tin' : 'rust', paint: pick(['woodD', 'pRed', 'pTeal']) }); }
-  s = site(-14, -16, 4.2, 4.2, { maxDh: 2.5, max: 9 }); if (s) waterTower(s.x, s.z);
+  if (!spNear(t, ['water_tower'])){ s = site(-14, -16, 4.2, 4.2, { maxDh: 2.5, max: 9 }); if (s) waterTower(s.x, s.z); }
   // 광석 · 곡괭이 · 짐 · 다이너마이트 · 손수레 · 쇠 화로
   for (const [x, z] of [[12, -2], [-6, -14], [20, 10]]){ p = prop(x, z, 1.4); if (p){ P.ores(p[0], p[1], 1.2, 10); P.pickaxe(p[0] + 1.3, gy(p[0] + 1.3, p[1]), p[1], R() * 3); } }
   for (const [x, z] of [[-20, 4], [4, 12], [-8, -20]]){ p = prop(x, z, 1.1); if (p) P.clutter(p[0], p[1], 3); }
@@ -1132,9 +1138,9 @@ function bStar(t){
   for (const [x, z] of [[-15, -11], [-17, 8], [3, -19]]){ s = site(x, z, 3.6, 5.2, { maxDh: 1.5, max: 9 }); if (s) ridgeTent(s.x, s.z, s.ry, { w: 3.0, L: 4.0, h: 2.3, key: pick(['canvas', 'canvasD']) }); }
   // 발굴 구덩이 둘 (비계 · 기중기)
   const p1 = site(7, 14, 6.5, 5.5, { maxDh: 1.2, max: 10 }); if (p1){ pit(p1.x, p1.z, 5.6, 4.6, p1.ry); const sx = p1.x - Math.sin(p1.ry) * 0.2, sz = p1.z - Math.cos(p1.ry) * 0.2; scaffold(sx + Math.cos(p1.ry) * 3.2, sz - Math.sin(p1.ry) * 3.2, p1.ry, 5); }
-  const p2 = site(-9, 16, 5.5, 4.8, { maxDh: 1.2, max: 10 }); if (p2){ pit(p2.x, p2.z, 4.6, 3.8, p2.ry); const cx = p2.x - Math.sin(p2.ry) * 6.4, cz = p2.z - Math.cos(p2.ry) * 6.4; if (free(cx, cz, 2.2, { plaza: true })){ crane(cx, cz, p2.ry); occupy(cx, cz, 3); } }
+  const p2 = spNear(t, ['excavation']) ? null : site(-9, 16, 5.5, 4.8, { maxDh: 1.2, max: 10 }); if (p2){ pit(p2.x, p2.z, 4.6, 3.8, p2.ry); const cx = p2.x - Math.sin(p2.ry) * 6.4, cz = p2.z - Math.cos(p2.ry) * 6.4; if (free(cx, cz, 2.2, { plaza: true })){ crane(cx, cz, p2.ry); occupy(cx, cz, 3); } }
   // 무너진 왕도 거리 조각
-  s = site(17, 6, 8, 16, { maxDh: 2, max: 10, k: 0.7, roadPad: 1.5 }); if (s) ruinedStreet(s.x, s.z, s.ry + Math.PI / 2, 13);
+  if (!spNear(t, ['ruined_street'])){ s = site(17, 6, 8, 16, { maxDh: 2, max: 10, k: 0.7, roadPad: 1.5 }); if (s) ruinedStreet(s.x, s.z, s.ry + Math.PI / 2, 13); }
   // 별 지도 · 망원경 · 화톳불 · 짐 · 손수레 · 깃발 · 쇠 화로
   p = prop(-6, -12, 1.0); if (p){ starBoard(p[0], p[1], faceTo(p[0], p[1])); const q = prop(p[0] + 1.8, p[1] + 0.6, 0.7, { max: 3 }); if (q) telescope(q[0], q[1], faceTo(q[0], q[1]) + Math.PI); }
   p = prop(-10, 4, 1.4); if (p){ P.campfire(p[0], p[1]); for (let i = 0; i < 2; i++){ const a = i * 2.6 + 0.6, q = [p[0] + Math.cos(a) * 2.1, p[1] + Math.sin(a) * 2.1]; if (free(q[0], q[1], 0.5, { plaza: true })) P.logSeat(q[0], q[1], a + Math.PI / 2, 1.6); } }
@@ -1142,5 +1148,123 @@ function bStar(t){
   p = prop(14, 18, 0.7); if (p) wheelbarrow(p[0], p[1], R() * 3);
   for (const [x, z] of [[-4, 11], [10, -6]]){ p = prop(x, z, 0.5); if (p) P.banner(p[0], p[1], 'fabricB', 4.2, faceTo(p[0], p[1]) - Math.PI / 2); }
   for (const [x, z] of [[8, 4], [-8, -5], [3, 9]]){ p = prop(x, z, 0.6, { roadPad: 0.4 }); if (p) P.lamp(p[0], p[1], 'iron', 0); }
+  entrySigns(t);
+}
+
+// ───────────────────────── 가시 파수대 (fort) ─────────────────────────
+// 목책 (그룹 로컬 타원 cx, cz, rx, rz) — 길이 지나는 곳은 문 (문기둥 · 상인방 · 깃발 · 화로)
+function palisade(cx, cz, rx, rz){
+  const per = TAU * Math.sqrt((rx * rx + rz * rz) / 2), n = Math.round(per / 0.56), pts = [];
+  for (let i = 0; i < n; i++){ const a = i / n * TAU, x = cx + Math.cos(a) * rx, z = cz + Math.sin(a) * rz, gate = roadD(OX + x, OZ + z) < 3.2, kept = CUR.keep.some(([kx, kz]) => Math.hypot(x - kx, z - kz) < 1.6); pts.push({ x, z, a, gate, skip: gate || kept }); }
+  let run = [];
+  const flush = () => { if (run.length >= 2){ const A = run[0], Bp = run[run.length - 1], mx = (A.x + Bp.x) / 2, mz = (A.z + Bp.z) / 2, L = Math.hypot(Bp.x - A.x, Bp.z - A.z); K.push(mx, 0, mz, Math.atan2(Bp.x - A.x, Bp.z - A.z)); cb(0, 0, 0.3, L / 2 + 0.3); K.pop(); } run = []; };
+  pts.forEach((q, i) => { if (q.skip){ flush(); return; } const h = rr(3.0, 3.7), y = gy(q.x, q.z) - 0.4; K.geo('bark2', cylM(0.22, 0.25, h, 6), q.x, y + h / 2, q.z, rr(-0.04, 0.04), 0, rr(-0.04, 0.04)); K.geo('woodD', cone(0.23, 0.55, 6), q.x, y + h + 0.26, q.z); run.push(q); if (run.length >= 7){ const last = run[run.length - 1]; flush(); run.push(last); } });
+  flush();
+  for (let i = 0; i < n; i += 5){ const A = pts[i], Bp = pts[(i + 5) % n]; if (pts.slice(i, i + 6).some(q => q.skip)) continue; const ka = 0.94, kb = 0.94; for (const hh of [1.1, 2.3]) link('woodD', [cx + (A.x - cx) * ka, gy(A.x, A.z) + hh, cz + (A.z - cz) * ka], [cx + (Bp.x - cx) * kb, gy(Bp.x, Bp.z) + hh, cz + (Bp.z - cz) * kb], 0.12); }
+  // 문
+  const gates = []; for (let i = 0; i < n; i++){ const q = pts[i], pq = pts[(i - 1 + n) % n]; if (q.gate && !pq.gate){ let j = i; while (pts[(j + 1) % n].gate && j - i < n) j++; gates.push([pq, pts[(j + 1) % n]]); } }
+  for (const [A, Bp] of gates){ const ry = Math.atan2(Bp.x - A.x, Bp.z - A.z), ya = gy(A.x, A.z) - 0.4, yb = gy(Bp.x, Bp.z) - 0.4, top = Math.max(ya, yb) + 5.4;
+    for (const [q, y] of [[A, ya], [Bp, yb]]){ K.geo('bark2', cylM(0.38, 0.42, top - y + 0.6, 7), q.x, (top + y + 0.6) / 2, q.z); K.geo('woodD', cone(0.4, 0.7, 7), q.x, top + 0.95, q.z); cc(q.x, q.z, 0.5); }
+    link('bark2', [A.x, top - 0.4, A.z], [Bp.x, top - 0.4, Bp.z], 0.42, 0.42); link('woodD', [A.x, top - 1.1, A.z], [Bp.x, top - 1.1, Bp.z], 0.2, 0.2);
+    const mx = (A.x + Bp.x) / 2, mz = (A.z + Bp.z) / 2; K.push(mx, top - 0.65, mz, ry + Math.PI / 2); K.geo('fabricB', plane(1.6, 2.4), 0, -1.4, 0.25); K.geo('fabricB', plane(1.6, 2.4), 0, -1.4, -0.25, 0, Math.PI, 0); K.box('gold', 0.5, 0.5, 0.03, 0, -1.0, 0.27, 0, 0, Math.PI / 4); K.box('gold', 0.5, 0.5, 0.03, 0, -1.0, -0.27, 0, 0, Math.PI / 4); K.pop();
+    for (const q of [A, Bp]){ const ox = q.x + (q.x - cx) * 0.12, oz = q.z + (q.z - cz) * 0.12, d = Math.hypot(ox - mx, oz - mz) || 1, bx = ox + (ox - mx) / d * 1.2, bz = oz + (oz - mz) / d * 1.2; if (free(bx, bz, 0.4, { plaza: true, maxR: CUR.r + 10, roadPad: 0.2 })) P.lamp(bx, bz, 'iron', 0); }
+  }
+  return gates;
+}
+function catapult(x, z, ry){
+  const y = gy(x, z); K.push(x, y, z, ry);
+  for (const s of [-1, 1]){ K.box('woodD', 0.3, 0.3, 4.4, s * 0.9, 0.6, 0); for (const zz of [-1.6, 1.6]){ K.geo('woodD', cyl(0.5, 0.5, 0.18, 10), s * 1.12, 0.5, zz, 0, 0, Math.PI / 2); K.geo('iron', tor(0.5, 0.03, 3, 12), s * 1.18, 0.5, zz, 0, Math.PI / 2, 0); } }
+  for (const zz of [-1.8, 0, 1.8]) K.box('woodD', 2.1, 0.25, 0.25, 0, 0.7, zz);
+  for (const s of [-1, 1]){ link('woodD', [s * 0.9, 0.7, -1.2], [s * 0.7, 2.6, 0.2], 0.2); link('woodD', [s * 0.9, 0.7, 1.2], [s * 0.7, 2.6, 0.2], 0.2); }
+  K.box('woodD', 1.7, 0.22, 0.22, 0, 2.6, 0.2); link('wood', [0, 2.6, 0.4], [0, 4.6, -2.4], 0.22, 0.22); K.geo('wood', sph(0.45, 8, 5, 0, TAU, 0, Math.PI / 2), 0, 4.75, -2.55, Math.PI + 0.6, 0, 0); K.box('iron', 0.9, 0.9, 0.9, 0, 2.1, 1.2);
+  K.geo('wood', cylM(0.22, 0.22, 1.4, 8), 0, 0.95, 1.9, 0, 0, Math.PI / 2); link('rope', [0, 1.0, 1.9], [0, 2.4, 0.9], 0.03);
+  K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.3, 2.3); K.pop();
+  for (let i = 0; i < 5; i++){ const a = R() * TAU, px = x + Math.cos(ry) * 2.2 + Math.cos(a) * 0.5, pz = z - Math.sin(ry) * 2.2 + Math.sin(a) * 0.5; K.geo('rock', ico(rr(0.3, 0.42), 1), px, gy(px, pz) + 0.32 + (i > 3 ? 0.5 : 0), pz); }
+  mapbox(x, z, 1.2, 2.2, ry);
+}
+function weaponRack(x, z, ry){ const y = gy(x, z); K.push(x, y, z, ry); for (const s of [-1, 1]) K.box('woodD', 0.1, 1.6, 0.1, s * 1.0, 0.8, 0); K.box('woodD', 2.2, 0.08, 0.12, 0, 1.45, 0); K.box('woodD', 2.2, 0.08, 0.3, 0, 0.3, 0);
+  for (let i = 0; i < 5; i++){ const xx = -0.8 + i * 0.4; K.geo('wood', cyl(0.025, 0.025, 2.0, 4), xx, 1.1, 0.05, 0.12, 0, 0); K.geo('steel', cone(0.05, 0.22, 4), xx, 2.15, 0.17); }
+  for (const s of [-1, 1]){ K.geo('fabricB', cyl(0.38, 0.38, 0.06, 10), s * 1.4, 0.55, 0.15, Math.PI / 2 - 0.2, 0, 0); K.geo('gold', sph(0.08, 6, 4), s * 1.4, 0.55, 0.2); }
+  K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.4, 0.3); K.pop(); }
+function dummy(x, z, ry){ const y = gy(x, z); K.push(x, y, z, ry); K.geo('woodD', cyl(0.06, 0.07, 1.8, 5), 0, 0.9, 0); K.box('woodD', 1.1, 0.07, 0.07, 0, 1.4, 0); K.geo('hay', cylM(0.26, 0.3, 0.8, 8), 0, 1.25, 0); K.geo('sack', sph(0.2, 7, 5), 0, 1.85, 0); for (const [r, k] of [[0.18, 'fabricW'], [0.1, 'fabricR']]) K.geo(k, new THREE.CircleGeometry(r, 10), 0, 1.3, 0.31 + (r < 0.15 ? 0.005 : 0)); K.pop(); cc(x, z, 0.4); }
+function chevaux(x, z, ry){ const y = gy(x, z); K.push(x, y + 0.5, z, ry); K.geo('bark2', cylM(0.16, 0.16, 3.2, 6), 0, 0, 0, 0, 0, Math.PI / 2); for (let i = 0; i < 5; i++){ const xx = -1.3 + i * 0.65; for (const s of [-1, 1]){ K.geo('woodD', cyl(0.05, 0.07, 1.6, 5), xx, 0.25, s * 0.3, s * 0.7, 0, 0); K.geo('thorn', cone(0.06, 0.25, 4), xx, 0.25 + 0.74, s * (0.3 + 0.52), s * 0.7, 0, 0); } } K.pop(); K.push(x, 0, z, ry); cb(0, 0, 1.7, 0.7); K.pop(); }
+function bFort(t){
+  const R0 = t.r; let p, s;
+  // 목책 타원: 평평한 판에 맞춰요 (가운데 조금 북쪽)
+  const gates = palisade(1, -4, R0 * 0.92, R0 * 0.68);
+  // 망루 셋 (안쪽 가장자리)
+  const tops = [];
+  for (const [x, z] of [[16, -15], [17, 6], [-18, -9]]){ s = site(x, z, 4.4, 4.4, { maxR: R0, max: 6, face: [0, 0], maxDh: 2 }); if (s) tops.push(watchtower(s.x, s.z, s.ry)); }
+  tops.slice(0, 2).forEach((tp, i) => flag(tp.x, tp.y + 1.1, tp.z, i * 1.3 + 0.4, 2.0, 1.2, i ? 'fabricY' : 'fabricB'));
+  // 막사 둘 · 치료소 · 지휘 천막
+  for (const [x, z, ky] of [[10, -7, 'fabricR'], [-13, 4, 'fabricR']]){ s = site(x, z, 7.2, 4.8, { maxDh: 1.6, max: 8 }); if (s) pavilion(s.x, s.z, s.ry, { w: 6.8, d: 4.4, key: 'canvasD', stripe: ky, roof: ky, cap: 'iron' }); }
+  s = site(12, 8, 6.2, 5.2, { maxDh: 1.6, max: 8 }); if (s){ pavilion(s.x, s.z, s.ry, { w: 5.8, d: 4.8, key: 'canvas', stripe: 'fabricW', roof: 'fabricW', emblem: 'fabricG', cap: 'gold' }); const q = prop(s.x + Math.cos(s.ry) * 3.8, s.z - Math.sin(s.ry) * 3.8, 1.0, { max: 3 }); if (q) P.clutter(q[0], q[1], 2, 0.7); }
+  s = site(-11, -12, 6, 5, { maxDh: 1.6, max: 8 }); if (s) pavilion(s.x, s.z, s.ry, { w: 5.4, d: 4.4, key: 'fabricB', stripe: 'fabricY', roof: 'fabricB', cap: 'gold' });
+  // 투석기 (북쪽을 봐요)
+  if (!spNear(t, ['catapult'])){ s = site(2, 9, 3.4, 5.2, { maxDh: 1.2, max: 8, face: Math.PI }); if (s) catapult(s.x, s.z, Math.PI); }
+  // 깃발 · 화로 · 무기 걸이 · 허수아비 · 짐 · 모닥불
+  for (const [x, z] of [[-7, -9], [8, 3], [-6, 8], [9, -10]]){ p = prop(x, z, 0.5); if (p) P.banner(p[0], p[1], 'fabricB', 4.8, faceTo(p[0], p[1]) - Math.PI / 2); }
+  for (const [x, z] of [[4, -10], [-9, 1], [5, 4]]){ p = prop(x, z, 0.6); if (p) P.lamp(p[0], p[1], 'iron', 0); }
+  for (const [x, z] of [[-16, -2], [19, -1]]){ p = prop(x, z, 1.5); if (p) weaponRack(p[0], p[1], faceTo(p[0], p[1])); }
+  for (const [x, z] of [[-4, 14], [-1, -16]]){ p = prop(x, z, 0.5); if (p) dummy(p[0], p[1], faceTo(p[0], p[1]) + Math.PI); }
+  for (const [x, z] of [[-18, 6], [14, -2], [20, 12]]){ p = prop(x, z, 1.0); if (p) P.clutter(p[0], p[1], 3); }
+  p = prop(-3, 4, 1.3); if (p) P.campfire(p[0], p[1]);
+  // 북문 밖 가시 막이
+  for (const [A, Bp] of gates){ const mx = (A.x + Bp.x) / 2, mz = (A.z + Bp.z) / 2; if (mz > -4) continue; for (const s2 of [-1, 1]){ const ux = (Bp.x - A.x), uz = (Bp.z - A.z), L = Math.hypot(ux, uz) || 1, ox = mx + ux / L * s2 * 5.5 + (mx - 1) * 0.0, oz = mz - 3.5; if (free(ox, oz, 1.6, { plaza: true, maxR: R0 + 14, roadPad: 0.4 })) chevaux(ox, oz, Math.atan2(ux, uz)); } }
+  entrySigns(t);
+}
+
+// ───────────────────────── 서리 수도원 (monastery) ─────────────────────────
+function abbey(x, z, ry){
+  const w = 12, d = 8, h = 5, [lo, hi] = foot(OX + x, OZ + z, w / 2 + 0.6, d / 2 + 0.6, ry), y = hi + 0.1; K.push(x, y, z, ry);
+  K.box('stoneD', w + 0.8, y - lo + 0.8, d + 0.8, 0, -(y - lo + 0.8) / 2 + 0.3, 0); K.box('stone', w, h, d, 0, 0.3 + h / 2, 0);
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++){ const xx = -w / 2 + 1.5 + i * (w - 3) / 3; K.box('stoneD', 0.7, h * 0.85, 0.9, xx, 0.3 + h * 0.42, s * (d / 2 + 0.35), s * 0.06); if (i < 3){ K.push(xx + (w - 3) / 6, 0, s * d / 2, s > 0 ? 0 : Math.PI); win(0, 0.3 + h * 0.55, 0.7, 1.9, 'stone', false); K.geo('stone', cone(0.5, 0.6, 4), 0, 0.3 + h * 0.55 + 1.25, 0.05, 0, Math.PI / 4, 0); K.pop(); } }
+  // 정면 (+z 아닌 +x 쪽 박공 · 큰 문 · 둥근 창)
+  K.push(w / 2, 0, 0, Math.PI / 2); K.box('woodD', 1.8, 2.8, 0.1, 0, 1.7, 0.05); K.geo('woodD', cyl(0.9, 0.9, 0.1, 10, false, 0, Math.PI), 0, 3.1, 0.05, Math.PI / 2, 0, 0); K.geo('stoneD', tor(0.95, 0.14, 4, 12, Math.PI), 0, 3.1, 0.1); K.box('stoneD', 2.6, 0.2, 1.0, 0, 0.35, 0.5);
+  K.geo('win', new THREE.CircleGeometry(0.8, 12), 0, h + 1.4, 0.06); K.geo('stoneD', tor(0.85, 0.12, 4, 16), 0, h + 1.4, 0.08); wallLamp(1.4, 2.6); wallLamp(-1.4, 2.6); K.pop();
+  K.push(0, 0, 0, Math.PI / 2); const rise = roofG(d, w, 0.3 + h, 1.0, 0.5, 'slate'); gables(d, w, 0.3 + h, rise, 'stone', false);
+  { const hd = w / 2 + 0.5, L = hd / Math.cos(1.0); for (const s of [-1, 1]) K.box('snow', d + 1.0, 0.14, L * 0.9, 0, 0.3 + h + rise - (hd / 2) * Math.tan(1.0) + 0.28, s * hd / 2, s * 1.0, 0, 0); } K.pop();
+  K.box('stone', 0.8, 2.4, 0.8, -w * 0.3, 0.3 + h + rise * 0.6, d * 0.2); CUR.smoke.push(kpt(-w * 0.3, 0.3 + h + rise * 0.6 + 1.3, d * 0.2));
+  K.geo('gold', cyl(0.05, 0.05, 1.4, 4), w / 2 - 0.3, 0.3 + h + rise + 0.6, 0); K.box('gold', 0.06, 0.06, 0.7, w / 2 - 0.3, 0.3 + h + rise + 1.0, 0);
+  K.pop(); cb(x, z, w / 2 + 0.4, d / 2 + 0.8, ry); mapbox(x, z, w / 2, d / 2, ry);
+}
+function bellTower(x, z){
+  const [lo] = footC(OX + x, OZ + z, 2.4), y = lo - 0.3, h = 9; K.push(x, y, z);
+  K.box('stone', 3.8, h, 3.8, 0, h / 2, 0); K.box('stoneD', 4.2, 0.4, 4.2, 0, h, 0); for (let i = 0; i < 3; i++) K.push(0, 0, 1.9), win(0, 3 + i * 2.2, 0.4, 0.9, 'stone', false), K.pop();
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) K.box('stone', 0.7, 2.8, 0.7, a * 1.6, h + 1.6, b * 1.6);
+  K.box('stoneD', 4.2, 0.4, 4.2, 0, h + 3.1, 0); K.geo('slate', cone(3.2, 3.2, 4), 0, h + 4.9, 0, 0, Math.PI / 4, 0); K.geo('snow', cone(3.25, 1.4, 4), 0, h + 5.85, 0, 0, Math.PI / 4, 0); K.geo('gold', sph(0.18, 6, 4), 0, h + 6.6, 0);
+  K.box('woodD', 3.4, 0.18, 0.18, 0, h + 2.7, 0); K.pop(); cc(x, z, 2.2); mapbox(x, z, 1.9, 1.9, 0);
+  // 종 (가끔 흔들려요)
+  const bg = new THREE.Group(); bg.position.set(x, y + h + 2.65, z); CUR.near.add(bg);
+  const bm = meshOf(vcGeo(() => { K.geo('bronze', lathe([[0, 0], [0.7, 0], [0.62, 0.2], [0.48, 0.75], [0.4, 1.15], [0, 1.2]], 12, 0.4), 0, -1.25, 0); K.geo('iron', sph(0.12, 6, 4), 0, -1.25, 0); }), vcMat(grainTex)); bm.matrixAutoUpdate = true; bg.add(bm);
+  glowAbs(x, y + h + 1.5, z, 0xffd090, 2.2, 0.2);
+  anim((dt, tt) => { const c = tt % 14, k = c < 3 ? Math.sin(c * 3.2) * (1 - c / 3) : 0; bm.rotation.x = k * 0.45; });
+}
+function lowWall(cx, cz, rx, rz){
+  const per = TAU * Math.sqrt((rx * rx + rz * rz) / 2), n = Math.round(per / 2.2), pts = [];
+  for (let i = 0; i <= n; i++){ const a = i / n * TAU, x = cx + Math.cos(a) * rx, z = cz + Math.sin(a) * rz; pts.push([x, z, roadD(OX + x, OZ + z) < 2.6 || CUR.keep.some(([kx, kz]) => Math.hypot(x - kx, z - kz) < 1.8)]); }
+  for (let i = 0; i < n; i++){ const [ax, az, ga] = pts[i], [bx, bz, gb] = pts[i + 1]; if (ga || gb) continue; const ya = gy(ax, az), yb = gy(bx, bz), L = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az), my = Math.min(ya, yb) - 0.3, hh = 1.2 + Math.abs(ya - yb);
+    K.push((ax + bx) / 2, my, (az + bz) / 2, yaw); K.box('stone', 0.7, hh, L + 0.1, 0, hh / 2, 0); K.box('snow', 0.8, 0.14, L + 0.15, 0, hh + 0.05, 0); K.pop(); K.push((ax + bx) / 2, 0, (az + bz) / 2, yaw); cb(0, 0, 0.4, L / 2 + 0.05); K.pop(); }
+  for (let i = 0; i < n; i++){ const ga = pts[i][2], gb = pts[i + 1][2]; if (ga === gb) continue; const [x, z] = ga ? pts[i + 1] : pts[i], y = gy(x, z) - 0.2; K.box('stone', 1.0, 2.4, 1.0, x, y + 1.2, z); K.box('snow', 1.1, 0.16, 1.1, x, y + 2.45, z); K.box('lampN', 0.3, 0.3, 0.3, x, y + 2.7, z); K.geo('stoneD', cone(0.45, 0.4, 4), x, y + 3.05, z, 0, Math.PI / 4, 0); glow(x, y + 2.7, z, 0xffd8a0, 2.2, 0.35); cc(x, z, 0.6); }
+}
+function pineTree(x, z, s = 1){ const y = gy(x, z); K.geo('bark2', cyl(0.1 * s, 0.14 * s, 1.2 * s, 5), x, y + 0.6 * s, z); for (let i = 0; i < 3; i++){ const r = (1.1 - i * 0.3) * s, yy = y + (1.0 + i * 0.85) * s; K.geo('pine', cone(r, 1.3 * s, 7), x, yy + 0.65 * s, z); K.geo('snow', cone(r * 0.75, 0.5 * s, 7), x, yy + 1.15 * s, z); } cc(x, z, 0.35 * s); }
+function snowPile(x, z, s = 1){ K.geo('snow', sph(s, 8, 5, 0, TAU, 0, Math.PI / 2), x, gy(x, z) - 0.15, z, 0, R() * 3, 0, 1.4, 0.45, 1); }
+function bFrost(t){
+  const R0 = t.r; let p, s;
+  lowWall(0, 0, R0 * 0.9, R0 * 0.72);
+  s = site(5, -12, 13, 9, { maxDh: 3, max: 10, k: 0.78 }); if (s) abbey(s.x, s.z, s.ry - Math.PI / 2);
+  if (!spNear(t, ['bell_tower'])){ s = site(14, 5, 4.6, 4.6, { maxDh: 2.5, max: 8 }); if (s) bellTower(s.x, s.z); }
+  for (const [x, z] of [[-10, 10], [-1, 13], [9, 12]]){ s = site(x, z, 4, 3.8, { maxDh: 2, max: 8 }); if (s) house(s.x, s.z, s.ry, { w: 3.6, d: 3.2, h: 2.5, wall: 'stone', base: 'stoneD', roof: 'slate', paint: 'woodD', timber: false, flowers: false, snow: true, back: false, pitch: 0.9 }); }
+  // 눈 덮인 정원: 작은 전나무 · 얼어붙은 연못 · 돌 등불 · 석상
+  p = prop(-11, -7, 3.2); if (p){ K.geo('ice', new THREE.CircleGeometry(2.4, 18).rotateX(-Math.PI / 2), p[0], gy(p[0], p[1]) + 0.07, p[1]); for (let i = 0; i < 12; i++){ const a = i / 12 * TAU; K.geo('stone', rockG(rr(0.25, 0.4), 0.6, 0), p[0] + Math.cos(a) * 2.6, gy(p[0], p[1]) + 0.1, p[1] + Math.sin(a) * 2.6); snowPile(p[0] + Math.cos(a + 0.2) * 3.0, p[1] + Math.sin(a + 0.2) * 3.0, 0.35); } }
+  for (const [x, z] of [[-17, -3], [-15, -13], [-5, -15], [-19, 6], [18, -8]]){ p = prop(x, z, 0.8); if (p) pineTree(p[0], p[1], rr(0.9, 1.3)); }
+  for (const [x, z] of [[-7, -2], [3, 5]]){ p = prop(x, z, 0.5); if (p) P.lamp(p[0], p[1], 'snow'); }
+  for (const [x, z] of [[-4, -8], [6, 0], [-8, 4], [9, -6]]){ p = prop(x, z, 0.6); if (p) P.lamp(p[0], p[1], 'iron', 0); }
+  // 기도 깃발 (마당을 가로질러요)
+  const PF = ['fabricB', 'fabricW', 'fabricR', 'fabricG', 'fabricY'], poles = [];
+  for (const [x, z] of [[-12, 0], [12, -2], [-8, 9], [8, 10]]){ const q = prop(x, z, 0.4, { max: 4 }); if (q) poles.push(P.pole(q[0], q[1], 5.2)); }
+  if (poles.length >= 2) P.pennants(poles[0], poles[1], 1.4, PF); if (poles.length >= 4){ P.pennants(poles[2], poles[3], 1.2, PF); P.pennants(poles[0], poles[2], 0.8, PF); }
+  for (let i = 0; i < 14; i++){ const a = R() * TAU, d = rr(R0 * 0.4, R0 * 1.1), x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z, 0.8, { plaza: true, maxR: R0 + 8, keepK: 0.5 })) snowPile(x, z, rr(0.6, 1.4)); }
+  for (const [x, z] of [[-14, 3], [14, 8]]){ p = prop(x, z, 1.0); if (p) P.clutter(p[0], p[1], 2); }
   entrySigns(t);
 }
