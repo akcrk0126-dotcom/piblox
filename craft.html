@@ -3563,7 +3563,7 @@ const RSMARK=new Uint8Array(NB);[WIRE,RTORCH_ON,RTORCH_OFF,REPEATER,COMPARATOR,L
 const CONNECTS=new Uint8Array(NB);[WIRE,RTORCH_ON,RTORCH_OFF,LEVER,BUTTON,PLATE,REDSTONE_BLOCK,REPEATER,COMPARATOR,OBSERVER].forEach(i=>CONNECTS[i]=1);
 function rsMark(x,y,z){for(let dy=-2;dy<=2;dy++)for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)>2)continue;const id=getB(x+dx,y+dy,z+dz);if(RSMARK[id])rsQ.set(tkey(x+dx,y+dy,z+dz),[x+dx,y+dy,z+dz])}}
 function blockChanged(x,y,z,old,id,om){if(!started)return;if(id===AIR||id!==old)portalNeighborCheck(x,y,z,old);
-  for(let d=-1;d<6;d++){const p=d<0?[x,y,z]:[x+DV[d][0],y+DV[d][1],z+DV[d][2]],n=getB(p[0],p[1],p[2]);if(n===WATER||n===LAVA)schedule(p[0],p[1],p[2],n===WATER?5:30,'liq')}
+  for(let d=-1;d<6;d++){const p=d<0?[x,y,z]:[x+DV[d][0],y+DV[d][1],z+DV[d][2]],n=getB(p[0],p[1],p[2]);if(n===WATER||n===LAVA)liqNear(p[0],p[1],p[2],n)}
   if(RSMARK[old]||RSMARK[id]||CONNECTS[old]||CONNECTS[id]||OP[old]!==OP[id]||rsNear(x,y,z))rsMark(x,y,z);
   for(let d=0;d<6;d++){const ox=x-DV[d][0],oy=y-DV[d][1],oz=z-DV[d][2];if(getB(ox,oy,oz)===OBSERVER&&(getM(ox,oy,oz)&7)===d&&!(getM(ox,oy,oz)&8))schedule(ox,oy,oz,2,'obs')}
   if(old===PISTON_HEAD&&id===AIR){const f=om&7;const px=x-DV[f][0],py=y-DV[f][1],pz=z-DV[f][2],pid=getB(px,py,pz);if((pid===PISTON||pid===STICKY_PISTON)&&(getM(px,py,pz)&8))setBlock(px,py,pz,pid,false,false,getM(px,py,pz)&7)}
@@ -3652,20 +3652,92 @@ function plateOcc(x,y,z){const ents2=[player,...mobs];for(const e of ents2){if(e
 function plateTick(){const cand=[player,...mobs];for(const e of cand){if(e.dead)continue;const x=Math.floor(e.pos.x),y=Math.floor(e.pos.y+.05),z=Math.floor(e.pos.z);if(getB(x,y,z)===PLATE&&!(getM(x,y,z)&1)){setBlock(x,y,z,PLATE,true,false,1);sfx('click');schedule(x,y,z,20,'plate')}
     else if(getB(x,y,z)===PLATE&&!pend(x,y,z,'plate'))schedule(x,y,z,20,'plate')}}
 /* 액체 */
-const flowInto=id=>id===AIR||(B[id]&&!SOLID[id]&&!B[id].liquid);
-function liqTick(x,y,z){const id=getB(x,y,z);if(id!==WATER&&id!==LAVA)return;const isW=id===WATER,inc=isW?1:(DIM==='nether'?1:2),maxL=isW?7:(DIM==='nether'?7:6);let m=getM(x,y,z);
-  if(!isW){for(let d=0;d<6;d++){if(d===3)continue;const n=getB(x+DV[d][0],y+DV[d][1],z+DV[d][2]);if(n===WATER){setBlock(x,y,z,m===0?OBSIDIAN:COBBLE);sfx('fizz');return}}}
-  if(m!==0){let want;if(getB(x,y+1,z)===id)want=8;else{let best=99;for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2];if(getB(nx,y,nz)===id){const nm=getM(nx,y,nz);best=Math.min(best,nm&8?0:nm&7)}}want=best+inc;if(want>maxL)want=-1}
-    if(isW&&want!==8){let src=0;for(const d of HDIRS)if(getB(x+DV[d][0],y,z+DV[d][2])===WATER&&getM(x+DV[d][0],y,z+DV[d][2])===0)src++;const bl=getB(x,y-1,z);if(src>=2&&(SOLID[bl]||(bl===WATER&&getM(x,y-1,z)===0)))want=0}
+// ── 액체 흐름 다듬기 (Agent 09): 마크 FlowingFluid — 물은 칸마다 1 (7칸) · 5틱, 용암은 2 (3칸) · 30틱, 네더 용암은 1 (7칸) · 10틱.
+// 옆으로는 물 4칸 (용암 2칸 · 네더 4칸) 안에서 가장 가까운 구멍 쪽으로만 흘러요 (getSpread · getSlopeDistance). 사다리 · 사탕수수 · 문 · 차원문은 물을 막아요.
+const flowInto=id=>id===AIR||(B[id]&&!SOLID[id]&&!B[id].liquid&&id!==LADDER&&id!==SUGAR_CANE&&!isDoor(id)&&id!==NETHER_PORTAL&&id!==END_PORTAL);
+const liqDelay=id=>id===WATER?5:DIM==='nether'?10:30;
+// 용암 옆 (위 · 옆 4칸) 에 물 → 원천은 흑요석 · 흐르는 용암은 조약돌, 영혼 흙 위에서 푸른 얼음 옆 → 현무암 (LiquidBlock.shouldSpreadLiquid, 바로 바뀌어요)
+function lavaContact(x,y,z){const m=getM(x,y,z),soul=getB(x,y-1,z)===SOUL_SOIL;for(let d=0;d<6;d++){if(d===3)continue;const n=getB(x+DV[d][0],y+DV[d][1],z+DV[d][2]);if(n===WATER){setBlock(x,y,z,m===0?OBSIDIAN:COBBLE);sfx('fizz');return true}if(soul&&n===BLUE_ICE){setBlock(x,y,z,BASALT);sfx('fizz');return true}}return false}
+function liqNear(x,y,z,n){if(n===LAVA&&lavaContact(x,y,z))return;schedule(x,y,z,liqDelay(n),'liq')}
+const liqPass=(n,nm,id)=>flowInto(n)||n===id&&nm!==0,liqHole=(x,y,z,id)=>{const b=getB(x,y-1,z);return b===id||flowInto(b)};
+function liqSlope(x,y,z,dep,from,id,max){let best=1000;for(const d of HDIRS){if(d===from)continue;const nx=x+DV[d][0],nz=z+DV[d][2];if(!liqPass(getB(nx,y,nz),getM(nx,y,nz),id))continue;if(liqHole(nx,y,nz,id))return dep;if(dep>=max)continue;const k=liqSlope(nx,y,nz,dep+1,OPPD[d],id,max);if(k<best)best=k}return best}
+function liqDirs(x,y,z,id,max){let best=1000;const out=[];for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2];if(!liqPass(getB(nx,y,nz),getM(nx,y,nz),id))continue;const j=liqHole(nx,y,nz,id)?0:liqSlope(nx,y,nz,1,OPPD[d],id,max);if(j<best){best=j;out.length=0}if(j>best)continue;out.push(d)}return out}
+function liqTick(x,y,z){const id=getB(x,y,z);if(id!==WATER&&id!==LAVA)return;const isW=id===WATER,nw=isW||DIM==='nether',inc=nw?1:2,maxL=nw?7:6;let m=getM(x,y,z);
+  if(!isW&&lavaContact(x,y,z))return;
+  // 흐르는 칸은 이웃에서 새 높이 (getNewLiquid): 원천 2개 + 아래가 단단하거나 원천 → 새 물 원천 · 위가 같은 액체 → 떨어지는 물 · 아니면 이웃 최대 − 감소량
+  if(m!==0){let want,src=0,best=99;for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2];if(getB(nx,y,nz)===id){const nm=getM(nx,y,nz);if(nm===0)src++;best=Math.min(best,nm&8?0:nm&7)}}
+    const bl=getB(x,y-1,z);if(isW&&src>=2&&(SOLID[bl]||bl===WATER&&getM(x,y-1,z)===0))want=0;else if(getB(x,y+1,z)===id)want=8;else{want=best+inc;if(want>maxL)want=-1}
     if(want===-1){setBlock(x,y,z,AIR,true);return}if(want!==m){setBlock(x,y,z,id,true,false,want);m=want}}
+  // 아래로 (spread): 흘러내리면 옆으로는 안 가요 (옆 원천이 3개 이상일 때만)
   const bx=getB(x,y-1,z);
-  if(y>0&&(flowInto(bx)||(bx===LAVA&&isW)||(bx===WATER&&!isW))){if(bx===LAVA){setBlock(x,y-1,z,getM(x,y-1,z)===0?OBSIDIAN:STONE);return}if(bx===WATER){setBlock(x,y-1,z,STONE);return}
-    if(bx!==AIR)dropFor(x,y-1,z,bx,true);setBlock(x,y-1,z,id,true,false,8);return}
-  if(bx===id)return;const lv=m&8?0:m&7;if(lv+inc>maxL)return;
-  for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2],n=getB(nx,y,nz);if(flowInto(n)){if(n!==AIR)dropFor(nx,y,nz,n,true);setBlock(nx,y,nz,id,true,false,lv+inc)}else if(n===id&&!(getM(nx,y,nz)&8)&&getM(nx,y,nz)!==0&&(getM(nx,y,nz)&7)>lv+inc)setBlock(nx,y,nz,id,true,false,lv+inc)}}
+  if(y>0&&(flowInto(bx)||(bx===LAVA&&isW)||(bx===WATER&&!isW))){if(bx===LAVA){setBlock(x,y-1,z,getM(x,y-1,z)===0?OBSIDIAN:COBBLE);sfx('fizz');return}if(bx===WATER){setBlock(x,y-1,z,STONE);sfx('fizz');return}
+    if(bx!==AIR)dropFor(x,y-1,z,bx,true);setBlock(x,y-1,z,id,true,false,8);let s3=0;for(const d of HDIRS)if(getB(x+DV[d][0],y,z+DV[d][2])===id&&getM(x+DV[d][0],y,z+DV[d][2])===0)s3++;if(s3<3)return}
+  else if(m!==0&&bx===id)return;   // 흐르는 물은 아래가 같은 액체면 옆으로 안 퍼져요 (원천은 퍼져요)
+  // 옆으로 (spreadToSides): 떨어지는 물은 7 · 나머지는 내 양 − 감소량
+  const lv=m&8?0:m&7;if(lv+inc>maxL)return;
+  for(const d of liqDirs(x,y,z,id,nw?4:2)){const nx=x+DV[d][0],nz=z+DV[d][2],n=getB(nx,y,nz);if(flowInto(n)){if(n!==AIR)dropFor(nx,y,nz,n,true);setBlock(nx,y,nz,id,true,false,lv+inc)}else if(n===id&&!(getM(nx,y,nz)&8)&&getM(nx,y,nz)!==0&&(getM(nx,y,nz)&7)>lv+inc)setBlock(nx,y,nz,id,true,false,lv+inc)}}
+// ── 무작위 틱 (Agent 09): 마크 ServerLevel.tickChunk — 플레이어 128칸 안 청크의 16×16×16 구역마다 틱마다 randomTickSpeed(3)개 블록 ──
+// 작물 · 묘목 · 사탕수수 · 선인장 · 잔디/균사체 퍼지기 · 얼음/눈 녹기 · 경작지 마르기 · 잎 사라지기 (예전 타이머 대신)
+let randomTickSpeed=3;   // /gamerule randomTickSpeed 가 이 값을 바꾸면 돼요
+let _rts=(Math.random()*4294967296)>>>0||1;const rtRand=()=>{_rts^=_rts<<13;_rts^=_rts>>>17;_rts^=_rts<<5;return _rts>>>0};
+const RT_FN=new Array(NB).fill(null);
+const effSky=s=>Math.max(0,s-Math.floor((1-clamp((daylight-.2)/.8,0,1))*11));   // 밤에는 하늘빛 −11 (getSkyDarken)
+function randomTicks(){let sp=randomTickSpeed|0;if(sp<=0||!started)return;if(DIM==='time')sp*=TC_SPEED;
+  let share=1;if(typeof MPS!=='undefined'&&MPS)for(const r of remotes.values()){const d=r.d;if(d&&!d.d&&Math.hypot(d.x-player.pos.x,d.z-player.pos.z)<256)share++}   // 멀티: 근처 사람 수로 나눠요 (같은 청크를 두 번 키우지 않게)
+  const px=player.pos.x,pz=player.pos.z,pcx=Math.floor(px)>>4,pcz=Math.floor(pz)>>4;
+  for(let dz=-8;dz<=8;dz++)for(let dx=-8;dx<=8;dx++){const cx=pcx+dx,cz=pcz+dz,ex=cx*16+8-px,ez=cz*16+8-pz;if(ex*ex+ez*ez>16384)continue;const ch=chunks.get(ck(cx,cz));if(!ch||!ch.b)continue;const top=Math.min(H,(ch.maxY||H)+1);
+    for(let sy=0;sy<top;sy+=16)for(let k=0;k<sp;k++){const r=rtRand();if(share>1&&r%share)continue;const y=sy+((r>>>8)&15);if(y>=H)continue;const i=(r&15)|(((r>>>4)&15)<<4)|(y<<8),f=RT_FN[ch.b[i]];if(f)f(cx*16+(r&15),y,cz*16+((r>>>4)&15),ch.b[i],ch.m[i])}}}
+// 작물 (CropBlock): 밝기 9 이상 · 성장 속도 = 1 + 경작지(젖음 3 · 마름 1, 옆 칸은 1/4) · 같은 작물이 둘레에 있으면 절반 → 1/(⌊25/속도⌋+1) 확률
+// 밀 · 당근 · 감자는 나이 0~7 (그림 4단계: 0 0 1 1 2 2 2 3, 남는 나이는 메타) · 비트 0~3 (2/3 만) · 네더 사마귀 0~3 (1/10, 밝기 상관없음)
+const CROP_BASE=new Int16Array(NB).fill(-1),AGE0=[0,2,4,7],AGE2ST=[0,0,1,1,2,2,2,3];
+function cropSpeed(x,y,z,id){let f=1;for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const b=getB(x+i,y-1,z+j);let g=b===FARMLAND?(getM(x+i,y-1,z+j)>0?3:1):0;if(i||j)g/=4;f+=g}
+  const k=CROP_BASE[id],same=(a,c)=>CROP_BASE[getB(a,y,c)]===k,w=same(x-1,z)||same(x+1,z),n=same(x,z-1)||same(x,z+1);if(w&&n||same(x-1,z-1)||same(x+1,z-1)||same(x+1,z+1)||same(x-1,z+1))f/=2;return f}
+function growCrop(x,y,z,id,m){const st=B[id].crop,beet=CROP_BASE[id]===BEETS0;if(beet){if(st<3)setBlock(x,y,z,id+1,true);return}const age=AGE0[st]+(m&7)+1;if(age>7)return;const ns=AGE2ST[age];if(ns!==st)setBlock(x,y,z,id+ns-st,true);else setBlock(x,y,z,id,true,false,age-AGE0[st])}
+function rtCrop(x,y,z,id,m){const b=B[id];if(b.crop==null||b.crop>=3)return;
+  if(b.wart){if(rtRand()%10===0){const age=(id===NWART0?(m&3):3)+1;if(age>=3)setBlock(x,y,z,NWART1,true);else setBlock(x,y,z,NWART0,true,false,age)}return}
+  const l=lightAt(x,y,z);if(Math.max(l[0],l[1])<9)return;if(CROP_BASE[id]===BEETS0&&rtRand()%3===0)return;if(rtRand()%(Math.floor(25/cropSpeed(x,y,z,id))+1)===0)growCrop(x,y,z,id,m)}
+// 묘목 (SaplingBlock): 위 칸 밝기 9 이상 (밤엔 어두워요) · 1/7 확률로 0단계 → 1단계 (메타 8) → 나무
+function growSapling(x,y,z,sid){for(let i=1;i<6;i++){const c=getB(x,y+i,z);if(!canReplace(c)&&!isLeaf(c))return}setBlock(x,y,z,AIR,true);
+  placeTree(B[sid].sap,x,y-1,z,Math.random(),(a,b,c,id)=>{const o=getB(a,b,c);if(isLog(id)||canReplace(o)||B[o]&&B[o].sap)setBlock(a,b,c,id,true);else if(id===DIRT&&o===GRASS)setBlock(a,b,c,DIRT,true)})}
+function rtSapling(x,y,z,id,m){const l=lightAt(x,y+1,z);if(Math.max(effSky(l[0]),l[1])<9||rtRand()%7)return;if(!(m&8))setBlock(x,y,z,id,true,false,m|8);else growSapling(x,y,z,id)}
+// 사탕수수 · 선인장: 위가 비고 키 3 미만이면 나이 +1, 15 → 한 칸 자라요 (약 18분에 한 칸)
+function rtTall(x,y,z,id,m){if(getB(x,y+1,z)!==AIR)return;let h=1;while(getB(x,y-h,z)===id)h++;if(h>=3)return;if((m&15)>=15){setBlock(x,y+1,z,id,true);setBlock(x,y,z,id,true,false,0)}else setBlock(x,y,z,id,true,false,(m&15)+1)}
+// 잔디 · 균사체 (SpreadingSnowyDirtBlock): 위가 빛을 다 막거나 물이 차 있으면 흙으로 · 위 칸 밝기 9 이상이면 주변 (±1, −3~+1) 흙 4곳에 퍼져요
+function canGrass(x,y,z){const a=getB(x,y+1,z);if(a===SNOW_LAYER)return true;if(a===LAVA||a===WATER&&fAmt(x,y+1,z)===8)return false;return !(OP[a]&&SOLID[a]&&BH[a]===1&&!SHAPED[a])}
+function rtGrass(x,y,z,id){if(!canGrass(x,y,z)){setBlock(x,y,z,DIRT,true);return}const l=lightAt(x,y+1,z);if(Math.max(effSky(l[0]),l[1])<9)return;
+  for(let i=0;i<4;i++){const r=rtRand(),nx=x+r%3-1,ny=y+(r>>>3)%5-3,nz=z+(r>>>7)%3-1;if(getB(nx,ny,nz)!==DIRT||!canGrass(nx,ny,nz)||getB(nx,ny+1,nz)===WATER)continue;setBlock(nx,ny,nz,id===MYCELIUM?MYCELIUM:getB(nx,ny+1,nz)===SNOW_LAYER?SNOWY_GRASS:GRASS,true)}}
+// 얼음: 블록빛 11 이상이면 물 (네더는 사라짐) · 눈 층: 블록빛 12 이상이면 사라져요
+function rtIce(x,y,z){if(lightAt(x,y,z)[1]>10)setBlock(x,y,z,DIM==='nether'?AIR:WATER,true)}
+function rtSnow(x,y,z){if(lightAt(x,y,z)[1]>11)setBlock(x,y,z,AIR,true)}
+// 경작지 (FarmBlock): 4칸 안에 물이 있거나 비를 맞으면 젖음 7 (메타) · 아니면 1씩 마르고 0 이면 (작물이 없을 때) 흙으로
+function rtFarm(x,y,z,id,m){let wet=isWet(x+.5,y+1.5,z+.5);for(let dy=0;dy<=1&&!wet;dy++)for(let dz=-4;dz<=4&&!wet;dz++)for(let dx=-4;dx<=4&&!wet;dx++)if(getB(x+dx,y+dy,z+dz)===WATER)wet=true;
+  if(wet){if(m<7)setBlock(x,y,z,FARMLAND,true,false,7)}else if(m>0)setBlock(x,y,z,FARMLAND,true,false,m-1);else{const a=getB(x,y+1,z);if(!(B[a]&&B[a].crop!=null))setBlock(x,y,z,DIRT,true)}}
+// 잎 (LeavesBlock): 플레이어가 놓은 잎 (메타 1) 은 그대로 · 원목에서 잎을 따라 6칸 넘게 떨어지면 무작위 틱에 사라져요
+const LEAF_ALL=new Set([LEAVES,BIRCH_LEAVES,SPRUCE_LEAVES,DARK_OAK_LEAVES,CHERRY_LEAVES,JUNGLE_LEAVES,ACACIA_LEAVES,MANGROVE_LEAVES,AZALEA_LEAVES,FL_AZALEA_LEAVES,PALE_OAK_LEAVES]),LEAF_CHK=new Set();
+function leafNear6(x,y,z){const seen=new Set([tkey(x,y,z)]);let fr=[[x,y,z]];for(let d=1;d<=6;d++){const nf=[];for(const [a,b,c] of fr)for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){const q=[a+dx,b+dy,c+dz],k=tkey(q[0],q[1],q[2]);if(seen.has(k))continue;seen.add(k);const id=getB(q[0],q[1],q[2]);if(isLog(id)||id===CRIMSON_STEM||id===WARPED_STEM)return true;if(LEAF_ALL.has(id)&&d<6)nf.push(q)}fr=nf}return false}
+function rtLeaf(x,y,z,id,m){const k=tkey(x,y,z);if(!LEAF_CHK.has(k))return;LEAF_CHK.delete(k);if(m&1||leafNear6(x,y,z))return;setBlock(x,y,z,AIR,true);if(isLeaf(id))leafDrops(x,y,z,id);else if(B[id].leaf&&Math.random()<.05)spawnItem({id:B[id].leaf,n:1},x+.5,y+.5,z+.5)}
+scheduleDecay=function(x,y,z){for(let dy=-6;dy<=6;dy++)for(let dz=-6;dz<=6;dz++)for(let dx=-6;dx<=6;dx++)if(LEAF_ALL.has(getB(x+dx,y+dy,z+dz)))LEAF_CHK.add(tkey(x+dx,y+dy,z+dz))};
+{const _pm=placeMeta;placeMeta=function(id,t){const m=_pm(id,t);return LEAF_ALL.has(id)?(m|1):m}}
+{const _db=doBreak;doBreak=function(x,y,z,id){_db(x,y,z,id);if(LEAF_ALL.has(id))scheduleDecay(x,y,z);if(id===ICE&&getB(x,y,z)===AIR&&DIM!=='nether'&&!creative()&&!(inv[sel]&&inv[sel].e&&inv[sel].e.silk)){const b=getB(x,y-1,z);if(SOLID[b]||B[b]&&B[b].liquid)setBlock(x,y,z,WATER)}}}   // 얼음을 깨면 아래가 단단하거나 액체일 때 물이 돼요
+// 예전 타이머 (작물 · 묘목 목록) 는 무작위 틱이 대신해요
+cropTick=function(){crops.length=0};saplingTick=function(){saplings.length=0};
+for(let i=0;i<NB;i++){const b=B[i];if(!b)continue;if(b.crop!=null){RT_FN[i]=rtCrop;CROP_BASE[i]=b.wart?NWART0:i>=WHEAT0&&i<WHEAT0+4?WHEAT0:i>=CARROTS0&&i<CARROTS0+4?CARROTS0:i>=POTATOES0&&i<POTATOES0+4?POTATOES0:i>=BEETS0&&i<BEETS0+4?BEETS0:i}else if(b.sap)RT_FN[i]=rtSapling}
+RT_FN[NWART0]=RT_FN[NWART1]=rtCrop;CROP_BASE[NWART0]=CROP_BASE[NWART1]=NWART0;RT_FN[SUGAR_CANE]=RT_FN[CACTUS]=rtTall;RT_FN[GRASS]=RT_FN[SNOWY_GRASS]=RT_FN[MYCELIUM]=rtGrass;RT_FN[ICE]=rtIce;RT_FN[SNOW_LAYER]=rtSnow;RT_FN[FARMLAND]=rtFarm;for(const i of LEAF_ALL)RT_FN[i]=rtLeaf;
+// ── 떨어지는 블록 (Agent 09): 마크 FallingBlockEntity — 아래가 비면 2틱 뒤 떨어지기 시작 · 틱마다 −0.04 · ×0.98 · 닿은 칸에 놓이고, 못 놓이면 (반 블록 · 횃불 위) 아이템
+const fallers=[];
+settle=function(x,y,z){const id=getB(x,y,z);if(y>0&&B[id]&&B[id].fall&&canReplace(getB(x,y-1,z)))schedule(x,y,z,2,'fall')};
+function fallStart(x,y,z){const id=getB(x,y,z),m=getM(x,y,z);if(!(y>0&&B[id]&&B[id].fall&&canReplace(getB(x,y-1,z))))return;setBlock(x,y,z,AIR);const g=itemMesh(id,.98);scene.add(g);fallers.push({id,m,x:x+.5,y,z:z+.5,py:y,vy:0,t:0,g});g.position.set(x+.5,y+.49,z+.5)}
+function fallTick(){for(let i=fallers.length-1;i>=0;i--){const f=fallers[i];f.py=f.y;f.t++;f.vy-=.04;
+    const s=[f.x-.49,f.y,f.z-.49,f.x+.49,f.y+.98,f.z+.49],L=pBoxes(s[0],f.y+Math.min(f.vy,0)-1e-3,s[2],s[3],s[4],s[5],-1e9,true),dy=pClip(L,s,1,f.vy);f.y+=dy;const land=dy!==f.vy&&f.vy<0;f.vy*=.98;
+    if(!land&&f.t<600&&f.y>-64)continue;fallers.splice(i,1);scene.remove(f.g);f.g.geometry.dispose();[].concat(f.g.material).forEach(q=>q.dispose());
+    const bx=Math.floor(f.x),by=Math.floor(f.y+1e-4),bz=Math.floor(f.z),o=getB(bx,by,bz);
+    if(land&&canReplace(o)){if(o!==AIR&&!(B[o]&&B[o].liquid))dropFor(bx,by,bz,o,true);setBlock(bx,by,bz,f.id,false,false,f.m);sfx('place',B[f.id].snd)}else spawnItem({id:f.id,n:1},f.x,f.y+.3,f.z)}}
+function fallRender(){const a=clamp(tickAcc/.05,0,1);for(const f of fallers)f.g.position.set(f.x,lerp(f.py,f.y,a)+.49,f.z)}
+{const _rs=runSched;runSched=function(s){if(s.k==='fall'){fallStart(s.x,s.y,s.z);return}return _rs(s)}}
+{const _ue=updateEnts;updateEnts=function(dt){_ue(dt);if(fallers.length)fallRender()}}
 /* 틱 루프 */
 function worldTicks(dt){tickAcc+=dt;let guard=0;while(tickAcc>=.05&&guard++<4){tickAcc-=.05;gameTick++;
-  if(gameTick%4===0)plateTick();
+  if(gameTick%4===0)plateTick();randomTicks();fallTick();
   let n=0;for(let i=0;i<SCH.length&&n<1500;i++){const s=SCH[i];if(s.t<=gameTick){SCH.splice(i,1);i--;n++;SKEYS.delete(s.k+'|'+s.x+','+s.y+','+s.z);runSched(s)}}
   if(rsQ.size){const items=[...rsQ.values()];rsQ.clear();const done=new Set();for(const [x,y,z] of items.slice(0,3000)){const id=getB(x,y,z);if(id===WIRE){if(!done.has(tkey(x,y,z)))updateWireNet(x,y,z,done)}else evalComp(x,y,z)}}}
   if(tickAcc>.2)tickAcc=0;updateTNT(dt)}
