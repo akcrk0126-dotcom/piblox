@@ -1338,6 +1338,24 @@ function oreMC2(seed,baseName,pal,o){const base=imgOf(baseName);
   diamond:[['#0e6f72','#148f92','#1ed0d6','#77e7d1','#d5fff6'],8,4,7],emerald:[['#00591a','#007b18','#1c9829','#17dd62','#d9ffeb'],5,4,7]};let sd=7000;
   for(const k in O){const [p,n,mn,mx]=O[k];RT(k+'_ore',oreMC2(sd++,'stone',p,{n,min:mn,max:mx}));RT('d_'+k+'_ore',oreMC2(sd++,'deepslate',k==='coal'?['#0a0a0a','#1f1f1f','#2a2a2a','#3c3c3c','#5c5c5c']:p,{n,min:mn,max:mx,shade:.7}))}
   RT('nether_gold_ore',oreMC2(7100,'netherrack',['#c08a1a','#f8af2b','#fcee4b','#ffffb5'],{n:9,min:2,max:4}));RT('nether_quartz_ore',oreMC2(7101,'netherrack',['#8a7a68','#b6a48e','#d4caba','#eae5de','#ffffff'],{n:7,min:3,max:6}))}
+// ── 블록 그림 다시 그리기 (Agent 01): 원본 블록과 나란히 놓고 무늬 · 배치를 맞췄어요 (원본 그림 파일은 쓰지 않고 코드가 직접 그려요) ──
+// 모델용 그림: 상자 (14×14×14 모델) · 걸쇠 · 랜턴 (마크 모델과 같은 자리 배치) · 판유리 가로 테두리
+{const H1=(x,y,s)=>hash2(x,y,s);
+  const CW=['#7f5f22','#8f691d','#956c2e','#a26b23','#a47227','#ab792d'],CB='#352f26',chestWood=(P,x,y,s)=>P.set(x,y,CW[clamp(2+(H1(x>>2,y,s)<.5?0:1)+(H1(x,y,s+1)<.3?1:0)+(y%3===0?-1:1),0,5)]);
+  RT('chest_top',paint(4101,P=>{P.clear();for(let y=1;y<15;y++)for(let x=1;x<15;x++){if(x===1||y===1||x===14||y===14)P.set(x,y,CB);else chestWood(P,x,y,4101)}}));
+  const chestSide=seed=>paint(seed,P=>{P.clear();for(let y=2;y<16;y++)for(let x=1;x<15;x++){if(x===1||x===14||y===2||y===6||y===15)P.set(x,y,CB);else chestWood(P,x,y,seed)}});
+  RT('chest_side',chestSide(4102));RT('chest_front',chestSide(4103));
+  addTile('chest_latch',paint(4104,P=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++)P.set(x,y,y===8?'#767676':x===8?'#868686':y<6?'#cdcdcd':'#a5a5a5')}));
+  // 랜턴: 뚜껑 옆 (1..4,0..1) · 몸통 옆 (0..5,2..8) · 몸통 위아래 (0..5,9..14) · 뚜껑 위 (1..4,10..13) · 손잡이 (11..13,1..4 / 6..11)
+  const lanternM=(seed,glow)=>paint(seed,P=>{P.clear();const I=['#262a33','#323743','#3f4552','#4c5361'];
+    for(let x=1;x<5;x++){P.set(x,0,I[2]);P.set(x,1,I[1])}
+    for(let y=2;y<9;y++)for(let x=0;x<6;x++){if(x===0||x===5||y===2||y===8){P.set(x,y,y===2?I[3]:I[1]);continue}const d=Math.max(Math.abs(x-2.5),Math.abs(y-5.2));P.set(x,y,glow[d<1?0:d<1.8?1:d<2.6?2:3])}
+    for(let y=9;y<15;y++)for(let x=0;x<6;x++)P.set(x,y,x===0||x===5||y===9||y===14?I[1]:I[2]);for(let y=10;y<14;y++)for(let x=1;x<5;x++)P.set(x,y,x===1||y===10?I[3]:I[2]);
+    for(const [x,y] of [[11,1],[12,1],[13,1],[11,2],[13,2],[11,3],[13,3],[11,4],[13,4],[11,10],[12,10],[13,10],[11,11],[13,11]])P.set(x,y,I[1]);
+    for(let y=6;y<12;y++){P.set(11,y,I[1]);P.set(13,y,I[1]);if(y===6)P.set(12,y,I[1])}});
+  addTile('lantern_m',lanternM(4105,['#fff6b0','#ffd36a','#f0a040','#b8642a']));addTile('soul_lantern_m',lanternM(4106,['#e0ffff','#7ff0f0','#38c6d0','#1f7f8f']));
+  const e=imgOf('glass_pane');addTile('pane_edge_h',paint(4107,P=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const i=(x*16+y)*4;P.set(x,y,[e[i],e[i+1],e[i+2]],e[i+3])}}));
+}
 // 색 맞추기에서 뺀 픽셀 표시 (알파 251) 를 다시 불투명으로
 for(const c of tileList){if(!c||!c.getContext)continue;const g=c.getContext('2d'),im=g.getImageData(0,0,16,16),d=im.data;let ch=false;for(let i=3;i<1024;i+=4)if(d[i]===KEEPA){d[i]=255;ch=true}if(ch)g.putImageData(im,0,0)}
 const ATLAS=cv(512,512);{const g=ATLAS.getContext('2d');tileList.forEach((c,i)=>g.drawImage(c,(i%32)*16,Math.floor(i/32)*16))}
@@ -2231,7 +2249,55 @@ const DOOR_OPEN=[5,4,0,0,1,0];// f(가로) → 열렸을 때 방향
 const isDoor=id=>id===DOOR_LO||id===DOOR_HI||id===IRON_DOOR_LO||id===IRON_DOOR_HI;
 const SHAPED=new Uint8Array(NB);[REPEATER,COMPARATOR,DOOR_LO,DOOR_HI,IRON_DOOR_LO,IRON_DOOR_HI,PISTON_HEAD,PISTON,STICKY_PISTON,LILY_PAD].forEach(i=>SHAPED[i]=1);
 const XSHAPES=new Set(['rail','vine','gateway','column2','carpet','bush','slab2','stairs','fence','ladder','lantern','column','rod','egg','portal','eportal','boxes']);for(let i=0;i<NB;i++)if(B[i]&&XSHAPES.has(B[i].shape))SHAPED[i]=1;
-function shapeBoxes(id,m){
+// ── 이웃을 보고 모양이 바뀌는 블록 (Agent 01): 계단 모서리 · 담장 · 판유리 · 철창 · 울타리 · 울타리 문 · 상자 · 가마솥 ──
+// 마크 규칙 그대로예요: 계단은 뒤 · 앞에 직각으로 놓인 계단을 보고 바깥 · 안쪽 모서리가 되고, 담장 · 판유리 · 철창 · 울타리는 옆 블록과 이어져요.
+// nb(dx,dy,dz) → 이웃 블록 id, nm(dx,dy,dz) → 이웃 메타. 메시를 만들 때(R 배열)와 부딪힘 검사(getB)가 같은 함수를 써요.
+const SH_D=[0,1,4,5];   // FACES 번호: +x(동) · -x(서) · +z(남) · -z(북)
+for(const k in WALL){const b=B[WALL[k]];b.wallB=1;b.shape='wall';SHAPED[WALL[k]]=1}
+for(const id of [GLASS_PANE,IRON_BARS]){B[id].paneB=id===IRON_BARS?2:1;B[id].shape='pane';SHAPED[id]=1}
+B[OAK_GATE].gateB=B[SPRUCE_GATE].gateB=1;for(let i=0;i<NB;i++)if(B[i]&&B[i].shape==='fence'&&i!==FENCE_NB)B[i].woodF=1;
+const fullFaceB=id=>OP[id]===1||!!(B[id]&&B[id].self&&SOLID[id]);   // 옆면이 꽉 찬 블록 (유리 · 얼음 포함)
+const gateAlongB=(m,d)=>FACES[HDIRS[m&3]].k!==FACES[d].k;            // 울타리 문은 보는 쪽과 직각인 양옆으로 이어져요
+// 계단: 아래(위) 반 블록 + 높은 부분. 높은 쪽 이웃 계단이 직각이면 바깥 모서리(4분의 1), 낮은 쪽 이웃 계단이 직각이면 안쪽 모서리(ㄱ 자)
+function stairBoxesB(m,nb,nm){const f=HDIRS[m&3],up=m&4?1:0,fd=FACES[f].d,y0=up?0:.5,y1=up?.5:1,slab=up?[0,.5,0,1,1,1]:[0,0,0,1,.5,1];
+  const half=fd[0]?[fd[0]>0?.5:0,y0,0,fd[0]>0?1:.5,y1,1]:[0,y0,fd[2]>0?.5:0,1,y1,fd[2]>0?1:.5],q=(sx,sz)=>[sx>0?.5:0,y0,sz>0?.5:0,sx>0?1:.5,y1,sz>0?1:.5];
+  const st=d=>{const D=FACES[d].d,n=nb(D[0],0,D[2]);if(!B[n]||B[n].shape!=='stairs')return null;const mm=nm(D[0],0,D[2]);return [HDIRS[mm&3],mm&4?1:0]},same=d=>{const s=st(d);return !!s&&s[0]===f&&s[1]===up};
+  let s=st(f);if(s&&s[1]===up&&FACES[s[0]].k!==FACES[f].k&&!same(OPPD[s[0]])){const d=FACES[s[0]].d;return [slab,q(fd[0]||d[0],fd[2]||d[2])]}
+  s=st(OPPD[f]);if(s&&s[1]===up&&FACES[s[0]].k!==FACES[f].k&&!same(s[0])){const d=FACES[s[0]].d;return [slab,half,q(-fd[0]||d[0],-fd[2]||d[2])]}
+  return [slab,half]}
+// 담장: 담장 · 판유리 · 철창 · 꽉 찬 블록 · 옆으로 놓인 울타리 문과 이어져요. 위가 막히면 높은 담장, 곧게 이어지면 기둥이 없어요
+function wallConnB(nb,nm,d){const D=FACES[d].d,n=nb(D[0],0,D[2]),b=B[n];return !!b&&(!!b.wallB||!!b.paneB||fullFaceB(n)||(!!b.gateB&&gateAlongB(nm(D[0],0,D[2]),d)))}
+const lowFullB=(id,m)=>{const b=B[id];return !!b&&((b.shape==='slab2'&&!(m&1))||(b.shape==='stairs'&&!(m&4)))};   // 아랫면이 꽉 찬 반 블록 · 계단
+function wallStateB(nb,nm,dep){const up=nb(0,1,0),mu=nm(0,1,0),wu=!!(B[up]&&B[up].wallB),S=[0,0,0,0],cov=fullFaceB(up)||lowFullB(up,mu),nbU=(a,b,c)=>nb(a,b+1,c),nmU=(a,b,c)=>nm(a,b+1,c);
+  for(let k=0;k<4;k++)if(wallConnB(nb,nm,SH_D[k]))S[k]=cov||(wu&&wallConnB(nbU,nmU,SH_D[k]))?2:1;
+  const e=!S[0],w=!S[1],s=!S[2],n=!S[3];let post;
+  if((e&&w&&s&&n)||e!==w||s!==n)post=1;   // 끝 · 모서리 · 홀로 선 담장은 기둥
+  else if((S[0]===2&&S[1]===2)||(S[2]===2&&S[3]===2))post=wu&&dep<4?wallStateB(nbU,nmU,dep+1)[4]:0;
+  else post=cov||wu||!!(B[up]&&(B[up].torch||up===PLATE))?1:0;
+  return [S[0],S[1],S[2],S[3],post]}   // [동 · 서 · 남 · 북 (0 없음 · 1 낮음 · 2 높음), 기둥]
+function wallBoxesB(s){const r=[];if(s[4])r.push([.25,0,.25,.75,1,.75]);
+  for(let k=0;k<4;k++){if(!s[k])continue;const h=s[k]===2?1:.875,d=SH_D[k];r.push(d===0?[.5,0,.3125,1,h,.6875]:d===1?[0,0,.3125,.5,h,.6875]:d===4?[.3125,0,.5,.6875,h,1]:[.3125,0,0,.6875,h,.5])}
+  return r}
+// 판유리 · 철창: 판유리 · 철창 · 담장 · 꽉 찬 블록과 이어져요 (혼자면 가는 기둥)
+function paneConnB(nb){const c=[0,0,0,0];for(let k=0;k<4;k++){const D=FACES[SH_D[k]].d,n=nb(D[0],0,D[2]),b=B[n];c[k]=b&&(b.paneB||b.wallB||fullFaceB(n))?1:0}return c}
+// 울타리: 꽉 찬 블록 · 같은 종류 울타리 (나무끼리 · 네더 벽돌끼리) · 옆으로 놓인 울타리 문과 이어져요
+function fenceConnB(id,nb,nm){const c=[0,0,0,0],wood=!!B[id].woodF;for(let k=0;k<4;k++){const d=SH_D[k],D=FACES[d].d,n=nb(D[0],0,D[2]),b=B[n];
+  c[k]=b&&(fullFaceB(n)||(b.shape==='fence'&&!!b.woodF===wood)||(b.gateB&&gateAlongB(nm(D[0],0,D[2]),d)))?1:0}return c}
+// 울타리 문: 마크 모델 그대로 (기둥 2 · 문짝 2, 열리면 보는 쪽으로 젖혀져요)
+const GATE_C=[[0,5,7,2,16,9],[14,5,7,16,16,9],[6,6,7,8,15,9],[8,6,7,10,15,9],[2,6,7,6,9,9],[2,12,7,6,15,9],[10,6,7,14,9,9],[10,12,7,14,15,9]],
+  GATE_O=[[0,5,7,2,16,9],[14,5,7,16,16,9],[0,6,13,2,15,15],[14,6,13,16,15,15],[0,6,9,2,9,13],[0,12,9,2,15,13],[14,6,9,16,9,13],[14,12,9,16,15,13]];
+B[OAK_GATE].boxes=B[SPRUCE_GATE].boxes=m=>(m&8?GATE_O:GATE_C).map(b=>rotBox(b.map(v=>v/16),HDIRS[m&3]));
+// 상자: 마크처럼 14×14×14 (+ 걸쇠) · 빛을 막지 않아요.  가마솥: 2칸 두께 벽 · 바닥 · 네 귀퉁이 다리 (속이 비었어요)
+B[CHEST].shape='chest';B[CHEST].op=false;OP[CHEST]=0;ATT[CHEST]=1;SHAPED[CHEST]=1;
+B[CAULDRON].shape='boxes';SHAPED[CAULDRON]=1;B[CAULDRON].boxes=[[0,3,0,2,16,16],[14,3,0,16,16,16],[2,3,0,14,16,2],[2,3,14,14,16,16],[2,3,2,14,4,14],[0,0,0,4,3,2],[0,0,2,2,3,4],[12,0,0,16,3,2],[14,0,2,16,3,4],[0,0,14,4,3,16],[0,0,12,2,3,14],[12,0,14,16,3,16],[14,0,12,16,3,14]].map(b=>b.map(v=>v/16));
+const NBSH={stairs:1,fence:1,wall:1,pane:1,chest:1};
+function nbShapeBoxes(id,m,x,y,z){const sh=B[id].shape;if(sh==='chest')return [[.0625,0,.0625,.9375,.875,.9375]];
+  if(x===undefined)return sh==='wall'?[[.25,0,.25,.75,1,.75]]:sh==='pane'?[[.4375,0,.4375,.5625,1,.5625]]:null;
+  const nb=(a,b,c)=>getB(x+a,y+b,z+c),nm=(a,b,c)=>getM(x+a,y+b,z+c);
+  if(sh==='stairs')return stairBoxesB(m,nb,nm);if(sh==='wall')return wallBoxesB(wallStateB(nb,nm,0));
+  const c=sh==='pane'?paneConnB(nb):fenceConnB(id,nb,nm),t=sh==='pane'?.4375:.375,u=1-t,r=[[t,0,t,u,1,u]];   // 기둥 + 이어진 쪽 팔 (부딪힘은 마크처럼 팔까지 막아요)
+  if(c[0])r.push([u,0,.4375,1,1,.5625]);if(c[1])r.push([0,0,.4375,t,1,.5625]);if(c[2])r.push([.4375,0,u,.5625,1,1]);if(c[3])r.push([.4375,0,0,.5625,1,t]);return r}
+function shapeBoxes(id,m,x,y,z){{const q=B[id]&&NBSH[B[id].shape]?nbShapeBoxes(id,m,x,y,z):null;if(q)return q}
   const xs=B[id]&&B[id].shape;if(xs&&XSHAPES.has(xs)){
     if(xs==='rail')return[[0,0,0,1,.125,1]];if(xs==='gateway')return[[0,0,0,1,1,1]];
     if(xs==='vine'){const d=HDIRS[m&3],t=.0625;return[d===0?[1-t,0,0,1,1,1]:d===1?[0,0,0,t,1,1]:d===4?[0,0,1-t,1,1,1]:[0,0,0,1,1,t]]}
@@ -2251,7 +2317,7 @@ function shapeBoxes(id,m){
 function overl(px,py,pz,hw,h,cb){const x0=Math.floor(px-hw),x1=Math.floor(px+hw),y0=Math.floor(py),y1=Math.floor(py+h),z0=Math.floor(pz-hw),z1=Math.floor(pz+hw);
   for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++){const id=getB(x,y,z);if(!SOLID[id])continue;
     if(!SHAPED[id]&&BH[id]===1){cb(x,y,z,x+1,y+1,z+1);continue}
-    for(const b of shapeBoxes(id,getM(x,y,z))){const ax=x+b[0],ay=y+b[1],az=z+b[2],bx=x+b[3],by=y+b[4],bz=z+b[5];if(px+hw>ax+1e-6&&px-hw<bx-1e-6&&py+h>ay+1e-6&&py<by-1e-4&&pz+hw>az+1e-6&&pz-hw<bz-1e-6)cb(ax,ay,az,bx,by,bz)}}}
+    for(const b of shapeBoxes(id,getM(x,y,z),x,y,z)){const ax=x+b[0],ay=y+b[1],az=z+b[2],bx=x+b[3],by=y+b[4],bz=z+b[5];if(px+hw>ax+1e-6&&px-hw<bx-1e-6&&py+h>ay+1e-6&&py<by-1e-4&&pz+hw>az+1e-6&&pz-hw<bz-1e-6)cb(ax,ay,az,bx,by,bz)}}}
 function boxHits(px,py,pz,hw,h){let top=0,hit=false;overl(px,py,pz,hw,h,(a,b,c,d,e)=>{hit=true;if(e>top)top=e});return hit?Math.max(top,1e-3):0}
 function moveEnt(e,dx,dy,dz,hw,h,sneakGuard){const n=Math.ceil(Math.max(Math.abs(dx),Math.abs(dy),Math.abs(dz))/.4)||1;dx/=n;dy/=n;dz/=n;const wasG=e.onGround;e.onGround=false;e.hitX=e.hitZ=false;
   const horiz=(ax,d)=>{const P=e.pos;let r=null,top=0;overl(P.x,P.y,P.z,hw,h,(a,b,c,dd,ee,f)=>{const lo=ax==='x'?a:c,hi=ax==='x'?dd:f;r=d>0?(r==null?lo:Math.min(r,lo)):(r==null?hi:Math.max(r,hi));if(ee>top)top=ee});
@@ -2334,6 +2400,11 @@ function buildChunk(ch){
           const t=typeof tx==='function'?tx(f):tx,T=tileUV(t);let u0,u1,v0,v1;if(F.k===1){u0=bx[0];u1=bx[3];v0=bx[2];v1=bx[5]}else{u0=F.k===0?bx[2]:bx[0];u1=F.k===0?bx[5]:bx[3];v0=bx[1];v1=bx[4]}
           const lv=[L0[0],L0[1],F.s];quad(M,vs,[T[0]+(T[2]-T[0])*u0,T[1]+(T[3]-T[1])*v0,T[0]+(T[2]-T[0])*u1,T[1]+(T[3]-T[1])*v1],[lv,lv,lv,lv],0,tc)}};
       const px=v=>v/16;
+      // (Agent 01) 블록 경계에 닿은 면은 옆이 꽉 차면 안 그려요 · 이웃 읽기 · 마크 모델처럼 UV 를 직접 주는 상자 (r=[그림, u0,v0,u1,v1] 픽셀, v 는 위에서부터)
+      const cullB=(bx,f)=>(f===0?bx[3]>=1:f===1?bx[0]<=0:f===2?bx[4]>=1:f===3?bx[1]<=0:f===4?bx[5]>=1:bx[2]<=0)&&OP[R[i+FACES[f].off]],nbR=(a,b2,c)=>R[i+a+b2*WW+c*W],nmR=(a,b2,c)=>getM(ch.cx*16+x+a,y+b2,ch.cz*16+z+c);
+      const uvR=r=>{const T=tileUV(r[0]),du=(T[2]-T[0])/16,dv=(T[3]-T[1])/16;return [T[0]+du*r[1],T[3]-dv*r[4],T[0]+du*r[3],T[3]-dv*r[2]]};
+      const boxUV=(bx,uvf)=>{for(let f=0;f<6;f++){const r=uvf(f);if(!r)continue;const F=FACES[f],lv=[L0[0],L0[1],F.s];quad(M,F.c.map(c=>[x+(c[0]?bx[3]:bx[0]),y+(c[1]?bx[4]:bx[1]),z+(c[2]?bx[5]:bx[2])]),uvR(r),[lv,lv,lv,lv])}};
+      const plane2=(x0,z0,x1,z1,y0,y1,r)=>{const uv=uvR(r),lv=[L0[0],L0[1],.9],q=[[x+x0,y+y0,z+z0],[x+x1,y+y0,z+z1],[x+x1,y+y1,z+z1],[x+x0,y+y1,z+z0]];quad(M,q,uv,[lv,lv,lv,lv]);quad(M,[q[1],q[0],q[3],q[2]],uv,[lv,lv,lv,lv])};
       if(sh==='wire'){const p=MV&15,tc=[p?.42+.58*p/15:.3,p>11?(p-11)*.06:0,0],L=[L0[0],L0[1],1],LS=[L,L,L,L],yy=y+.015,tD=tileUV(TEX.wire_dot),tL=tileUV(TEX.wire_line);
         quad(M,[[x,yy,z+1],[x+1,yy,z+1],[x+1,yy,z],[x,yy,z]],tD,LS,0,tc);
         const con=wireCon(R,i);for(const d of HDIRS){if(!con[d])continue;const F=FACES[d],ax=F.d[0],az=F.d[2];let vs;
@@ -2363,15 +2434,25 @@ function buildChunk(ch){
       if(sh==='carpet'){boxQ([0,0,0,1,.0625,1],b.tex[0],null,f=>f===3);continue}
       if(sh==='bush'){boxQ([.0625,.25,.0625,.9375,1,.9375],b.tex[0]);boxQ([.4375,0,.4375,.5625,.25,.5625],TEX.log_side);continue}
       if(sh==='slab2'){boxQ(MV&2?[0,0,0,1,1,1]:MV&1?[0,.5,0,1,1,1]:[0,0,0,1,.5,1],T6,null,f=>(MV&2||(f===3&&!(MV&1))||(f===2&&(MV&1)))&&OP[R[i+FACES[f].off]]);continue}
-      if(sh==='stairs'){const up=MV&4,d=HDIRS[MV&3],hb=d===0?[.5,0,1,1]:d===1?[0,0,.5,1]:d===4?[0,.5,1,1]:[0,0,1,.5];boxQ(up?[0,.5,0,1,1,1]:[0,0,0,1,.5,1],T6,null,f=>f===(up?2:3)&&OP[R[i+FACES[f].off]]);boxQ([hb[0],up?0:.5,hb[1],hb[2],up?.5:1,hb[3]],T6);continue}
-      if(sh==='fence'){const T0=b.tex[0];boxQ([.375,0,.375,.625,1,.625],T0);const cn=d=>{const nid=R[i+FACES[d].off];return OP[nid]||(B[nid]&&B[nid].shape==='fence')};
+      if(sh==='stairs'){for(const bx of stairBoxesB(MV,nbR,nmR))boxQ(bx,T6,null,f=>cullB(bx,f));continue}
+      if(sh==='wall'){const s=wallStateB(nbR,nmR,0),T0=b.tex[0],bq=bx=>boxQ(bx,T0,null,f=>cullB(bx,f));   // (Agent 01) 담장: 기둥 · 낮은/높은 옆 (곧은 줄은 한 덩어리)
+        if(!s[4]&&s[0]&&s[0]===s[1]&&!s[2]&&!s[3])bq([0,0,.3125,1,s[0]===2?1:.875,.6875]);else if(!s[4]&&s[2]&&s[2]===s[3]&&!s[0]&&!s[1])bq([.3125,0,0,.6875,s[2]===2?1:.875,1]);else for(const bx of wallBoxesB(s))bq(bx);continue}
+      if(sh==='pane'){const c=paneConnB(nbR),bars=b.paneB===2,TG=b.tex[4],TV=b.tex[2],TH=bars?TV:TEX.pane_edge_h,P0=[.4375,0,.4375,.5625,1,.5625];   // (Agent 01) 판유리 · 철창: 가는 기둥 + 이어진 쪽 판
+        boxQ(P0,f=>f===2||f===3?TV:TG,null,f=>(f===0&&c[0])||(f===1&&c[1])||(f===4&&c[2])||(f===5&&c[3])||cullB(P0,f));
+        const arm=(bx,ax)=>{boxQ(bx,f=>f===2||f===3?(ax?TH:TV):TG,null,f=>f<2?(ax||bars):f>3?(!ax||bars):cullB(bx,f));if(bars)boxQ(ax?[bx[0],0,.5,bx[3],1,.5]:[.5,0,bx[2],.5,1,bx[5]],TG,null,f=>ax?f<4:f>1)};
+        if(c[0])arm([.5625,0,.4375,1,1,.5625],1);if(c[1])arm([0,0,.4375,.4375,1,.5625],1);if(c[2])arm([.4375,0,.5625,.5625,1,1],0);if(c[3])arm([.4375,0,0,.5625,1,.4375],0);continue}
+      if(sh==='chest'){const te=tiles.get((ch.cx*16+x)+','+y+','+(ch.cz*16+z)),fr=te&&te.f!=null?te.f:4,FT=TEX[b.face];   // (Agent 01) 상자: 14×14×14 + 걸쇠
+        boxQ([.0625,0,.0625,.9375,.875,.9375],f=>f===fr?FT:b.tex[f],null,f=>f===3&&OP[R[i-WW]]);boxQ(rotBox([.4375,.4375,.9375,.5625,.6875,1],fr),TEX.chest_latch,null,f=>f===OPPD[fr]);continue}
+      if(sh==='fence'){const T0=b.tex[0];boxQ([.375,0,.375,.625,1,.625],T0);const FC=fenceConnB(id,nbR,nmR),cn=d=>FC[SH_D.indexOf(d)];
         if(cn(0)){boxQ([.625,.75,.4375,1,.9375,.5625],T0);boxQ([.625,.375,.4375,1,.5625,.5625],T0)}if(cn(1)){boxQ([0,.75,.4375,.375,.9375,.5625],T0);boxQ([0,.375,.4375,.375,.5625,.5625],T0)}
         if(cn(4)){boxQ([.4375,.75,.625,.5625,.9375,1],T0);boxQ([.4375,.375,.625,.5625,.5625,1],T0)}if(cn(5)){boxQ([.4375,.75,0,.5625,.9375,.375],T0);boxQ([.4375,.375,0,.5625,.5625,.375],T0)}continue}
       if(sh==='ladder'){const d=HDIRS[MV&3];boxQ(d===0?[.875,0,0,.9375,1,1]:d===1?[.0625,0,0,.125,1,1]:d===4?[0,0,.875,1,1,.9375]:[0,0,.0625,1,1,.125],b.tex[0]);continue}
       if(sh==='rail'){const L=[L0[0],L0[1],1],LS=[L,L,L,L],yy=y+.02,T=tileUV(b.tex[0]),v=MV&1?[[x+1,yy,z+1],[x+1,yy,z],[x,yy,z],[x,yy,z+1]]:[[x,yy,z+1],[x+1,yy,z+1],[x+1,yy,z],[x,yy,z]];quad(M,v,T,LS);quad(M,[v[1],v[0],v[3],v[2]],T,LS);continue}
       if(sh==='vine'){const d=HDIRS[MV&3],t=.0625;boxQ(d===0?[1-t,0,0,1,1,1]:d===1?[0,0,0,t,1,1]:d===4?[0,0,1-t,1,1,1]:[0,0,0,1,1,t],b.tex[0],tintOf(b,x,z));continue}
       if(sh==='gateway'){boxQ([0,0,0,1,1,1],b.tex[0],null,f=>OP[R[i+FACES[f].off]]);continue}
-      if(sh==='lantern'){boxQ([.3125,0,.3125,.6875,.5625,.6875],b.tex[0]);continue}
+      if(sh==='lantern'){const T=TEX[(id===SOUL_LANTERN?'soul_lantern':'lantern')+'_m'],hg=MV&1,o=hg?1/16:0;   // (Agent 01) 랜턴: 마크 모델 그대로 · 천장에 달면 매달려요
+        boxUV([.3125,o,.3125,.6875,.4375+o,.6875],f=>f===2||f===3?[T,0,9,6,15]:[T,0,2,6,9]);boxUV([.375,.4375+o,.375,.625,.5625+o,.625],f=>f===3?(hg?[T,1,10,5,14]:null):f===2?[T,1,10,5,14]:[T,1,0,5,2]);
+        const a=1.5/16*Math.SQRT1_2;if(hg){plane2(.5-a,.5-a,.5+a,.5+a,11/16,15/16,[T,11,1,14,5]);plane2(.5-a,.5+a,.5+a,.5-a,10/16,1,[T,11,6,14,12])}else{plane2(.5-a,.5-a,.5+a,.5+a,9/16,11/16,[T,11,1,14,3]);plane2(.5-a,.5+a,.5+a,.5-a,9/16,11/16,[T,11,10,14,12])}continue}
       if(sh==='rod'){boxQ([.4375,0,.4375,.5625,1,.5625],b.tex[0]);continue}
       if(sh==='egg'){boxQ([.0625,0,.0625,.9375,1,.9375],b.tex[0]);continue}
       if(sh==='column'){const T0=b.tex[0];boxQ([.1875,0,.1875,.8125,1,.8125],T0,null,f=>(f===2||f===3)&&(R[i+FACES[f].off]===id||R[i+FACES[f].off]===CHORUS_FLOWER||OP[R[i+FACES[f].off]]));
@@ -3577,7 +3658,7 @@ function rsUse(use,t){const {x,y,z}=t,m=getM(x,y,z);doSwing();
   return false}
 function horizFacing(){const a=((player.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);const dx=-Math.sin(a),dz=-Math.cos(a);return Math.abs(dx)>Math.abs(dz)?(dx>0?0:1):(dz>0?4:5)}
 function lookFacing(){if(player.pitch>.8)return 2;if(player.pitch<-.8)return 3;return horizFacing()}
-function placeMeta(id,t){const pb=B[id];if(pb&&pb.log&&!pb.shape)return t.face<2?1:t.face>3?2:0;if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
+function placeMeta(id,t){const pb=B[id];if((id===LANTERN||id===SOUL_LANTERN)&&t.face===3)return 1;if(pb&&pb.log&&!pb.shape)return t.face<2?1:t.face>3?2:0;if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
   if(id===OAK_TRAPDOOR||id===IRON_TRAPDOOR){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return HDIRS.indexOf(OPPD[horizFacing()])|(top?4:0)}
   if(id===OAK_GATE||id===SPRUCE_GATE)return HDIRS.indexOf(horizFacing());if(pb&&pb.mface||id===END_FRAME)return HDIRS.indexOf(faceToward(t.x,t.z));if(id===LADDER)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(id===REPEATER||id===COMPARATOR)return HDIRS.indexOf(horizFacing());if(id===PISTON||id===STICKY_PISTON)return OPPD[lookFacing()];if(id===OBSERVER)return lookFacing();return 0}
 function bucketUse(st){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);
