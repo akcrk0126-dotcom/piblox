@@ -2726,6 +2726,11 @@ function buildChunk(ch){
     if(b.cross){const l=[SL[i]/15,BLL[i]/15,1],uv=tileUV(b.tex[0]),ls=[l,l,l,l],tc=tintOf(b,x,z);const a=.05,c=.95,ot=PLANT_OFF[id];let ox=0,oy=0,oz=0;if(ot){const o=plantOffset(x,z,ot===2);ox=o[0];oy=o[1];oz=o[2]}
       const q1=[[x+a+ox,y+oy,z+a+oz],[x+c+ox,y+oy,z+c+oz],[x+c+ox,y+1+oy,z+c+oz],[x+a+ox,y+1+oy,z+a+oz]],q2=[[x+a+ox,y+oy,z+c+oz],[x+c+ox,y+oy,z+a+oz],[x+c+ox,y+1+oy,z+a+oz],[x+a+ox,y+1+oy,z+c+oz]];
       quad(M,q1,uv,ls,0,tc);quad(M,[q1[1],q1[0],q1[3],q1[2]],uv,ls,0,tc);quad(M,q2,uv,ls,0,tc);quad(M,[q2[1],q2[0],q2[3],q2[2]],uv,ls,0,tc);continue}
+    if(b.torch&&(MM[x|(z<<4)|(y<<8)]&7)&&(id===TORCH||id===SOUL_TORCH)){   // (Agent 01) 벽 횃불: 마크 모델처럼 벽에 붙어 22.5° 기울어요
+      const tm=MM[x|(z<<4)|(y<<8)]&7,l=[SL[i]/15,BLL[i]/15,1],ls=[l,l,l,l],t=tileUV(b.tex[0]),du=(t[2]-t[0])/16,dv=(t[3]-t[1])/16,fd=HDIRS[(tm-1)&3],ca=Math.cos(-.3927),sa=Math.sin(-.3927);
+      const P3=(px,py,pz)=>{const dy=py-3.5,X=px*ca-dy*sa,Y=px*sa+dy*ca+3.5;let wx=X,wz=pz;if(fd===1){wx=16-X;wz=16-pz}else if(fd===4){wx=16-pz;wz=X}else if(fd===5){wx=pz;wz=16-X}return [x+wx/16,y+Y/16,z+wz/16]};
+      const C=[[-1,3.5,7],[1,3.5,7],[1,3.5,9],[-1,3.5,9],[-1,13.5,7],[1,13.5,7],[1,13.5,9],[-1,13.5,9]].map(p=>P3(...p)),uv=(u0,v0,u1,v1)=>[t[0]+du*u0,t[3]-dv*v1,t[0]+du*u1,t[3]-dv*v0];
+      for(const [a,b2,c,d,u] of [[0,1,2,3,uv(7,13,9,15)],[4,5,6,7,uv(7,6,9,8)],[0,1,5,4,uv(7,6,9,16)],[3,2,6,7,uv(7,6,9,16)],[0,3,7,4,uv(7,6,9,16)],[1,2,6,5,uv(7,6,9,16)]]){quad(M,[C[a],C[b2],C[c],C[d]],u,ls);quad(M,[C[b2],C[a],C[d],C[c]],u,ls)}continue}
     if(b.torch){const l=[SL[i]/15,BLL[i]/15,1],ls=[l,l,l,l],t=tileUV(b.tex[0]),tw=(t[2]-t[0]),u0=t[0]+tw*7/16,u1=t[0]+tw*9/16,v0=t[1],v1=t[1]+(t[3]-t[1])*10/16;
       const a=x+7/16,c=x+9/16,d=z+7/16,e=z+9/16,h=y+10/16;
       quad(M,[[a,y,e],[c,y,e],[c,h,e],[a,h,e]],[u0,v0,u1,v1],ls);quad(M,[[c,y,d],[a,y,d],[a,h,d],[c,h,d]],[u0,v0,u1,v1],ls);
@@ -3499,7 +3504,8 @@ function doBreak(x,y,z,id){const b=B[id],harvest=canHarvest(id);if(!creative())d
   const te=tiles.get(tkey(x,y,z));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,x+.5,y+.5,z+.5)});tiles.delete(tkey(x,y,z));mpTile(tkey(x,y,z),null);if(screenOpen&&screenTile===te)closeScreen()}
   const wet=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0]].some(([a,c,e])=>getB(x+a,y+c,z+e)===WATER);
   blockBreakFx(x,y,z,id);setBlock(x,y,z,wet?WATER:AIR);sfx('break',b.snd);
-  const above=getB(x,y+1,z);if(B[above]&&(B[above].cross||B[above].torch)){dropFor(x,y+1,z,above,true);setBlock(x,y+1,z,AIR)}
+  const above=getB(x,y+1,z);if(B[above]&&(B[above].cross||(B[above].torch&&!((above===TORCH||above===SOUL_TORCH)&&(getM(x,y+1,z)&7))))){dropFor(x,y+1,z,above,true);setBlock(x,y+1,z,AIR)}
+  for(const d of HDIRS){const D=FACES[d].d,nx=x+D[0],nz=z+D[2],n=getB(nx,y,nz);if((n===TORCH||n===SOUL_TORCH)&&(getM(nx,y,nz)&7)===1+HDIRS.indexOf(d)){dropFor(nx,y,nz,n,true);setBlock(nx,y,nz,AIR)}}   // (Agent 01) 벽 횃불
   settle(x,y+1,z);if(isLog(id))scheduleDecay(x,y,z);
   const st=inv[sel],tool=toolOf(st);if(tool&&b.h>0&&!creative())damageHeld(1);player.exh+=.005;renderHotbar()}
 function damageHeld(n){const st=inv[sel],tool=toolOf(st);if(!tool)return;if(st.e&&st.e.unb&&Math.random()>1/(st.e.unb+1))return;st.d=(st.d||0)+n;if(st.d>=tool.dur){inv[sel]=null;sfx('tbreak');setHeld(true)}renderHotbar()}
@@ -3531,7 +3537,7 @@ function useItem(first){const st=inv[sel];if(targetMob&&first){feedMob(targetMob
   if(b.cross&&!plantOK(b,below))return;
   if(id===LADDER&&(target.face===2||target.face===3||!OP[target.id]))return;
   if(id===CACTUS&&!(below===SAND||below===CACTUS))return;
-  if(b.torch&&!OP[below])return;
+  if(b.torch&&!OP[below]&&!((id===TORCH||id===SOUL_TORCH)&&target.face!==2&&target.face!==3&&OP[target.id]))return;
   if((id===WIRE||id===LEVER||id===BUTTON||id===PLATE||id===REPEATER||id===COMPARATOR)&&!(SOLID[below]&&BH[below]===1&&!SHAPED[below]))return;
   if(b.use==='furnace'||b.use==='chest'){if(id===BARREL)b.use='chest';tiles.set(tkey(x,y,z),b.use==='furnace'?{t:'furnace',f:faceToward(x,z),s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:faceToward(x,z),items:new Array(27).fill(null)})}
   if(id===BED){   // 침대는 두 칸: 보는 쪽으로 머리가 놓여요
@@ -3998,7 +4004,7 @@ function rsUse(use,t){const {x,y,z}=t,m=getM(x,y,z);doSwing();
   return false}
 function horizFacing(){const a=((player.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);const dx=-Math.sin(a),dz=-Math.cos(a);return Math.abs(dx)>Math.abs(dz)?(dx>0?0:1):(dz>0?4:5)}
 function lookFacing(){if(player.pitch>.8)return 2;if(player.pitch<-.8)return 3;return horizFacing()}
-function placeMeta(id,t){const pb=B[id];if((id===LANTERN||id===SOUL_LANTERN)&&t.face===3)return 1;if(pb&&pb.log&&!pb.shape)return t.face<2?1:t.face>3?2:0;if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
+function placeMeta(id,t){const pb=B[id];if((id===LANTERN||id===SOUL_LANTERN)&&t.face===3)return 1;if((id===TORCH||id===SOUL_TORCH)&&t.face>=0&&t.face!==2&&t.face!==3&&OP[t.id])return 1+HDIRS.indexOf(t.face);if(pb&&pb.log&&!pb.shape)return t.face<2?1:t.face>3?2:0;if(id===RAIL)return HDIRS.indexOf(horizFacing())<2?1:0;if(id===VINE)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(pb&&(pb.shape==='slab2'||pb.shape==='stairs')){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return pb.shape==='slab2'?(top?1:0):HDIRS.indexOf(horizFacing())|(top?4:0)}if(id===GLASS_PANE)return (HDIRS.indexOf(horizFacing())<2)?1:0;
   if(id===OAK_TRAPDOOR||id===IRON_TRAPDOOR){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return HDIRS.indexOf(OPPD[horizFacing()])|(top?4:0)}
   if(id===OAK_GATE||id===SPRUCE_GATE)return HDIRS.indexOf(horizFacing());if(pb&&pb.mface||id===END_FRAME)return HDIRS.indexOf(faceToward(t.x,t.z));if(id===LADDER)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(id===REPEATER||id===COMPARATOR)return HDIRS.indexOf(horizFacing());if(id===PISTON||id===STICKY_PISTON)return OPPD[lookFacing()];if(id===OBSERVER)return lookFacing();return 0}
 function bucketUse(st){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);
