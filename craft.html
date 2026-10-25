@@ -5360,9 +5360,17 @@ function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;$('
 // ── 명령어 (Agent 05): 마크 자바 에디션 26.3 과 똑같은 명령어 ─────────────────────────────────────
 //   Brigadier 처럼 한 글자씩 읽어요: 틀린 곳을 정확히 짚어서 빨간 글씨 + "…<--[여기]" 로 알려 줘요.
 //   명령어 · 인수 · 아이디는 영어만 (마크와 똑같이), 알림 글은 한국어예요.
-//   계약 (팀 BRIEF): CmdError · CMDS · regCmd(name,run,o) · execCmd(line,ctxPatch) · ctx 도우미 · MCID · idOfMC
-//   · ctx.pos = 게임 안 좌표 (player.pos · getB 와 같은 좌표, 화면 Y + YO) · ctx.rot = 마크 각도 {yaw:0 남쪽 · 90 서쪽, pitch:+ 아래}
-//   · ctx.dim = 'minecraft:overworld' · 'minecraft:the_nether' · 'minecraft:the_end' · 'blockcraft:time_chamber'
+//   계약 (팀 BRIEF):
+//   · regCmd(name, run(ctx,args), {usage, perm(기본 2), alias:[…], suggest(ctx,args,last) → 후보 | {sub:n} | '@entity' | '@pos', tree})
+//     args = 이름 뒤의 낱말들 ("…" · {…} · […] · @e[…] 는 하나) · run 이 throw new CmdError('글') 하면 빨간 줄
+//   · execCmd(line, {src,pos,rot,dim,anchor,perm,silent,_line,_at}) → 결과 수 (틀리면 CmdError) · CMDS[name] = {run,usage,perm,alias,node}
+//   · ctx: src (실행하는 개체, 보통 player) · pos (게임 안 좌표 = player.pos 와 같아요, 화면 Y + YO) · rot (마크 각도 {yaw:0 남쪽 · 90 서쪽, pitch:+ 아래})
+//     dim ('minecraft:overworld' · 'minecraft:the_nether' · 'minecraft:the_end' · 'blockcraft:time_chamber') · perm (0~4)
+//     targets/players/entity(낱말) → 원래 객체 (player · 몹 · 떨어진 아이템 …) · vec3/block(x,y,z 낱말) → 게임 안 좌표 · item(낱말) → {id,mc,comp}
+//     blockState(낱말) → {id,meta} · int/num(낱말,min,max) · bool · str · feedback(글) · say(글,색) · player()
+//   · 개체 도우미: entType · entName · entPos · entRot · entTags · entKill · entTp · cmdEnts · DIM_ID/DIM_OF/DIM_SCALE (execute in 은 좌표를 나눠요)
+//   · 아이디: MCID[게임아이디] · idOfMC(이름) → 아이템 아이디 (없으면 -1) · blockOfMC(이름,{상태}) → {id,meta}|null · MC_TAGS
+//   · 다른 구역이 만들면 고르개가 써요: scoreGet(개체,목표) (scores=) · teamOf(개체) (team=) · advHas(아이디) (advancements=) · 개체.tags (tag=)
 // 구조물 찾기: 이름 → {n 이름, dim 차원, find(x,z) → {x,y,z} | null}
 const DIR8=['남','남서','서','북서','북','북동','동','남동'];
 const dirName=(dx,dz)=>DIR8[((Math.round(Math.atan2(-dx,dz)/(Math.PI/4))%8)+8)%8];
@@ -5749,7 +5757,7 @@ function cmdTokens(s,base){const T=[],P=[];let i=0;const n=s.length;base=base||0
 function regCmd(name,run,o){o=o||{};let nd=o.tree;
   if(!nd){nd=cLit(name,{perm:o.perm==null?2:o.perm,imp:false},cNode('args',false,null,[{imp:true,run:(ctx,a)=>run(ctx,a._toks||[])}]));nd.run=(ctx)=>run(ctx,[]);nd.ch[0].sugF=o.suggest||null;nd.ch[0].usageText=o.usage?o.usage.replace(/^\/?\S+\s*/,''):null}
   nd.n=name;if(nd.perm==null)nd.perm=o.perm==null?2:o.perm;
-  const rec={run:nd.lit&&o.tree?(ctx,args)=>execCmd(name+(args&&args.length?' '+args.join(' '):''),ctx):run,usage:o.usage||'/'+name,perm:nd.perm,alias:o.alias||[],node:nd};
+  const rec={run:nd.lit&&o.tree?(ctx,args)=>execCmd(name+(args&&args.length?' '+args.join(' '):''),ctx&&{src:ctx.src,pos:ctx.pos,rot:ctx.rot,dim:ctx.dim,anchor:ctx.anchor,perm:ctx.perm,silent:ctx.silent}):run,usage:o.usage||'/'+name,perm:nd.perm,alias:o.alias||[],node:nd};
   const put=(n,node)=>{CROOT.ch=CROOT.ch.filter(c=>c.n!==n);CROOT.ch.push(node);CROOT.ch.sort((a,c)=>a.n<c.n?-1:a.n>c.n?1:0);CMDS[n]=rec};
   put(name,nd);for(const a of rec.alias)put(a,cLit(a,{perm:nd.perm,redirect:nd}));return rec}
 // 사용법 글 (마크 getSmartUsage): [선택] · (하나 고르기 | …)
@@ -5954,7 +5962,7 @@ function locShow(c,name,f,withY,label){const sx=Math.floor(c.pos.x),sy=Math.floo
   cFbHtml(c,esc(cmf('loc_ok',name,'\u0001',d)).replace('\u0001',`<span class="cmdLink" style="color:#55ff55" data-cmd="/tp @s ${f.x} ${fy} ${f.z}" title="${esc(cmf('loc_tip'))}">${co}</span>`));
   if(c.src===player&&!c.silent&&d>=6)setWaypoint({x:f.x,y:withY?f.y:null,z:f.z,n:label||mcN(name),dim:DIM});return d}
 function locStruct(c,a){const v=a.structure;let ids;
-  if(v.tag){ids=(MC_TAGS.structure||{})[v.tag];if(!ids)cFail('loc_s_bad','#'+v.tag)}else{if(!MC_STRUCTS.includes(mcN(v.id))&&!LOCATORS[mcN(v.id)])cFail('loc_s_bad',v.id);ids=[v.id]}
+  if(v.tag){ids=(MC_TAGS.structure||{})[v.tag];if(!ids)cFail('loc_s_bad','#'+v.tag)}else{if(!MC_STRUCTS.includes(mcN(v.id)))cFail('loc_s_bad',v.id);ids=[v.id]}
   let best=null,bi=null,bd=1e18;for(const id of ids){const f=locStructFind(id,c.pos.x,c.pos.z);if(!f)continue;const d=Math.hypot(f.x-c.pos.x,f.z-c.pos.z);if(d<bd){bd=d;best=f;bi=id}}
   const nm=v.tag?'#'+v.tag:v.id;if(!best)cFail('loc_s_none',nm);const L=LOCATORS[(STRUCT_LOC[mcN(bi)]||[mcN(bi)])[0]];
   return locShow(c,v.tag?nm+' ('+bi+')':nm,{x:Math.floor(best.x),y:best.y,z:Math.floor(best.z)},false,L&&L.n)}
@@ -6016,7 +6024,7 @@ reg(cLit('say',cArg('message',CA.msg(),(c,a)=>{const t=msgText(c,a.message);if(t
 reg(cLit('me',{perm:0},cArg('action',CA.msg(),(c,a)=>{const t=msgText(c,a.action);if(typeof MPS!=='undefined'&&MPS&&c.src===player)mpSay(t,'me');else chatLine(`* ${srcName(c)} ${t}`,'#fff');return 1})));
 // 멀티 채팅 받기 (보통 말 · say · me · 나에게 온 귓속말)
 function mpChatShow(m){const n=esc(m.n),t=esc(m.t);if(m.k==='say')return chatLine(`[${n}] ${t}`,'#fff',true);if(m.k==='me')return chatLine(`* ${n} ${t}`,'#fff',true);
-  if(m.k==='w'){if(MPS&&m.to===MPS.uid){const d=cLine(cmf('msg_in',m.n,m.t),'#aaa');if(d)d.style.fontStyle='italic'}return}chatLine(`<${n}> ${t}`,'#fff',true)}
+  if(m.k==='w'){if(MPS&&m.to===MPS.uid){const d=cLine(cmf('msg_in',m.n,m.t),'#aaa');if(d)d.style.fontStyle='italic'}return}chatLine(`&lt;${n}&gt; ${t}`,'#fff',true)}
 {const msg=cLit('msg',{perm:0},cArg('targets',CA.ent(false,true),cArg('message',CA.msg(),(c,a)=>{const L=cTargets(c,a.targets,true),t=msgText(c,a.message);
     for(const p of L){if(!c.silent){const d=cLine(cmf('msg_out',entName(p),t),'#aaa');if(d)d.style.fontStyle='italic'}if(p===player){const d=cLine(cmf('msg_in',srcName(c),t),'#aaa');if(d)d.style.fontStyle='italic'}else if(p.uid)mpSay(t,'w',p.uid)}return L.length})));
   reg(msg);reg(cLit('tell',{perm:0,redirect:msg}));reg(cLit('w',{perm:0,redirect:msg}))}
@@ -6041,7 +6049,7 @@ function execRun(c,T,i){let n=0;
     throw new CmdError(cmf('arg_bad'),at,c._line)}
   throw new CmdError(cmf('unknown_cmd'),c._line.length,c._line)}
 if(!CMDS.execute)regCmd('execute',(c,T)=>{if(!T.length)throw new CmdError(cmf('unknown_cmd'),c._line?c._line.length:0,c._line);return execRun(c,T,0)},{usage:'/execute (anchored|as|at|in|positioned|rotated|run) …',perm:2,
-  suggest(c,T,last){const p=T[T.length-2];if(p==='in')return Object.values(DIM_ID);if(p==='anchored')return['eyes','feet'];if(p==='as'||p==='at')return'@entity';if(p==='positioned'||p==='rotated')return(p==='positioned'?'@pos':['as','~ ~'].concat([]));
+  suggest(c,T,last){const p=T[T.length-2];if(p==='in')return Object.values(DIM_ID);if(p==='anchored')return['eyes','feet'];if(p==='as'||p==='at')return'@entity';if(p==='positioned')return'@pos';if(p==='rotated')return['as','~ ~'];
     const ri=T.indexOf('run');if(ri>=0&&ri<T.length-1)return{sub:ri+1};return EXEC_SUB}});
 // ── 채팅에서 친 명령어 실행 · 오류 보여 주기 (마크처럼: 빨간 오류 + "…앞글자" + 빨간 밑줄 나머지 + <--[여기]) ──
 function cLine(t,col,html){chatLine(t,col,html);return $('chatLog').lastChild}
@@ -6145,6 +6153,8 @@ respawn=function(){const s=player.spawn;
   if(s&&s.dim&&s.dim!=='over'&&DIM_ID[s.dim]){const p=player;$('dead').classList.add('hide');p.dead=false;p.hp=20;p.food=20;p.sat=5;p.exh=0;p.air=15;p.hurtTime=0;p.deathTime=0;p.fallDist=0;p.fallStart=null;
     const R={yaw:s.yaw||0,pitch:s.pitch||0};if(DIM!==s.dim)switchDim(s.dim,s.x,s.y,s.z,()=>{entTp(player,s.x,s.y,s.z,R);updateStats()});else{entTp(player,s.x,s.y,s.z,R);updateStats();lockPointer()}return}
   _respawn0();if(s&&s.yaw!=null&&DIM==='over'&&!dimBusy){player.yaw=Math.PI-s.yaw*DEG;player.pitch=-(s.pitch||0)*DEG}};
+// 침대로 정한 스폰은 표시해 둬요 (/setworldspawn 이 덮어쓰지 않게)
+const _sleepIn0=sleepIn;sleepIn=function(){const s0=player.spawn,r=_sleepIn0.apply(this,arguments);if(player.spawn&&player.spawn!==s0)player.spawn.bed=1;return r};
 // 자연 생성: spawn_mobs · spawn_monsters · spawn_phantoms · 평화로움 (생성기 · 구조물 몹은 그대로)
 const _spawnTick0=spawnTick;spawnTick=function(dt){if(!gr('spawn_mobs')&&spawnT-dt<=0)spawnT=1;return _spawnTick0(dt)};
 for(const k of['packSpawn','dimSpawn','extraSpawns','extraSpawns3'])if(typeof window[k]==='function'){const f0=window[k];window[k]=function(){CMD_NAT=true;try{return f0.apply(this,arguments)}finally{CMD_NAT=false}}}
