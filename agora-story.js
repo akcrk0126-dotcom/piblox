@@ -1275,17 +1275,17 @@ function spawnMon(key, x, z, elite, opt = {}){
   if (opt.fld){ e.fld = Object.assign({ hx: x, hz: z, aggro: 9, leash: 30, wr: 7 }, opt.fld); e.aggro = false; e.wt = rr(0.5, 3); }
   if (opt.name || opt.lv){ e.label = opt.name || cfg.name; e.bar.insertAdjacentHTML('beforeend', `<u class="lv">${opt.lv ? 'Lv.' + opt.lv + ' ' : ''}${e.label}</u>`); e.bar.classList.add('named'); }
   if (opt.fieldBoss){ e.fboss = true; e.bar.classList.add('fboss'); }
-  if (elite && !isBoss) makeElite(e);
+  if (elite && !isBoss) makeElite(e, opt.quiet || (MODE === 'field' && Math.hypot(player.pos.x - x, player.pos.z - z) > 45));
   if (e.lv) e.bar.querySelector('u.lv').style.color = e.lv - S.lv >= 5 ? '#ff5a5a' : e.lv - S.lv >= 2 ? '#ffb05a' : S.lv - e.lv >= 6 ? '#9aa4aa' : '#f2f2e8';
   ENEMIES.push(e); BUS.emit('spawn', e); return e;
 }
-function makeElite(e){
+function makeElite(e, quiet){
   e.elite = true; e.hp *= 3; e.max = e.hp; e.dmg *= 1.4; e.spdMul = 1.32; e.m.g.scale.setScalar(1.35);
   const up = new V3(0, 1, 0), r = e.cfg.rad * 0.8, h = Math.min(1.6, e.cfg.top * 0.5);
   for (let i = 0; i < 8; i++){ const a = i / 8 * TAU + 0.3, c = new THREE.Mesh(THORN_G, THORN_M), dir = new V3(Math.cos(a), 0.7 + (i % 2) * 0.5, Math.sin(a)).normalize(); c.quaternion.setFromUnitVectors(up, dir); c.position.set(Math.cos(a) * r, h + (i % 2) * 0.15, Math.sin(a) * r); e.m.body.add(c); }
   const au = glowSprite(0x9a1aff, e.cfg.rad * 6, 0.5); au.position.y = 0.3; e.g.add(au); e.aura = au;
   e.bar.classList.add('elite'); const lu = e.bar.querySelector('u.lv'); if (lu) lu.textContent = `☠ ${lu.textContent}`; else e.bar.insertAdjacentHTML('beforeend', `<u>☠ 검은 가시 · ${e.cfg.name}</u>`);
-  burst(new V3(e.pos.x, 0.6, e.pos.z), 0x9a1aff, 40, 5, 0.35, 0.9, -1, 2.5); sfx('elite');
+  burst(new V3(e.pos.x, 0.6, e.pos.z), 0x9a1aff, 40, 5, 0.35, 0.9, -1, 2.5); if (!quiet) sfx('elite');
   if (battle && !battle.eliteSeen){ battle.eliteSeen = true; banner('ELITE', `검은 가시에 물든 ${e.cfg.name}`, '체력 3배 · 공격 강화 — 조심해!', true, 2.4); }
 }
 function hitEnemy(e, dmg, dx, dz, kb, crit){
@@ -3003,6 +3003,7 @@ G.onKey = (code) => {
   if (si !== undefined && inStory && !G.lock){ useSkill(si); return true; }
   if (G.lock || wmap.classList.contains('on')) return true;
   if (!inStory) return false;
+  if (X.F && X.F.rpgWindowOpen && X.F.rpgWindowOpen() && /^(KeyJ|KeyF|KeyK|KeyR|KeyQ)$/.test(code)) return true;
   if (code === 'KeyJ' || code === 'KeyF'){ attack(); return true; }
   if (code === 'KeyK'){ doRoll(); return true; }
   if (code === 'KeyR' || code === 'KeyQ'){ doRune(); return true; }

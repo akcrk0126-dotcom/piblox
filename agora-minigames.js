@@ -88,9 +88,10 @@ function sfx(k){
 // ═════════════════════════ 1. 물고기 ═════════════════════════
 // 등급: 0 일반 · 1 고급 · 2 희귀 · 3 영웅 · 4 전설
 const RAR = [
-  { n: '일반', c: '#c3ccd2', w: 52, xp: 10, dif: 0.05 }, { n: '고급', c: '#7fe08a', w: 28, xp: 22, dif: 0.25 }, { n: '희귀', c: '#5ab8ff', w: 11, xp: 48, dif: 0.45 },
-  { n: '영웅', c: '#c07aff', w: 3.6, xp: 130, dif: 0.66 }, { n: '전설', c: '#ffb03a', w: 0.9, xp: 520, dif: 0.95 },
+  { n: '일반', c: '#c3ccd2', w: 52, xp: 10, dif: 0.05 }, { n: '고급', c: '#7fe08a', w: 28, xp: 22, dif: 0.25 }, { n: '희귀', c: '#5ab8ff', w: 9, xp: 48, dif: 0.45 },
+  { n: '영웅', c: '#c07aff', w: 2.6, xp: 130, dif: 0.66 }, { n: '전설', c: '#ffb03a', w: 0.9, xp: 520, dif: 0.95 },
 ];
+RAR.forEach(r => { r.hex = parseInt(r.c.slice(1), 16); });
 // hab: 서식지 · time: any / day / night / dawn(새벽·해 질 녘) · cm: 크기 · g: 기본 값 · mv: 줄다리기 움직임 { s: smooth|dart|sink|float|mixed|boss, sp, dt } · a: 그림
 const FISH = [
   { id: 'minnow', n: '피라미', en: 'Pale Chub', r: 0, hab: ['pond', 'river', 'lake'], time: 'any', cm: [5, 12], g: 6, mv: { s: 'smooth', sp: 0.3, dt: 0.2 },
@@ -423,6 +424,36 @@ const PLAZA_A = 1.35, PLAZA = { id: 'plaza', name: '룬의 광장 분수', plaza
   G.INTERACT.push({ x: PLAZA.x, z: PLAZA.z, r: 1.7, title: '🎣 분수 낚시', sub: '', action: () => startFishing('plaza') });
 }
 const spotById = id => id === 'plaza' ? PLAZA : SPOTS.find(s => s.id === id);
+// 광장 룬 오락실: 오락기 두 대 (화면이 움직여요) — 미니 게임 메뉴 입구
+const ARC_A = 0.3, AX = Math.cos(ARC_A) * 7.6, AZ = Math.sin(ARC_A) * 7.6, ARY = Math.atan2(AX, AZ);
+const CAB = (() => {
+  const scr = G.cnv(256, 192), sx = scr.getContext('2d'), stex = G.tex(scr, true, 1, 1);
+  const mq = G.cnv(512, 128), mx = mq.getContext('2d'), g0 = mx.createLinearGradient(0, 0, 0, 128); g0.addColorStop(0, '#3a1a6a'); g0.addColorStop(1, '#12081e'); mx.fillStyle = g0; mx.fillRect(0, 0, 512, 128);
+  mx.strokeStyle = '#ffd36a'; mx.lineWidth = 6; mx.strokeRect(6, 6, 500, 116); mx.textAlign = 'center'; mx.shadowColor = '#ff8ad8'; mx.shadowBlur = 18; mx.fillStyle = '#fff3d6';
+  mx.font = "900 50px 'Gowun Batang', serif"; mx.fillText('룬 오락실', 256, 66); mx.shadowColor = '#7ff3ff'; mx.font = "700 22px 'Cinzel', serif"; mx.fillStyle = '#7ff3ff'; mx.fillText('R U N E   A R C A D E', 256, 102);
+  const root = new THREE.Group(); root.position.set(AX, 0.04, AZ); root.rotation.y = ARY; root.scale.setScalar(1.15); G.world.add(root);
+  const B = new G.Builder(), K = new G.Kit(B), M_SCR = new THREE.MeshBasicMaterial({ map: stex, toneMapped: false }), M_MQ = new THREE.MeshBasicMaterial({ map: G.tex(mq, true, 1, 1), toneMapped: false });
+  for (const [ox, ry] of [[-0.6, 0.2], [0.6, -0.2]]){
+    K.push(ox, 0, 0, ry);
+    K.box('cab', 0.95, 1.5, 0.75, 0, 0.75, 0); K.box('trim', 1.0, 0.06, 0.8, 0, 1.53, 0.02); K.box('cab', 0.95, 0.34, 0.5, 0, 1.73, -0.1); K.box('trim', 1.0, 0.05, 0.55, 0, 1.92, -0.1);
+    K.box('trim', 0.97, 0.1, 0.5, 0, 0.98, 0.5, -0.4); K.box('cab', 0.95, 0.9, 0.06, 0, 0.45, 0.4);
+    for (let i = 0; i < 4; i++) K.geo('btn', new THREE.CylinderGeometry(0.045, 0.045, 0.04, 10), -0.27 + i * 0.18, 1.04, 0.52, -0.4);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.56), M_SCR); sm.position.set(ox + Math.sin(ry) * 0.38, 1.24, Math.cos(ry) * 0.38); sm.rotation.set(-0.12, ry, 0, 'YXZ'); root.add(sm);
+    const mm = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.26), M_MQ); mm.position.set(ox + Math.sin(ry) * 0.155, 1.73, Math.cos(ry) * 0.155); mm.rotation.y = ry; root.add(mm);
+    K.pop();
+  }
+  B.build({ cab: mStd(0x2a1848, { roughness: 0.45 }), trim: mStd(0xd9b05a, { metalness: 0.6, roughness: 0.35 }), btn: new THREE.MeshBasicMaterial({ color: 0xff8ad8, toneMapped: false }) }, root, true, true);
+  const glow = X.glowSprite(0xb08aff, 3.2, 0.35); glow.position.set(0, 1.9, 0.3); root.add(glow);
+  if (G.addCircle) G.addCircle(AX, AZ, 1.3);
+  G.INTERACT.push({ x: AX + Math.sin(ARY) * 1.35, z: AZ + Math.cos(ARY) * 1.35, r: 2.2, title: '🎲 룬 오락실 · 미니 게임', sub: '', action: () => openMenu() });
+  // 화면: 떨어지는 룬 (가까이 있을 때만 다시 그려요)
+  const N = Array.from({ length: 7 }, (_, i) => ({ l: i % 4, y: R() * 192 })); let acc = 0;
+  return { tick(dt){ if (X.mode !== 'plaza' || Math.hypot(pp.x - AX, pp.z - AZ) > 28) return; acc += dt; if (acc < 0.11) return; const st = acc; acc = 0;
+    sx.fillStyle = '#0a0c1e'; sx.fillRect(0, 0, 256, 192); sx.strokeStyle = 'rgba(255,255,255,.12)'; sx.lineWidth = 2; for (let l = 1; l < 4; l++){ sx.beginPath(); sx.moveTo(l * 64, 0); sx.lineTo(l * 64, 192); sx.stroke(); }
+    sx.fillStyle = '#ffe9b0'; sx.fillRect(0, 160, 256, 3);
+    for (const n of N){ n.y += st * 140; if (n.y > 170){ n.y = -20 - R() * 60; n.l = (R() * 4) | 0; } sx.fillStyle = LANEC[n.l]; sx.fillRect(n.l * 64 + 10, n.y, 44, 14); }
+    sx.font = "900 18px 'Cinzel', serif"; sx.fillStyle = '#fff'; sx.textAlign = 'center'; sx.fillText('PRESS E', 128, 186); stex.needsUpdate = true; } };
+})();
 
 // ═════════════════════════ 4. 낚시 상태 ═════════════════════════
 // FS.st: cast → wait → bite → reel → land → ready (→ 다시 cast)
@@ -440,7 +471,6 @@ css.textContent = `
   #mgFishHud .lvb { display:flex; align-items:center; gap:6px; font:700 11px 'Noto Sans KR'; color:#bfe9ef; }
   #mgFishHud .lvb i { display:block; width:110px; height:4px; border-radius:2px; background:rgba(255,255,255,.12); overflow:hidden; } #mgFishHud .lvb i b { display:block; height:100%; background:linear-gradient(90deg,#5ab8ff,#9ffcff); }
   body.touch #mgFishHud .ky { display:none; }
-  @media (max-height:560px){ #mgFishHud { bottom:calc(84px + env(safe-area-inset-bottom)); } #mgFishHud .sp, #mgFishHud .lvb { display:none; } #mgCatch { padding:10px 14px 10px; top:50%; } #mgCatch .art { max-width:210px; } #mgCatch .ds { display:none; } #mgCatch .nm { font-size:22px; } }
   #mgFishBtn, #mgFishX { position:fixed; display:none; align-items:center; justify-content:center; border-radius:50%; pointer-events:auto; z-index:7; user-select:none; -webkit-user-select:none; touch-action:none; }
   #mgFishBtn { right:24px; bottom:calc(34px + env(safe-area-inset-bottom)); width:86px; height:86px; font:700 13px 'Gowun Batang'; color:#2a1a00; flex-direction:column; background:radial-gradient(circle at 50% 35%, #fff2c9, #d9a43c); border:2px solid #fff3d6; box-shadow:0 0 18px rgba(255,211,106,.6), 0 6px 16px rgba(0,0,0,.4); }
   #mgFishBtn span { font-size:28px; line-height:1; } #mgFishBtn.hot { animation:mgHot .35s infinite alternate; }
@@ -452,7 +482,7 @@ css.textContent = `
   @keyframes mgBang { from { transform:translate(-50%,-60%) scale(.3); opacity:0; } 70% { transform:translate(-50%,-110%) scale(1.25); opacity:1; } }
   #mgHold { position:fixed; inset:0; z-index:8; display:none; touch-action:none; cursor:pointer; }
   #mgReel { position:fixed; left:calc(50% + clamp(60px, 9vw, 150px)); top:48%; transform:translate(0,-50%); z-index:9; display:none; gap:10px; align-items:stretch; pointer-events:none; --h:min(320px, 56vh); }
-  body.mgreel #modes, body.mgreel #fmenu, body.mgfish #prompt { opacity:0 !important; pointer-events:none !important; }
+  body.touch.mgfish #modes, body.mgreel #mgFishX, body.mgreel #modes, body.mgreel #fmenu, body.mgreel #rpgTrk, body.mgreel #rpgNav, body.mgfish #prompt { opacity:0 !important; pointer-events:none !important; }
   #mgReel.on { display:flex; animation:mgIn .25s ease-out; } @keyframes mgIn { from { opacity:0; transform:translate(20px,-50%); } }
   #mgReel .bar { position:relative; width:54px; height:var(--h); border-radius:10px; overflow:hidden; background:linear-gradient(180deg, #1a5a7a, #0a2a44 60%, #061a2c); border:2px solid rgba(233,200,126,.75); box-shadow:0 0 0 3px rgba(10,14,24,.55), 0 10px 30px rgba(0,0,0,.6), inset 0 0 18px rgba(0,0,0,.6); }
   #mgReel .bar::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg, transparent 0 22px, rgba(255,255,255,.05) 22px 23px); }
@@ -527,6 +557,7 @@ css.textContent = `
   #mgFishW .stat { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px; } #mgFishW .stat div { padding:10px 12px; border-radius:7px; background:rgba(255,255,255,.035); font:500 12px 'Noto Sans KR'; color:#9fb6c0; } #mgFishW .stat b { display:block; font:900 20px 'Cinzel'; color:#fff3d6; margin-top:2px; } #mgFishW .stat b small { font:700 12px 'Noto Sans KR'; color:#c9d6da; }
   #mgFishW .flv { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:10px; border-radius:8px; background:linear-gradient(90deg, rgba(90,184,255,.14), rgba(90,184,255,.02)); border:1px solid rgba(127,243,255,.3); }
   #mgFishW .flv .l { font:900 24px 'Cinzel'; color:#9ffcff; } #mgFishW .flv .b { flex:1; } #mgFishW .flv .b i { display:block; height:6px; border-radius:3px; background:rgba(255,255,255,.1); overflow:hidden; margin-top:4px; } #mgFishW .flv .b i b { display:block; height:100%; background:linear-gradient(90deg,#5ab8ff,#9ffcff); }
+  @media (max-height:560px){ #mgFishHud { bottom:calc(104px + env(safe-area-inset-bottom)); } #mgFishHud .sp, #mgFishHud .lvb { display:none; } #mgCatch { padding:10px 14px 10px; top:50%; } #mgCatch .art { max-width:210px; } #mgCatch .ds { display:none; } #mgCatch .nm { font-size:22px; } }
 `;
 document.head.appendChild(css);
 const hud = X.mk('div', 'mgFishHud', '<div class="sp"></div><div class="st"></div><div class="lvb"></div><div class="ky"></div>', X.hud);
@@ -562,10 +593,13 @@ function rollFish(sp){
     if (!f.hab.some(h => sp.hab.includes(h))) continue;
     if (f.time !== 'any' && !timeOk(f, ph)) continue;
     if (f.rod && (S.fish.rod | 0) < f.rod) continue;
-    let w = RAR[f.r].w * (f.r >= 2 ? T.rare * lvk : 1) * (f.time !== 'any' ? 1.5 : 1);
+    let w = RAR[f.r].w * (f.r >= 2 ? T.rare * lvk : 1) * (f.time !== 'any' ? 1.3 : 1);
     if (f.night && ph === 'night') w *= f.night; if (f.dawnB && ph === 'dawn') w *= f.dawnB;
     L.push([f, w]);
   }
+  // 흔한 물고기가 적은 곳(얼음 호수 · 샘)도 희귀 비율이 치솟지 않게 일반 · 고급 무게를 채워요
+  let base = 0; for (const o of L) if (o[0].r <= 1) base += o[1];
+  if (base > 0 && base < 95) for (const o of L) if (o[0].r <= 1) o[1] *= 95 / base;
   // 잡동사니 · 보물
   const jw = sp.plaza ? [['coin', 7], ['boot', 2]] : [['boot', 4], ['bottle', 1.4]];
   for (const [id, w] of jw) L.push([FBY[id], w]);
@@ -576,7 +610,6 @@ function rollFish(sp){
 function rollSize(f){ const k = Math.pow(R(), 1.6 - Math.min(0.6, S.fish.lv * 0.02)); return Math.round(lerp(f.cm[0], f.cm[1], k) * 10) / 10; }
 
 // ── 시작 / 끝 ──
-const _v = new V3(), _w = new V3(), _q = new THREE.Vector3();
 let heldWeapons = [], prevEmote = null, myCam = null;
 function startFishing(id){
   if (FS){ if (FS.st === 'ready') cast(); return true; }
@@ -665,7 +698,7 @@ function reelStart(){
   s.st = 'reel'; s.t = 0;
   Object.assign(RL, { on: true, f: 0.35, fv: 0, ft: 0.5, tT: 0.6, z: 0.18, zv: 0, zh: clamp(T.zone + (S.fish.lv - 1) * 0.004 - (f.r >= 4 ? 0.04 : 0), 0.16, 0.5), prog: 0.3, perfect: true, t: 0, tick: 0, hold: !!RL.hold, H: 300, chest: R() < 0.22 + (S.fish.rod | 0) * 0.03 ? { at: rr(1.2, 3.5), on: false, p: rr(0.15, 0.85), k: 0, got: false } : null,
     dif: clamp(RAR[f.r].dif + (f.mv.sp - 0.5) * 0.3, 0, 1.1) });
-  RE.fish.src = artURL(f.id, 2); RE.fish.classList.toggle('boss', f.r >= 3); RE.nm.textContent = f.r >= 4 ? '??? (전설)' : f.r >= 3 ? '??? (대어)' : '???';
+  RL.fury = null; RE.nm.style.color = ''; RE.fish.src = artURL(f.id, 2); RE.fish.classList.toggle('boss', f.r >= 3); RE.nm.textContent = f.r >= 4 ? '??? (전설)' : f.r >= 3 ? '??? (대어)' : '???';
   RE.zone.style.height = (RL.zh * 100) + '%'; RE.chest.style.display = 'none'; RE.pf.classList.remove('x');
   reelEl.classList.add('on'); document.body.classList.add('mgreel'); holdL.style.display = 'block'; RL.H = RE.bar.clientHeight || 300;
   hudSet('', '', '', false); hud.style.opacity = 0;
@@ -680,20 +713,23 @@ function reelTick(dt){
   RL.zv += (RL.hold ? 2.9 : -2.5) * dt; RL.zv = clamp(RL.zv, -1.5, 1.5); RL.z += RL.zv * dt;
   if (RL.z < 0){ RL.z = 0; RL.zv = RL.zv < -0.45 ? -RL.zv * 0.32 : 0; }
   if (RL.z > 1 - RL.zh){ RL.z = 1 - RL.zh; RL.zv = Math.min(0, RL.zv); }
-  // 물고기 움직임
+  // 물고기 움직임 (전설은 「몸부림」과 「지침」을 번갈아요 — 지친 틈에 끌어올려요)
+  let fury = true;
+  if (mv.s === 'boss'){ fury = (RL.t + 3.2) % 4.4 < 2.4; if (fury !== RL.fury){ RL.fury = fury; RE.nm.textContent = fury ? '몸부림친다!' : '지쳤다! 지금이야'; RE.nm.style.color = fury ? '#ff9a5a' : '#8aff9a'; if (fury){ G.shake = Math.max(G.shake, 0.4); sfx('splash'); } } }
   if ((RL.tT -= dt) <= 0){
-    const st = mv.s === 'mixed' ? pick(['smooth', 'dart', 'sink', 'float']) : mv.s, big = R() < mv.dt;
+    const st = mv.s === 'mixed' ? pick(['smooth', 'dart', 'sink', 'float']) : fury ? mv.s : 'smooth', big = R() < (fury ? mv.dt : 0.12);
     if (st === 'smooth') RL.ft = clamp(RL.f + rr(-0.28, 0.28), 0.05, 0.95);
     else if (st === 'dart') RL.ft = big ? rr(0.05, 0.95) : clamp(RL.f + rr(-0.15, 0.15), 0.05, 0.95);
     else if (st === 'sink') RL.ft = big ? rr(0.4, 0.9) : rr(0.04, 0.38);
     else if (st === 'float') RL.ft = big ? rr(0.1, 0.5) : rr(0.6, 0.96);
     else RL.ft = big ? (RL.f > 0.5 ? rr(0.03, 0.25) : rr(0.75, 0.97)) : clamp(RL.f + rr(-0.3, 0.3), 0.04, 0.96);
-    RL.tT = rr(0.3, 1.2) / (0.55 + mv.dt * 0.8);
+    RL.tT = (fury ? rr(0.3, 1.2) : rr(0.7, 1.5)) / (0.55 + mv.dt * 0.8);
     if (big && Math.abs(RL.ft - RL.f) > 0.3){ splash(s.bob.x, s.ty, s.bob.z, 8, 1.8); if (R() < 0.5) sfx('splash'); }
   }
-  const k = 5 + mv.sp * 16; RL.fv += (RL.ft - RL.f) * k * dt; RL.fv *= Math.exp(-dt * (4.2 - mv.sp * 1.6)); RL.f = clamp(RL.f + RL.fv * dt + Math.sin(RL.t * 23) * 0.0016 * mv.sp, 0.02, 0.98);
+  const fsp = fury ? mv.sp : mv.sp * 0.45, k = 5 + fsp * 16; RL.fv += (RL.ft - RL.f) * k * dt; RL.fv *= Math.exp(-dt * (4.2 - fsp * 1.6)); RL.f = clamp(RL.f + RL.fv * dt + Math.sin(RL.t * 23) * 0.0016 * fsp, 0.02, 0.98);
   const inside = RL.f >= RL.z - 0.01 && RL.f <= RL.z + RL.zh + 0.01;
-  const fill = 0.3 + (S.fish.rod | 0) * 0.025 + S.fish.lv * 0.004, drain = 0.14 + RL.dif * 0.24;
+  // 채우는 속도 · 빠지는 속도 (등급별 보정 — 전설은 길고 끈질긴 싸움)
+  const fill = (0.3 + (S.fish.rod | 0) * 0.025 + S.fish.lv * 0.004) * [1, 1, 0.9, 0.8, 0.62][f.r], drain = (0.14 + RL.dif * 0.24) * [1, 1, 1, 0.9, 0.62][f.r];
   RL.prog += (inside ? fill : -drain) * dt; if (!inside && RL.t > 0.4) RL.perfect = false;
   // 보물 상자
   const c = RL.chest;
@@ -862,7 +898,7 @@ function tickFishing(dt, rdt){
     if (k >= 1) finishLand();
   } else if (s.st === 'show'){
     HELD.position.set(pp.x + Math.sin(s.yaw) * 0.2, pp.y + 2.35 + s.jl * 0.18 + Math.sin(s.t * 3) * 0.04, pp.z + Math.cos(s.yaw) * 0.2); HELD.material.rotation = Math.sin(s.t * 2.2) * 0.08;
-    if (s.fish.r >= 2 && R() < rdt * 10) X.emit(HELD.position.x + rr(-s.jl / 2, s.jl / 2), HELD.position.y + rr(-0.2, 0.2), HELD.position.z, rr(-0.3, 0.3), rr(0.3, 1), rr(-0.3, 0.3), new THREE.Color(RAR[s.fish.r].c).getHex(), 0.1, 0.9, { drag: 1 });
+    if (s.fish.r >= 2 && R() < rdt * 10) X.emit(HELD.position.x + rr(-s.jl / 2, s.jl / 2), HELD.position.y + rr(-0.2, 0.2), HELD.position.z, rr(-0.3, 0.3), rr(0.3, 1), rr(-0.3, 0.3), RAR[s.fish.r].hex, 0.1, 0.9, { drag: 1 });
     s.bob.set(HELD.position.x, HELD.position.y, HELD.position.z); HELDGLOW.position.copy(HELD.position);
     if (catchT > 0 && (catchT -= rdt) <= 0) closeCatch();
   } else if (s.st === 'ready'){
@@ -880,13 +916,13 @@ function tickFishing(dt, rdt){
 }
 
 // ── 필드 낚시터 마크 애니메이션 · 물고기 점프 (주변 분위기) ──
-let markT = 0;
 function tickSpots(dt){
   if (!F.inField) return;
-  markT += dt; const t = G.time;
+  const t = G.time;
   for (const s of SPOTS){
-    const d = Math.hypot(pp.x - s.wx, pp.z - s.wz), on = d < 130 && !(FS && FS.sp === s);
+    const d = Math.hypot(pp.x - s.wx, pp.z - s.wz), on = d < 130, mine = !!(FS && FS.sp === s);
     if (s.g.visible !== on) s.g.visible = on; if (!on) continue;
+    s.fb.visible = !mine; s.rings[0].visible = s.rings[1].visible = !mine;
     s.fb.position.y = 0.02 + Math.sin(t * 2 + s.wx) * 0.03; s.fb.rotation.z = Math.sin(t * 1.3 + s.wz) * 0.12;
     for (let i = 0; i < 2; i++){ const k = ((t * 0.45 + i * 0.5 + s.wx * 0.01) % 1 + 1) % 1; s.rings[i].scale.setScalar(0.2 + k * (s.ice ? 0.9 : 1.6)); s.rings[i].material.opacity = (1 - k) * 0.45; }
     if (d < 60 && !s.ice && (s.jumpT -= dt) <= 0){ s.jumpT = rr(4, 10); const a = R() * TAU, r = rr(1.5, 5), jx = s.wx + Math.cos(a) * r, jz = s.wz + Math.sin(a) * r; if (F.isWater(jx, jz)) ambientJump(jx, s.wy, jz, s); }
@@ -907,7 +943,7 @@ function tickAJ(dt){
 // ═════════════════════════ 5. 낚시 창 (도감 · 바구니 · 낚싯대 · 기록) ═════════════════════════
 const fw = X.mk('div', 'mgFishW', ''); fw.className = 'mgw';
 let fwOpen = false, fwTab = 'dex', fwShop = false, fwSel = null;
-const nearNoah = () => { const o = F.npcs && F.npcs.fisher, n = byId('npcs', 'fisher'); const p = o && o.pos ? o.pos : n ? { x: n.c[0], z: n.c[1] } : null; return !!(p && F.inField && Math.hypot(pp.x - p.x, pp.z - p.z) < 9); };
+const nearNoah = () => { const o = F.npcs && F.npcs.fisher, n = byId('npcs', 'fisher'); const p = o && o.pos ? o.pos : n ? { x: n.c[0], z: n.c[1] } : null; return !!(p && F.inField && Math.hypot(pp.x - p.x, pp.z - p.z) < 12); };
 function openFishLog(tab = 'dex', shop = false){ if (arcOpen) return; closeMenu(); fwTab = tab; fwShop = shop; fwSel = null; fwOpen = true; renderFishW(); fw.classList.add('on'); X.sfx('ui'); }
 function closeFishW(){ if (!fwOpen) return; fwOpen = false; fw.classList.remove('on'); }
 function keepValue(){ let s = 0; for (const [id, cm, pf] of S.fish.keep){ const f = FBY[id]; if (f) s += fishPrice(f, cm, pf); } return s; }
@@ -1022,7 +1058,6 @@ css2.textContent = `
   #mgArc .song .ic { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; background:radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--c) 60%, #fff), color-mix(in srgb, var(--c) 40%, #000)); box-shadow:0 0 16px color-mix(in srgb, var(--c) 50%, transparent); }
   #mgArc .song .n { font:700 16px 'Gowun Batang'; color:#fff3d6; } #mgArc .song .n small { font:700 9px 'Cinzel'; letter-spacing:.2em; color:#9fb6c0; margin-left:6px; }
   #mgArc .song .m { font:500 11px 'Noto Sans KR'; color:#9fb6c0; } #mgArc .song .m b { color:#fff; }
-  @media (max-height:560px){ #mgArc .card { padding:10px 14px; } #mgArc .card h2 { font-size:21px; } #mgArc .card p { margin:3px 0 8px; font-size:11.5px; } #mgArc .song { padding:6px 10px; grid-template-columns:40px minmax(0,1fr) auto; } #mgArc .song .ic { width:40px; height:40px; font-size:19px; } #mgArc .songs { gap:6px; } #mgArc .grade { font-size:60px; } #mgArc .res { margin:6px 0; } }
   #mgArc .song .bs { display:flex; flex-direction:column; gap:4px; } #mgArc .song .bs button { font:700 12px 'Gowun Batang'; padding:6px 10px; border-radius:4px; cursor:pointer; border:1px solid color-mix(in srgb, var(--c) 70%, transparent); background:rgba(0,0,0,.3); color:#fff3d6; white-space:nowrap; }
   #mgArc .song .bs button.h { border-color:#ff8a8a; } #mgArc .song .bs button em { font-style:normal; color:#ffd36a; margin-left:4px; font-family:'Cinzel'; }
   #mgArc .opts { display:flex; justify-content:center; gap:14px; flex-wrap:wrap; font:500 12px 'Noto Sans KR'; color:#c9d6da; margin:4px 0 10px; } #mgArc .opts span { display:inline-flex; align-items:center; gap:6px; }
@@ -1046,9 +1081,10 @@ css2.textContent = `
   #mgMenu .gc .art::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, transparent 55%, rgba(10,14,24,.95)); }
   #mgMenu .gc .art span { position:relative; z-index:1; filter:drop-shadow(0 0 16px color-mix(in srgb, var(--c) 80%, transparent)); animation:mgFloat 3s ease-in-out infinite; } @keyframes mgFloat { 50% { transform:translateY(-6px); } }
   #mgMenu .gc .art em { position:absolute; left:10px; top:8px; z-index:1; font:700 9px 'Cinzel'; letter-spacing:.3em; color:var(--c); font-style:normal; }
-  #mgMenu .gc .art .dly { position:absolute; right:8px; top:7px; z-index:1; font:900 10px 'Noto Sans KR'; color:#2a1a00; background:linear-gradient(180deg,#fff2c9,#ffb03a); padding:2px 8px; border-radius:10px; animation:mgPulse .9s infinite alternate; }
+  #mgMenu .gc .art .dly { position:absolute; right:8px; bottom:8px; z-index:1; font:900 10px 'Noto Sans KR'; color:#2a1a00; background:linear-gradient(180deg,#fff2c9,#ffb03a); padding:2px 8px; border-radius:10px; animation:mgPulse .9s infinite alternate; }
   #mgMenu .gc .tx { padding:2px 12px 10px; flex:1; display:flex; flex-direction:column; gap:3px; } #mgMenu .gc .n { font:700 17px 'Gowun Batang'; color:#fff3d6; } #mgMenu .gc .d { font:400 11.5px/1.55 'Noto Sans KR'; color:#9fb6c0; flex:1; }
   #mgMenu .gc .b { font:500 11px 'Noto Sans KR'; color:#c9d6da; } #mgMenu .gc .b b { color:#ffe9b0; font-family:'Cinzel'; } #mgMenu .gc .btn { margin-top:6px; }
+  @media (max-height:560px){ #mgArc .card { padding:10px 14px; } #mgArc .card h2 { font-size:21px; } #mgArc .card p { margin:3px 0 8px; font-size:11.5px; } #mgArc .song { padding:6px 10px; grid-template-columns:40px minmax(0,1fr) auto; } #mgArc .song .ic { width:40px; height:40px; font-size:19px; } #mgArc .songs { gap:6px; } #mgArc .grade { font-size:56px !important; margin:2px 0 0; } #mgArc .res { margin:6px 0; gap:4px; } #mgArc .res div { padding:4px 6px; } #mgArc .res b { font-size:15px; } #mgArc .rw { margin:4px 0 8px; } #mgArc .btn { padding:8px 16px; } }
   #modes #mMini { position:relative; } #modes #mMini.dot::after { content:''; position:absolute; right:4px; top:4px; width:9px; height:9px; border-radius:50%; background:#ff4a4a; box-shadow:0 0 6px #ff4a4a; margin:0; }
 `;
 document.head.appendChild(css2);
@@ -1120,7 +1156,7 @@ const dailyLeft = id => S.mini.day !== today() || !S.mini.daily[id];
 function setBest(k, v){ const old = S.mini.best[k] || 0; if (v > old){ S.mini.best[k] = v; return true; } return false; }
 
 // ── 음악 엔진 (WebAudio 합성 · 미리 짠 악보를 앞서서 예약) ──
-const MUS = { ev: [], i: 0, t0: 0, out: null, rev: null, nodes: [] };
+const MUS = { ev: [], i: 0, t0: 0, out: null, rev: null };
 const NOTE_I = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const midi = s => { const m = /^([A-G])(#|b)?(-?\d)$/.exec(s); return m ? 12 * (+m[3] + 1) + NOTE_I[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) : 60; };
 const mf = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -1138,7 +1174,7 @@ function musicStop(){ if (MUS.out){ const a = AC, o = MUS.out, c = MUS.comp; try
 function vEnv(g, t, a, peak, dur, rel){ g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.setTargetAtTime(peak * 0.55, t + a, dur * 0.4); g.gain.setTargetAtTime(0.0001, t + dur, rel); }
 function voice(type, f, t, dur, vol, o = {}){
   const a = AC, g = a.createGain(), fl = a.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(o.cut || 3000, t); if (o.env) fl.frequency.setTargetAtTime(o.cut * 0.35, t, dur * 0.5); fl.Q.value = o.q || 0.7;
-  const os = []; for (const dt of (o.det || [0])){ const s = a.createOscillator(); s.type = type; s.frequency.setValueAtTime(f, t); s.detune.value = dt; if (o.vib && dur > 0.3){ const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = 5.5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * 0.012, t + 0.25); l.connect(lg); lg.connect(s.frequency); l.start(t); l.stop(t + dur + 0.4); } s.connect(fl); s.start(t); s.stop(t + dur + (o.rel || 0.1) * 5 + 0.05); os.push(s); }
+  for (const dt of (o.det || [0])){ const s = a.createOscillator(); s.type = type; s.frequency.setValueAtTime(f, t); s.detune.value = dt; if (o.vib && dur > 0.3){ const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = 5.5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * 0.012, t + 0.25); l.connect(lg); lg.connect(s.frequency); l.start(t); l.stop(t + dur + 0.4); } s.connect(fl); s.start(t); s.stop(t + dur + (o.rel || 0.1) * 5 + 0.05); }
   vEnv(g, t, o.att || 0.008, vol, dur, o.rel || 0.08); fl.connect(g); g.connect(MUS.out); if (o.wet && MUS.rev){ const w = a.createGain(); w.gain.value = o.wet; g.connect(w); w.connect(MUS.rev); }
 }
 function drum(k, t){
@@ -1162,7 +1198,7 @@ function musicTick(now){ // now = AC 시각
 }
 // 드럼 · 베이스 패턴 (한 마디)
 const DRUMS = {
-  intro: { k: 'x...x...', h: '..x...x.' }, pop: { k: 'x..xx...', s: '..x...x.', h: 'xxxxxxxx' }, pop2: { k: 'x..xx..x', s: '..x...x.', h: 'xxxxxxxo' },
+  intro: { k: 'x...x...', h: '..x...x.' }, pop: { k: 'x..xx...', s: '..x...x.', h: 'xxxxxxxx' }, pop2: { k: 'x..xx..x', s: '..x...x.', h: 'xxxxxxx.', o: '.......x' },
   march: { k: 'x...x...', s: '..x.x.xx', h: 'x.x.x.x.', p: '......x.' }, march2: { k: 'x.x.x.x.', s: '..x...x.', h: 'xxxxxxxx', p: '..x...x.' }, end: { k: 'x.......', h: 'x.......' },
   build: { k: 'x...x...x...x...', h: '..x...x...x...x.' }, rock: { k: 'x.....x.x.......', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
   drive: { k: 'x..x..x.x..x..x.', s: '....x.......x..x', h: 'xxxxxxxxxxxxxxxx' }, end4: { k: 'x...............', h: 'x...............' },
@@ -1631,7 +1667,7 @@ function closeMenu(){ if (!menuOpen) return; menuOpen = false; menuEl.classList.
 
 // ═════════════════════════ 매 프레임 · 키 · 이벤트 ═════════════════════════
 G.hooks.push((dt, rdt) => {
-  updRipples(rdt); tickAJ(rdt); tickSpots(rdt);
+  updRipples(rdt); tickAJ(rdt); tickSpots(rdt); CAB.tick(rdt);
   if (FS) tickFishing(dt, rdt);
 });
 X.KEYH.push(code => {
@@ -1647,8 +1683,8 @@ X.KEYH.push(code => {
   if (code === 'Escape' && menuOpen){ closeMenu(); return true; }
   return false;
 });
-BUS.on('hurt', () => { if (FS) stopFishing('💢 공격받아 낚싯줄을 거뒀어요'); });
-BUS.on('mode', () => { if (FS) stopFishing(); closeFishW(); });
+BUS.on('hurt', () => { if (FS) stopFishing('💢 공격받아 낚싯줄을 거뒀어요'); if (arcOpen && X.mode !== 'plaza'){ arcadeClose(); X.hint('⚔ 공격받아 미니 게임을 멈췄어요', 2.5); } });
+BUS.on('mode', () => { if (FS) stopFishing(); closeFishW(); closeMenu(); if (arcOpen) arcadeClose(); });
 BUS.on('leaveField', () => { if (FS && !FS.sp.plaza) stopFishing(); });
 if (F.menu && F.menu.add) F.menu.add('🐟', '낚시 수첩', () => fwOpen ? closeFishW() : openFishLog('dex'));
 

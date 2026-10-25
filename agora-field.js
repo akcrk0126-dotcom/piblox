@@ -118,6 +118,8 @@ css.textContent = `
   #fmenu button span { font-size:17px; } #fmenu button kbd { font:700 10px 'Cinzel'; color:#e9c87e; opacity:.8; }
   #fmenu button.dot::after { content:''; position:absolute; right:2px; top:2px; width:9px; height:9px; border-radius:50%; background:#ff4a4a; box-shadow:0 0 6px #ff4a4a; }
   body.touch #fmenu button { padding:8px; } body.touch #fmenu button b, body.touch #fmenu button kbd { display:none; }
+  @media (max-height:760px){ #fmenu { gap:5px; } #fmenu button { padding:6px 8px; } #fmenu button b, #fmenu button kbd { display:none; } #fmenu button span { font-size:16px; } }
+  @media (max-height:520px){ #fmenu { flex-direction:row; flex-wrap:wrap; justify-content:flex-end; max-width:min(50vw, 300px); } }
   body.cine #fmenu, body.shopping #fmenu { opacity:0; pointer-events:none; }
   #modes button.field { background:linear-gradient(90deg, rgba(40,90,60,.55), rgba(20,50,30,.92)); border-color:rgba(140,255,170,.6); }
   #modes button.field.lock { opacity:.55; }
@@ -146,7 +148,8 @@ const menuEl = X.mk('div', 'fmenu', '', X.hud);
 F.menu = { el: menuEl, add(icon, label, fn, key){ const b = document.createElement('button'); b.innerHTML = `<span>${icon}</span><b>${label}</b>${key ? `<kbd>${key}</kbd>` : ''}`; b.onclick = e => { e.stopPropagation(); fn(); }; menuEl.appendChild(b); return b; } };
 F.menu.add('🏠', '귀환', () => X.fieldReturn());
 let regionT = 0;
-F.regionBanner = (a, b, c, dur = 3.6) => { regionEl.querySelector('.a').textContent = a; regionEl.querySelector('.b').textContent = b; regionEl.querySelector('.c').textContent = c || ''; regionEl.classList.add('on'); regionT = dur; };
+let pendReg = null;
+F.regionBanner = (a, b, c, dur = 3.6) => { const lf = document.getElementById('lmfound'); if (lf && lf.classList.contains('on')){ pendReg = [a, b, c, dur]; return; } pendReg = null; regionEl.querySelector('.a').textContent = a; regionEl.querySelector('.b').textContent = b; regionEl.querySelector('.c').textContent = c || ''; regionEl.classList.add('on'); regionT = dur; };
 
 // ── NPC 대화 분배: 모듈이 F.talkers[npcId] 또는 F.roleTalkers[role] 를 채워요 ──
 F.talkers = {}; F.roleTalkers = {};
@@ -223,6 +226,7 @@ const story = document.getElementById('mStory'); if (story) story.innerHTML = '<
 let nearT = 0, regT = 0;
 G.hooks.push((dt, rdt) => {
   if (regionT > 0){ regionT -= rdt; if (regionT <= 0) regionEl.classList.remove('on'); }
+  if (pendReg){ const lf = document.getElementById('lmfound'); if (!lf || !lf.classList.contains('on')) F.regionBanner(...pendReg); }
   if (!F.inField) { if (LABELS.length) for (const L of LABELS) L.el.style.display = 'none'; return; }
   nearT -= rdt; if (nearT <= 0){ nearT = 0.25; refreshNear(); }
   updateLabels();

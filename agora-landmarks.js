@@ -485,6 +485,7 @@ function pumpFound(rdt){
   n.textContent = l.name; n.setAttribute('data-t', l.name); foundEl.querySelector('.e').textContent = (l.en || '').toUpperCase(); foundEl.querySelector('.d').textContent = l.desc || '';
   foundEl.querySelector('.x').textContent = `탐험 경험치 +${X.fmt ? X.fmt(exp) : exp}  ·  발견 ${cnt} / ${W.landmarks.length}`;
   const nn = n.cloneNode(true); n.replaceWith(nn);   // 반짝임 애니메이션 다시
+  if (rb) rb.classList.remove('on'); foundEl.classList.remove('low');
   foundEl.classList.add('on'); foundT = 4.6;
 }
 const LABELS = {};
