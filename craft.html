@@ -5774,27 +5774,30 @@ function cmdCtx(patch){const ctx={src:player,pos:{x:player.pos.x,y:player.pos.y,
   if(patch&&patch.src&&!patch.pos){const p=entPos(patch.src);ctx.pos={x:p.x,y:p.y,z:p.z}}if(patch&&patch.src&&!patch.rot)ctx.rot=entRot(patch.src);
   return Object.assign(ctx,CTX_HELP)}
 // 맥락 도우미 (계약): 낱말 하나를 받아서 마크와 같은 규칙으로 읽어요. 틀리면 그 낱말 자리를 짚어요
-function ctxRd(ctx,tok){const T=ctx._toks,line=ctx._line;if(T&&line!=null){let i=T.indexOf(tok,ctx._ti||0);if(i<0)i=T.indexOf(tok);if(i>=0){ctx._ti=i+1;return new CR(line.slice(0,T.pos[i]+tok.length),T.pos[i])}}return new CR(String(tok),0)}
-function ctxEnd(r){if(r.can())throw r.err('sep');return r}
+function ctxRd(ctx,tok,more){const T=ctx._toks,line=ctx._line,M=(more||[]).filter(x=>x!=null);if(tok==null)throw new CmdError(cmf('unknown_cmd'),line?line.length:-1,line);
+  if(T&&line!=null){let i=T.indexOf(tok,ctx._ti||0);if(i<0)i=T.indexOf(tok);
+    if(i>=0&&M.every((x,k)=>T[i+1+k]===x)){const j=i+M.length;ctx._ti=j+1;const r=new CR(line.slice(0,T.pos[j]+T[j].length),T.pos[i]);r.full=line;return r}}return new CR([tok].concat(M).join(' '),0)}
+// 낱말 읽기 (틀리면 오류 글에 줄 전체를 보여 줘요) · 다 읽은 뒤 남는 글자가 있으면 오류
+function ctxH(ctx,tok,more,f){const r=ctxRd(ctx,tok,more);try{const v=f(r);if(r.can())throw r.err('sep');return v}catch(e){if(e instanceof CmdError&&r.full&&e.input===r.s)e.input=r.full;throw e}}
 const CTX_HELP={
-  targets(tok){const r=ctxRd(this,tok),S=selParse(r,this.perm,{});ctxEnd(r);const L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_ent'));return L},
-  players(tok){const r=ctxRd(this,tok),S=selParse(r,this.perm,{players:true});ctxEnd(r);const L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_pl'));return L},
-  entity(tok){const r=ctxRd(this,tok),S=selParse(r,this.perm,{single:true});ctxEnd(r);const L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_ent'));return L[0]},
-  vec3(tx,ty,tz){const r=ctxRd(this,tx);if(ty!=null){const s=[tx,ty,tz].join(' ');const c=coordParse(new CR(s,0),3,true,false);return coordGet(c,this)}return coordGet(ctxEnd(r)&&coordParse(new CR(r.s,r.i),3,true,false),this)},
-  block(tx,ty,tz){const s=ty!=null?[tx,ty,tz].join(' '):String(tx);return coordBlock(coordParse(new CR(s,0),3,false,true),this)},
-  item(tok){const r=ctxRd(this,tok),o=itemParse(r,false);ctxEnd(r);return{id:o.id,mc:o.mc,comp:o.comp}},
-  blockState(tok){const r=ctxRd(this,tok),o=blockParse(r,false);ctxEnd(r);return{id:o.id,meta:o.meta,mc:o.mc,props:o.p,nbt:o.nbt}},
-  int(tok,min,max){const r=ctxRd(this,tok),v=CA.int(min,max).parse(r);ctxEnd(r);return v},
-  num(tok,min,max){const r=ctxRd(this,tok),v=CA.num(min,max).parse(r);ctxEnd(r);return v},
-  bool(tok){const r=ctxRd(this,tok),v=r.bool();ctxEnd(r);return v},
-  str(tok){const r=ctxRd(this,tok);return r.str()},
+  targets(tok){const S=ctxH(this,tok,0,r=>selParse(r,this.perm,{})),L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_ent'));return L},
+  players(tok){const S=ctxH(this,tok,0,r=>selParse(r,this.perm,{players:true})),L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_pl'));return L},
+  entity(tok){const S=ctxH(this,tok,0,r=>selParse(r,this.perm,{single:true})),L=selFind(S,this);if(!L.length)throw new CmdError(cmf('no_ent'));return L[0]},
+  vec3(tx,ty,tz){return coordGet(ctxH(this,tx,[ty,tz],r=>coordParse(r,3,true,false)),this)},
+  block(tx,ty,tz){return coordBlock(ctxH(this,tx,[ty,tz],r=>coordParse(r,3,false,true)),this)},
+  item(tok){const o=ctxH(this,tok,0,r=>itemParse(r,false));return{id:o.id,mc:o.mc,comp:o.comp}},
+  blockState(tok){const o=ctxH(this,tok,0,r=>blockParse(r,false));return{id:o.id,meta:o.meta,mc:o.mc,props:o.p,nbt:o.nbt}},
+  int(tok,min,max){return ctxH(this,tok,0,r=>CA.int(min,max).parse(r))},
+  num(tok,min,max){return ctxH(this,tok,0,r=>CA.num(min,max).parse(r))},
+  bool(tok){return ctxH(this,tok,0,r=>r.bool())},
+  str(tok){return ctxH(this,tok,0,r=>r.str())},
   feedback(text){if(!this.silent&&gr('send_command_feedback'))chatLine(text,'#fff')},
   say(text,color){chatLine(text,color||'#fff')},
   player(){if(this.src!==player)throw new CmdError(cmf('need_player'));return player}};
 // execCmd (계약): 명령어 한 줄 실행 (앞의 / 는 있어도 없어도 돼요) · ctxPatch 로 src · pos · rot · dim 바꾸기 · 결과 수 돌려줌 · 틀리면 CmdError
 //   patch._line · patch._at: 긴 줄 안의 한 부분을 실행할 때 (execute … run) 오류 위치를 긴 줄 기준으로 짚어요
 function execCmd(line,patch){line=String(line);let full=line,at=0;if(patch&&patch._line!=null){full=patch._line;at=patch._at|0}else if(line[0]==='/'){full=line;at=1}
-  const ctx=cmdCtx(patch);delete ctx._line;delete ctx._at;const r=new CR(full,at),p=cParse(CROOT,r,ctx,{nodes:[],args:{},run:null,child:null});
+  const ctx=cmdCtx(patch);for(const k of['_line','_at','_toks','_ti'])delete ctx[k];const r=new CR(full,at),p=cParse(CROOT,r,ctx,{nodes:[],args:{},run:null,child:null});
   if(p.r.can()){if(p.errs.length===1)throw p.errs[0][1];throw new CmdError(cmf(p.cx.nodes.length?'arg_bad':'unknown_cmd'),p.r.i,full)}
   const L=cLast(p.cx);if(!L.run)throw new CmdError(cmf('unknown_cmd'),p.r.i,full);
   const T=L.args._toks;ctx._line=full;if(T){ctx._toks=T;ctx._ti=0}
