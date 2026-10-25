@@ -3139,7 +3139,7 @@ function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void')retu
   d=Math.round(d*2)/2;if(d<=0)return;p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt');hudHurt();
   // 마크: 맞은 쪽 반대로 화면이 기울어요 (bobHurt) · 넉백 0.4
   p.hurtTime=10;p.hurtDir=src?Math.atan2(src.x-p.pos.x,src.z-p.pos.z)/DEG-(180-p.yaw/DEG):(Math.random()*2|0)*180;
-  if(src){const dx=src.x-p.pos.x,dz=src.z-p.pos.z,l=Math.hypot(dx,dz)||1;p.vel.x=p.vel.x/2-dx/l*8;p.vel.z=p.vel.z/2-dz/l*8;if(p.onGround)p.vel.y=Math.min(8,p.vel.y/2+8)}
+  if(src){const k=8*(1-armor.reduce((s,a)=>s+(a&&ITEM[a.id].armor&&ITEM[a.id].armor.mat===4?.1:0),0)),dx=src.x-p.pos.x,dz=src.z-p.pos.z,l=Math.hypot(dx,dz)||1;if(k>0){p.vel.x=p.vel.x/2-dx/l*k;p.vel.z=p.vel.z/2-dz/l*k;if(p.onGround)p.vel.y=Math.min(8,p.vel.y/2+k)}}   // 네더라이트 갑옷 한 벌마다 넉백 저항 0.1
   if(p.hp<=0){p.hp=0;die(why)}updateStats()}
 let camKick=0,eyeS=1.62;
 function die(why){const p=player;p.dead=true;mouseL=mouseR=false;for(let i=0;i<36;i++)if(inv[i]&&inv[i].e&&inv[i].e.vanish)inv[i]=null;for(let i=0;i<4;i++)if(armor[i]&&armor[i].e&&armor[i].e.vanish)armor[i]=null;
@@ -3438,7 +3438,9 @@ const MOBDEF={
 function makeMob(type){const g=new THREE.Group(),P={};MOBDEF[type].build(g,P);return{g,P}}
 function spawnMob(type,x,y,z,baby){const D=MOBDEF[type],{g,P}=makeMob(type);if(baby)g.scale.setScalar(.5);scene.add(g);
   const m={type,D,pos:new V3(x,y,z),vel:new V3(),yaw:Math.random()*6.28,hp:D.hp,hw:D.hw*(baby?.5:1),h:D.h*(baby?.5:1),g,P,onGround:false,hitX:false,hitZ:false,ai:{t:0,mv:false,dir:0},panic:0,hurtT:0,dead:false,deadT:0,atk:0,walk:0,burnT:0,fuse:0,snd:3+Math.random()*8,baby:baby?240:0,love:0,breedCD:0,angry:0};mobs.push(m);return m}
-function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx('break','wood')}return}if(m.dead||m.hurtT>0)return;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type);
+function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx('break','wood')}return}if(m.dead)return;
+  // 무적 10틱 (LivingEntity.hurt): 그 사이엔 더 센 피해만 차이만큼 (넉백 · 소리 없이)
+  if(m.hurtT>0){if(d<=(m.lastHurt||0))return;const raw=d;d-=m.lastHurt||0;m.lastHurt=raw;m.hp-=d;src=null}else{m.lastHurt=d;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type)}
   if(src)mobKnock(m,.4,m.pos.x-src.x,m.pos.z-src.z);   // 맞으면 늘 0.4 (LivingEntity.hurt → knockback)
   if(!m.D.hostile)m.panic=4;else m.angry=30;
   if(m.D.split&&m.hp<=0)for(let k=0;k<2+Math.floor(Math.random()*2);k++)spawnMob(m.D.split,m.pos.x+(Math.random()-.5),m.pos.y+.3,m.pos.z+(Math.random()-.5));
