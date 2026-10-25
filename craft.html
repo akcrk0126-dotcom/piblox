@@ -2224,7 +2224,7 @@ function g5ent(N,x,y,z,ro){const r=N.spaghetti_3d_rarity.v(x*2,y,z*2),e=r<-.5?.7
   return Math.min(.37+N.cave_entrance.v(x*.75,y*.5,z*.75)+g5cm(y,-10,30,.3,0),ro+g5cl(w+(-.0765+-.011499999999999996*N.spaghetti_3d_thickness.v(x,y,z)),-1,1))}
 // 꼭짓점(4×8×4 칸의 모서리) 밀도: 마크 final_density 의 보간 전 값
 function g5D(c,x,y,z){const gb=g5cm(y,-64,-40,0,1);if(gb===0)return .1171875;const gt=g5cm(y,240,256,1,0);let t2=0;
-  if(gt!==0){const g=G5,N=g.N,dp=g5cm(y,-64,320,1.5,-1.5)+c.off,sq=(dp+c.jag)*c.fac,sc=4*(sq>0?sq:sq*.25)+g.B.v(x,y,z);
+  if(gt!==0){const g=G5,N=g.N,dp=g5cm(y,-64,320,1.5,-1.5)+c.off,sq=(dp+c.jag)*c.fac,sc=sq>=.9859375?4*sq:4*(sq>0?sq:sq*.25)+g.B.v(x,y,z);   // 깊은 땅속: 기본 노이즈(|값|≤1.5)를 더해도 sc≥2.34 → 아래 공식에서 sc 가 안 쓰여서 건너뛰어요 (결과 같음)
     const ro=(-.05+-.05*N.spaghetti_roughness_modulator.v(x,y,z))*(-.4+Math.abs(N.spaghetti_roughness.v(x,y,z)));let rc;
     if(sc<1.5625)rc=Math.min(sc,5*g5ent(N,x,y,z,ro));
     else{const ent=g5ent(N,x,y,z,ro),cl=N.cave_layer.v(x,y*8,z),ch=4*(cl*cl)+(g5cl(.27+N.cave_cheese.v(x,y*.6666666666666666,z),-1,1)+g5cl(1.5+-.64*sc,0,.5));
@@ -2468,7 +2468,7 @@ function g5froz(b,c,X,Z,ms,t,bm){const N=G5.N,e=Math.min(Math.abs(N.iceberg_surf
     if(v===AIR&&o<ki&&r.nextDouble()>.01||v===WATER&&o>ji&&o<63&&j!==0&&r.nextDouble()>.15){if(n<=l&&o>m){b[c|(iy<<8)]=SNOW;n++}else b[c|(iy<<8)]=PACKED_ICE}}}
 // 카버 (마크 CaveWorldCarver · CanyonWorldCarver): 예전 방식 굴 · 방 · 협곡 — 주변 8청크에서 시작한 것까지 파요
 let G5SIN=null;const g5sn=d=>G5SIN[Math.trunc(d*10430.378350470453)&65535],g5cs=d=>G5SIN[Math.trunc(d*10430.378350470453+16384)&65535];
-let G5REP=null;
+let G5REP=null,G5CV=null;const G5E=[];
 function g5carve(b,cx,cz,A,nether){if(!G5SIN){G5SIN=new Float32Array(65536);for(let i=0;i<65536;i++)G5SIN[i]=Math.sin(i*Math.PI*2/65536)}
   if(!G5REP)G5REP=new Set([STONE,GRANITE,DIORITE,ANDESITE,TUFF,DEEPSLATE,DIRT,COARSE_DIRT,PODZOL,GRASS,SNOWY_GRASS,MYCELIUM,MUD,ROOTED_DIRT,TERRACOTTA,ORANGE_TC,WHITE_TC,YELLOW_TC,BROWN_TC,RED_TC,LGRAY_TC,
     SAND,RED_SAND,SANDSTONE,RED_SANDSTONE,GRAVEL,CALCITE,SNOW,PACKED_ICE,WATER,COPPER_ORE,D_IRON,RAW_IRON_BLOCK,RAW_COPPER_BLOCK].filter(v=>v!==undefined));
@@ -2483,34 +2483,43 @@ function g5carve(b,cx,cz,A,nether){if(!G5SIN){G5SIN=new Float32Array(65536);for(
     for(let r=k;r<=l;r++){const g=(ox+r+.5-x)/hr;for(let t=p;t<=q;t++){const h=(oz+t+.5-z)/hr;if(g*g+h*h>=1)continue;const top={v:0};
       for(let v=o;v>m;v--){const w=(v-.5-y)/vr,mi=r|(t<<4)|((v-minY)<<8);if(skip(g,w,h,v)||mask[mi])continue;mask[mi]=1;carveBlock(r|(t<<4)|((v+yo)<<8),v,top)}}}};
   const reach=(x,z,bi,bc,w)=>{const f=x-mx,g=z-mz,h=bc-bi,i=g5f(g5f(w+2)+16);return f*f+g*g-h*h<=i*i};
+  // 원천 청크마다 동굴 · 협곡 출발점은 한 번만 계산해 두고 (G5CV), 이 청크에 닿을 수 있는 굴만 다시 돌려요 (결과 같음)
+  // bb 가 있으면 시험 삼아 돌리며 타원체가 지나갈 수 있는 범위만 모아요 (청크 거리 검사 없이 끝까지)
+  let bb=null;const acc=(x,z,hr)=>{const w=2*hr;if(x-w<bb[0])bb[0]=x-w;if(x+w>bb[1])bb[1]=x+w;if(z-w<bb[2])bb[2]=z-w;if(z+w>bb[3])bb[3]=z+w};
+  const near=t=>!(mx>t[2]+17||mx<t[1]-17||mz>t[4]+17||mz<t[3]-17);
   const tunnel=(sd,x,y,z,hm,vm,th,yaw,pit,bi,bc,ys,skip)=>{const r=new G5L(sd[0],sd[1]),i=r.nextInt(bc>>1)+(bc>>2),bl=r.nextInt(6)===0;let f=0,g=0;
     for(let j=bi;j<bc;j++){const d=1.5+g5f(g5sn(g5f(g5f(PI*j)/bc))*th),e=d*ys,h=g5cs(pit);x+=g5f(g5cs(yaw)*h);y+=g5sn(pit);z+=g5f(g5sn(yaw)*h);
       pit=g5f(pit*(bl?g5f(.92):g5f(.7)));pit=g5f(pit+g5f(g*g5f(.1)));yaw=g5f(yaw+g5f(f*g5f(.1)));g=g5f(g*g5f(.9));f=g5f(f*.75);
       g=g5f(g+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*2));f=g5f(f+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*4));
       if(j===i&&th>1){for(const s of [-1,1]){r.nextLong();const sd2=[G5U.h,G5U.l];tunnel(sd2,x,y,z,hm,vm,g5f(g5f(r.nextFloat()*.5)+.5),g5f(yaw+s*g5f(PI/2)),g5f(pit/3),j,bc,1,skip)}return}
-      if(r.nextInt(4)!==0){if(!reach(x,z,j,bc,th))return;ell(x,y,z,d*hm,e*vm,skip)}}};
-  const caves=(rnd,ccx,ccz,ymin,ymax,hr0,hr1,vr0,vr1,fl0,fl1,ys0,ys1,bound,thick,yS)=>{const i=112,j=rnd.nextInt(rnd.nextInt(rnd.nextInt(bound)+1)+1);
+      if(r.nextInt(4)!==0){if(bb){acc(x,z,d*hm);continue}if(!reach(x,z,j,bc,th))return;ell(x,y,z,d*hm,e*vm,skip)}}};
+  const caves=(rnd,ccx,ccz,ymin,ymax,hr0,hr1,vr0,vr1,fl0,fl1,ys0,ys1,bound,thick,yS,L)=>{const i=112,j=rnd.nextInt(rnd.nextInt(rnd.nextInt(bound)+1)+1);
     for(let k=0;k<j;k++){const d=ccx*16+rnd.nextInt(16),e=rnd.nextInt(ymax-ymin+1)+ymin,f=ccz*16+rnd.nextInt(16),g=hr0===hr1?hr0:g5f(g5f(rnd.nextFloat()*g5f(hr1-hr0))+hr0),
       h=vr0===vr1?vr0:g5f(g5f(rnd.nextFloat()*g5f(vr1-vr0))+vr0),l=fl0===fl1?fl0:g5f(g5f(rnd.nextFloat()*g5f(fl1-fl0))+fl0),skip=(a,c,e2)=>c<=l||a*a+c*c+e2*e2>=1;let m=1;
-      if(rnd.nextInt(4)===0){const n=ys0===ys1?ys0:g5f(g5f(rnd.nextFloat()*g5f(ys1-ys0))+ys0),o=g5f(1+g5f(rnd.nextFloat()*6)),d2=1.5+g5f(g5sn(g5f(PI/2))*o);ell(d+1,e,f,d2,d2*n,skip);m+=rnd.nextInt(4)}
-      for(let p=0;p<m;p++){const q=g5f(rnd.nextFloat()*g5f(PI*2)),o=g5f(g5f(rnd.nextFloat()-.5)/4),r=thick(rnd),s=i-rnd.nextInt(i>>2);rnd.nextLong();tunnel([G5U.h,G5U.l],d,e,f,g,h,r,q,o,0,s,yS,skip)}}};
+      if(rnd.nextInt(4)===0){const n=ys0===ys1?ys0:g5f(g5f(rnd.nextFloat()*g5f(ys1-ys0))+ys0),o=g5f(1+g5f(rnd.nextFloat()*6)),d2=1.5+g5f(g5sn(g5f(PI/2))*o);L.push([0,d+1,e,f,d2,d2*n,skip]);m+=rnd.nextInt(4)}
+      for(let p=0;p<m;p++){const q=g5f(rnd.nextFloat()*g5f(PI*2)),o=g5f(g5f(rnd.nextFloat()-.5)/4),r=thick(rnd),s=i-rnd.nextInt(i>>2);rnd.nextLong();
+        const t=[1,0,0,0,0,[G5U.h,G5U.l],d,e,f,g,h,r,q,o,s,yS,skip];bb=[1e9,-1e9,1e9,-1e9];tunnel(t[5],d,e,f,g,h,r,q,o,0,s,yS,skip);t[1]=bb[0];t[2]=bb[1];t[3]=bb[2];t[4]=bb[3];bb=null;L.push(t)}}};
   const thickC=r=>{let f=g5f(g5f(r.nextFloat()*2)+r.nextFloat());if(r.nextInt(10)===0)f=g5f(f*g5f(g5f(g5f(r.nextFloat()*r.nextFloat())*3)+1));return f};
   const thickN=r=>g5f(g5f(g5f(r.nextFloat()*2)+r.nextFloat())*2);
-  const canyon=(rnd,ccx,ccz)=>{const i=112,d=ccx*16+rnd.nextInt(16),j=rnd.nextInt(58)+10,e=ccz*16+rnd.nextInt(16),f=g5f(rnd.nextFloat()*g5f(PI*2)),g=g5f(g5f(rnd.nextFloat()*.25)+-.125),
+  const canyon=(rnd,ccx,ccz,L)=>{const i=112,d=ccx*16+rnd.nextInt(16),j=rnd.nextInt(58)+10,e=ccz*16+rnd.nextInt(16),f=g5f(rnd.nextFloat()*g5f(PI*2)),g=g5f(g5f(rnd.nextFloat()*.25)+-.125),
       k=g5f(g5f(rnd.nextFloat()*g5f(4))+g5f(rnd.nextFloat()*g5f(2))),l=Math.trunc(g5f(i*g5f(g5f(rnd.nextFloat()*.25)+.75)));rnd.nextLong();
-    const r=new G5L(G5U.h,G5U.l);if(!fs){fs=new Float32Array(dep)}let fw=1;for(let a=0;a<dep;a++){if(a===0||r.nextInt(3)===0)fw=g5f(1+g5f(r.nextFloat()*r.nextFloat()));fs[a]=g5f(fw*fw)}
+    const t=[2,0,0,0,0,G5U.h,G5U.l,d,j,e,f,g,k,l];bb=[1e9,-1e9,1e9,-1e9];canyonRun(t);t[1]=bb[0];t[2]=bb[1];t[3]=bb[2];t[4]=bb[3];bb=null;L.push(t)};
+  const canyonRun=t=>{const r=new G5L(t[5],t[6]),d=t[7],j=t[8],e=t[9],f=t[10],g=t[11],k=t[12],l=t[13];if(!fs){fs=new Float32Array(dep)}let fw=1;for(let a=0;a<dep;a++){if(a===0||r.nextInt(3)===0)fw=g5f(1+g5f(r.nextFloat()*r.nextFloat()));fs[a]=g5f(fw*fw)}
     const skip=(a,c,e2,v)=>(a*a+e2*e2)*fs[v-minY-1]+c*c/6>=1;let x=d,y=j,z=e,yaw=f,pit=g,ff=0,gg=0;
     for(let q=0;q<l;q++){let dd=1.5+g5f(g5sn(g5f(g5f(q*PI)/l))*k),ee=dd*3;dd*=g5f(g5f(r.nextFloat()*.25)+.75);const t=g5f(1-g5f(Math.abs(g5f(.5-g5f(q/l)))*2));ee=g5f(1+0*t)*ee*g5f(g5f(r.nextFloat()*.25)+.75);
       const h=g5cs(pit),s2=g5sn(pit);x+=g5f(g5cs(yaw)*h);y+=s2;z+=g5f(g5sn(yaw)*h);pit=g5f(pit*g5f(.7));pit=g5f(pit+g5f(gg*g5f(.05)));yaw=g5f(yaw+g5f(ff*g5f(.05)));gg=g5f(gg*g5f(.8));ff=g5f(ff*.5);
       gg=g5f(gg+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*2));ff=g5f(ff+g5f(g5f(g5f(r.nextFloat()-r.nextFloat())*r.nextFloat())*4));
-      if(r.nextInt(4)!==0){if(!reach(x,z,q,l,k))return;ell(x,y,z,dd,ee,skip)}}};
+      if(r.nextInt(4)!==0){if(bb){acc(x,z,dd);continue}if(!reach(x,z,q,l,k))return;ell(x,y,z,dd,ee,skip)}}};
   const P=nether?[[g5f(.2),0]]:[[g5f(.15),0],[g5f(.07),1],[g5f(.01),2]];
-  for(let dx=-8;dx<=8;dx++)for(let dz=-8;dz<=8;dz++){const ccx=cx+dx,ccz=cz+dz;
-    for(const [pr,k] of P){g5add(sh,sl,0,k);const s0h=G5U.h,s0l=G5U.l;R.set(s0h,s0l);R.nextLong();const ah=G5U.h,al=G5U.l;R.nextLong();const bh=G5U.h,bl=G5U.l;
+  if(!G5CV||G5CV.s!==SEED)G5CV={s:SEED,o:new Map(),n:new Map()};const M=nether?G5CV.n:G5CV.o;
+  for(let dx=-8;dx<=8;dx++)for(let dz=-8;dz<=8;dz++){const ccx=cx+dx,ccz=cz+dz,key=ccx*4194304+ccz;let L=M.get(key);
+    if(!L){L=[];for(const [pr,k] of P){g5add(sh,sl,0,k);const s0h=G5U.h,s0l=G5U.l;R.set(s0h,s0l);R.nextLong();const ah=G5U.h,al=G5U.l;R.nextLong();const bh=G5U.h,bl=G5U.l;
       g5mul(ccx<0?4294967295:0,ccx>>>0,ah,al);const ph=G5U.h,pl=G5U.l;g5mul(ccz<0?4294967295:0,ccz>>>0,bh,bl);R.set((ph^G5U.h^s0h)>>>0,(pl^G5U.l^s0l)>>>0);
       if(!(R.nextFloat()<=pr))continue;
-      if(nether)caves(R,ccx,ccz,0,126,1,1,1,1,g5f(-.7),g5f(-.7),.5,.5,10,thickN,5);
-      else if(k===2)canyon(R,ccx,ccz);else caves(R,ccx,ccz,-56,k===0?180:47,g5f(.7),g5f(1.4),g5f(.8),g5f(1.3),-1,g5f(-.4),g5f(.1),g5f(.9),15,thickC,1)}}}
+      if(nether)caves(R,ccx,ccz,0,126,1,1,1,1,g5f(-.7),g5f(-.7),.5,.5,10,thickN,5,L);
+      else if(k===2)canyon(R,ccx,ccz,L);else caves(R,ccx,ccz,-56,k===0?180:47,g5f(.7),g5f(1.4),g5f(.8),g5f(1.3),-1,g5f(-.4),g5f(.1),g5f(.9),15,thickC,1,L)}
+      if(!L.length)L=G5E;if(M.size>3000)M.clear();M.set(key,L)}
+    for(const t of L){if(t[0]===0)ell(t[1],t[2],t[3],t[4],t[5],t[6]);else if(near(t)){if(t[0]===1)tunnel(t[5],t[6],t[7],t[8],t[9],t[10],t[11],t[12],t[13],0,t[14],t[15],t[16]);else canyonRun(t)}}}}
 // 땅 높이 (이 세계 y): 꼭짓점 밀도만으로 가장 높은 돌을 찾아요 (나무 · 구조물 · 스폰 찾기가 써요)
 function g5ct(o){if(o.top===null){let t=-1;for(let j=Math.min(39,g5cg(o)-1);j>=0;j--)if(g5d(o,j)>0){t=j;break}o.top=t}return o.top}
 function terrainH5(x,z){g5init();const x0=x&~3,z0=z&~3,fx=(x&3)/4,fz=(z&3)/4,a=g5cc(x0,z0),b=g5cc(x0+4,z0),c=g5cc(x0,z0+4),d=g5cc(x0+4,z0+4),
