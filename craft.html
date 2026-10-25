@@ -2884,7 +2884,7 @@ const player={pos:new V3(.5,70,.5),vel:new V3(),yaw:0,pitch:0,onGround:false,hp:
 const inv=new Array(36).fill(null),armor=[null,null,null,null];const armorPts=()=>armor.reduce((s,a)=>s+(a&&ITEM[a.id]&&ITEM[a.id].armor?ITEM[a.id].armor.pts:0),0);let sel=0,cursor=null;
 const keys={};let mouseL=false,mouseR=false;
 const PW=.3,PH=1.8;
-const eyeH=()=>player.sneak?1.27:1.62;
+const eyeH=()=>POSE_EYE[player.pose]||1.62;
 let joy={x:0,y:0},tJump=false,autoJump=isTouch,lastW=0;
 // 마크 자바 플레이어 물리 (LivingEntity.travel · LocalPlayer.aiStep 그대로, 1틱 = 0.05초 · 속도 단위는 블록/틱으로 계산)
 const TICK=.05,DEG=Math.PI/180;let pTickAcc=0,PT=1;
@@ -2892,6 +2892,82 @@ Object.assign(player,{prev:new V3(),walkDist:0,walkDistO:0,bob:0,oBob:0,moveDist
   atkTicker:100,swingTime:0,swinging:false,attackAnim:0,oAttackAnim:0,fovMod:1,fovModO:1,useTicks:0,minorHit:false,handH:1,oHandH:1,handItem:null,missTime:0,lastHeldId:-1});
 const FRIC=id=>id===ICE||id===PACKED_ICE?.98:id===BLUE_ICE?.989:id===SLIME_BLOCK?.8:.6;
 const CLIMB=id=>id===LADDER||id===SCAFFOLD||!!(B[id]&&B[id].climb);
+// ── 플레이어 물리 다듬기 (Agent 09): 마크 자바 Entity.move · Entity.collide · 자세 · 물 높이 · 물살 ──
+// 충돌: 상자를 Y → (덜 움직이는 쪽) → (더 움직이는 쪽) 축 순서로 밀어 넣어요 (Shapes.collide, 1e-7 여유). 막히면 0.6칸까지 계단 오르기.
+// 자세 (Player.updatePlayerPose): 서기 0.6×1.8 (눈 1.62) · 웅크리기 0.6×1.5 (눈 1.27) · 수영 · 기기 · 겉날개 0.6×0.6 (눈 0.4). 자리가 없으면 웅크리기 → 기기.
+const POSE_H={stand:1.8,crouch:1.5,swim:.6,glide:.6},POSE_EYE={stand:1.62,crouch:1.27,swim:.4,glide:.4},STEP_H=.6;
+player.pose='stand';player.swimming=false;player.shiftKey=false;
+const pH=()=>POSE_H[player.pose]||PH;
+const _pb=[];
+// 범위 안 블록 충돌 상자 [x0,y0,z0,x1,y1,z1,…] (한 칸 아래는 1칸보다 키 큰 모양만 · 비계: 발이 위에 있고 Shift 를 안 누를 때만 윗판)
+function pBoxes(x0,y0,z0,x1,y1,z1,feetY,desc){const L=_pb;L.length=0;const X0=Math.floor(x0),X1=Math.floor(x1),Y0=Math.floor(y0)-1,Y1=Math.floor(y1),Z0=Math.floor(z0),Z1=Math.floor(z1);
+  for(let y=Y0;y<=Y1;y++)for(let z=Z0;z<=Z1;z++)for(let x=X0;x<=X1;x++){const id=getB(x,y,z);if(!SOLID[id])continue;
+    if(id===SCAFFOLD){if(y>Y0&&feetY>y+1-1e-5&&!desc)L.push(x,y+.875,z,x+1,y+1,z+1);continue}
+    if(!SHAPED[id]&&BH[id]===1){if(y>Y0)L.push(x,y,z,x+1,y+1,z+1);continue}
+    for(const b of shapeBoxes(id,getM(x,y,z)))if(y>Y0||b[4]>1)L.push(x+b[0],y+b[1],z+b[2],x+b[3],y+b[4],z+b[5])}
+  return L}
+// 한 축으로 d 만큼 움직일 때 막히는 곳까지 (VoxelShape.collide)
+function pClip(L,s,a,d){if(Math.abs(d)<1e-7)return 0;const b=a===0?1:0,c=a===2?1:2;
+  for(let i=0;i<L.length;i+=6){if(L[i+3+b]<=s[b]+1e-7||L[i+b]>=s[3+b]-1e-7||L[i+3+c]<=s[c]+1e-7||L[i+c]>=s[3+c]-1e-7)continue;
+    if(d>0){const g=L[i+a]-s[3+a];if(g>=-1e-7&&g<d)d=g}else{const g=L[i+3+a]-s[a];if(g<=1e-7&&g>d)d=g}}
+  return Math.abs(d)<1e-7?0:d}
+function pCollideBB(L,s0,dx,dy,dz){const s=s0.slice();if(dy!==0){dy=pClip(L,s,1,dy);if(dy!==0){s[1]+=dy;s[4]+=dy}}const zf=Math.abs(dx)<Math.abs(dz);
+  if(zf&&dz!==0){dz=pClip(L,s,2,dz);if(dz!==0){s[2]+=dz;s[5]+=dz}}if(dx!==0){dx=pClip(L,s,0,dx);if(!zf&&dx!==0){s[0]+=dx;s[3]+=dx}}if(!zf&&dz!==0)dz=pClip(L,s,2,dz);return[dx,dy,dz]}
+function pCollide(p,dx,dy,dz,h){const P=p.pos,s=[P.x-PW,P.y,P.z-PW,P.x+PW,P.y+h,P.z+PW];
+  const L=pBoxes(s[0]+Math.min(dx,0)-1e-3,s[1]+Math.min(dy,0)-1e-3,s[2]+Math.min(dz,0)-1e-3,s[3]+Math.max(dx,0)+1e-3,s[4]+Math.max(dy,STEP_H)+1e-3,s[5]+Math.max(dz,0)+1e-3,P.y,p.shiftKey);
+  const v=pCollideBB(L,s,dx,dy,dz);
+  if((p.onGround||v[1]!==dy&&dy<0)&&(v[0]!==dx||v[2]!==dz)){let a=pCollideBB(L,s,dx,STEP_H,dz);
+    const up=pCollideBB(L,[s[0]+Math.min(dx,0),s[1],s[2]+Math.min(dz,0),s[3]+Math.max(dx,0),s[4],s[5]+Math.max(dz,0)],0,STEP_H,0);
+    if(up[1]<STEP_H){const c=pCollideBB(L,[s[0],s[1]+up[1],s[2],s[3],s[4]+up[1],s[5]],dx,0,dz);c[1]+=up[1];if(c[0]*c[0]+c[2]*c[2]>a[0]*a[0]+a[2]*a[2])a=c}
+    if(a[0]*a[0]+a[2]*a[2]>v[0]*v[0]+v[2]*v[2]){const dn=pCollideBB(L,[s[0]+a[0],s[1]+a[1],s[2]+a[2],s[3]+a[0],s[4]+a[1],s[5]+a[2]],0,dy-a[1],0);return[a[0],a[1]+dn[1],a[2]]}}
+  return v}
+// 상자가 블록과 안 겹쳐요? (Level.noCollision, 1e-7 줄여서)
+function pFree(p,ox,oy,oz,h){const P=p.pos,x0=P.x+ox-PW+1e-7,x1=P.x+ox+PW-1e-7,y0=P.y+oy+1e-7,y1=P.y+oy+h-1e-7,z0=P.z+oz-PW+1e-7,z1=P.z+oz+PW-1e-7,L=pBoxes(x0,y0,z0,x1,y1,z1,P.y,p.shiftKey);
+  for(let i=0;i<L.length;i+=6)if(L[i]<x1&&L[i+3]>x0&&L[i+1]<y1&&L[i+4]>y0&&L[i+2]<z1&&L[i+5]>z0)return false;return true}
+// 웅크리면 가장자리에서 0.05칸씩 물러나요 (Player.maybeBackOffFromEdge: 0.6칸 아래에 받칠 게 있어야 나가요)
+function pBackOff(p,dx,dy,dz,h){if(p.fly||dy>0||!p.sneak)return null;if(!(p.onGround||p.fallDist<STEP_H&&!pFree(p,0,p.fallDist-STEP_H,0,h)))return null;
+  const s=v=>v<.05&&v>=-.05?0:v>0?v-.05:v+.05;while(dx!==0&&pFree(p,dx,-STEP_H,0,h))dx=s(dx);while(dz!==0&&pFree(p,0,-STEP_H,dz,h))dz=s(dz);
+  while(dx!==0&&dz!==0&&pFree(p,dx,-STEP_H,dz,h)){dx=s(dx);dz=s(dz)}return[dx,dz]}
+// 한 틱 움직이기: 가장자리 → 충돌 → 땅 · 벽 판정 (막힌 축 속도는 0)
+function playerMove(p,dx,dy,dz){const h=pH();
+  // 발이 0.6칸 이하로 블록 속에 묻혔으면 그 위로 올려요 (Block.pushEntitiesUp: 경작지 → 흙 등)
+  {const P=p.pos,L=pBoxes(P.x-PW+1e-7,P.y+1e-7,P.z-PW+1e-7,P.x+PW-1e-7,P.y+STEP_H,P.z+PW-1e-7,P.y,p.shiftKey);let top=P.y;for(let i=0;i<L.length;i+=6)if(L[i]<P.x+PW-1e-7&&L[i+3]>P.x-PW+1e-7&&L[i+2]<P.z+PW-1e-7&&L[i+5]>P.z-PW+1e-7&&L[i+1]<P.y+1e-7&&L[i+4]>top+1e-7&&L[i+4]<=P.y+STEP_H)top=L[i+4];
+    if(top>P.y&&pFree(p,0,top-P.y,0,h))P.y=top}
+  const r=pBackOff(p,dx,dy,dz,h);if(r){dx=r[0];dz=r[1]}const m=pCollide(p,dx,dy,dz,h);
+  p.pos.x+=m[0];p.pos.y+=m[1];p.pos.z+=m[2];p.hitX=Math.abs(dx-m[0])>=1e-5;p.hitZ=Math.abs(dz-m[2])>=1e-5;const vc=dy!==m[1];p.onGround=vc&&dy<0;
+  if(p.hitX)p.vel.x=0;if(p.hitZ)p.vel.z=0;if(vc)p.vel.y=0;return m}
+// 액체: 원천 · 떨어지는 물 = 8, 흐르는 물 = 8 − 단계. 높이 = 양/9 (위에 같은 액체가 있으면 1)
+const fAmt=(x,y,z)=>{const m=getM(x,y,z);return m&8||!(m&7)?8:8-(m&7)},fHt=(x,y,z,id)=>getB(x,y+1,z)===id?1:fAmt(x,y,z)/9;
+const fullFace=id=>SOLID[id]&&!SHAPED[id]&&BH[id]===1&&id!==ICE;
+// 물살 방향 (FlowingFluid.getFlow): 이웃과 높이 차이 · 떨어지는 물 옆이 벽이면 아래로
+function fFlow(x,y,z,id,o){const own=fAmt(x,y,z)/9;let dx=0,dz=0,dy=0;
+  for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2],n=getB(nx,y,nz);let g=0;
+    if(n===id)g=own-fAmt(nx,y,nz)/9;else if(B[n]&&B[n].liquid)continue;else if(!SOLID[n]&&getB(nx,y-1,nz)===id)g=own-(fAmt(nx,y-1,nz)/9-.8888889);
+    dx+=DV[d][0]*g;dz+=DV[d][2]*g}
+  if(getM(x,y,z)&8)for(const d of HDIRS){const nx=x+DV[d][0],nz=z+DV[d][2];if(fullFace(getB(nx,y,nz))||fullFace(getB(nx,y+1,nz))){const l=Math.hypot(dx,dz);if(l>0){dx/=l;dz/=l}dy=-6;break}}
+  const l=Math.hypot(dx,dy,dz);o[0]=l?dx/l:0;o[1]=l?dy/l:0;o[2]=l?dz/l:0}
+// 몸이 물 · 용암에 얼마나 잠겼나 + 물살에 밀리기 (Entity.updateFluidHeightAndDoFluidPushing: 물 0.014 · 용암 0.0023 / 네더 0.007)
+const _fo=[0,0,0];
+function pFluidTick(p){const h=pH(),P=p.pos,x0=P.x-PW+.001,x1=P.x+PW-.001,y0=P.y+.001,y1=P.y+h-.001,z0=P.z-PW+.001,z1=P.z+PW-.001;let wH=0,lH=0,inW=false,inL=false;const W=[0,0,0,0],Lv=[0,0,0,0];
+  for(let y=Math.floor(y0);y<=Math.floor(y1);y++)for(let z=Math.floor(z0);z<=Math.floor(z1);z++)for(let x=Math.floor(x0);x<=Math.floor(x1);x++){const id=getB(x,y,z);if(id!==WATER&&id!==LAVA)continue;
+    const top=y+fHt(x,y,z,id);if(top<y0)continue;let s;if(id===WATER){inW=true;wH=Math.max(wH,top-y0);s=wH}else{inL=true;lH=Math.max(lH,top-y0);s=lH}
+    if(!p.fly){fFlow(x,y,z,id,_fo);const k=s<.4?s:1,A=id===WATER?W:Lv;A[0]+=_fo[0]*k;A[1]+=_fo[1]*k;A[2]+=_fo[2]*k;A[3]++}}
+  p.inWater=inW;p.inLava=inL;p.waterH=wH;p.lavaH=lH;
+  for(const [A,str] of [[W,.014],[Lv,DIM==='nether'?.007:.0023333333]]){let l=Math.hypot(A[0],A[1],A[2]);if(!(l>0)||!A[3])continue;let fx=A[0]/A[3]*str,fy=A[1]/A[3]*str,fz=A[2]/A[3]*str;
+    const vx=p.vel.x*TICK,vz=p.vel.z*TICK;l=Math.hypot(fx,fy,fz);if(Math.abs(vx)<.003&&Math.abs(vz)<.003&&l<.0045){fx=fx/l*.0045;fy=fy/l*.0045;fz=fz/l*.0045}p.vel.x+=fx/TICK;p.vel.y+=fy/TICK;p.vel.z+=fz/TICK}}
+// 눈이 물속? (Entity.updateFluidOnEyes: 눈 높이 − 0.111 이 액체 표면 아래)
+function pEyeIn(p,id){const ey=p.pos.y+(POSE_EYE[p.pose]||1.62)-.11111111,x=Math.floor(p.pos.x),y=Math.floor(ey),z=Math.floor(p.pos.z);return getB(x,y,z)===id&&y+fHt(x,y,z,id)>ey}
+// 상자 안에 액체가 있어요? (Level.containsAnyLiquid)
+function boxLiquid(x,y,z,h){for(let yy=Math.floor(y);yy<=Math.floor(y+h);yy++)for(let zz=Math.floor(z-PW);zz<=Math.floor(z+PW);zz++)for(let xx=Math.floor(x-PW);xx<=Math.floor(x+PW);xx++){const id=getB(xx,yy,zz);if(id===WATER||id===LAVA)return true}return false}
+// 배고픔 소모 (Player.checkMovementStatistics: cm 로 반올림 · 수영 · 물속 · 물 위 1m 0.01 · 땅에서 달리기 1m 0.1 · 걷기 · 웅크리기 · 공중은 0)
+function moveStats(p,dx,dy,dz,ladder){const cm=v=>Math.round(v*100);if(p.swimming||underWater)p.exh+=cm(Math.hypot(dx,dy,dz))*1e-4;else if(p.inWater)p.exh+=cm(Math.hypot(dx,dz))*1e-4;else if(!ladder&&p.onGround&&p.sprint)p.exh+=cm(Math.hypot(dx,dz))*1e-3}
+// 몹 넉백 (LivingEntity.knockback): 세기 × (1 − 넉백 저항) · 수평 속도는 반으로 줄이고 (dx,dz) 쪽으로 밀기 · 땅이면 위로 min(0.4, vy/2 + 세기) — 몹 속도는 블록/초라 ÷0.05
+const KB_RES={iron_golem:1,warden:1,hoglin:.6,dragon:1};
+function mobKnock(m,s,dx,dz){s*=1-((m.D&&m.D.kbres)??KB_RES[m.type]??0);const l=Math.hypot(dx,dz);if(s<=0||l<1e-6)return;const k=s/TICK;m.vel.x=m.vel.x/2+dx/l*k;m.vel.z=m.vel.z/2+dz/l*k;if(m.onGround)m.vel.y=Math.min(.4/TICK,(m.vel.y>0?m.vel.y:-1.568)/2+k)}
+// 먹고 마시는 시간 (consume_seconds): 꿀이 든 병 2초 · 나머지 1.6초 (32틱)
+const useSec=st=>st&&st.id===HONEY_BOTTLE?2:1.6;
+// 몸이 닿은 블록 (Entity.checkInsideBlocks: 상자를 1e-5 줄여서) — 거미줄 · 달콤한 열매 덤불 · 선인장
+function pInside(p,fn){const h=pH(),P=p.pos;for(let y=Math.floor(P.y+1e-5);y<=Math.floor(P.y+h-1e-5);y++)for(let z=Math.floor(P.z-PW+1e-5);z<=Math.floor(P.z+PW-1e-5);z++)for(let x=Math.floor(P.x-PW+1e-5);x<=Math.floor(P.x+PW-1e-5);x++)fn(getB(x,y,z),x,y,z)}
 // 공격 속도 · 공격력 (마크 1.9+)
 {const AXE_D=[7,9,9,9,7,10],SHOV_D=[2.5,3.5,4.5,5.5,2.5,6.5],AXE_S=[.8,.8,.9,1,1,1],HOE_S=[1,2,3,4,1,4];
   for(let m=0;m<6;m++)for(let t=0;t<5;t++){const it=ITEM[toolId(m,t)];if(!it||!it.tool)continue;const tl=it.tool;tl.mat=m;
@@ -2928,22 +3004,24 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   if(tpFix())return;trapTick();arrowTrapTick();if(boatRideTick())return;if(rideTick(dt))return;
   const sneakKey=!!(keys.ShiftLeft||keys.ShiftRight||tSneak);
   if(p.fly&&!creative())p.fly=false;
-  p.sneak=sneakKey&&!p.fly;
+  p.sneak=sneakKey&&!p.fly;p.shiftKey=sneakKey;
   let fw=clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)-joy.y,-1,1),st=clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+joy.x,-1,1);
-  if(p.sneak){fw*=.3;st*=.3}
+  if(p.pose==='crouch'||p.pose==='swim'&&!p.inWater){fw*=.3;st*=.3}   // 웅크리기 · 기기 (isMovingSlowly)
   const using=eating||drawT>0;if(using){fw*=.2;st*=.2}
   const fx=Math.floor(p.pos.x),fz=Math.floor(p.pos.z);
   const feet=getB(fx,Math.floor(p.pos.y+.1),fz),mid=getB(fx,Math.floor(p.pos.y+.9),fz);
-  p.inWater=feet===WATER||mid===WATER;p.inLava=feet===LAVA||mid===LAVA;
+  pFluidTick(p);if(p.inWater)p.fallDist=0;
   if(p.burn>0&&!p.inLava&&(p.inWater||isWet(p.pos.x,p.pos.y+1.6,p.pos.z)))p.burn=0;
-  if(p.inLava){p.lavaT=(p.lavaT||0)+dt;if(p.lavaT>=.5){p.lavaT=0;hurtPlayer(4,null,'lava')}p.burn=15}else if(p.burn>0){p.burn-=dt;p.burnT=(p.burnT||0)+dt;if(p.burnT>=1){p.burnT=0;hurtPlayer(1,null,'fire')}}
-  const head=getB(fx,Math.floor(p.pos.y+p.eye),fz);underWater=head===WATER;
-  {const ub=getB(fx,Math.floor(p.pos.y-.05),fz);if((ub===MAGMA||feet===CAMPFIRE)&&!p.sneak&&p.onGround){p.hotT=(p.hotT||0)+dt;if(p.hotT>=.5){p.hotT=0;hurtPlayer(1,null,'fire')}}}
+  if(p.inLava){p.lavaT=(p.lavaT||0)+dt;if(p.lavaT>=.5){p.lavaT=0;hurtPlayer(4,null,'lava')}p.burn=15}else if(p.burn>0){p.burn-=dt;p.burnT=(p.burnT||0)+dt;if(p.burnT>=1){p.burnT=0;hurtPlayer(1,null,'fire',{noArmor:1})}}
+  underWater=pEyeIn(p,WATER);
+  {const ub=getB(fx,Math.floor(p.pos.y-.05),fz);if(ub===MAGMA&&!p.sneak&&p.onGround||feet===CAMPFIRE){p.hotT=(p.hotT||0)+dt;if(p.hotT>=.5){p.hotT=0;hurtPlayer(1,null,'fire')}}}
   // 달리기 (마크: 앞 입력 0.8 이상 · 배고픔 6 초과 · 먹거나 활 당기는 중 아님 · 벽에 정면으로 막히면 멈춤)
   const canSprint=(p.food>6||creative())&&!using;
-  if(p.sprint&&(fw<1e-5||!canSprint||p.sneak||(p.hitX||p.hitZ)&&!p.minorHit||p.inWater&&!underWater&&!p.fly))p.sprint=false;
-  if(!p.sprint&&fw>=.8&&canSprint&&!p.sneak&&(keys.ControlLeft||keys.ControlRight||joy.y<-.92)&&(!p.inWater||underWater))p.sprint=true;
-  const swimming=p.sprint&&p.inWater&&!p.inLava&&underWater;
+  // 수영 중이면 물에 있는 동안 (앞으로 가거나 웅크리면) 계속 달려요 (LocalPlayer.aiStep · isSwimming)
+  if(p.sprint&&(p.swimming?(!p.onGround&&!sneakKey&&(fw<1e-5||!canSprint)||!p.inWater):(fw<1e-5||!canSprint||p.sneak||(p.hitX||p.hitZ)&&!p.minorHit||p.inWater&&!underWater&&!p.fly)))p.sprint=false;
+  if(!p.sprint&&(underWater?fw>1e-5:fw>=.8)&&canSprint&&!p.sneak&&(keys.ControlLeft||keys.ControlRight||joy.y<-.92)&&(!p.inWater||underWater))p.sprint=true;
+  // Entity.updateSwimming: 물속에서 달리면 수영 시작 · 물에 있는 동안 계속
+  p.swimming=!p.fly&&(p.swimming?p.sprint&&p.inWater:p.sprint&&underWater&&getB(fx,Math.floor(p.pos.y),fz)===WATER);const swimming=p.swimming&&!p.inLava;
   const spd=.1*(p.sprint?1.3:1)*(p.buffT>0?1.15:1);
   let vx=p.vel.x*TICK,vy=p.vel.y*TICK,vz=p.vel.z*TICK;
   if(Math.abs(vx)<.003)vx=0;if(Math.abs(vy)<.003)vy=0;if(Math.abs(vz)<.003)vz=0;
@@ -2955,21 +3033,26 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   // 점프 · 물에서 위로 (LivingEntity.aiStep)
   if(p.noJump>0)p.noJump--;
   const onLadder=CLIMB(getB(fx,Math.floor(p.pos.y),fz))||CLIMB(feet);
-  const wantAuto=autoJump&&p.onGround&&(p.hitX||p.hitZ)&&Math.abs(fw)+Math.abs(st)>.3&&!boxHits(p.pos.x+(-sy*fw+cy*st)*.5,p.pos.y+1.05,p.pos.z+(-cy*fw-sy*st)*.5,PW,PH-.1);
+  const wantAuto=autoJump&&p.onGround&&(p.hitX||p.hitZ)&&Math.abs(fw)+Math.abs(st)>.3&&!boxHits(p.pos.x+(-sy*fw+cy*st)*.5,p.pos.y+1.05,p.pos.z+(-cy*fw-sy*st)*.5,PW,pH()-.1);
   if((jump||wantAuto)&&!p.fly&&!p.glide){
-    if(p.inWater&&!p.inLava&&!(p.onGround&&feet!==WATER))vy+=.04;
-    else if(p.inLava&&!p.onGround)vy+=.04;
-    else if(p.onGround&&p.noJump===0){const jb=getB(fx,Math.floor(p.pos.y-.5000001),fz);vy=.42*(jb===HONEY_BLOCK?.5:1);if(p.sprint){vx+=-sy*.2;vz+=-cy*.2}p.noJump=10;p.exh+=p.sprint?.2:.05}}
+    // 액체 높이가 0.4 (getFluidJumpThreshold) 넘거나 떠 있으면 헤엄쳐 오르기, 얕으면 땅처럼 점프
+    const fh=p.inLava?p.lavaH:p.waterH,inW=p.inWater&&fh>0,thr=(POSE_EYE[p.pose]||1.62)<.4?0:.4;
+    if(inW&&(!p.onGround||fh>thr))vy+=.04;
+    else if(p.inLava&&(!p.onGround||fh>thr))vy+=.04;
+    else if((p.onGround||inW&&fh<=thr)&&p.noJump===0){const jb=getB(fx,Math.floor(p.pos.y-.5000001),fz);vy=.42*(jb===HONEY_BLOCK?.5:1);if(p.sprint){vx+=-sy*.2;vz+=-cy*.2}p.noJump=10;p.exh+=p.sprint?.2:.05}}
   else if(!jump)p.noJump=0;
   if(p.fly){const j=(jump?1:0)-(sneakKey?1:0);if(j)vy+=j*.05*3}
   const moveRel=s=>{let ix=st*.98,iz=fw*.98;const l2=ix*ix+iz*iz;if(l2<1e-7)return;if(l2>1){const l=Math.sqrt(l2);ix/=l;iz/=l}ix*=s;iz*=s;vx+=-sy*iz+cy*ix;vz+=-cy*iz-sy*ix};
-  const inWeb=getB(fx,Math.floor(p.pos.y+.1),fz)===COBWEB||getB(fx,Math.floor(p.pos.y+1.2),fz)===COBWEB;
+  // 끼임 (Entity.makeStuckInBlock, 몸이 닿은 칸 전부): 거미줄 0.25·0.05·0.25 · 달콤한 열매 덤불 0.8·0.75·0.8 (낙하 거리도 사라져요)
+  let stuck=null;pInside(p,id=>{if(id===COBWEB)stuck=[.25,.05,.25];else if(id===SWEET_BERRY&&!stuck)stuck=[.8,.75,.8]});if(stuck)p.fallDist=0;
   const ox=p.pos.x,oy=p.pos.y,oz=p.pos.z;let preVy=0,vColl=false;
-  const mv=()=>{preVy=vy;let mx=vx,my=vy,mz=vz;if(inWeb){mx*=.25;my*=.05;mz*=.25}p.vel.set(vx,vy,vz);moveEnt(p,mx,my,mz,PW,PH,p.sneak&&!p.fly);
-    vColl=Math.abs(p.pos.y-oy-my)>1e-6&&my!==0;if(inWeb){vx=vy=vz=0}else{vx=p.vel.x;vy=p.vel.y;vz=p.vel.z}
-    const sb=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.5000001),Math.floor(p.pos.z));if((sb===SOUL_SAND||sb===HONEY_BLOCK)&&p.onGround){vx*=.4;vz*=.4}
-    if(p.onGround&&preVy<0&&sb===SLIME_BLOCK&&!p.sneak){vy=-preVy}
-    else if(p.onGround&&sb===SLIME_BLOCK&&Math.abs(preVy)<.1&&!p.sneak){const k=.4+Math.abs(preVy)*.2;vx*=k;vz*=k}};
+  const mv=()=>{preVy=vy;let mx=vx,my=vy,mz=vz;if(stuck){mx*=stuck[0];my*=stuck[1];mz*=stuck[2]}p.vel.set(vx,vy,vz);playerMove(p,mx,my,mz);
+    vColl=Math.abs(p.pos.y-oy-my)>1e-6&&my!==0;if(stuck){vx=vy=vz=0}else{vx=p.vel.x;vy=p.vel.y;vz=p.vel.z}
+    // 떨어진 블록 (updateEntityAfterFallOn: 슬라임 1.0 · 침대 0.66 튕김) · stepOn (슬라임 감속) · 속도 계수 (영혼 모래 · 꿀 0.4, 공중에서도)
+    const ob=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z)),sb=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.5000001),Math.floor(p.pos.z));
+    if(vColl&&preVy<0&&!p.sneak){if(ob===SLIME_BLOCK)vy=-preVy;else if(ob===BED||ob===BED_HEAD)vy=-preVy*.66}
+    if(p.onGround&&ob===SLIME_BLOCK&&Math.abs(vy)<.1&&!p.sneak){const k=.4+Math.abs(vy)*.2;vx*=k;vz*=k}
+    {const spf=id=>id===HONEY_BLOCK?.4:B[id]&&B[id].slow||1,fb2=getB(Math.floor(p.pos.x),Math.floor(p.pos.y),Math.floor(p.pos.z)),f=fb2===WATER||spf(fb2)<1?spf(fb2):spf(sb);if(f<1){vx*=f;vz*=f}}};
   if(p.glide){// 겉날개 (LivingEntity.travel 의 fall flying)
     const look=new V3(0,0,-1).applyQuaternion(camera.quaternion),f=-p.pitch,d1=Math.hypot(look.x,look.z),d3=Math.hypot(vx,vz);let d5=Math.cos(f);d5=d5*d5*Math.min(1,look.length()/.4);
     if(vy>-.5)p.fallDist=1;vy+=.08*(-1+d5*.75);
@@ -2984,12 +3067,13 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
     if(swimming){const ly=Math.sin(p.pitch),k=ly<-.2?.085:.06;if(ly<=0||jump||getB(fx,Math.floor(p.pos.y+.9),fz)===WATER)vy+=(ly-vy)*k}
     moveRel(acc);const y0=p.pos.y;mv();if((p.hitX||p.hitZ)&&onLadder)vy=.2;
     vx*=drag;vy*=.8;vz*=drag;if(!p.sprint)vy-=.005;
-    if((p.hitX||p.hitZ)&&!boxHits(p.pos.x+vx,y0+vy+.6,p.pos.z+vz,PW,PH))vy=.3;p.fallDist=0}
-  else if(p.inLava&&!p.fly){moveRel(.02);const y0=p.pos.y;mv();vx*=.5;vy*=.5;vz*=.5;vy-=.02;if((p.hitX||p.hitZ)&&!boxHits(p.pos.x+vx,y0+vy+.6,p.pos.z+vz,PW,PH))vy=.3;p.fallDist*=.5}
+    {const ex=p.pos.x+vx,ey=y0+vy+.6,ez=p.pos.z+vz;if((p.hitX||p.hitZ)&&!boxHits(ex,ey,ez,PW,pH())&&!boxLiquid(ex,ey,ez,pH()))vy=.3}p.fallDist=0}   // 물가로 올라서기 (위가 비고 액체가 없을 때만)
+  else if(p.inLava&&!p.fly){moveRel(.02);const y0=p.pos.y;mv();if(p.lavaH<=((POSE_EYE[p.pose]||1.62)<.4?0:.4)){vx*=.5;vy*=.8;vz*=.5;if(!p.sprint)vy-=.005}else{vx*=.5;vy*=.5;vz*=.5}vy-=.02;
+    {const ex=p.pos.x+vx,ey=y0+vy+.6,ez=p.pos.z+vz;if((p.hitX||p.hitZ)&&!boxHits(ex,ey,ez,PW,pH())&&!boxLiquid(ex,ey,ez,pH()))vy=.3}p.fallDist*=.5}
   else if(p.fly){const vy0=vy;moveRel(p.sprint?.1:.05);mv();vx*=.91;vz*=.91;vy=vy0*.6;p.fallDist=0;if(p.onGround&&!jump)p.fly=false}
   else{const fb=getB(fx,Math.floor(p.pos.y-.5000001),fz),f2=FRIC(fb),f3=p.onGround?f2*.91:.91;
     moveRel(p.onGround?spd*(.21600002/(f2*f2*f2)):(p.sprint?.025999999:.02));
-    if(onLadder){vx=clamp(vx,-.15,.15);vz=clamp(vz,-.15,.15);vy=Math.max(vy,-.15);if(vy<0&&p.sneak)vy=0;p.fallDist=0}
+    if(onLadder){vx=clamp(vx,-.15,.15);vz=clamp(vz,-.15,.15);vy=Math.max(vy,-.15);if(vy<0&&p.sneak&&getB(fx,Math.floor(p.pos.y),fz)!==SCAFFOLD)vy=0;p.fallDist=0}
     mv();if(onLadder&&(p.hitX||p.hitZ||jump))vy=.2;
     vy=(vy-.08)*.98;vx*=f3;vz*=f3}
   // 정면으로 막혔는지 (8도 안쪽이면 살짝 스친 것)
@@ -3001,24 +3085,34 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   if(p.moveDist>p.nextStep){const ub=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(ub&&(p.onGround||onLadder)){p.nextStep=Math.floor(p.moveDist)+1;const b=B[onLadder?LADDER:ub];if(b&&b.snd&&!p.inWater)sfx('step',b.snd,.8)}else if(p.inWater&&!p.onGround&&hm>.01){p.nextStep=Math.floor(p.moveDist)+1}}
   {const h=p.onGround&&!swimming?Math.min(.1,Math.hypot(vx,vz)):0;p.bob+=(h-p.bob)*.4}
   if(p.sprint&&p.onGround&&!p.inWater&&!p.sneak)sprintDust(p);
-  p.exh+=hm*(p.sprint?.1:p.inWater?.01:0);
-  // 낙하 피해 (Entity.checkFallDamage · 3칸 넘게 떨어지면 1칸마다 반 칸)
-  if(p.onGround){if(p.fallDist>3&&!p.inWater)landDust(p,p.fallDist);if(p.fallDist>3&&!p.inWater){const ub=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));const mul=ub===SLIME_BLOCK&&!p.sneak?0:ub===HONEY_BLOCK||ub===HAY?.2:1;const d=Math.ceil(((p.windY!=null?Math.min(p.fallDist,Math.max(0,p.windY-p.pos.y)):p.fallDist)-3)*mul);if(d>0)hurtPlayer(d,null,'fall')}p.fallDist=0}
+  moveStats(p,p.pos.x-ox,dyM,p.pos.z-oz,onLadder);
+  // 낙하 피해 (Entity.checkFallDamage → Block.fallOn): ceil(거리 − 3) × 배수 (건초 · 꿀 0.2 · 슬라임 0 · 침대는 거리 절반) · 가벼운 착지 · 보호는 hurtPlayer 에서
+  if(p.onGround&&p.fallDist>0&&!p.inWater)pFluidTick(p);   // 내려앉는 순간 물을 한 번 더 봐요 (LivingEntity.checkFallDamage)
+  if(p.onGround){if(p.fallDist>3&&!p.inWater)landDust(p,p.fallDist);if(p.fallDist>0&&!p.inWater){const ux=Math.floor(p.pos.x),uy=Math.floor(p.pos.y-.2),uz=Math.floor(p.pos.z),ub=getB(ux,uy,uz);
+      if(ub===FARMLAND&&!creative()&&Math.random()<p.fallDist-.5){setBlock(ux,uy,uz,DIRT);p.pos.y=Math.max(p.pos.y,uy+1)}   // 경작지 밟기 (FarmBlock.fallOn: 거리 − 0.5 확률)
+      const mul=ub===SLIME_BLOCK&&!p.sneak?0:ub===HONEY_BLOCK||ub===HAY?.2:1,fd=(p.windY!=null?Math.min(p.fallDist,Math.max(0,p.windY-p.pos.y)):p.fallDist)*(ub===BED||ub===BED_HEAD?.5:1),d=Math.ceil((fd-3)*mul);if(d>0)hurtPlayer(d,null,'fall')}p.fallDist=0}
   else if(dyM<0)p.fallDist-=dyM;
   if(p.inWater)p.fallDist=0;
   if(p.pos.y<-20){hurtPlayer(4,null,'void')}
-  {const x0=Math.floor(p.pos.x-PW-.05),x1=Math.floor(p.pos.x+PW+.05),z0=Math.floor(p.pos.z-PW-.05),z1=Math.floor(p.pos.z+PW+.05),y0=Math.floor(p.pos.y-.05),y1=Math.floor(p.pos.y+PH);let hit=false;for(let y=y0;y<=y1&&!hit;y++)for(let z=z0;z<=z1&&!hit;z++)for(let x=x0;x<=x1&&!hit;x++)if(getB(x,y,z)===CACTUS||(B[getB(x,y,z)]&&B[getB(x,y,z)].thorn))hit=true;if(hit)hurtPlayer(1,null,'cactus')}
-  // 눈높이 (Camera.tick: 0.5씩 따라가요) · 시야각 (달리기 1.15배 · 날기 1.1배 · 활 당기면 좁아져요)
-  p.eye+=((p.sneak?1.27:1.62)-p.eye)*.5;
+  // 선인장: 닿으면 1 · 달콤한 열매 덤불: 안에서 움직이면 1 (뾰족한 점적석은 닿아도 괜찮아요)
+  {const x0=Math.floor(p.pos.x-PW-.05),x1=Math.floor(p.pos.x+PW+.05),z0=Math.floor(p.pos.z-PW-.05),z1=Math.floor(p.pos.z+PW+.05),y0=Math.floor(p.pos.y-.05),y1=Math.floor(p.pos.y+pH());let hit=false;for(let y=y0;y<=y1&&!hit;y++)for(let z=z0;z<=z1&&!hit;z++)for(let x=x0;x<=x1&&!hit;x++){const id=getB(x,y,z);if(id===CACTUS||(B[id]&&B[id].thorn&&id!==SWEET_BERRY&&id!==POINTED_DRIPSTONE))hit=true}
+    if(!hit){pInside(p,id=>{if(id===SWEET_BERRY)hit=true});if(hit&&!(Math.abs(p.pos.x-ox)>=.003||Math.abs(p.pos.z-oz)>=.003))hit=false}if(hit)hurtPlayer(1,null,'cactus')}
+  // 눈높이 (Camera.tick: 0.5씩 따라가요, 자세마다 1.62 · 1.27 · 0.4) · 시야각 (달리기 1.15배 · 날기 1.1배 · 활 당기면 좁아져요)
+  p.eye+=((POSE_EYE[p.pose]||1.62)-p.eye)*.5;
   {let f=1;if(p.fly)f*=1.1;f*=((p.sprint?1.3:1)+1)/2;if(drawT>0){let t=p.useTicks/20;t=t>1?1:t*t;f*=1-t*.15}p.fovMod+=(clamp(f,.1,1.5)-p.fovMod)*.5}
   // 숨
-  if(underWater){p.air-=dt/(1+((armor[0]&&armor[0].e&&armor[0].e.resp)||0));if(p.air<=0){p.air=0;p.drownT+=dt;if(p.drownT>=1){p.drownT=0;hurtPlayer(2,null,'drown')}}}else p.air=Math.min(15,p.air+dt*6);
-  // 배고픔
+  if(underWater){p.air-=dt/(1+((armor[0]&&armor[0].e&&armor[0].e.resp)||0));if(p.air<=0){p.air=0;p.drownT+=dt;if(p.drownT>=1){p.drownT=0;hurtPlayer(2,null,'drown')}}}else{p.air=Math.min(15,p.air+dt*4);p.drownT=0}   // 물 밖: 틱마다 숨 4틱씩 (3.75초면 다 차요)
+  // 배고픔 (FoodData.tick): 소모 4 넘으면 포화 → 배고픔 1 · 배고픔 20 + 포화 → 10틱마다 포화/6 회복 (포화만큼 소모) · 18 이상 → 80틱마다 1 · 0 → 80틱마다 1 피해 (보통: 1 남기고)
   if(creative()){p.exh=0;p.food=20;p.hp=20}
-  if(p.exh>=4){p.exh-=4;if(p.sat>0)p.sat=Math.max(0,p.sat-1);else p.food=Math.max(0,p.food-1)}
-  if(p.food>=18&&p.hp<20){p.regenT+=dt;const iv=p.food>=20&&p.sat>0?.5:4;if(p.regenT>=iv){p.regenT=0;p.hp=Math.min(20,p.hp+1);p.exh+=6;hudRegen()}}else p.regenT=0;
-  if(p.food<=0){p.starveT+=dt;if(p.starveT>=4){p.starveT=0;if(p.hp>1)hurtPlayer(1,null,'starve')}}
-  if(p.hurtT>0)p.hurtT-=dt}
+  if(p.exh>4){p.exh-=4;if(p.sat>0)p.sat=Math.max(0,p.sat-1);else p.food=Math.max(0,p.food-1)}
+  p.foodT=p.foodT||0;
+  if(p.sat>0&&p.hp<20&&p.food>=20){if(++p.foodT>=10){const f=Math.min(p.sat,6);p.hp=Math.min(20,p.hp+f/6);p.exh+=f;p.foodT=0;hudRegen()}}
+  else if(p.food>=18&&p.hp<20){if(++p.foodT>=80){p.hp=Math.min(20,p.hp+1);p.exh+=6;p.foodT=0;hudRegen()}}
+  else if(p.food<=0){if(++p.foodT>=80){if(p.hp>1)hurtPlayer(1,null,'starve');p.foodT=0}}
+  else p.foodT=0;
+  if(p.hurtT>0)p.hurtT-=dt;
+  // 자세 (Player.updatePlayerPose, 틱 끝): 겉날개 · 수영 → 0.6 · Shift → 1.5 · 아니면 1.8. 그 키로 안 들어가면 웅크리기 → 기기
+  {const want=p.glide?'glide':p.swimming?'swim':p.sneak?'crouch':'stand';p.pose=want==='stand'||want==='crouch'?(pFree(p,0,0,0,POSE_H[want])?want:pFree(p,0,0,0,1.5)?'crouch':'swim'):want}}
 let hudRegenT=-1,hudHurtT=-1;function hudRegen(){hudRegenT=0}function hudHurt(){hudHurtT=0}
 
 // 치명타 · 휩쓸기 효과 (파티클은 아래 파티클 부분에서 채워요)
@@ -3026,7 +3120,14 @@ let critFx=m=>{},sweepFx=m=>{};
 
 // 가시: 나를 때린 몹에게 되돌려 줘요
 function thornsHit(why){let t=0;armor.forEach(a=>{if(a&&a.e&&a.e.thorns)t=Math.max(t,a.e.thorns)});if(!t||!MOBDEF[why]||Math.random()>t*.15)return;let best=null,bd=5;for(const m of mobs)if(!m.dead&&m.type===why){const d=m.pos.distanceTo(player.pos);if(d<bd){bd=d;best=m}}if(best){best.hurtT=0;hurtMob(best,1+Math.floor(Math.random()*4),player.pos)}}
-function hurtPlayer(d,src,why){const p=player;if(creative()&&why!=='void')return;if(p.dead||(p.hurtT>0&&why!=='drown'&&why!=='starve'))return;thornsHit(why);if(why!=='fall'&&why!=='void'&&why!=='starve'&&why!=='drown'&&why!=='sonic'){const pts=armorPts(),tg=armor.reduce((s,a)=>s+(a&&ITEM[a.id].armor?ITEM[a.id].armor.tough:0),0);let prot=0;armor.forEach(a=>{if(a&&a.e&&a.e.prot)prot+=a.e.prot});if(pts>0||prot>0){d=d*(1-Math.min(20,Math.max(pts/5,pts-d/(2+tg/4)))/25)*(1-Math.min(.8,prot*.04));armor.forEach((a,i)=>{if(a&&ITEM[a.id].armor){a.d=(a.d||0)+1;if(a.d>=ITEM[a.id].armor.dur){armor[i]=null;sfx('tbreak')}}})}}if(why==='fall'&&armor[3]&&armor[3].e&&armor[3].e.fall)d*=Math.max(.2,1-armor[3].e.fall*.12);d=Math.round(d*2)/2;if(d<=0)return;p.hp-=d;p.hurtT=.5;p.exh+=.1;sfx('hurt');hudHurt();
+function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void')return;if(p.dead)return;
+  // 무적 10틱 (LivingEntity.hurt): 그 사이엔 더 센 피해만 차이만큼 (넉백 · 흔들림 없이)
+  let full=true;if(p.hurtT>0&&why!=='drown'&&why!=='starve'){if(d<=(p.lastHurt||0))return;const raw=d;d-=p.lastHurt||0;p.lastHurt=raw;full=false}else p.lastHurt=d;
+  if(full)thornsHit(why);const raw0=d;
+  // 갑옷 (불에 타기 · 낙하 · 익사 · 굶주림 · 공허 · 음파 · 벽 끼임은 무시) → 내구도 −max(1, 피해/4) · 보호 마법부여 EPF (보호 1/레벨 · 가벼운 착지 3/레벨 낙하만, 20까지 = 80%)
+  if(!(o&&o.noArmor)&&why!=='fall'&&why!=='void'&&why!=='starve'&&why!=='drown'&&why!=='sonic'&&why!=='wall'){const pts=armorPts(),tg=armor.reduce((s,a)=>s+(a&&ITEM[a.id].armor?ITEM[a.id].armor.tough:0),0);if(pts>0){d=d*(1-Math.min(20,Math.max(pts/5,pts-d/(2+tg/4)))/25);armor.forEach((a,i)=>{if(a&&ITEM[a.id].armor){a.d=(a.d||0)+Math.max(1,Math.floor(raw0/4));if(a.d>=ITEM[a.id].armor.dur){armor[i]=null;sfx('tbreak')}}})}}
+  if(why!=='void'&&why!=='sonic'&&why!=='starve'&&why!=='drown'){let epf=0;armor.forEach(a=>{if(a&&a.e&&a.e.prot)epf+=a.e.prot});if(why==='fall'&&armor[3]&&armor[3].e&&armor[3].e.fall)epf+=3*armor[3].e.fall;if(epf>0)d*=1-Math.min(20,epf)/25}
+  d=Math.round(d*2)/2;if(d<=0)return;p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt');hudHurt();
   // 마크: 맞은 쪽 반대로 화면이 기울어요 (bobHurt) · 넉백 0.4
   p.hurtTime=10;p.hurtDir=src?Math.atan2(src.x-p.pos.x,src.z-p.pos.z)/DEG-(180-p.yaw/DEG):(Math.random()*2|0)*180;
   if(src){const dx=src.x-p.pos.x,dz=src.z-p.pos.z,l=Math.hypot(dx,dz)||1;p.vel.x=p.vel.x/2-dx/l*8;p.vel.z=p.vel.z/2-dz/l*8;if(p.onGround)p.vel.y=Math.min(8,p.vel.y/2+8)}
@@ -3128,10 +3229,11 @@ let drawT=0;
 function updateUse(dt){if(useCD>0)useCD-=dt;
   {const st=inv[sel];if(st&&(st.id===BOW||st.id===CROSSBOW)){const hasA=creative()||inv.some(s=>s&&s.id===ARROW);
     if(mouseR&&hasA&&!screenOpen&&!player.dead){drawT+=dt;return}
-    if(drawT>0){const pw=Math.min(1,drawT/1);drawT=0;if(pw>.1){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);{const pwr=inv[sel]&&inv[sel].e&&inv[sel].e.power||0;shootArrow(camera.position.clone().addScaledVector(d,.5),d,45*pw,'player',Math.ceil((1+8*pw*pw)*(pwr?1+.25*(pwr+1):1)))}
+    if(drawT>0){let pw=drawT;pw=Math.min(1,(pw*pw+pw*2)/3);drawT=0;if(pw>=.1){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);{const pwr=inv[sel]&&inv[sel].e&&inv[sel].e.power||0,base=2+(pwr?pwr*.5+.5:0);let dm=Math.ceil(3*pw*base);if(pw>=1)dm+=Math.floor(Math.random()*(dm/2+2));   // BowItem.getPowerForTime · 화살 3칸/틱 × 힘 · 피해 ceil(속도 × 2) · 꽉 당기면 치명타
+        shootArrow(camera.position.clone().addScaledVector(d,.5),d,60*pw,'player',dm);const pr=projs[projs.length-1];if(pr&&pr.owner==='player'){pr.base=base;pr.crit=pw>=1}}
       {const E=inv[sel]&&inv[sel].e||{},pr=projs[projs.length-1];if(pr&&pr.owner==='player'){pr.flame=E.flame;pr.punch=E.punch;if(E.infin)pr.noPick=1}if(!creative()&&!E.infin){const k=inv.findIndex(s=>s&&s.id===ARROW);inv[k].n--;if(!inv[k].n)inv[k]=null}if(!creative())damageHeld(1)}renderHotbar()}return}}else drawT=0}
   if(eating){const st=inv[sel];if(!mouseR||!st||!ITEM[st.id].food||screenOpen){eating=false;eatT=0;return}eatT+=dt;if(Math.floor(eatT*5)!==Math.floor((eatT-dt)*5))sfx('eat');
-    if(eatT>=1.6){const it=ITEM[st.id],f=it.food;player.food=Math.min(20,player.food+f[0]);player.sat=Math.min(player.food,player.sat+f[1]);st.n--;if(st.n<=0)inv[sel]=null;if(it.gapple)player.hp=Math.min(20,player.hp+6);if(it.chorus)chorusTP();if(it.bowlBack)giveOrDrop({id:BOWL,n:1,d:0});if(it.bottleBack)giveOrDrop({id:GLASS_BOTTLE,n:1,d:0});eatT=0;eating=false;sfx('burp');renderHotbar();updateStats();useCD=.3}return}
+    if(eatT>=useSec(st)){const it=ITEM[st.id],f=it.food;player.food=Math.min(20,player.food+f[0]);player.sat=Math.min(player.food,player.sat+f[1]);st.n--;if(st.n<=0)inv[sel]=null;if(it.gapple)player.hp=Math.min(20,player.hp+6);if(it.chorus)chorusTP();if(it.bowlBack)giveOrDrop({id:BOWL,n:1,d:0});if(it.bottleBack)giveOrDrop({id:GLASS_BOTTLE,n:1,d:0});eatT=0;eating=false;sfx('burp');renderHotbar();updateStats();useCD=.3}return}
   if(mouseR&&useCD<=0&&!screenOpen&&!player.dead){useItem(false)}}
 function attack(m){const p=player,st=inv[sel],tool=toolOf(st),E=st&&st.e||{};const f2=atkScale(.5),strong=f2>.9;
   let dmg=(tool?tool.dmg:1)*(.2+f2*f2*.8)+(player.buffT>0?2*f2:0),ench=((E.sharp?E.sharp*.5+.5:0)+(E.smite&&UNDEAD.has(m.type)?E.smite*2.5:0)+(E.bane&&ARTHRO.has(m.type)?E.bane*2.5:0))*f2;
@@ -3139,9 +3241,11 @@ function attack(m){const p=player,st=inv[sel],tool=toolOf(st),E=st&&st.e||{};con
   const sweep=strong&&!crit&&!sprintHit&&p.onGround&&tool&&tool.type==='sword'&&(p.walkDist-p.walkDistO)<.1;
   if(st&&st.id===MACE&&p.fallDist>1.5&&!p.onGround)dmg+=maceSmash(m);
   const hit0=m.hurtT<=0;m.byPlayer=E.loot||0;hurtMob(m,dmg+ench,p.pos);
-  if(hit0&&!m.dead){if(E.fire)m.fireT=4*E.fire;const kb=(E.knock||0)+(sprintHit?1:0);if(kb){const dx=m.pos.x-p.pos.x,dz=m.pos.z-p.pos.z,l=Math.hypot(dx,dz)||1;m.vel.x+=dx/l*kb*10;m.vel.z+=dz/l*kb*10;m.vel.y=Math.max(m.vel.y,2)}}
-  if(sprintHit){p.vel.x*=.6;p.vel.z*=.6;p.sprint=false}
-  if(crit){critFx(m);sfx('crit')}else if(sweep){for(const o of mobs)if(o!==m&&!o.dead&&!o.D.tame&&o.pos.distanceTo(m.pos)<1.6&&o.pos.distanceTo(p.pos)<3.5)hurtMob(o,1+(E.sweep?E.sweep/(E.sweep+1)*dmg:0),p.pos);sweepFx(m);sfx('sweep')}else if(!strong)sfx('weak');
+  // 추가 넉백 (Player.attack): (밀치기 레벨 + 달리며 친 1) × 0.5, 바라보는 쪽으로 · 그러면 내 속도 ×0.6 · 달리기 멈춤
+  const fwx=-Math.sin(p.yaw),fwz=-Math.cos(p.yaw);
+  if(hit0&&!m.dead){if(E.fire)m.fireT=4*E.fire;const kb=(E.knock||0)+(sprintHit?1:0);if(kb){mobKnock(m,kb*.5,fwx,fwz);p.vel.x*=.6;p.vel.z*=.6;p.sprint=false}}
+  // 휩쓸기: 맞은 몹 상자를 (1, 0.25, 1) 키운 범위 안 · 나와 3칸 안 · 길들인 동물 빼고 → 0.4 넉백 + 1 (+휩쓸기 마법) 피해
+  if(crit){critFx(m);sfx('crit')}else if(sweep){for(const o of mobs)if(o!==m&&!o.dead&&!o.tamed&&Math.abs(o.pos.x-m.pos.x)<o.hw+m.hw+1&&Math.abs(o.pos.z-m.pos.z)<o.hw+m.hw+1&&o.pos.y<m.pos.y+m.h+.25&&o.pos.y+o.h>m.pos.y-.25&&o.pos.distanceToSquared(p.pos)<9){mobKnock(o,.4,fwx,fwz);hurtMob(o,1+(E.sweep?E.sweep/(E.sweep+1)*dmg:0),p.pos)}sweepFx(m);sfx('sweep')}else if(!strong)sfx('weak');
   p.atkTicker=0;doSwing();if(tool)damageHeld(tool.type==='sword'||tool.type==='mace'?1:2);p.exh+=.1}
 
 /* ── 파티클 ── */
@@ -3326,7 +3430,7 @@ function makeMob(type){const g=new THREE.Group(),P={};MOBDEF[type].build(g,P);re
 function spawnMob(type,x,y,z,baby){const D=MOBDEF[type],{g,P}=makeMob(type);if(baby)g.scale.setScalar(.5);scene.add(g);
   const m={type,D,pos:new V3(x,y,z),vel:new V3(),yaw:Math.random()*6.28,hp:D.hp,hw:D.hw*(baby?.5:1),h:D.h*(baby?.5:1),g,P,onGround:false,hitX:false,hitZ:false,ai:{t:0,mv:false,dir:0},panic:0,hurtT:0,dead:false,deadT:0,atk:0,walk:0,burnT:0,fuse:0,snd:3+Math.random()*8,baby:baby?240:0,love:0,breedCD:0,angry:0};mobs.push(m);return m}
 function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx('break','wood')}return}if(m.dead||m.hurtT>0)return;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type);
-  if(src){const dx=m.pos.x-src.x,dz=m.pos.z-src.z,l=Math.hypot(dx,dz)||1,kb=player.sprint?9:6;m.vel.x=dx/l*kb;m.vel.z=dz/l*kb;m.vel.y=5.5}
+  if(src)mobKnock(m,.4,m.pos.x-src.x,m.pos.z-src.z);   // 맞으면 늘 0.4 (LivingEntity.hurt → knockback)
   if(!m.D.hostile)m.panic=4;else m.angry=30;
   if(m.D.split&&m.hp<=0)for(let k=0;k<2+Math.floor(Math.random()*2);k++)spawnMob(m.D.split,m.pos.x+(Math.random()-.5),m.pos.y+.3,m.pos.z+(Math.random()-.5));
   if(m.D.neutral&&!m.tamed){m.angry=30;if(m.type==='zpiglin'||m.D.piglin)for(const o of mobs)if(o.type===m.type&&o.pos.distanceTo(m.pos)<16)o.angry=30}
@@ -4705,7 +4809,7 @@ function updateHand(dt){const p=player,pt=PT;
     ps.t(-1,3.6,3.5).rz(120).rx(200).ry(-135).t(5.6,0,0);
     ps.t(-5/16,2/16,0).rz(.1/DEG)}
   else{const useEat=eating&&st===inv[sel],useBow=drawT>0&&st===inv[sel]&&(id===BOW||id===CROSSBOW);
-    if(useEat){const dur=32,rem=dur-p.useTicks,f=rem-pt+1,f1=f/dur;if(f1<.8)ps.t(0,Math.abs(Math.cos(f/4*Math.PI)*.1),0);const f3=1-Math.pow(clamp(f1,0,1),27);
+    if(useEat){const dur=Math.round(useSec(st)*20),rem=dur-p.useTicks,f=rem-pt+1,f1=f/dur;if(f1<.8)ps.t(0,Math.abs(Math.cos(f/4*Math.PI)*.1),0);const f3=1-Math.pow(clamp(f1,0,1),27);
       ps.t(f3*.6,f3*-.5,0).ry(f3*90).rx(f3*10).rz(f3*30);ps.t(.56,-.52+eq*-.6,-.72)}
     else if(useBow){ps.t(.56,-.52+eq*-.6,-.72);ps.t(-.2785682,.18344387,.15731531).rx(-13.935).ry(35.3).rz(-9.785);
       const f8=p.useTicks+pt-1;let f12=f8/20;f12=(f12*f12+f12*2)/3;if(f12>1)f12=1;if(f12>.1){const f20=Math.sin((f8-.1)*1.3)*(f12-.1);ps.t(0,f20*.004,0)}
@@ -5112,7 +5216,7 @@ addEventListener('keydown',e=>{if(chatOpen)return;if(e.repeat&&!/^Key[WASD]$|Spa
   if(e.code==='KeyE'&&!player.dead)openScreen(creative()?'creative':'inv');
   if(e.code==='KeyT'||e.code==='Enter'){e.preventDefault();keys[e.code]=false;openChat('');return}
   if(e.code==='Slash'){e.preventDefault();keys[e.code]=false;openChat('/');return}
-  if(e.code==='Space'&&!e.repeat&&creative()){const now=performance.now();if(now-lastSpace<300){player.fly=!player.fly;player.vel.y=0}lastSpace=now}
+  if(e.code==='Space'&&!e.repeat&&creative()){const now=performance.now();if(now-lastSpace<350&&!player.swimming){player.fly=!player.fly;player.vel.y=0;lastSpace=0}else lastSpace=now}   // 마크 jumpTriggerTime 7틱 · 수영 중엔 안 돼요
   if(e.code==='KeyQ')dropHeld(e.ctrlKey);
   if(e.code==='F5'){viewMode=(viewMode+1)%3;e.preventDefault()}
   if(e.code==='F1'){hideGui=!hideGui;e.preventDefault()}
@@ -6664,14 +6768,14 @@ function openNews(){const u=UPDATES[0],esc2=t=>String(t).replace(/[&<>]/g,c=>({'
 function closeNews(){const v=$('news').querySelector('video');if(v)v.pause();$('news').classList.add('hide')}
 $('newsX').onclick=closeNews;$('news').addEventListener('click',e=>{if(e.target.id==='news')closeNews()});
 bootPanorama();
-function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)===0)updateWaypoint();let dt=Math.min(.05,(now-last)/1000);last=now;fpsN++;fpsT+=dt;if(fpsT>=1){fps=fpsN;fpsN=0;fpsT=0}
+function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)===0)updateWaypoint();const rdt=Math.min(.25,(now-last)/1000);let dt=Math.min(.05,rdt);last=now;fpsN++;   // rdt: 플레이어 틱은 20 TPS 를 따라잡아요 (한 프레임 최대 5틱 · 마크 Timer 처럼)fpsT+=dt;if(fpsT>=1){fps=fpsN;fpsN=0;fpsT=0}
   if(!loadDone){chunkTick(40);const pcx=Math.floor(player.pos.x/16),pcz=Math.floor(player.pos.z/16);let tot=0,ok=0,gen=0;
     for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){tot++;const c=chunks.get(ck(pcx+dx,pcz+dz));if(c){gen++;if(!c.dirty)ok++}}
     $('loadBar').style.width=((gen+ok)/tot/2*100)+'%';if(phase==='loading')$('loadSub').textContent=gen<tot?'지형 생성 중... '+Math.round(gen/tot*100)+'%':'지형 불러오는 중... '+Math.round(ok/tot*100)+'%';
     if(ok===tot){loadDone=true;if(phase==='boot'){$('loading').classList.add('hide');showMenu('title')}else if(phase==='dim'){$('loading').classList.add('hide');phase='play';if(afterDim){const f=afterDim;afterDim=null;f()}}else finishEnter()}
     camera.position.set(player.pos.x,player.pos.y+eyeH(),player.pos.z);updateSky(dt);renderer.clear();renderer.render(scene,camera);return}
   const running=started&&!(menuOpen&&!MPS&&menuOpen!=='ready');
-  if(running){if(DIM==='time'){dimState.tc=(dimState.tc||0)+dt*TC_SPEED;player.tcStay=(player.tcStay||0)+dt;if(MPS)worldTime+=dt}else worldTime+=dt;pTickAcc+=dt;let g=0;while(pTickAcc>=TICK&&g++<5){pTickAcc-=TICK;updatePlayer(TICK);fxTick();weatherTick();fireTick();xpTick()}if(pTickAcc>=TICK)pTickAcc=0;PT=pTickAcc/TICK;
+  if(running){if(DIM==='time'){dimState.tc=(dimState.tc||0)+dt*TC_SPEED;player.tcStay=(player.tcStay||0)+dt;if(MPS)worldTime+=dt}else worldTime+=dt;pTickAcc+=rdt;let g=0;while(pTickAcc>=TICK&&g++<5){pTickAcc-=TICK;updatePlayer(TICK);fxTick();weatherTick();fireTick();xpTick()}if(pTickAcc>=TICK)pTickAcc=0;PT=pTickAcc/TICK;
     worldTicks(dt);portalTick(dt);updateThrowns(dt);updateXP(dt);crystalTick(dt);breathTick(dt);updateMobs(dt);updateBoats(dt);updateProjs(dt);updateEnts(dt);updateParts(dt);furnaceTick(DIM==='time'?dt*TC_SPEED:dt);spawnTick(dt);updateBreaking(dt);updateUse(dt);
     slowT+=dt;if(slowT>1){slowT=0;decayTick();saplingTick();cropTick()}decayQ.length&&decayTick()}
   mpTick(dt);
