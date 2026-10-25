@@ -103,6 +103,7 @@ export default {
     // 붉은 탁자 바위 · 동쪽
     { id: 'sp_cn_dig', kind: 'excavation', c: [364, -261], ry: 0.4, note: '학자 엘린이 파다 만 발굴 구덩이 — 탁자 바위 남쪽 벽의 왕국 룬 (r_cn_elin, 6장 예고)' },
     { id: 'sp_cn_hedge', kind: 'crates', c: [486, -282], ry: 0.8, note: '고슴도치 바위길에 버려진 광석 상자 — 땅울림에 놀란 고슴도치들이 굴러다녀 수레가 못 지나간다' },
+    { id: 'sp_cn_helm', kind: 'titan_bone', c: [600, -280], ry: -0.9, note: '협곡 동쪽 끝에 뒹구는 아이 거인의 투구 — 엄니왕이 천 년 동안 지켜 온 어린 주인의 물건. 둘레에 붉은 멧돼지 털이 잔뜩' },
     { id: 'sp_cn_patrol', kind: 'campfire', c: [563, -301], note: '독수리 둥지 바위 아래, 바람 승강 룬 옆 순찰꾼 솔라의 정찰 야영지' },
     // 남쪽 입구
     { id: 'sp_cn_wagon', kind: 'wagon', c: [420, -100], ry: 1.4, note: '늪지 샛길을 올라온 행상 마차 — 땅울림이 무서워 더는 올라가지 않는다 (dust_lively 뒤 광산촌으로 들어감)' },

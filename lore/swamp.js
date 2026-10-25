@@ -99,7 +99,7 @@ export default {
     { id: 'sp_sw_boat', kind: 'sunken_boat', c: [440, 234], ry: 2.2, note: '덕보의 뒤집힌 장대배 — 물 밑 뿌리가 들이받았다' },
     { id: 'sp_sw_toolbox', kind: 'crates', pickup: true, c: [462, 246], note: '덕보의 연장 상자 — 물가에 떠밀려 왔다 (s_sw_boat)' },
     { id: 'sp_sw_dark', kind: 'dark_spring', c: [488, 184], note: '두더지 둔덕 옆 웅덩이에 검은 물이 솟는다 — 땅 밑 뿌리에서 스민 가시 물 (장이 끝나면 맑아짐)' },
-    { id: 'sp_sw_bones', kind: 'bog_bones', c: [500, 214], ry: 1.1, note: '두더지들이 땅 밑 뿌리를 피해 파 올린 흙더미 — 그 사이로 커다란 옛 두꺼비 뼈가 드러났다 (그롬보다 앞선 늪의 왕?)' },
+    { id: 'sp_sw_bones', kind: 'bog_bones', c: [538, 226], ry: 1.1, note: '두더지 둔덕 동쪽 끝 — 두더지들이 땅 밑 뿌리를 피해 파 올린 흙더미 사이로 커다란 옛 두꺼비 뼈가 드러났다 (그롬보다 앞선 늪의 왕?)' },
     // 신전 둘레
     { id: 'sp_sw_root', kind: 'thorn_crater', c: [396, 60], note: '백 년 전 가시의 첫 뿌리가 땅을 뚫고 나왔던 자리 — 이끼 골렘 습지 북서쪽의 검은 구덩이' },
     { id: 'sp_sw_pillar', kind: 'temple_pillar', c: [452, 40], ry: 1.3, note: '늪지 샛길 옆에 쓰러진 신전 기둥 — 신전 섬은 옛날엔 여기까지 닿았다' },

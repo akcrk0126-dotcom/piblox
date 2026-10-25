@@ -113,7 +113,8 @@ css.textContent = `
   #sagaCine .nar p.old { opacity:.5; }
   #sagaCine .skip { position:absolute; right:16px; bottom:calc(13vh + 8px); font:500 11px 'Noto Sans KR'; color:#e8dcc0; opacity:.55; letter-spacing:.06em; }
   body.saga-cine.cine .lb { height:13vh; }
-  body.saga-cine #fregion, body.saga-cine #lmfound, body.saga-cine #prompt { opacity:0 !important; } body.saga-intro #banner { opacity:0 !important; }
+  body.saga-cine #fregion, body.saga-cine #lmfound, body.saga-cine #prompt, body.saga-cine #hud { opacity:0 !important; pointer-events:none !important; } body.saga-intro #banner { opacity:0 !important; }
+  #sagaCine .shade { position:absolute; left:0; right:0; bottom:13vh; height:34vh; background:linear-gradient(180deg, transparent, rgba(0,0,0,.42)); pointer-events:none; }
   .sagw { position:fixed; left:50%; top:50%; transform:translate(-50%,-48%) scale(.97); z-index:27; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
   .sagw.on { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
   #sagaRead { width:min(560px, 92vw); max-height:min(640px, 84vh); display:flex; flex-direction:column; padding:20px 24px 14px; color:#3a2a16;
@@ -232,7 +233,9 @@ function setChange(key, on, instant){
   guard('towns.setChange', () => { if (F.towns && F.towns.setChange) F.towns.setChange(key, on, instant); });
   guard('props.setChange', () => { if (F.props && F.props.setChange) F.props.setChange(key, on, instant); });
   if (key === 'windmill_spin'){ WM.tgt = on ? 1 : 0; if (instant){ WM.cur = WM.tgt; F.lmState.windmill = WM.cur; } }
+  if (CALM[key]) for (const id of CALM[key]) guard('campCalm', () => F.campCalm && F.campCalm(id, !!on));   // 진정된 사냥터: 때리지 않으면 덤비지 않아요 (life)
 }
+const CALM = { golems_calm: ['c_ancient'] };
 function applyChanges(n, on, instant){ const c = CHN[n]; if (!c) return; for (const key of c.c.change || []) setChange(key, on, instant); }
 function applyAllChanges(){ for (const c of CH) applyChanges(c.n, chapterState(c.n) === 'after', true);
   for (const id in RES) if (RES[id].o.home && chapterState(RES[id].ch.n) === 'after') guard('home ' + id, () => moveHome(id)); }
@@ -275,14 +278,16 @@ function closeRead(){ if (!readCur) return; readCur = null; RW.classList.remove(
 
 // ───────────────────────── 룬 수호석 (의식: E 를 누르고 있기) ─────────────────────────
 for (const id in KS) guard('keystone ' + id, () => { const k = KS[id], [x, , z] = spotOf(id, k.o.c);
-  k.it = F.addInteract({ x, z, r: 3.0, title: `💠 ${k.o.small ? k.o.name : '룬 수호석'}`, action: () => touchStone(id) });
+  k.it = F.addInteract({ x, z, r: 3.0, title: k.o.record ? `📜 ${k.o.name}` : `💠 ${k.o.small ? k.o.name : '룬 수호석'}`, action: () => touchStone(id) });
+  // 기록석(record): 의식이 끝나면 곁의 읽을거리를 바로 펼쳐요 (read 가 없으면 같은 장에서 가장 가까운 읽을거리)
+  if (k.o.record){ let best = k.o.read && RD[k.o.read] ? k.o.read : null, bd = 15; if (!best) for (const rid in RD){ const r = RD[rid]; if (r.ch !== k.ch) continue; const d = Math.hypot(r.o.c[0] - k.o.c[0], r.o.c[1] - k.o.c[1]); if (d < bd){ bd = d; best = rid; } } k.rd = best; }
   if (!townObj(id)) k.fb = fbKeystone(k.o); setLit(id, SG.cleansed[id] ? 1 : 0); });
 function setLit(id, v){ const k = KS[id]; if (!k) return; k.lit = v; const t = townObj(id); if (t && t.setLit) guard('setLit', () => t.setLit(v)); if (k.fb) k.fb.lit(v); }
 function touchStone(id){
   if (RT || CINE || X.dead) return; const k = KS[id];
   if (SG.cleansed[id]){ X.hint(`💠 ${esc(k.o.name)} — 새긴 룬이 고요히 빛나고 있다`, 2.6); return; }
   if (!NEED.cleanse.has(id)) calcNeed();
-  if (!NEED.cleanse.has(id)){ X.hint('빛을 잃은 룬 비석… 아직은 반응이 없다', 2.8); X.sfx('ui'); return; }
+  if (!NEED.cleanse.has(id)){ X.hint(k.o.record ? '먼지 쌓인 기록석… 아직은 글자가 떠오르지 않는다' : '빛을 잃은 룬 비석… 아직은 반응이 없다', 2.8); X.sfx('ui'); return; }
   startRitual(id);
 }
 const RUNES = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃ';
@@ -297,7 +302,7 @@ function startRitual(id){
   const k = KS[id], key = !!(G.keys && G.keys.KeyE);
   RT = { id, k: 0, mode: key ? 'key' : 'btn', hold: key, started: false, t0: now(), last: now(), shown: -1, y: spotOf(id, k.o.c)[1] };
   G.lock = true; X.fig.root.rotation.y = Math.atan2(k.o.c[0] - pp.x, k.o.c[1] - pp.z);
-  RTW.querySelector('.t').textContent = k.o.name; RTW.querySelector('.s').textContent = key ? 'E 를 누르고 있기 — 손을 떼면 룬이 흩어져요' : '룬 고리를 누르고 있기';
+  RTW.querySelector('.t').textContent = k.o.name; RTW.querySelector('.s').textContent = key ? `E 를 누르고 있기 — 손을 떼면 ${k.o.record ? '글자가' : '룬이'} 흩어져요` : '룬 고리를 누르고 있기';
   RTW.classList.remove('done', 'hold'); RTW.classList.add('on'); RT_PG.style.strokeDashoffset = 326.7; for (const t of RT_TX) t.classList.remove('on'); X.sfx('rune');
 }
 function endRitual(ok, quiet){ const r = RT; if (!r) return; RT = null; G.lock = false; RTW.classList.remove('hold');
@@ -326,7 +331,9 @@ function finishRitual(){
   X.burst(new V3(x, 1.4, z), 0xfff0b0, LOW ? 36 : 80, 6, 0.3, 1.2, -1, 4); X.burst(new V3(x, 1, z), 0x7ff3ff, LOW ? 18 : 40, 4, 0.25, 1, -2, 3);
   G.shake = Math.max(G.shake || 0, 0.5); X.sfx('rune'); X.sfx('level'); X.sfx('shard');
   guard('cleanse event', () => { if (F.questEvent) F.questEvent('cleanse', { id }); BUS.emit('cleanse', { id }); });
-  X.banner('RUNE RESTORED', k.o.name, '이름 없는 자의 손에 룬이 다시 새겨졌다', false, 3); codexDot(); needDirty = true;
+  if (k.o.record){ X.banner('RECORD AWAKENED', k.o.name, '천 년 전의 글자가 빛으로 떠오른다', false, 3); if (k.rd) X.later(1.4, () => openRead(k.rd)); }
+  else X.banner('RUNE RESTORED', k.o.name, '이름 없는 자의 손에 룬이 다시 새겨졌다', false, 3);
+  codexDot(); needDirty = true;
 }
 
 // ───────────────────────── 이야기 물건 줍기 (셋피스 pickup) ─────────────────────────
@@ -334,18 +341,18 @@ function finishRitual(){
 const USE = { dark_spring: ['✨', '정화하기', '정화했다'], nets: ['🪢', '건지기', '건져 올렸다'] };
 const isFix = id => !!guard('props.isFixture', () => F.props && F.props.isFixture && F.props.isFixture(id));
 const PK = {};
-for (const id in SP){ const s = SP[id]; if (!s.o.pickup) continue; guard('pickup ' + id, () => { const [x, z] = s.o.c, name = spName(s.o), u = USE[s.o.kind] || ['✋', '줍기', '주웠다'];
+for (const id in SP){ const s = SP[id]; if (!s.o.pickup) continue; guard('pickup ' + id, () => { const [x, z] = s.o.c, pn = guard('props.name', () => F.props && F.props.name ? F.props.name(id) : null), name = (pn && String(pn).trim()) || spName(s.o), u = USE[s.o.kind] || ['✋', '줍기', '주웠다'];
   PK[id] = { s, name, u, on: null, it: F.addInteract({ x, z, r: 2.4, title: `${u[0]} ${name} ${u[1]}`, action: () => pickUp(id), hidden: true }), fb: propObj(id) ? null : fbPickup(s.o) };
   showPick(id, false); }); }
-// 고정물(isFixture: 검은 웅덩이처럼 늘 보이는 것)은 보이기는 props 에 맡기고 interact 만 켜고 꺼요
+// props.show(id, on): 들고 갈 물건이면 물체를, 늘 보이는 고정물(쓰러진 골렘 · 검은 웅덩이 …)이면 빛 표식만 켜고 꺼요 — props 가 정해요
 function showPick(id, on){ const p = PK[id]; if (!p || p.on === on) return; p.on = on; p.it.hidden = !on;
-  if (!isFix(id)) guard('props.show', () => { if (F.props && F.props.show) F.props.show(id, on); }); if (p.fb){ p.fb.on = on; if (!on) p.fb.g.visible = false; } }
+  if (!SG.picked[id] || on) guard('props.show', () => { if (F.props && F.props.show) F.props.show(id, on); }); if (p.fb){ p.fb.on = on; if (!on) p.fb.g.visible = false; } }
 function pickUp(id){
   const p = PK[id]; if (!p || !p.on || SG.picked[id] || CINE || RT) return;
   SG.picked[id] = Date.now(); X.save();
   // 주운 뒤 모습은 props 가 정해요 (collected: 검은 웅덩이 → 맑은 물). 없으면 숨겨요
   p.on = false; p.it.hidden = true; if (p.fb){ p.fb.on = false; p.fb.g.visible = false; }
-  guard('props.collected', () => { if (F.props && F.props.collected) F.props.collected(id); else if (F.props && F.props.show && !isFix(id)) F.props.show(id, false); });
+  guard('props.collected', () => { if (F.props && F.props.collected) F.props.collected(id); else if (F.props && F.props.show) F.props.show(id, false); });
   const [x, z] = p.s.o.c, y = gy(x, z), fix = p.s.o.kind === 'dark_spring'; for (let i = 0; i < (LOW ? 12 : 24); i++) X.emit(x, y + 0.4, z, rr(-1.5, 1.5), rr(1.5, 3.5), rr(-1.5, 1.5), pick(fix ? [0x9ff6ff, 0xffffff, 0x7ad8ff] : [0xffe08a, 0xfff6d0, 0x9ff6ff]), 0.12, rr(0.5, 0.9), { grav: -3, drag: 1 });
   if (fix) pillar(x, z, 0x9ff6ff, 2.2, 24, y);
   X.sfx('pick'); X.sfx('shard'); F.note(`${p.u[0]} ${esc(p.name)} — ${p.u[2]}`, 2.4);
@@ -403,7 +410,7 @@ BUS.on('kill', e => guard('sb kill', () => { if (!e || !e.sbId) return; const id
 
 // ───────────────────────── 장 연출 (시작 · 끝) ─────────────────────────
 // 실제 시간(performance.now)으로 흘러요 — 느린 기기에서도 글이 제 속도로 나와요. 클릭 · E · Esc · Space 로 건너뛰기.
-const CE = X.mk('div', 'sagaCine', '<div class="fade"></div><div class="card"><div class="no"></div><div class="ti"></div><div class="ln"></div><div class="en"></div></div><div class="nar"></div><div class="skip">클릭 · E · Esc — 건너뛰기</div>');
+const CE = X.mk('div', 'sagaCine', '<div class="shade"></div><div class="fade"></div><div class="card"><div class="no"></div><div class="ti"></div><div class="ln"></div><div class="en"></div></div><div class="nar"></div><div class="skip">클릭 · E · Esc — 건너뛰기</div>');
 const CE_FADE = CE.querySelector('.fade'), CE_CARD = CE.querySelector('.card'), CE_NAR = CE.querySelector('.nar');
 CE.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (CINE && now() - CINE.t0 > 0.8) skipCine(); });
 const OV = { pos: new V3(), look: new V3() }, _a = new V3(), _b = new V3();
@@ -465,12 +472,27 @@ function playOutro(n){
     CINE.done = () => outroBanner(n);
   });
 }
+// 에필로그 (chapter.epilogue { title, en, quest, lines, c? }): 그 퀘스트를 마치면 장 끝 연출 다음에 — 새싹 마을을 높이서 천천히 돌아봐요
+const EPI = {}; for (const c of CH){ const e = c.c.epilogue; if (e && (e.lines || []).length) EPI[e.quest || c.last] = c; }
+let pendEpi = null;
+function playEpi(n, replay){
+  const c = CHN[n], e = c && c.c.epilogue; if (!e) return Promise.resolve(false);
+  if (!replay){ chRec(n).epi = true; X.save(); if (pendEpi === n) pendEpi = null; }
+  if (CINE || !fieldOn()) return Promise.resolve(false);
+  return new Promise(res => {
+    const nar = narPlan((e.lines || []).slice(0, 6), 1.9), v = (CHN[0] && CHN[0].set && CHN[0].set.c) || (F.regionById('village') || { c: [0, 560] }).c, f = e.c || v;
+    CINE = { kind: 'outro', epi: true, n, c, t0: now(), res, nar, tc: 1e9, f, fy: gy(f[0], f[1]), sv: null, a0: 0.6, changed: true, tEnd: nar.end + 2.4 };
+    cineStart('outro', n); CE_CARD.classList.add('sm'); CE_CARD.querySelector('.no').textContent = '「에필로그」'; CE_CARD.querySelector('.ti').textContent = e.title || ''; CE_CARD.querySelector('.en').textContent = (e.en || 'EPILOGUE').toUpperCase();
+    CINE.done = () => { if (!replay){ X.banner('EPILOGUE', `에필로그 — ${e.title || ''}`, '그리고 이야기는 계속돼요', false, 4); X.sfx('level'); codexDot(); } };
+  });
+}
 function outroChange(C){ if (C.changed) return; C.changed = true; applyChanges(C.n, true, false);
   const [x, z] = C.f; pillar(x, z, 0xfff0b8, 3.6, 70, C.fy); X.shockwave(x, 0.2, z, 12, 0xffd36a, 1.2); X.burst(new V3(x, 2, z), 0xfff0b0, LOW ? 30 : 70, 7, 0.3, 1.4, -1, 5); X.sfx('rune'); X.sfx('shard'); }
 function updOutro(C, t){
   const [fx, fz] = C.f, fy = C.fy;
   if (t >= 0.5){
-    if (C.sv && C.changed && t > C.tc + 0.9){ const [sx, sz] = C.sv, sy = gy(sx, sz), a = Math.atan2(fx - sx, fz - sz) + 0.5 + (t - C.tc) * 0.03; camAt(sx + Math.sin(a) * 34, sy + 20, sz + Math.cos(a) * 34, sx, sy + 2, sz); }
+    if (C.epi){ const a = C.a0 + t * 0.035; camAt(fx + Math.sin(a) * 42, fy + 24, fz + Math.cos(a) * 42, fx, fy + 3, fz); }
+    else if (C.sv && C.changed && t > C.tc + 0.9){ const [sx, sz] = C.sv, sy = gy(sx, sz), a = Math.atan2(fx - sx, fz - sz) + 0.5 + (t - C.tc) * 0.03; camAt(sx + Math.sin(a) * 34, sy + 20, sz + Math.cos(a) * 34, sx, sy + 2, sz); }
     else { const a = C.a0 + t * 0.045, d = C.c.ks && C.c.ks.small ? 9 : 12; camAt(fx + Math.sin(a) * d, fy + 5.2, fz + Math.cos(a) * d, fx, fy + 1.6, fz); } }
   if (C.ph === undefined && t >= 1.3){ C.ph = 1; fade(false, 0.9); CE_CARD.classList.add('on'); }
   if (!C.out) narUpd(C, t);
@@ -501,11 +523,14 @@ let pendOutro = null;
 function storyTick(){
   if (CINE || !canCine()) return;
   if (pendOutro != null){ const n = pendOutro; if (chRec(n).outro) pendOutro = null; else { playOutro(n); return; } }
+  if (pendEpi != null){ const n = pendEpi; if (chRec(n).epi) pendEpi = null; else { playEpi(n); return; } }
   for (const c of CH){ const r = chRec(c.n); if (r.intro) continue; const s = chapterState(c.n);
     if (c.n === CH[0].n ? s !== 'after' : s === 'during' && inArea(c)){ playIntro(c.n); return; } }
 }
 // rpg 가 보고를 받은 직후 불러요 — 장의 마지막 이야기면 장 끝 연출을 보여 주고 끝나면 이어가요
-async function afterQuest(qid){ const c = CH.find(x => x.last === qid); if (!c || chRec(c.n).outro || chapterState(c.n) !== 'after') return false; return playOutro(c.n); }
+async function afterQuest(qid){ let r = false; const c = CH.find(x => x.last === qid);
+  if (c && !chRec(c.n).outro && chapterState(c.n) === 'after') r = await playOutro(c.n);
+  const e = EPI[qid]; if (e && !chRec(e.n).epi && DONE()[qid]) r = (await playEpi(e.n)) || r; return r; }
 
 // ───────────────────────── 인사 (F.greet) ─────────────────────────
 // 주민: 자기 지역 장의 상태(전 · 중 · 후) 대사 / 기존 NPC: 그 NPC 의 대사를 가진 lore 중 진행 중인 장 → 끝난 장(나중 장 먼저) → 사는 지역 장의 'before'
@@ -557,7 +582,8 @@ function toggleCodex(tab){ if (cxOpen && !tab) closeCodex(); else openCodex(tab)
 CW.querySelector('.x').onclick = e => { e.stopPropagation(); closeCodex(); X.sfx('ui'); };
 CW.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; cxTab = b.dataset.t; X.sfx('ui'); renderCodex(); };
 CW.querySelector('.bd').addEventListener('click', e => {
-  const rp = e.target.closest('[data-intro]'), rd = e.target.closest('[data-rd]');
+  const rp = e.target.closest('[data-intro]'), rd = e.target.closest('[data-rd]'), ep = e.target.closest('[data-epi]');
+  if (ep){ if (!fieldOn()){ X.hint('모험의 대지에서 다시 볼 수 있어요', 2.4); return; } closeCodex(); playEpi(+ep.dataset.epi, true); return; }
   if (rp){ const n = +rp.dataset.intro; if (!fieldOn()){ X.hint('모험의 대지에서 다시 볼 수 있어요', 2.4); return; } closeCodex(); playIntro(n, true); return; }
   if (rd){ openRead(rd.dataset.rd, true); }
 });
@@ -572,6 +598,7 @@ function renderCodex(){
         <div class="pb"><i style="width:${Math.round(dn / tot * 100)}%"></i></div><small>이야기 ${dn} / ${c.mains.length}${lv ? ' · ' + lv : ''}${c.ks ? ` · 💠 ${esc(c.ks.name)} ${SG.cleansed[c.ks.id] ? '✦' : '—'}` : ''}</small>
         ${s === 'before' ? '<p class="in" style="color:#7a8a90">아직 펼쳐지지 않은 장이에요.</p>' : `<p class="in">${(c.c.intro || []).map(esc).join('<br>')}</p>`}
         ${s === 'after' && (c.c.outro || []).length ? `<div class="out">${c.c.outro.map(esc).join('<br>')}</div>` : ''}
+        ${c.c.epilogue && chRec(c.n).epi ? `<div class="out"><b>에필로그 · ${esc(c.c.epilogue.title || '')}</b><br>${(c.c.epilogue.lines || []).map(esc).join('<br>')}<br><button class="btn" style="margin-top:6px" data-epi="${c.n}">▶ 에필로그 다시 보기</button></div>` : ''}
         ${s !== 'before' || chRec(c.n).intro ? `<div class="rp"><button class="btn" data-intro="${c.n}">▶ 다시 보기</button></div>` : ''}</div>`; } }
   else if (cxTab === 'rec'){
     const all = Object.keys(RD).length, got = Object.keys(RD).filter(id => SG.read[id]).length;
@@ -589,8 +616,11 @@ function renderCodex(){
     if (!met.length) h += '<p class="note" style="color:#7a8a90">아직 이야기를 나눈 사람이 없어요. 머리 위에 이름이 뜬 사람에게 말을 걸어 보세요.</p>'; }
   else {
     h = '<p class="note">천 년 전 현자 세렌이 대봉인을 위해 박은 룬 수호석. 이름 없는 자의 손이 룬을 다시 새길 수 있어요.</p>';
-    for (const id in KS){ const k = KS[id], s = chapterState(k.ch.n), lit = !!SG.cleansed[id], known = lit || s !== 'before';
-      h += `<div class="ksr ${lit ? 'lit' : s === 'during' ? 'dark' : ''}"><i>${lit ? 'ᛟ' : known ? 'ᚱ' : '?'}</i><div><b>${known ? esc(k.o.name) : '? ? ?'}</b><small>${chNo(k.ch.n)} · ${esc(regName(k.ch.L.region))}${known ? ` · 수호: ${esc(k.o.guardian || GUARD[k.ch.L.region] || '—')}` : ''}</small></div><em>${lit ? '✦ 룬이 새겨짐' : s === 'during' ? '빛을 잃음 — 정화가 필요해요' : known ? '빛을 잃음' : '아직 모르는 곳'}</em></div>`; } }
+    const ksRow = id => { const k = KS[id], s = chapterState(k.ch.n), lit = !!SG.cleansed[id], known = lit || s !== 'before';
+      return `<div class="ksr ${lit ? 'lit' : s === 'during' ? 'dark' : ''}"><i>${lit ? 'ᛟ' : known ? 'ᚱ' : '?'}</i><div><b>${known ? esc(k.o.name) : '? ? ?'}</b><small>${chNo(k.ch.n)} · ${esc(regName(k.ch.L.region))}${known ? ` · 수호: ${esc(k.o.guardian || GUARD[k.ch.L.region] || '—')}` : ''}</small></div><em>${lit ? (k.o.record ? '✦ 기록이 깨어남' : '✦ 룬이 새겨짐') : s === 'during' ? (k.o.record ? '잠든 기록 — 깨워야 해요' : '빛을 잃음 — 정화가 필요해요') : known ? '빛을 잃음' : '아직 모르는 곳'}</em></div>`; };
+    const ids = Object.keys(KS), rec = ids.filter(id => KS[id].o.record);
+    h += ids.filter(id => !KS[id].o.record).map(ksRow).join('');
+    if (rec.length) h += `<div class="grp"><b>세렌의 기록석</b><span>RECORD STONES</span></div>` + rec.map(ksRow).join(''); }
   bd.innerHTML = h;
 }
 
@@ -611,6 +641,7 @@ function target(o){ if (!o) return null;
     case 'collect': { let best = null, bd = 1e9; for (const id of (Array.isArray(o.id) ? o.id : [o.id])){ const s = SP[id]; if (!s || SG.picked[id]) continue; const d = Math.hypot(s.o.c[0] - pp.x, s.o.c[1] - pp.z); if (d < bd){ bd = d; best = s; } }
       return best ? { x: best.o.c[0], z: best.o.c[1], label: `✋ ${spName(best.o)}` } : null; }
     case 'cleanse': { const k = KS[o.id]; return k ? { x: k.o.c[0], z: k.o.c[1], label: `💠 ${k.o.name}` } : null; }
+    case 'reach': return o.c ? { x: o.c[0], z: o.c[1], label: `📍 ${o.d || '목적지'}` } : null;
     case 'sboss': { const s = SBS[o.id]; if (!s) return null; const e = s.e && liveE(s.e) ? s.e : null; return { x: e ? e.pos.x : s.b.c[0], z: e ? e.pos.z : s.b.c[1], label: `☠ ${s.b.name}` }; }
   }
   return null; }
@@ -641,6 +672,31 @@ function updLord(rdt){
   if (!LOW && R() < rdt * 20) X.emit(L.g.position.x, y, L.g.position.z, rr(-0.3, 0.3), rr(-0.5, 0.3), rr(-0.3, 0.3), 0xdff4ff, 0.1, 0.5, { grav: -6 });
 }
 
+// ───────────────────────── 하늘 끝의 별 (summit_star) · 얼어붙은 제단 ─────────────────────────
+// 세렌의 마지막 룬 자리에서 하늘로 솟는 빛기둥 — 장이 끝나기 전엔 희미하게 깜빡이고(봉인이 닳는 중), 끝나면 환하게. 안개를 안 받아서 새싹 마을에서도 북쪽 하늘에 보여요.
+const STAR = (() => { const c = CH.find(x => (x.c.change || []).includes('summit_star')); if (!c) return null; const src = c.ks ? c.ks.c : (byId('landmarks', 'summit') || {}).c; return src ? { c: src, id: c.ks && c.ks.id, me: null, k: 0, fl: 1 } : null; })();
+function updStar(rdt){
+  if (!STAR) return;
+  if (!STAR.me){ const [x, y, z] = STAR.id ? spotOf(STAR.id, STAR.c) : [STAR.c[0], gy(STAR.c[0], STAR.c[1]), STAR.c[1]];
+    const m = new THREE.ShaderMaterial({ uniforms: { uC: { value: new THREE.Color(0xbfe8ff) }, uO: { value: 0 }, uT: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, vertexShader: PIL_VS, fragmentShader: PIL_FS });
+    STAR.me = new THREE.Mesh(PIL_G, m); STAR.me.position.set(x, y, z); STAR.me.scale.set(1.2, 340, 1.2); STAR.me.renderOrder = 2; STAR.me.frustumCulled = false; FW.add(STAR.me); }
+  const on = !!CHG.summit_star, u = STAR.me.material.uniforms; u.uT.value += rdt * (on ? 0.6 : 1);
+  STAR.k += ((on ? 1 : 0) - STAR.k) * Math.min(1, rdt * 0.5);
+  if (!on && R() < rdt * 2.5) STAR.fl = rr(0.05, 0.6); STAR.fl += (1 - STAR.fl) * Math.min(1, rdt * 4);   // 깜빡임
+  u.uO.value = lerp(0.22 * STAR.fl, 0.85 + Math.sin(u.uT.value * 1.3) * 0.08, STAR.k); const w = lerp(1.1, 2.4, STAR.k); STAR.me.scale.x = STAR.me.scale.z = w;
+}
+// 서리 거룡을 풀어 준 뒤 (레이드 cryos 클리어): 얼어붙은 제단 바닥에 푸른 룬 고리가 은은하게
+const ALTAR = (() => { const l = byId('landmarks', 'altar'); return l ? { c: l.c, g: null } : null; })();
+const cryosClear = () => { const c = S.raid && S.raid.clears; return !!((c && typeof c === 'object' && c.cryos) || (S.ach && S.ach.c && S.ach.c.r_cryos)); };
+function updAltar(rdt){
+  if (!ALTAR || !cryosClear()) return; const [x, z] = ALTAR.c, near = Math.hypot(pp.x - x, pp.z - z) < 220;
+  if (!ALTAR.g){ if (!near) return; const g = new THREE.Group(), y = gy(x, z); g.position.set(x, y + 0.25, z);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(4.2, 5.2, 48), new THREE.MeshBasicMaterial({ color: 0x8adfff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); ring.rotation.x = -Math.PI / 2; g.add(ring);
+    const ring2 = new THREE.Mesh(new THREE.RingGeometry(2.4, 2.7, 6), ring.material); ring2.rotation.x = -Math.PI / 2; g.add(ring2);
+    const gl = X.glowSprite(0x9fe8ff, 9, 0.55); gl.position.y = 2.4; g.add(gl); FW.add(g); ALTAR.g = g; ALTAR.r = [ring, ring2]; ALTAR.gl = gl; }
+  ALTAR.g.visible = near; if (!near) return; const t = G.time || 0; ALTAR.r[0].rotation.z += rdt * 0.12; ALTAR.r[1].rotation.z -= rdt * 0.25; ALTAR.gl.material.opacity = 0.45 + Math.sin(t * 1.4) * 0.15;
+}
+
 // ───────────────────────── 키 · 이벤트 ─────────────────────────
 // 연출 · 의식 중엔 다른 키가 새지 않게 맨 앞에 끼워요
 X.KEYH.unshift(code => {
@@ -653,7 +709,7 @@ X.KEYH.unshift(code => {
   return false;
 });
 BUS.on('quest', d => guard('quest ev', () => { needDirty = true; chapterEvents();
-  if (d && d.state === 'done'){ const c = CH.find(x => x.last === d.id); if (c && !chRec(c.n).outro && chapterState(c.n) === 'after') pendOutro = c.n; } }));
+  if (d && d.state === 'done'){ const c = CH.find(x => x.last === d.id); if (c && !chRec(c.n).outro && chapterState(c.n) === 'after') pendOutro = c.n; const e = EPI[d.id]; if (e && !chRec(e.n).epi) pendEpi = e.n; } }));
 BUS.on('enterField', d => { enterT = T; needDirty = true; if (!d || !d.warp) guard('apply', applyAllChanges); });
 BUS.on('leaveField', () => guard('leave', () => { clrAllMk(); for (const id in SBS) dropSB(SBS[id], 0); if (RT) endRitual(false, true); if (readCur) closeRead(); if (CINE) cineEnd(); }));
 BUS.on('death', () => guard('death', () => { for (const id in SBS) dropSB(SBS[id], 6); if (RT) endRitual(false, true); }));
@@ -667,7 +723,7 @@ G.hooks.push((dt, rdt) => {
   if (saveT > 0 && (saveT -= rdt) <= 0) X.save();
   if ((cxOpen || readCur) && F.rpgWindowOpen && F.rpgWindowOpen()){ closeCodex(); if (readCur){ readRet = false; closeRead(); } }
   if (!F.inField) return;
-  T += rdt; guard('fallback', () => updFallback(rdt)); guard('lord', () => updLord(rdt));
+  T += rdt; guard('fallback', () => updFallback(rdt)); guard('lord', () => updLord(rdt)); guard('star', () => updStar(rdt)); guard('altar', () => updAltar(rdt));
   if ((tickT -= rdt) > 0) return; tickT = 0.25;
   needT -= 0.25; if (needDirty || needT <= 0){ needT = 2; guard('need', calcNeed); }
   guard('sboss', sbTick); guard('story', storyTick);
@@ -680,8 +736,8 @@ for (const c of CH) if (chapterState(c.n) === 'after'){ const r = chRec(c.n); if
 if (WM.has){ const c = CH.find(x => (x.c.change || []).includes('windmill_spin')); WM.cur = WM.tgt = c && chapterState(c.n) === 'after' ? 1 : 0; F.lmState.windmill = WM.cur; }
 guard('apply', applyAllChanges); guard('need', calcNeed);
 if (F.ready) guard('residents', buildResidentFigs);
-F.saga = { chapterState, openCodex: tab => openCodex(tab), target, playIntro: n => playIntro(n, true), busy, afterQuest, changed: key => !!CHG[key], state: SG, chapters: CH };
+F.saga = { chapterState, openCodex: tab => openCodex(tab), target, playIntro: n => playIntro(n, true), playEpilogue: n => playEpi(n, true), busy, afterQuest, changed: key => !!CHG[key], state: SG, chapters: CH };
 F.story = Object.assign(F.story || {}, { done: n => chapterState(n) === 'after' });
 console.log(`[saga] 장 ${CH.length} · 읽을거리 ${Object.keys(RD).length} · 수호석 ${Object.keys(KS).length} · 줍기 ${Object.keys(PK).length} · 이야기 보스 ${Object.keys(SB).length} · 주민 ${Object.keys(RES).length} · 대신 세운 표식 ${FBK.length} · ${Math.round(performance.now() - T0)}ms`);
-return { CH, RD, SP, KS, SB, RES, NEED, chapterState, playIntro, playOutro, openCodex, closeCodex, openRead, target, calcNeed, setChange, get cine(){ return CINE; }, get ritual(){ return RT; }, sbs: SBS, startRitual, pickUp };
+return { CH, RD, SP, KS, SB, RES, NEED, chapterState, playIntro, playOutro, playEpi, openCodex, closeCodex, openRead, target, calcNeed, setChange, get cine(){ return CINE; }, get ritual(){ return RT; }, sbs: SBS, startRitual, pickUp };
 }

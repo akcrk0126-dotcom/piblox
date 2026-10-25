@@ -1268,3 +1268,171 @@ function bFrost(t){
   for (const [x, z] of [[-14, 3], [14, 8]]){ p = prop(x, z, 1.0); if (p) P.clutter(p[0], p[1], 2); }
   entrySigns(t);
 }
+
+// ───────────────────────── 새싹 마을 축제 장식 (festival) — 집은 landmarks 것, 장식만 ─────────────────────────
+function bVillageFest(t){
+  const lampTop = (x, z) => [x - t.x, gy(x - t.x, z - t.z) + 3.4, z - t.z];
+  t.chg.festival = subMesh(() => {
+    for (const z of [512, 528, 571, 588, 612]){ const a = lampTop(-5.6, z + 1.5), b = lampTop(5.6, z); if (a[2] > -t.r - 30 && a[2] < t.r + 30) P.lights(a, b, 0.5, 'lampF', 3, 0xffd080, 1.4); }
+    const mp = [26 - t.x, gy(26 - t.x, 559 - t.z) + 8.4, 559 - t.z];
+    for (const [x, z] of [[30, 542], [40, 560], [17, 562]]) P.lights(mp, lampTop(x, z), 1.0, 'lampF', 3, 0xffd080, 1.6);
+    P.lights(lampTop(-30, 540), lampTop(-12, 562), 0.9); P.lights(lampTop(-38, 562), lampTop(-12, 562), 0.8);
+    P.pennants(lampTop(-30, 540), lampTop(-38, 562), 0.8, ['fabricR', 'fabricY', 'fabricB', 'fabricG', 'fabricW']);
+    // 꽃 아치: 서문(농원길) · 동문
+    const rn = roadNear(-66, 553); if (rn && rn[2] < 4){ const s = rn[3]; flowerArch(rn[0] - t.x, rn[1] - t.z, Math.atan2(s.ex, s.ez), 6.4); }
+    flowerArch(66 - t.x, 559 - t.z, Math.PI / 2, 6.4);
+    // 큰길 위 축제 현수막
+    { const a = lampTop(-5.6, 529.5), b = lampTop(5.6, 528), uv = signCell('새싹 축제', 'Harvest Festival'), mx = (a[0] + b[0]) / 2, my = Math.max(a[1], b[1]) + 0.2, mz = (a[2] + b[2]) / 2; link('rope', a, [mx, my, mz], 0.02); link('rope', [mx, my, mz], b, 0.02);
+      K.push(mx, my - 0.75, mz, Math.atan2(b[0] - a[0], b[2] - a[2]) + Math.PI / 2); K.box('fabricR', 3.4, 1.0, 0.04, 0, 0, 0); K.geo('signT', quadUV(3.0, 0.75, uv), 0, 0, 0.03); K.geo('signT', quadUV(3.0, 0.75, uv), 0, 0, -0.03, 0, Math.PI, 0); K.pop(); }
+  }, [0, t.y, 0]);
+  t.chg.festival.visible = false;
+}
+
+// ───────────────────────── 조립: 정착지 ─────────────────────────
+const BUILD = { farm: bFarm, treehouse: bLeaf, fishing: bMist, stilt: bStilt, mining: bDust, dig: bStar, fort: bFort, monastery: bFrost };
+const FAILED = [], TIMES = [];
+for (const t of TOWNS){
+  const t0 = performance.now();
+  try { begin(t); if (t.existing){ if (t.id === 'village' || t.style === 'village') bVillageFest(t); } else { const fn = BUILD[t.style]; if (fn) fn(t); else FAILED.push(t.id + ':no-style'); } finish(); }
+  catch (e){ console.error('[towns] 빌드 실패', t.id, e); FAILED.push(t.id); try { if (CUR) finish(); } catch (e2){} CUR = null; B = K = null; COLREC = null; }
+  TIMES.push([t.id, Math.round(performance.now() - t0)]);
+}
+
+// ───────────────────────── 읽을거리 (한 메시 · 하나씩 숨기기는 셰이더로) ─────────────────────────
+const RDMAX = 96, RHIDE = new Float32Array(RDMAX), RHU = { value: RHIDE };
+const RDMAT = (() => { const m = std({ map: grainTex, vertexColors: true, side: DS, roughness: 0.85 });
+  m.onBeforeCompile = sh => { emiPatch(sh); sh.uniforms.uRH = RHU;
+    sh.vertexShader = 'attribute float aRd;\nuniform float uRH[96];\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tif (uRH[int(aRd + 0.5)] > 0.5 || distance(cameraPosition, transformed) > 330.0) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);'); };
+  m.customProgramCacheKey = () => 'twrd'; OWN.push(m); return m; })();
+const RDS = [], RBY = {};
+const baseY = (o, x, z) => o.top ? Math.max(F.groundFn(x, z), H(x, z)) : H(x, z);
+function rdFace(x, z){
+  for (const t of TOWNS) if (Math.hypot(x - t.x, z - t.z) < t.r + 4) return Math.atan2(t.x - x, t.z - z);
+  const rn = roadNear(x, z); if (rn && rn[2] < 45) return Math.atan2(rn[0] - x, rn[1] - z);
+  return (hashS('f' + x + ',' + z) % 628) / 100;
+}
+function buildReadable(r){
+  const [x, z] = r.c, y = baseY(r, x, z), ry = rdFace(x, z), kind = r.kind || 'note'; let top = 1.6, cr = 0.4;
+  K.push(x, y, z, ry);
+  if (kind === 'stone'){ K.box('stoneD', 1.4, 0.3, 0.7, 0, 0.1, 0); K.box('stone', 1.0, 1.4, 0.22, 0, 0.95, 0, -0.04); K.geo('stone', cyl(0.5, 0.5, 0.22, 10), 0, 1.65, -0.03, Math.PI / 2 - 0.04, 0, 0);
+    for (let i = 0; i < 5; i++) K.box('dark', rr(0.4, 0.7), 0.035, 0.02, rr(-0.05, 0.05), 0.55 + i * 0.2, 0.12 - (0.55 + i * 0.2) * 0.04); K.geo('glowC', new THREE.RingGeometry(0.1, 0.15, 10), 0, 1.68, 0.14 - 0.07); K.geo('mossy', rockG(0.28, 0.6, 0), 0.55, 0.15, 0.25); top = 2.2; cr = 0.75; }
+  else if (kind === 'diary'){ P.crate(0, 0, 0, 0.72, 0); K.box('pRed', 0.36, 0.05, 0.27, -0.08, 0.745, 0.02, 0, 0.3, 0); for (const s of [-1, 1]) K.box('paper', 0.16, 0.012, 0.25, -0.08 + s * 0.08, 0.78, 0.02, 0, 0.3, s * 0.12); K.geo('wax', cyl(0.035, 0.035, 0.14, 6), 0.22, 0.79, -0.16); K.geo('glowO', sph(0.03, 4, 3), 0.22, 0.88, -0.16); glow(0.22, 0.89, -0.16, 0xffb050, 0.9, 0.3); top = 1.2; cr = 0.5; }
+  else if (kind === 'book'){ K.geo('woodD', cyl(0.06, 0.09, 1.0, 6), 0, 0.5, 0); K.box('woodD', 0.5, 0.06, 0.4, 0, 0.02, 0); K.push(0, 1.05, 0, 0, -0.45); K.box('wood', 0.62, 0.05, 0.46, 0, 0, 0); K.box('pRed', 0.56, 0.03, 0.4, 0, 0.04, 0); for (const s of [-1, 1]) K.box('paper', 0.25, 0.02, 0.36, s * 0.13, 0.065, 0, 0, 0, s * 0.08); K.pop(); top = 1.5; }
+  else if (kind === 'letter'){ for (const s of [-1, 1]) K.geo('woodD', cyl(0.04, 0.05, 1.3, 5), s * 0.42, 0.65, 0); K.box('wood', 0.95, 0.6, 0.06, 0, 1.0, 0); K.box('parch', 0.4, 0.27, 0.01, 0, 1.0, 0.04, 0, 0, rr(-0.1, 0.1)); K.geo('fabricR', cyl(0.035, 0.035, 0.01, 8), 0, 0.98, 0.05, Math.PI / 2, 0, 0); top = 1.5; }
+  else if (kind === 'poster'){ for (const s of [-1, 1]) K.geo('woodD', cyl(0.07, 0.08, 2.3, 6), s * 0.85, 1.15, 0); K.box('wood', 1.75, 1.15, 0.08, 0, 1.45, 0); for (const s of [-1, 1]) K.box('shingle', 2.1, 0.06, 0.45, 0, 2.2, s * 0.17, s * 0.5); K.geo('beam', cyl(0.04, 0.04, 2.1, 4), 0, 2.32, 0, 0, 0, Math.PI / 2);
+    K.box('paper', 0.6, 0.75, 0.01, 0, 1.45, 0.05, 0, 0, rr(-0.06, 0.06)); K.box('parch', 0.42, 0.5, 0.01, -0.58, 1.5, 0.05, 0, 0, rr(-0.1, 0.1)); K.box('paper', 0.36, 0.42, 0.01, 0.58, 1.38, 0.05, 0, 0, rr(-0.1, 0.1)); for (const xx of [0, -0.58, 0.58]) K.geo('fabricR', sph(0.025, 4, 3), xx, 1.78, 0.07); top = 2.5; cr = 0.9; }
+  else if (kind === 'grave'){ K.geo('soil', sph(0.8, 8, 5, 0, TAU, 0, Math.PI / 2), 0, -0.05, 0.75, 0, 0, 0, 0.8, 0.3, 1.3); K.box('stone', 0.7, 0.8, 0.16, 0, 0.45, 0, -0.06); K.geo('stone', cyl(0.35, 0.35, 0.16, 10), 0, 0.85, -0.02, Math.PI / 2 - 0.06, 0, 0); K.box('dark', 0.3, 0.03, 0.02, 0, 0.7, 0.09); K.box('dark', 0.04, 0.3, 0.02, 0, 0.65, 0.09);
+    for (let i = 0; i < 5; i++) K.geo(pick(['flower', 'flowerY', 'flowerW']), ico(0.08, 0), rr(-0.3, 0.3), 0.15, rr(0.4, 1.0)); top = 1.3; cr = 0.5; }
+  else if (kind === 'song'){ K.geo('mossy', sph(0.55, 9, 6), 0, 0.4, 0, 0, 0, 0, 1, 1.25, 0.6); K.push(0, 0.55, 0.32); K.geo('glowY', cyl(0.07, 0.07, 0.03, 8), -0.06, -0.12, 0, Math.PI / 2, 0, 0, 1.3, 1, 1); K.box('glowY', 0.03, 0.3, 0.03, 0.03, 0.03, 0); K.box('glowY', 0.12, 0.03, 0.03, 0.08, 0.17, 0, 0, 0, -0.4);
+    K.geo('glowY', cyl(0.05, 0.05, 0.03, 8), 0.2, -0.04, 0, Math.PI / 2, 0, 0, 1.3, 1, 1); K.box('glowY', 0.025, 0.22, 0.03, 0.25, 0.07, 0); K.pop(); top = 1.2; cr = 0.55; }
+  else { K.geo('woodD', cyl(0.06, 0.07, 1.6, 5), 0, 0.8, 0); K.box('paper', 0.42, 0.55, 0.01, 0, 1.25, 0.075, 0, 0, rr(-0.08, 0.08)); K.geo('fabricR', sph(0.03, 4, 3), 0, 1.48, 0.085); }
+  K.pop();
+  return { y, top: y + top, cr, ry };
+}
+{
+  OX = 0; OZ = 0; CUR = { anims: [], smoke: [], sparks: [], occ: [], keep: [], rects: [], r: 5, near: null, mapbox: [] };
+  const parts = [];
+  for (const L of LORE) for (const r of (L && L.readables) || []){
+    if (!r || !r.id || !Array.isArray(r.c) || RBY[r.id] || RDS.length >= RDMAX) continue;
+    srand(hashS(r.id)); const sb = new LB(1e9); B = sb; K = new G.Kit(sb); const cols = []; COLREC = cols;
+    let info; try { info = buildReadable(r); } catch (e){ console.warn('[towns] 읽을거리 실패', r.id, e); continue; }
+    const list = []; for (const k in sb.g) for (const g of sb.g[k]) list.push([k, g]); const geo = mergeVC(list, 0.04); if (!geo) continue;
+    const idx = RDS.length; geo.setAttribute('aRd', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(idx), 1)); parts.push(geo);
+    if (r.kind === 'poster'){ K.push(r.c[0], 0, r.c[1], info.ry); cb(0, 0, 0.95, 0.25); K.pop(); } else F.circle(r.c[0], r.c[1], info.cr);
+    const obj = new THREE.Object3D(); obj.position.set(r.c[0], info.top, r.c[1]); obj.name = 'rd_' + r.id; FW.add(obj);
+    const rd = { id: r.id, L, r, kind: r.kind, x: r.c[0], z: r.c[1], y: info.y, top: info.top, idx, cols, obj, glow: false, hidden: false };
+    Object.assign(obj, { kind: r.kind, title: r.title, region: L.region, top: info.top, setGlow: on => rdGlow(rd, on), get glowing(){ return rd.glow; } });
+    obj.userData.readable = r.id; RDS.push(rd); RBY[r.id] = rd;
+  }
+  COLREC = null; B = K = null; CUR = null;
+  if (parts.length){
+    const out = new THREE.BufferGeometry(); let n = 0; for (const g of parts) n += g.attributes.position.count;
+    for (const [name, sz] of [['position', 3], ['normal', 3], ['color', 3], ['uv', 2], ['aEmi', 1], ['aRd', 1]]){ const arr = new Float32Array(n * sz); let o = 0; for (const g of parts){ arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; } out.setAttribute(name, new THREE.BufferAttribute(arr, sz)); }
+    out.computeBoundingSphere(); const m = meshOf(out, RDMAT, false); m.frustumCulled = false; m.name = 'town_readables'; FW.add(m); TRIS += n / 3;
+  }
+  STATS.readables = RDS.length;
+}
+// 반짝임 (읽지 않은 · 퀘스트 읽을거리): 점 하나로 전부
+const RGP = new Float32Array(RDS.length * 3), RGON = new Float32Array(RDS.length);
+RDS.forEach((rd, i) => { RGP[i * 3] = rd.x; RGP[i * 3 + 1] = rd.top + 0.35; RGP[i * 3 + 2] = rd.z; });
+const rgGeo = new THREE.BufferGeometry(); rgGeo.setAttribute('position', new THREE.BufferAttribute(RGP, 3)); rgGeo.setAttribute('aOn', new THREE.BufferAttribute(RGON, 1));
+const RGMAT = new THREE.ShaderMaterial({ uniforms: { uTime: TU, uScale: { value: 400 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+  vertexShader: `attribute float aOn; uniform float uTime, uScale; varying float vA; varying float vT;
+    void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); float d = -mv.z; vT = uTime * 2.2 + position.x * 0.7; vA = aOn * smoothstep(170.0, 120.0, d) * (0.7 + 0.3 * sin(vT));
+      gl_Position = projectionMatrix * mv; position.y += 0.0; if (vA < 0.01) gl_Position = vec4(0.0, 0.0, -2.0, 1.0); gl_PointSize = max(1.6 * uScale / d * (0.9 + 0.2 * sin(vT * 1.3)), 6.0); }`,
+  fragmentShader: `varying float vA; varying float vT; void main(){ vec2 p = gl_PointCoord - 0.5; float r = length(p), a = atan(p.y, p.x) + vT * 0.25;
+    float star = smoothstep(0.5, 0.0, r) * (0.35 + 0.65 * pow(abs(cos(a * 2.0)), 18.0)) + smoothstep(0.18, 0.0, r);
+    float al = star * vA; gl_FragColor = vec4(vec3(1.0, 0.86, 0.45) * al * 1.5, al); }` });
+const rgPts = new THREE.Points(rgGeo, RGMAT); rgPts.frustumCulled = false; rgPts.name = 'town_readable_glow'; if (RDS.length) FW.add(rgPts);
+function rdGlow(rd, on){ rd.glow = !!on; RGON[rd.idx] = rd.glow && !rd.hidden ? 1 : 0; rgGeo.attributes.aOn.needsUpdate = true; }
+
+// ───────────────────────── 룬 수호석 (빛 잃은 비석 · 가시 덩굴 · setLit 로 정화) ─────────────────────────
+function thornVine(pts, r0, r1, spikes = 10){
+  K.geo('thorn', tubeG(pts, r0, r1, 5, 6));
+  const c = new THREE.CatmullRomCurve3(pts.map(p => new V3(...p))); for (let i = 0; i < spikes; i++){ const tt = rr(0.05, 0.95), p = c.getPointAt(tt), tg = c.getTangentAt(tt), r = lerp(r0, r1, tt), a = R() * TAU, n = new V3(Math.cos(a), rr(-0.3, 0.6), Math.sin(a)).cross(tg).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new V3(0, 1, 0), n), e = new THREE.Euler().setFromQuaternion(q); K.geo(R() < 0.85 ? 'thornR' : 'crystalP', cone(r * 0.45, r * 2.4, 4), p.x + n.x * r, p.y + n.y * r, p.z + n.z * r, e.x, e.y, e.z); }
+}
+const KSS = [], KBY = {};
+const PILLARS = [];
+function bKeystone(L){
+  const k = L.keystone, s = k.small ? 0.55 : 1, rec = !!k.record, x = k.c[0], z = k.c[1];
+  srand(hashS(k.id)); OX = x; OZ = z;
+  const [lo, hi] = footC(x, z, 2.4 * s), y0 = k.top ? baseY(k, x, z) : (hi - lo > 1.2 ? (lo + hi) / 2 + 0.3 : hi), yb = k.top ? y0 - 0.1 : lo - 0.25;
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.name = 'ks_' + k.id;
+  const o = { id: k.id, L, x, z, y: y0, s, g, k: 0, cols: [], hidden: false, active: false };
+  COLREC = o.cols; CUR = { anims: [], smoke: [], sparks: [], occ: [], keep: [], rects: [], r: 5, near: g, mapbox: [] };
+  const mw = (rec ? 1.55 : 0.9) * s, mh = (rec ? 3.0 : 4.4) * s, dz = rec ? 0.32 : 0.55, ph = y0 + 0.75 * s, hwB = mw * 0.7071, hwT = mw * 0.62 * 0.7071, tilt = Math.atan((hwB - hwT) * dz / mh);
+  // 받침 · 비석 · 고리 돌
+  let sb = new LB(1e9); B = sb; K = new G.Kit(sb);
+  K.geo('stoneD', cylM(2.4 * s, 2.6 * s, y0 + 0.4 * s - yb, 8), 0, (y0 + 0.4 * s + yb) / 2, 0); K.geo('stone', cylM(1.6 * s, 1.8 * s, 0.4 * s, 8), 0, y0 + 0.55 * s, 0);
+  K.geo('darkst', cyl(mw * 0.62, mw, mh, 4).rotateY(Math.PI / 4), 0, ph + mh / 2, 0, 0, 0, 0, 1, 1, dz); K.geo('darkst', cone(mw * 0.62 * 1.02, 0.8 * s, 4).rotateY(Math.PI / 4), 0, ph + mh + 0.4 * s, 0, 0, 0, 0, 1, 1, dz);
+  const RS = []; const nRing = rec ? 6 : 8; for (let i = 0; i < nRing; i++){ const a = i / nRing * TAU + 0.2, rx = Math.cos(a) * 3.5 * s, rz = Math.sin(a) * 3.5 * s, h = rr(0.9, 1.5) * s, yy = (k.top ? y0 : H(x + rx, z + rz)) - 0.15; K.push(rx, yy, rz, -a - Math.PI / 2, rr(-0.06, 0.06)); K.geo('stone', cyl(0.2 * s, 0.32 * s, h, 5), 0, h / 2, 0); K.pop(); RS.push([rx, yy + h * 0.6, rz, a]); cc(rx, rz, 0.35 * s); }
+  for (let i = 0; i < 5; i++){ const a = R() * TAU, d = rr(2.7, 3.2) * s; K.geo('mossy', rockG(rr(0.2, 0.35) * s, 0.6, 0), Math.cos(a) * d, y0 + 0.4 * s, Math.sin(a) * d); }
+  buildMerged(sb.g, g, true);
+  // 룬 홈 (자기 재질 · 빛 세기 = k)
+  sb = new LB(1e9); B = sb; K = new G.Kit(sb);
+  const zAt = yy => (hwB + (hwT - hwB) * (yy - ph) / mh) * dz;
+  for (const f of [1, -1]){ const rows = rec ? 7 : 4, rh = mh * 0.78 / rows;
+    for (let j = 0; j < rows; j++){ const yc = ph + mh * 0.12 + (j + 0.5) * rh; K.push(0, yc, f * zAt(yc), f > 0 ? 0 : Math.PI, -tilt);
+      if (rec){ for (let q = 0; q < 3; q++) K.box('glowC', rr(0.15, 0.35) * s, 0.04 * s, 0.03, (q - 1) * 0.42 * s, rr(-0.05, 0.05) * s, 0.015); }
+      else { const gw = rh * 0.75; if (R() < 0.8) K.box('glowC', 0.06 * s, gw, 0.03, 0, 0, 0.015); for (let q = 0; q < 2 + (R() * 2 | 0); q++){ const ang = pick([0, 0.75, -0.75, Math.PI / 2]), len = rr(0.22, 0.4) * s; K.box('glowC', 0.055 * s, len, 0.03, rr(-0.14, 0.14) * s, rr(-0.18, 0.18) * gw, 0.015, 0, 0, ang); } }
+      K.pop(); }
+    K.push(0, ph + mh * 0.92, f * zAt(ph + mh * 0.92), f > 0 ? 0 : Math.PI, -tilt); K.geo('glowC', tor(0.16 * s, 0.025 * s, 3, 14), 0, 0, 0.02); K.pop(); }
+  for (const [rx, yy, rz, a] of RS){ K.push(rx, yy, rz, -a - Math.PI / 2); K.box('glowC', 0.05 * s, 0.3 * s, 0.03, 0, 0, 0.22 * s); K.pop(); }
+  K.geo('glowC', tor(2.85 * s, 0.05, 3, 40), 0, y0 + 0.42 * s, 0, Math.PI / 2);
+  const runeMat = std({ color: 0x1a2028, emissive: 0x3fe6ff, emissiveIntensity: 0.05, roughness: 0.4 }); OWN.push(runeMat);
+  { const list = []; for (const kk in sb.g) for (const gg of sb.g[kk]) list.push(gg); const m = meshOf(mergeG(list), runeMat, false); g.add(m); }
+  // 가시 덩굴 (빛이 들면 줄어들어 사라져요) — 받침 높이를 축으로 키를 줄여요
+  sb = new LB(1e9); B = sb; K = new G.Kit(sb);
+  for (let v = 0; v < 3; v++){ const pts = [], a0 = v * 2.1 + R(); for (let i = 0; i <= 7; i++){ const yy = ph - 0.2 + i / 7 * mh * 0.85, a = a0 + i * 1.05, r = (hwB + (hwT - hwB) * (yy - ph) / mh) * 1.15 + 0.12 * s; pts.push([Math.cos(a) * r, yy, Math.sin(a) * r * Math.max(dz * 1.6, 0.7)]); } thornVine(pts, 0.16 * s, 0.05 * s, 10); }
+  for (let v = 0; v < 4; v++){ const a = v / 4 * TAU + R(), r0 = 0.6 * s, r1 = 2.4 * s; thornVine([[Math.cos(a) * r0, ph - 0.1, Math.sin(a) * r0], [Math.cos(a + 0.4) * (r0 + r1) / 2, y0 + 0.7 * s, Math.sin(a + 0.4) * (r0 + r1) / 2], [Math.cos(a + 0.7) * r1, y0 + 0.3 * s, Math.sin(a + 0.7) * r1]], 0.12 * s, 0.04 * s, 5); }
+  for (let i = 0; i < 5; i++){ const a = R() * TAU, d = rr(1.0, 2.0) * s; K.geo('crystalP', new THREE.OctahedronGeometry(rr(0.15, 0.3) * s, 0), Math.cos(a) * d, y0 + 0.6 * s, Math.sin(a) * d, R(), R(), R(), 0.7, 1.8, 0.7); }
+  const vg = new THREE.Group(); vg.position.y = y0; const vin = new THREE.Group(); vin.position.y = -y0; vg.add(vin); buildMerged(sb.g, vin, false); g.add(vg);
+  // 빛 · 빛기둥 · 떠오르는 빛가루
+  const spr = X.glowSprite(0x6af0ff, 7 * s, 0); spr.position.set(0, ph + mh * 0.62, 0); g.add(spr);
+  const pm = new THREE.MeshBasicMaterial({ color: 0x8af4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: DS, fog: false });
+  const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.7 * s, 1.5 * s, 150, 12, 1, true).translate(0, 75 + ph + mh, 0), pm); pil.position.set(x, 0, z); pil.visible = false; pil.renderOrder = 4; pil.frustumCulled = false; FW.add(pil);
+  CUR.near = g; const mo = G.particles(LOW ? 14 : 28, [new V3(0, y0 + 0.5 * s, 0)], { parent: g, vert: `float life = fract(uTime * 0.25 + aSeed); vL = life; float an = aSeed * 40.0; vec3 p = position + vec3(cos(an) * (1.2 + life) * ${(2.2 * s).toFixed(2)}, life * ${(6 * s).toFixed(1)}, sin(an) * (1.2 + life) * ${(2.2 * s).toFixed(2)}); float sz = 0.16;`,
+    frag: `float a = smoothstep(0.5, 0.0, d) * (1.0 - vL) * smoothstep(0.0, 0.15, vL); gl_FragColor = vec4(vec3(0.5, 0.95, 1.0) * a * 1.5, a);` }); mo.visible = false;
+  F.circle(x, z, 2.5 * s);
+  Object.assign(o, { runeMat, vg, spr, pil, pm, mo });
+  g.setLit = kk => ksApply(o, kk); g.userData.keystone = k.id; Object.defineProperty(g, 'lit', { get: () => o.k });
+  g.visible = false; FW.add(g); KSS.push(o); KBY[k.id] = o; PILLARS.push(o);
+  COLREC = null; B = K = null; CUR = null; STATS.keystones++;
+  ksApply(o, 0);
+}
+function ksApply(o, k){
+  o.k = k = clamp(+k || 0, 0, 1);
+  o.runeMat.emissiveIntensity = 0.05 + 2.6 * k; o.runeMat.color.setRGB(lerp(0.1, 0.05, k), lerp(0.12, 0.2, k), lerp(0.15, 0.24, k));
+  const sh = Math.max(0.001, 1 - k); o.vg.scale.set(lerp(1, 0.6, k), sh, lerp(1, 0.6, k)); o.vg.visible = k < 0.995;
+  o.spr.material.opacity = k * 0.6; o.pil.visible = k > 0.5 && !o.hidden; o.pm.opacity = (k - 0.5) * 2 * 0.16; o.mo.visible = k > 0.25;
+}
+for (const L of LORE){ if (!L || !L.keystone || !Array.isArray(L.keystone.c) || KBY[L.keystone.id]) continue; try { bKeystone(L); } catch (e){ console.warn('[towns] 수호석 실패', L.keystone.id, e); COLREC = null; B = K = null; CUR = null; } }
+
+// ───────────────────────── 먼 실루엣 · 빛 점 · 발판 ─────────────────────────
+if (FARL.length){ const g = G.mergeGeos(FARL.map(x => x)); for (const name of ['color', 'aEmi', 'aT']){ let n = 0; for (const q of FARL) n += q.attributes[name].array.length; const arr = new Float32Array(n); let o = 0; for (const q of FARL){ arr.set(q.attributes[name].array, o); o += q.attributes[name].array.length; } g.setAttribute(name, new THREE.BufferAttribute(arr, name === 'color' ? 3 : 1)); }
+  const m = meshOf(g, FARMAT); m.name = 'town_far'; m.frustumCulled = false; FW.add(m); }
+buildGlows();
+if (PLAT.length) F.groundFn = townGround;
+SA.t.needsUpdate = true;
+F.addCollider = _addCol; STATS.colliders = MYCOL.length;
