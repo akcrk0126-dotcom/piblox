@@ -7393,6 +7393,7 @@ class CmdReader{constructor(s,i){this.s=s;this.i=i||0}
   quoted(){if(!this.can())return'';const q=this.peek();if(q!=='"'&&q!=="'")throw this.err('quote_start');this.i++;let o='',e=false;
     while(this.can()){const c=this.read();if(e){if(c===q||c==='\\'){o+=c;e=false}else{this.i--;throw this.err('quote_esc',c)}}else if(c==='\\')e=true;else if(c===q)return o;else o+=c}throw this.err('quote_end')}
   str(){if(!this.can())return'';const c=this.peek();return c==='"'||c==="'"?this.quoted():this.unq()}
+  pname(stop){if(!this.can())return'';const c=this.peek();if(c==='"'||c==="'")return this.quoted();const st=this.i;while(this.can()&&!/\s/.test(this.peek())&&!(stop&&stop.includes(this.peek())))this.i++;return this.s.slice(st,this.i)}   // 닉네임 (한국어 · "띄어 쓴 이름")
   num(k){const st=this.i;while(this.can()&&/[0-9.\-]/.test(this.peek()))this.i++;const t=this.s.slice(st,this.i);if(!t)throw this.err(k==='i'?'int_exp':'dbl_exp');
     const v=k==='i'?(/^-?\d+$/.test(t)?parseInt(t,10):NaN):(/^-?(\d+\.?\d*|\.\d+)$/.test(t)?parseFloat(t):NaN);if(isNaN(v)||k==='i'&&(v>2147483647||v<-2147483648))throw this.at(st,k==='i'?'int_bad':'dbl_bad',t);return v}
   int(){return this.num('i')}dbl(){return this.num('d')}
@@ -7526,7 +7527,8 @@ function selParse(r,perm,o){o=o||{};const S={st:r.i,lim:Infinity,sort:'arbitrary
     else if(c==='r'){S.lim=1;S.ents=false;S.sort='random';S.typeLim=true;S.player=true}else if(c==='s'){S.lim=1;S.cur=true}
     else if(c==='e'){S.alive=true}else if(c==='n'){S.lim=1;S.sort='nearest';S.alive=true}else throw r.at(i,'sel_unknown','@'+c);
     if(r.can()&&r.peek()==='['){r.skip();selOpts(r,S)}}
-  else{const i=r.i,s=r.str();if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)){S.uuid=s;S.lim=1}else{if(!s||s.length>16)throw r.at(i,'ent_bad');S.name=s;S.ents=false;S.lim=1}}
+  else{const i=r.i;let s=r.pname();if(s&&r.s.charAt(i)!=='"'&&r.s.charAt(i)!=="'"){const rest=r.s.slice(i);let best='';for(const n of cmdPlayers().map(cmdEntName))if(/\s/.test(n)&&n.length>best.length&&rest.startsWith(n)&&(rest.length===n.length||/\s/.test(rest.charAt(n.length))))best=n;if(best){s=best;r.i=i+best.length}}   // 띄어 쓴 닉네임은 따옴표 없이 써도 접속한 이름과 맞으면 알아들어요
+    if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)){S.uuid=s;S.lim=1}else{if(!s||s.length>32)throw r.at(i,'ent_bad');S.name=s;S.ents=false;S.lim=1}}
   S.end=r.i;
   if(o.single&&S.lim>1)throw r.at(0,o.players?'pl_many':'ent_many');
   if(o.players&&S.ents&&!S.cur&&!S.player)throw r.at(0,'pl_ents');
@@ -7541,7 +7543,7 @@ function selOpts(r,S){r.ws();
   if(!r.can())throw r.err('opt_unterm');r.skip();S.sug=null}
 function selNeg(r){r.ws();if(r.can()&&r.peek()==='!'){r.skip();r.ws();return true}return false}
 function selOpt(r,S,s){const i=r.i;
-  if(s==='name'){const neg=selNeg(r);if(S.nameNe&&!neg){r.i=i;throw r.err('opt_inapp','name')}const v=r.str();if(neg)S.nameNe=true;else S.nameEq=true;S.preds.push(o=>(cmdEntName(o)===v)!==neg);return}
+  if(s==='name'){const neg=selNeg(r);if(S.nameNe&&!neg){r.i=i;throw r.err('opt_inapp','name')}const v=r.pname(',]');if(neg)S.nameNe=true;else S.nameEq=true;S.preds.push(o=>(cmdEntName(o)===v)!==neg);return}
   if(s==='distance'){const R=cmdRange(r,false);if(R.min!=null&&R.min<0||R.max!=null&&R.max<0)throw r.at(i,'dist_neg');S.dist=R;return}
   if(s==='level'){const R=cmdRange(r,true);if(R.min!=null&&R.min<0||R.max!=null&&R.max<0)throw r.at(i,'lvl_neg');S.lvl=R;S.ents=false;return}
   if(s==='x'||s==='y'||s==='z'||s==='dx'||s==='dy'||s==='dz'){S[s]=r.dbl();return}
@@ -7669,7 +7671,7 @@ function cmdBlockSug(b,pred){const q=b.rem,k=q.indexOf('[');
 // 고르개 후보: 이름 · @p @a … · [옵션= · 값
 const SEL_TIP={'@p':'가장 가까운 플레이어','@a':'모든 플레이어','@r':'무작위 플레이어','@s':'지금 실행하는 개체','@e':'모든 개체','@n':'가장 가까운 개체'};
 function selSug(b,ctx){const q=b.rem;
-  if(!q.startsWith('@')){cmdSugList(b,cmdPlayers().map(cmdEntName));if(!q&&(!ctx||ctx.perm>=2))for(const s in SEL_TIP)b.add(s,SEL_TIP[s]);return}
+  if(!q.startsWith('@')){cmdSugList(b,cmdPlayers().map(cmdEntName).map(n=>/\s/.test(n)?'"'+n+'"':n));if(!q&&(!ctx||ctx.perm>=2))for(const s in SEL_TIP)b.add(s,SEL_TIP[s]);return}
   if(!ctx||ctx.perm>=2){if(q.length<=1){for(const s in SEL_TIP)b.add(s,SEL_TIP[s]);return}if(/^@[parsen]$/.test(q)){b.add('[',null,b.st+2);return}}
   const m=/^@[parsen]\[(.*)$/.exec(q);if(!m||m[1].includes(']'))return;const inner=m[1];let depth=0,cut=0;for(let i=0;i<inner.length;i++){const c=inner[i];if(c==='{'||c==='[')depth++;else if(c==='}'||c===']')depth--;else if(c===','&&!depth)cut=i+1}
   const seg=inner.slice(cut),at=b.st+q.length-seg.length,e=seg.indexOf('='),lead=seg.length-seg.trimStart().length;
