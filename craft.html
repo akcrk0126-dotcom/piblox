@@ -7204,6 +7204,11 @@ function drawOffSlot(){const st=offh[0];if(!st||!started||hideGui||$('hud').clas
   if(st.n>1){const n=String(st.n);drawNum(n,x+3+19-2-n.length*6+1,y+4+6+3,'#fff','#3f3f3f')}}
 {const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);drawOffSlot();return r}}
 {const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);if(shotReq){shotReq=false;takeShot()}return r}}
+// 네더 차원문 안에서 화면이 일렁여요 (GameRenderer.renderLevel: spinningEffectIntensity · 틱마다 0.0125 → 4초면 최대 · 화면 효과 옵션 제곱만큼 · 손은 그대로)
+let scrFx=1;try{const a=localStorage.getItem('bc_opt_scrfx');if(a!==null&&a!=='')scrFx=clamp(+a/100,0,1)||0}catch(e){}
+const _wobM=new THREE.Matrix4(),_wobT=new THREE.Matrix4(),_wobA=new THREE.Vector3(0,Math.SQRT1_2,Math.SQRT1_2);
+function portalWobble(){const f1=clamp(portalT/4,0,1)*scrFx*scrFx;if(!(f1>0)||!started||player.dead)return false;const t=performance.now()/50*20*DEG;let f2=5/(f1*f1+5)-f1*.04;f2*=f2;
+  _wobM.makeRotationAxis(_wobA,t).multiply(_wobT.makeScale(1/f2,1,1)).multiply(_wobT.makeRotationAxis(_wobA,-t));camera.projectionMatrix.multiply(_wobM);return true}
 // F3 + H 고급 툴팁: 이름 아래에 아이디 (minecraft:...) 를 회색으로
 $('screen').addEventListener('pointerover',e=>{if(!advTips)return;const el=e.target.closest&&e.target.closest('.slot'),tip=$('tip');if(!el||tip.classList.contains('hide')||el.dataset.c==='trash'||typeof arrOf!=='function')return;
   const st=el.dataset.c==='res'?craftOut():arrOf(el.dataset.c)[+el.dataset.i];if(st&&MCID[st.id])tip.insertAdjacentHTML('beforeend',`<small style="color:#555">${MCID[st.id]}</small>`)});
@@ -10672,7 +10677,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   $('water').classList.toggle('hide',!underWater||!started);
   fxRender(PT);updateShadows(PT);renderPrecip(PT);updateFlames();
   const _cp0=camera.position.clone(),_cq0=camera.quaternion.clone();if(started){const ps=camShake(new PoseS(),PT);_cmA.compose(camera.position,camera.quaternion,_one3).multiply(_cmB.copy(ps.m).invert());_cmA.decompose(camera.position,camera.quaternion,_cs3)}
-  renderer.clear();renderer.render(scene,camera);if(started&&!p.dead&&!viewMode&&!hideGui){renderer.clearDepth();renderer.render(handScene,handCam)}camera.position.copy(_cp0);camera.quaternion.copy(_cq0);
+  const _wob=portalWobble();renderer.clear();renderer.render(scene,camera);if(_wob)camera.updateProjectionMatrix();if(started&&!p.dead&&!viewMode&&!hideGui){renderer.clearDepth();renderer.render(handScene,handCam)}camera.position.copy(_cp0);camera.quaternion.copy(_cq0);
   statT+=dt;if(statT>.25&&started){statT=0;updateStats();
     if(showDebug){const l=lightAt(p.pos.x,p.pos.y+1,p.pos.z),bm=biomeOf(Math.floor(p.pos.x),Math.floor(p.pos.z),terrainH(Math.floor(p.pos.x),Math.floor(p.pos.z)));
       const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),face=Math.abs(fx)>Math.abs(fz)?(fx>0?'east (Towards positive X)':'west (Towards negative X)'):(fz>0?'south (Towards positive Z)':'north (Towards negative Z)');
