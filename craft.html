@@ -3625,7 +3625,7 @@ function boltTick(){for(let i=bolts.length-1;i>=0;i--){const b=bolts[i];b.life--
     if(b.life<0){if(b.flashes===0){scene.remove(b.m);b.m.geometry.dispose();bolts.splice(i,1);continue}if(b.life<-Math.floor(Math.random()*10)){b.flashes--;b.life=1;b.m.geometry.dispose();b.m.geometry=boltGeo(Math.random()*2**31|0)}}
     if(b.life>=0)skyFlash=2}}
 // 천둥 (어디서 쳐도 크게 들려요) · 가까우면 쾅 소리도
-function thunderSound(d){const a=ac();if(!a||muted||a.state!=='running')return;const t=a.currentTime,out=a.createGain();out.gain.value=.9;out.connect(a.destination);
+function thunderSound(d){const a=ac();if(!a||muted||a.state!=='running')return;const t=a.currentTime,out=a.createGain();out.gain.value=.9;out.connect(sbus('weather'));
   const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;s.playbackRate.value=.8+Math.random()*.2;
   const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(1100,t);lp.frequency.exponentialRampToValueAtTime(160,t+1.2);lp.frequency.exponentialRampToValueAtTime(90,t+6);
   const lp2=a.createBiquadFilter();lp2.type='lowpass';lp2.frequency.value=500;const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(1,t+.03);g.gain.exponentialRampToValueAtTime(.35,t+.5);
@@ -3635,7 +3635,7 @@ function thunderSound(d){const a=ac();if(!a||muted||a.state!=='running')return;c
     s2.connect(hp);hp.connect(g2);g2.connect(out);s2.start(t);s2.stop(t+.5)}}
 // 빗소리 (지붕 아래면 먹먹하게)
 let rainNode=null;
-function rainSound(){const a=AC;if(!a||a.state!=='running')return;if(!rainNode){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=3000;const hp=a.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;const g=a.createGain();g.gain.value=0;s.connect(hp);hp.connect(fl);fl.connect(g);g.connect(a.destination);s.start();rainNode={g,fl}}
+function rainSound(){const a=AC;if(!a||a.state!=='running')return;if(!rainNode){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=3000;const hp=a.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;const g=a.createGain();g.gain.value=0;s.connect(hp);hp.connect(fl);fl.connect(g);g.connect(sbus('weather'));s.start();rainNode={g,fl}}
   const p=player,l=lightAt(p.pos.x,p.pos.y+p.eye,p.pos.z),out=l[0]>=14,[bm,tp]=colTemp(Math.floor(p.pos.x),Math.floor(p.pos.z)),rl=muted||DIM!=='over'||!started||NO_PRECIP.has(bm)||coldAt(tp,p.pos.y)?0:rainLvl;
   const t=a.currentTime;rainNode.g.gain.setTargetAtTime(rl*(out?.16:.07),t,.4);rainNode.fl.frequency.setTargetAtTime(out?3000:700,t,.4)}
 // 매 틱: 비 세기는 0.01씩 바뀌어요 · 뇌우면 번개 · 땅에 튀는 빗방울 (tickRain)
@@ -3727,7 +3727,7 @@ function saplingTick(){for(let k=saplings.length-1;k>=0;k--){const s=saplings[k]
 let AC=null,NOISE=null,muted=false;
 function ac(){if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)();const n=AC.createBuffer(1,AC.sampleRate,AC.sampleRate),d=n.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;NOISE=n}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
 const MATF={wool:[1200,.5,'lowpass'],stone:[1700,1.2,'bandpass'],wood:[650,2.2,'bandpass'],grass:[3200,.7,'highpass'],sand:[2600,.5,'lowpass'],glass:[3000,2,'bandpass']};
-function sfx(kind,mat,vol){const a=ac();if(!a||muted)return;vol=vol==null?1:vol;const t=a.currentTime,g=a.createGain();g.connect(a.destination);
+function sfx(kind,mat,vol){const a=ac();if(!a||muted)return;vol=vol==null?1:vol;const t=a.currentTime,g=a.createGain();g.connect(SDST||sbus('master'));
   const nz=(dur,f,q,type,v)=>{const s=a.createBufferSource();s.buffer=NOISE;s.playbackRate.value=.8+Math.random()*.4;const fl=a.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const gg=a.createGain();gg.gain.setValueAtTime(v,t);gg.gain.exponentialRampToValueAtTime(.001,t+dur);s.connect(fl);fl.connect(gg);gg.connect(g);s.start(t,Math.random()*.5,dur+.05)};
   const osc=(type,f0,f1,dur,v,d0)=>{const o=a.createOscillator(),gg=a.createGain();o.type=type;o.frequency.setValueAtTime(f0,t+(d0||0));o.frequency.exponentialRampToValueAtTime(f1,t+(d0||0)+dur);gg.gain.setValueAtTime(0,t);gg.gain.setValueAtTime(v,t+(d0||0));gg.gain.exponentialRampToValueAtTime(.001,t+(d0||0)+dur);o.connect(gg);gg.connect(g);o.start(t);o.stop(t+(d0||0)+dur+.05)};
   const m=MATF[mat]||MATF.stone;g.gain.value=.5*vol;
@@ -3803,7 +3803,7 @@ const GMAT={
   metal:{f:[1800,3000],q:6,t:'bandpass',g:3,len:.1,click:1,ring:1,v:.9}};
 // 마크 SoundType: 발소리 0.15 · 부수기 1.0 (음높이 0.8) · 놓기 1.0 (0.8) · 캐는 중 (볼륨+1)/8 (0.5)
 function matSound(kind,mat,vol){const a=ac();if(!a||muted)return;const M=GMAT[mat]||GMAT.stone,t0=a.currentTime;
-  const out=a.createGain();out.connect(a.destination);
+  const out=a.createGain();out.connect(SDST||sbus('block'));
   const cfg=kind==='step'?{n:Math.max(2,Math.round(M.g*.55)),len:M.len*.7,v:.34,p:1}:kind==='dig'?{n:Math.max(2,Math.round(M.g*.5)),len:M.len*.7,v:.32,p:.6}:kind==='place'?{n:M.g,len:M.len,v:.62,p:.85}:{n:Math.round(M.g*1.4)+1,len:M.len*1.6,v:.85,p:.8};
   out.gain.value=cfg.v*(vol==null?1:vol)*M.v;
   for(let i=0;i<cfg.n;i++){const s=a.createBufferSource();s.buffer=NOISE;s.playbackRate.value=(.8+Math.random()*.5)*cfg.p;const fl=a.createBiquadFilter();fl.type=M.t;
@@ -3816,7 +3816,7 @@ function matSound(kind,mat,vol){const a=ac();if(!a||muted)return;const M=GMAT[ma
   if(M.ring&&kind!=='step'){for(const [f,v] of [[1250,.12],[2210,.07],[3470,.04]]){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=f*cfg.p*(1+Math.random()*.03);g.gain.setValueAtTime(v,t0);g.gain.exponentialRampToValueAtTime(.001,t0+.35);o.connect(g);g.connect(out);o.start(t0);o.stop(t0+.4)}}
   if(mat==='glass'&&kind==='break'){for(let i=0;i<5;i++){const o=a.createOscillator(),g=a.createGain(),st=t0+Math.random()*.12;o.type='sine';o.frequency.value=2200+Math.random()*2600;g.gain.setValueAtTime(.12,st);g.gain.exponentialRampToValueAtTime(.001,st+.18);o.connect(g);g.connect(out);o.start(st);o.stop(st+.2)}}}
 // 몸 소리 (엔티티 · 사람)
-function bodySound(kind,vol){const a=ac();if(!a||muted)return;const t0=a.currentTime,out=a.createGain();out.gain.value=vol==null?1:vol;out.connect(a.destination);
+function bodySound(kind,vol){const a=ac();if(!a||muted)return;const t0=a.currentTime,out=a.createGain();out.gain.value=vol==null?1:vol;out.connect(SDST||sbus('player'));
   const nz=(st,dur,f,q,type,v)=>{const s=a.createBufferSource();s.buffer=NOISE;const fl=a.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const g=a.createGain();g.gain.setValueAtTime(0,t0+st);g.gain.linearRampToValueAtTime(v,t0+st+.004);g.gain.exponentialRampToValueAtTime(.001,t0+st+dur);s.connect(fl);fl.connect(g);g.connect(out);s.start(t0+st,Math.random(),dur+.05);return fl};
   if(kind==='hurt'){// "윽": 성대 소리(톱니) + 모음 필터 두 개
     const o=a.createOscillator();o.type='sawtooth';const p=.9+Math.random()*.2;o.frequency.setValueAtTime(190*p,t0);o.frequency.exponentialRampToValueAtTime(120*p,t0+.16);
@@ -3834,13 +3834,368 @@ function bodySound(kind,vol){const a=ac();if(!a||muted)return;const t0=a.current
 {const sfx0=sfx;sfx=function(kind,mat,vol){if(kind==='step'||kind==='dig'||kind==='break'||kind==='place'){matSound(kind,mat||'stone',vol);if((kind==='place'||kind==='break')&&typeof vibrate==='function'&&typeof player!=='undefined')vibrate(player.pos.x,player.pos.y,player.pos.z,1.5);return}
   if(kind==='hurt'||kind==='sweep'||kind==='crit'||kind==='weak'||kind==='strong'||kind==='levelup'||kind==='xp'||kind==='pop'||kind==='click'){bodySound(kind,vol);return}return sfx0(kind,mat,vol)}}
 
+/* ═════════════ 소리 엔진 (P2-SND): 마크처럼 소리 분류 (음량 설정) · 16칸 거리 감쇠 · 좌우 방향 · 재질별 소리 묶음 ═════════════
+   소리는 모두 직접 만들어요 (마크 소리 파일은 안 써요). 처음 쓸 때 JS 로 한 번 계산해 버퍼로 두고 (마크처럼 소리마다 여러 벌),
+   재생은 버퍼 하나 + 음량 + 좌우 → 분류 버스라 가벼워요. 음높이는 마크처럼 재생 속도 (0.5~2).
+   거리: 선형으로 16칸 × max(1, 볼륨) 에서 0 (OpenAL linear), 볼륨은 1 까지만 커져요 */
+const SCAT=['master','music','record','weather','block','hostile','neutral','player','ambient','voice'];
+const SCAT_N={master:'주 음량',music:'음악',record:'주크박스 · 소리 블록',weather:'날씨',block:'블록',hostile:'적대적 생물',neutral:'우호적 생물',player:'플레이어',ambient:'주변 환경',voice:'목소리'};
+const SVOL={};for(const c of SCAT){let v=1;try{const s=localStorage.getItem('bc_vol_'+c);if(s!=null&&s!=='')v=Math.min(1,Math.max(0,+s||0))}catch(e){}SVOL[c]=v}
+try{if(localStorage.getItem('bc_opt_music')==='0'&&localStorage.getItem('bc_vol_music')==null)SVOL.music=0}catch(e){}
+if(SVOL.master<=0)muted=true;
+let SBUS=null,SDST=null;
+function sbus(c){const a=AC;if(!a)return null;if(!SBUS){SBUS={master:a.createGain()};SBUS.master.connect(a.destination);for(const k of SCAT)if(k!=='master'){SBUS[k]=a.createGain();SBUS[k].connect(SBUS.master)}sndApplyVol()}return SBUS[c]||SBUS.master}
+function sndApplyVol(){if(SBUS)for(const k of SCAT)SBUS[k].gain.value=k==='master'?(muted?0:SVOL.master):SVOL[k]}
+function sndSetVol(c,v){SVOL[c]=v;try{localStorage.setItem('bc_vol_'+c,v)}catch(e){}if(c==='master')muted=v<=0;if(c==='music'){musicOn=v>0;try{localStorage.setItem('bc_opt_music',v>0?1:0)}catch(e){}musicToggle()}sndApplyVol()}
+// ── 소리 만들기 도구 (24kHz 버퍼) ──
+const SSR=24000,R_=Math.random,rr=(a,b)=>a+R_()*(b-a);
+// 2차 필터 (RBJ) · f 는 숫자나 시간→Hz 함수 (32표본마다 다시 계산)
+function sfl(x,type,f,q,i0=0,i1=x.length){let b0,b1,b2,a1,a2,x1=0,x2=0,y1=0,y2=0;const co=fr=>{fr=Math.min(Math.max(fr,20),SSR*.45);const w=6.2832*fr/SSR,cs=Math.cos(w),al=Math.sin(w)/(2*q),a0=1+al;
+    if(type==='lp'){b1=(1-cs)/a0;b0=b2=b1/2}else if(type==='hp'){b1=-(1+cs)/a0;b0=b2=-b1/2}else{b0=al/a0;b1=0;b2=-b0}a1=-2*cs/a0;a2=(1-al)/a0};const fn=typeof f==='function';if(!fn)co(f);
+  for(let i=i0;i<i1;i++){if(fn&&((i-i0)&31)===0)co(f((i-i0)/SSR));const v=x[i],y=b0*v+b1*x1+b2*x2-a1*y1-a2*y2;x2=x1;x1=v;y2=y1;y1=y;x[i]=y}return x}
+// 소음 알갱이: at 초부터 dur 동안 · 필터 · 크기 · 올라가는 시간
+function sgr(o,at,dur,type,f,q,amp,att=.002){const i0=at*SSR|0,n=Math.min(dur*SSR|0,o.length-i0);if(n<=0)return;const g=new Float32Array(n);for(let i=0;i<n;i++)g[i]=R_()*2-1;sfl(g,type,f,q);
+  const na=Math.max(1,att*SSR),k=6.9/Math.max(1,n-na);for(let i=0;i<n;i++)o[i0+i]+=g[i]*amp*(i<na?i/na:Math.exp(-(i-na)*k))}
+// 울림 (감쇠하는 사인) · f2 로 음이 미끄러져요
+function smo(o,at,f,dec,amp,f2,att=.001){const i0=at*SSR|0,n=Math.min(dec*7*SSR|0,o.length-i0);let ph=R_()*6.28;const na=Math.max(1,att*SSR),L=f2?Math.log(f2/f)/(dec*3):0;
+  for(let i=0;i<n;i++){const t=i/SSR;ph+=6.2832*(f2?f*Math.exp(L*Math.min(t,dec*3)):f)/SSR;o[i0+i]+=Math.sin(ph)*amp*Math.exp(-t/dec)*(i<na?i/na:1)}}
+const sbf=d=>new Float32Array(Math.ceil(d*SSR));
+// 끝 다듬기: 뒤쪽 조용한 부분 자르고 크기 맞추기
+function snorm(o,pk=.9){let m=0,e=0;for(let i=0;i<o.length;i++){const v=Math.abs(o[i]);if(v>m)m=v}const th=m*.003;for(let i=o.length-1;i>0;i--)if(Math.abs(o[i])>th){e=i+1;break}o=o.subarray(0,Math.max(e,32));if(m>0){const k=pk/m;for(let i=0;i<o.length;i++)o[i]*=k}
+  const fe=Math.min(o.length,SSR*.004|0);for(let i=0;i<fe;i++)o[o.length-1-i]*=i/fe;o.sn=1;return o}
+// 목소리: 성대 (톱니/네모 + 숨) → 모음 공명 3개 (시간따라 바뀜) → 음량. f [처음,가운데,끝] Hz · v 모음들 · syl 음절 [[시작,길이]] (sf: 음절마다 음 다시)
+const VW={a:[780,1200,2500],o:[500,880,2450],u:[330,720,2300],e:[470,1850,2500],i:[290,2250,2950],m:[260,1050,2250],r:[440,1150,1650]};
+function svox(P){const d=P.d,n=Math.ceil((d+.03)*SSR),src=new Float32Array(n),o=new Float32Array(n),f=P.f.map(x=>x*rr(.93,1.07)),vib=P.vib||[0,0],j=P.j||0,br=P.br||0,syl=P.syl;let ph=0,jw=0,jt=0,gp=R_()*6;
+  const ut=t=>{if(syl&&P.sf)for(const s of syl)if(t>=s[0]&&t<s[0]+s[1])return(t-s[0])/s[1];return Math.min(1,t/d)};
+  for(let i=0;i<n;i++){const t=i/SSR,u=ut(t),f0=u<.5?f[0]*Math.pow(f[1]/f[0],u*2):f[1]*Math.pow(f[2]/f[1],u*2-1);if(i%160===0)jt=(R_()*2-1)*j;jw+=(jt-jw)*.004;
+    ph+=f0*(1+Math.sin(6.2832*vib[0]*t)*vib[1]+jw)/SSR;ph-=Math.floor(ph);src[i]=(P.sq?(ph<.5?.7:-.7):2*ph-1)*(1-br)+(R_()*2-1)*br}
+  const V=P.v,fs=P.fs||1,fq=k=>t=>{const u=Math.min(.999,t/d)*(V.length-1),a=u|0,b=Math.min(V.length-1,a+1),w=u-a;return(V[a][k]*(1-w)+V[b][k]*w)*fs};
+  const W=[1,.6,.28];for(let k=0;k<3;k++){const c=src.slice();sfl(c,'bp',fq(k),P.q||5);for(let i=0;i<n;i++)o[i]+=c[i]*W[k]}
+  const at=P.at||.025,rl=P.rl||.12,gr=P.gr;for(let i=0;i<n;i++){const t=i/SSR;let e;
+    if(syl){e=0;for(const s of syl)if(t>=s[0]&&t<s[0]+s[1]){const q=t-s[0];e=Math.max(e,Math.min(1,q/.012,(s[1]-q)/(s[1]*.45)))}}else e=t<at?t/at:t>d-rl?Math.max(0,(d-t)/rl):1;
+    if(gr){gp+=6.2832*gr[0]*(1+(R_()-.5)*.6)/SSR;e*=1-gr[1]*(.5+.5*Math.sin(gp))}o[i]*=e}
+  if(P.lp)sfl(o,'lp',P.lp,.7);if(P.echo)for(let i=n-1;i>=0;i--){const k=i-(SSR*.11|0);if(k>=0)o[i]+=o[k]*.35}
+  return o}
+// 뼈 덜그럭 (스켈레톤): 짧은 딱딱 소리 n 개
+function srat(f,nn,d,fall){const o=sbf(d+.1);for(let i=0;i<nn;i++){const at=fall?d*(1-Math.pow(1-i/nn,1.6)):R_()*d,a=fall?1-i/nn*.6:rr(.5,1);smo(o,at,f*rr(.7,1.5),rr(.004,.009),a*.8);sgr(o,at,.012,'bp',f*rr(1.5,2.5),3,a*.6)}return o}
+// 쉭 (거미 · 크리퍼 · 블레이즈): 떨리는 띠 소음
+function shis(f,d,tr,q=1.4){const o=sbf(d);sgr(o,0,d,'bp',t=>f*(1+.15*Math.sin(t*9)),q,1,d*.3);let ph=0;for(let i=0;i<o.length;i++){ph+=6.2832*tr[0]*(1+(R_()-.5)*.8)/SSR;o[i]*=1-tr[1]*(.5+.5*Math.sin(ph))}for(let k=0;k<4;k++)smo(o,R_()*d*.8,rr(2500,4000),.004,.5);return o}
+// 철벅 (슬라임 · 진흙 · 오징어): 내려가는 공명 낀 낮은 소음
+function swet(o,at,f0,dur,amp){sgr(o,at,dur,'bp',t=>f0*(1-.65*Math.min(1,t/dur)),4,amp,.006);sgr(o,at,dur*.7,'lp',f0*.7,.8,amp*.5,.004)}
+function ssq(f,d,n=2){const o=sbf(d+.1);for(let i=0;i<n;i++)swet(o,i*d/n*.8,f*rr(.8,1.2),d/n+.04,1-i*.2);return o}
+// 바삭 (크리퍼 · 불): 아주 짧은 딱 소리 여럿
+function scrk(d,n,f=3000){const o=sbf(d+.05);for(let i=0;i<n;i++)sgr(o,R_()*d,rr(.002,.008),'hp',f*rr(.7,1.4),.8,rr(.3,1));sgr(o,0,d,'bp',f*.6,1,.12,d*.3);return o}
+// 쇠 울림 (철 골렘 · 쇠문)
+function sclank(f,d,amp=1){const o=sbf(d+.1);for(const [r,a] of [[1,1],[2.76,.5],[5.4,.25],[8.93,.12]])smo(o,0,f*r,d/Math.sqrt(r),a*amp);sgr(o,0,.03,'bp',2500,1,.6);smo(o,0,90,.05,.6);return o}
+// 재질 소리 묶음 (마크 SoundType 이름 · 비슷한 것끼리) — g 알갱이 [캐기,걷기] · f 필터 범위 · q · t 필터 · gd 알갱이 길이 · sp 퍼짐 [캐기,걷기]
+// th 쿵 [Hz,감쇠,크기] · kn 통 울림 [Hz낮,높,감쇠,크기] · rg 쇠 울림 [Hz낮,높,감쇠,크기] · ch 반짝 [개수,Hz낮,높,감쇠,크기] · wt 젖음 · sq 뽀드득 · ck 딱 · lp 먹먹 · v 볼륨 · p 음높이 (SoundType)
+const SMAT={
+  stone:{g:[16,6],f:[800,3400],q:1.2,gd:[.008,.03],sp:[.12,.045],th:[160,.022,.45],ck:.35},
+  deepslate:{g:[16,6],f:[500,2200],q:1.3,gd:[.01,.035],sp:[.12,.05],th:[115,.035,.7],ck:.25},
+  deepslate_bricks:{g:[10,4],f:[1100,3600],q:1.8,gd:[.006,.02],sp:[.08,.03],th:[140,.025,.5],kn:[1500,2300,.006,.35],ck:.5},
+  tuff:{g:[16,7],f:[600,2400],q:.9,gd:[.012,.04],sp:[.13,.06],th:[130,.03,.5]},
+  calcite:{g:[12,5],f:[1800,5200],q:1.6,gd:[.005,.02],sp:[.09,.035],ck:.6,kn:[2500,3500,.004,.25]},
+  dripstone:{g:[12,5],f:[900,3200],q:1.4,gd:[.008,.03],sp:[.1,.045],th:[150,.025,.4],ch:[3,1800,3200,.05,.18]},
+  amethyst:{g:[8,3],f:[2500,6500],q:1.5,gd:[.006,.02],sp:[.1,.05],ch:[9,1600,5200,.35,.4],ck:.3},
+  copper:{g:[10,4],f:[1200,3800],q:2.5,gd:[.006,.025],sp:[.09,.04],rg:[600,1000,.09,.3],ck:.4},
+  metal:{g:[10,4],f:[1500,4500],q:3,gd:[.006,.025],sp:[.09,.04],rg:[800,1300,.16,.38],ck:.55,p:1.5},
+  anvil:{g:[10,4],f:[900,3000],q:2.5,gd:[.01,.03],sp:[.1,.05],rg:[280,420,.4,.55],th:[90,.05,.6],ck:.5,v:.3},
+  lantern:{g:[6,3],f:[2000,5000],q:3,gd:[.005,.015],sp:[.08,.04],ch:[5,1800,4200,.06,.35],ck:.4},
+  trial:{g:[14,6],f:[1500,4500],q:3,gd:[.005,.02],sp:[.12,.05],rg:[700,1100,.05,.22],ch:[4,2000,4000,.03,.2]},
+  netherite:{g:[12,5],f:[400,1800],q:1.5,gd:[.01,.04],sp:[.12,.05],th:[85,.06,.8],rg:[260,380,.1,.22]},
+  netherrack:{g:[22,9],f:[600,2600],q:.8,gd:[.012,.045],sp:[.16,.07],th:[140,.025,.35],wt:.25},
+  nether_ore:{g:[18,8],f:[700,3000],q:1,gd:[.01,.04],sp:[.14,.06],th:[150,.025,.4],ck:.5,ch:[2,2500,4000,.03,.15]},
+  nether_bricks:{g:[10,4],f:[1300,4200],q:1.8,gd:[.005,.02],sp:[.08,.03],kn:[850,1300,.012,.45],ck:.6},
+  basalt:{g:[14,6],f:[450,1900],q:1.2,gd:[.01,.035],sp:[.12,.05],th:[110,.045,.7],kn:[550,800,.02,.3]},
+  bone:{g:[8,4],f:[1800,4500],q:2,gd:[.005,.015],sp:[.1,.05],kn:[1000,1700,.015,.55],ck:.5},
+  soul_sand:{g:[22,12],f:[350,1600],q:.7,gd:[.03,.08],sp:[.25,.13],at:.008,lp:3000,wh:1},
+  soul_soil:{g:[18,10],f:[450,1900],q:.8,gd:[.025,.06],sp:[.2,.11],at:.006,lp:3500},
+  nylium:{g:[18,9],f:[1400,5000],q:.9,gd:[.008,.03],sp:[.16,.08],th:[150,.02,.3],wt:.15},
+  gravel:{g:[28,13],f:[600,2600],q:.9,gd:[.008,.03],sp:[.22,.12]},
+  grass:{g:[20,11],f:[2200,7000],q:.8,gd:[.008,.028],sp:[.2,.11]},
+  crop:{g:[12,6],f:[2000,6500],q:1,gd:[.006,.02],sp:[.14,.07],kn:[2200,3200,.004,.25],ck:.3},
+  vine:{g:[14,7],f:[1800,6000],q:.8,gd:[.01,.03],sp:[.18,.1],lp:6000},
+  fungus:{g:[10,6],f:[900,3500],q:.9,gd:[.012,.035],sp:[.14,.08],wt:.25},
+  wart:{g:[12,7],f:[500,2200],q:.8,gd:[.02,.05],sp:[.15,.09],wt:.35,lp:4000},
+  sand:{g:[26,14],f:[1800,6200],q:.55,gd:[.025,.07],sp:[.25,.14],at:.01},
+  snow:{g:[20,11],f:[900,3200],q:.8,gd:[.015,.045],sp:[.2,.12],at:.006,sq:.25,lp:5500},
+  powder_snow:{g:[18,10],f:[700,2600],q:.7,gd:[.02,.05],sp:[.2,.12],at:.01,lp:4000},
+  wool:{g:[10,6],f:[300,1000],q:.7,t:'lp',gd:[.03,.07],sp:[.15,.1],at:.012},
+  cobweb:{g:[8,5],f:[600,2200],q:.6,gd:[.03,.06],sp:[.15,.1],at:.012,lp:2500},
+  moss:{g:[12,7],f:[400,1800],q:.7,gd:[.025,.06],sp:[.16,.1],at:.01,wt:.2,lp:3000},
+  mud:{g:[8,5],f:[250,1100],q:.8,gd:[.03,.07],sp:[.14,.09],at:.008,wt:.8,lp:2500},
+  mud_bricks:{g:[14,6],f:[450,2000],q:1,gd:[.01,.035],sp:[.11,.05],th:[140,.03,.5]},
+  honey:{g:[6,4],f:[300,1200],q:.8,gd:[.03,.06],sp:[.12,.08],wt:.6,lp:2200},
+  slime:{g:[6,4],f:[250,1000],q:.8,gd:[.03,.06],sp:[.1,.07],wt:1,lp:2000},
+  sculk:{g:[10,6],f:[400,2000],q:.8,gd:[.02,.05],sp:[.15,.09],wt:.6,lp:3500},
+  sculk_sensor:{g:[10,6],f:[500,2400],q:.9,gd:[.015,.04],sp:[.14,.08],wt:.45,ck:.35,lp:4500},
+  wood:{g:[8,4],f:[350,1500],q:2.2,gd:[.01,.035],sp:[.09,.04],kn:[230,420,.03,.75],ck:.25},
+  ladder:{g:[6,4],f:[600,2200],q:2,gd:[.008,.025],sp:[.12,.08],kn:[480,780,.018,.55]},
+  stem:{g:[10,5],f:[400,1700],q:1.5,gd:[.012,.04],sp:[.11,.05],kn:[200,340,.028,.55],wt:.12},
+  nether_wood:{g:[8,4],f:[400,1700],q:2,gd:[.01,.035],sp:[.09,.04],kn:[260,430,.025,.6],lp:5000},
+  cherry_wood:{g:[8,4],f:[600,2400],q:2.2,gd:[.008,.03],sp:[.09,.04],kn:[380,620,.022,.6],ck:.3},
+  bamboo_wood:{g:[8,4],f:[700,2600],q:2.4,gd:[.008,.028],sp:[.09,.04],kn:[520,800,.02,.6],ck:.25},
+  bamboo:{g:[8,4],f:[900,3000],q:2.5,gd:[.006,.02],sp:[.1,.05],kn:[650,1000,.025,.6]},
+  froglight:{g:[8,4],f:[1200,3600],q:1.4,gd:[.01,.03],sp:[.1,.05],ch:[3,1200,2600,.08,.25],lp:6000},
+  coral:{g:[14,6],f:[800,3000],q:1.1,gd:[.01,.03],sp:[.12,.05],th:[160,.02,.35],wt:.2},
+  wet_grass:{g:[16,9],f:[1500,5000],q:.8,gd:[.01,.03],sp:[.18,.1],wt:.3},
+  pot:{g:[8,4],f:[1200,4000],q:2,gd:[.006,.02],sp:[.1,.04],kn:[900,1400,.02,.5],ck:.5}};
+// 마크: 유리 · 얼음은 놓기 · 걷기가 돌 소리, 깨질 때만 쨍그랑 · 나머지는 비슷한 묶음으로
+const SMAT_AL={glass:'stone',lodestone:'stone',gilded:'nether_ore',candle:'wool',sponge:'wool',lily:'wet_grass'};
+function smat(M,kind){const dig=kind==='dig',sp=dig?M.sp[0]:M.sp[1],ng=dig?M.g[0]:M.g[1],o=sbf(sp+.25+(M.rg?M.rg[2]*5:0)+(M.ch?M.ch[3]*5:0));
+  for(let i=0;i<ng;i++){const at=i===0?0:Math.pow(R_(),1.5)*sp,amp=(i===0?1:.35+R_()*.6)*Math.max(.15,1-at/(sp*1.6));sgr(o,at,rr(M.gd[0],M.gd[1])*(dig?1:.8),M.t||'bp',rr(M.f[0],M.f[1]),M.q,amp,M.at||.001)}
+  if(M.th)smo(o,0,M.th[0]*rr(.9,1.1),M.th[1]*(dig?1:.7),M.th[2],M.th[0]*.6);
+  if(M.kn){const f=rr(M.kn[0],M.kn[1]);smo(o,0,f,M.kn[2]*(dig?1:.7),M.kn[3],f*.85);smo(o,0,f*2.3,M.kn[2]*.4,M.kn[3]*.25)}
+  if(M.rg){const f0=rr(M.rg[0],M.rg[1]);for(const [r,a] of [[1,1],[2.76,.5],[5.4,.25],[8.93,.12]])smo(o,0,f0*r,M.rg[2]*(dig?1:.45)/Math.sqrt(r),M.rg[3]*a)}
+  if(M.ch){const c=dig?M.ch[0]:Math.max(1,M.ch[0]/3|0);for(let i=0;i<c;i++)smo(o,R_()*sp*1.4,rr(M.ch[1],M.ch[2]),M.ch[3]*(dig?1:.5)*rr(.6,1.2),M.ch[4]*rr(.5,1))}
+  if(M.wt){const k=dig?3:1;for(let i=0;i<k;i++)swet(o,i*sp/k,rr(500,900),rr(.05,.1),M.wt*(1-i*.2))}
+  if(M.sq)for(let i=0;i<(dig?3:1);i++)smo(o,R_()*sp,rr(500,900),.015,M.sq,null,.004);
+  if(M.wh)sgr(o,0,sp+.15,'bp',t=>500+t*1500,3,.25,.05);
+  if(M.ck)sgr(o,0,.006,'hp',3500,.7,M.ck);if(M.lp)sfl(o,'lp',M.lp,.7);return snorm(o,dig?.62:1)}
+// 유리 깨짐: 밝은 알갱이 + 쨍쨍 울림
+function sglass(){const o=sbf(.6);for(let i=0;i<22;i++)sgr(o,Math.pow(R_(),1.8)*.18,rr(.008,.03),'bp',rr(2500,7500),2,rr(.3,1));for(let i=0;i<12;i++)smo(o,Math.pow(R_(),1.5)*.2,rr(2400,7600),rr(.04,.11),rr(.15,.4));sgr(o,0,.008,'hp',3000,.7,1);smo(o,0,180,.02,.3);return snorm(o,.7)}
+// ── 이름 붙은 소리 (변형 여러 벌 · 처음 쓸 때 만들어요) ──
+const SDEF={};
+function sdef(name,n,gen){SDEF[name]={n,gen,b:[]}}
+function sbufOf(D){const i=R_()*D.n|0;if(!D.b[i]){let x=D.gen(i);if(!x.sn)x=snorm(x);const b=AC.createBuffer(1,x.length,SSR);b.getChannelData(0).set(x);D.b[i]=b}return D.b[i]}
+const SND={n:0,max:48,log:null};
+// 귀: 카메라 자리 · 오른쪽 방향 (마크도 듣는 곳 = 카메라)
+function sndEar(){const c=camera,p=c.position,q=c.quaternion;return[p.x,p.y,p.z,1-2*(q.y*q.y+q.z*q.z),2*(q.x*q.y+q.w*q.z),2*(q.x*q.z-q.w*q.y)]}
+// 재생: 이름 · 분류 · 볼륨 · 음높이 · 자리 ({x,y,z} 없으면 귀 바로 옆)
+function snd(name,cat,vol=1,pitch=1,pos=null){let g=Math.min(1,vol),pan=0,d=0;
+  if(pos&&typeof camera!=='undefined'){const e=sndEar(),dx=pos.x-e[0],dy=pos.y-e[1],dz=pos.z-e[2],R=16*Math.max(1,vol);d=Math.sqrt(dx*dx+dy*dy+dz*dz);g*=Math.max(0,1-d/R);if(d>.01)pan=(dx*e[3]+dy*e[4]+dz*e[5])/d*Math.min(1,d/1.5)*.85}
+  pitch=Math.min(2,Math.max(.5,pitch));if(SND.log)SND.log.push({name,cat,vol:+vol.toFixed(3),pitch:+pitch.toFixed(3),d:+d.toFixed(1),g:+g.toFixed(3),pan:+pan.toFixed(2)});
+  const D=SDEF[name],a=D&&g>=.003&&!muted?ac():null;if(!D||!a||muted||a.state!=='running'||g<.003||SND.n>=SND.max||SVOL[cat]<=0)return;
+  const s=a.createBufferSource();s.buffer=sbufOf(D);s.playbackRate.value=pitch;const gn=a.createGain();gn.gain.value=g;s.connect(gn);let o=gn;
+  if(pan&&a.createStereoPanner){const p=a.createStereoPanner();p.pan.value=pan;gn.connect(p);o=p}o.connect(sbus(cat));SND.n++;s.onended=()=>{SND.n--;try{o.disconnect()}catch(e){}};s.start()}
+// 재질 소리: kind = break · place · dig (캐는 중) · step · fall — 마크 SoundType 볼륨 · 음높이 그대로
+let SND_MAPPED=false;
+function sgrp(m){m=m&&SMAT[m]||SMAT_AL[m]?m:'stone';return m}
+function sndMat(kind,mat,pos,cat='block',vm=1){if(!SND_MAPPED)sndMapBlocks();const g=sgrp(mat),base=SMAT_AL[g]||g,M=SMAT[base],V=M.v||1,P=M.p||1;
+  let name='mat.'+base+'.'+(kind==='break'||kind==='place'?'dig':'step');if(kind==='break'&&g==='glass')name='mat.glass.break';
+  if(!SDEF[name])sdef(name,name.endsWith('.dig')?4:6,name==='mat.glass.break'?sglass:()=>smat(M,name.endsWith('.dig')?'dig':'step'));
+  if(kind==='break'||kind==='place')snd(name,cat,(V+1)/2*vm,P*.8,pos);else if(kind==='dig')snd(name,cat,(V+1)/8*vm,P*.5,pos);else if(kind==='fall')snd(name,cat,V*.5*vm,P*.75,pos);else snd(name,cat,V*.15*vm,P,pos)}
+// 블록마다 마크 SoundType (이름으로 골라요 · 처음 소리 날 때 한 번)
+const SND_RULES=[[/^(soul_)?lantern$|chain$/,'lantern'],[/^(deepslate_(bricks?|tiles?)|deepslate_(brick|tile)_|chiseled_deepslate|cracked_deepslate_|polished_deepslate)/,'deepslate_bricks'],[/deepslate/,'deepslate'],
+  [/tuff/,'tuff'],[/calcite/,'calcite'],[/dripstone/,'dripstone'],[/amethyst/,'amethyst'],[/^(?!raw_).*copper(?!_ore)/,'copper'],[/sculk_(sensor|shrieker|catalyst)/,'sculk_sensor'],[/sculk/,'sculk'],
+  [/netherrack/,'netherrack'],[/nether_(gold|quartz)_ore/,'nether_ore'],[/nether_brick/,'nether_bricks'],[/soul_sand/,'soul_sand'],[/soul_soil/,'soul_soil'],[/basalt/,'basalt'],[/nylium/,'nylium'],[/^bone_block$/,'bone'],
+  [/(crimson|warped)_(stem|hyphae)/,'stem'],[/(crimson|warped)_(planks|slab|stairs|fence|door|trapdoor|button|pressure|sign)/,'nether_wood'],[/(crimson|warped)_(fungus|roots)|nether_sprouts|weeping_vines|twisting_vines/,'fungus'],
+  [/wart_block|shroomlight/,'wart'],[/^nether_wart$/,'crop'],[/ancient_debris|netherite_block/,'netherite'],[/^(iron|gold|diamond|emerald|redstone)_block$|iron_bars|iron_door|iron_trapdoor|rail$|^hopper$/,'metal'],
+  [/anvil$|^bell$/,'anvil'],[/^lodestone$/,'lodestone'],[/gilded_blackstone/,'gilded'],[/trial_spawner|^vault$|^spawner$/,'trial'],[/^ladder$/,'ladder'],[/^bamboo$|bamboo_sapling|scaffolding/,'bamboo'],[/bamboo/,'bamboo_wood'],
+  [/cherry_(log|wood|planks|slab|stairs|fence|door|trapdoor|button|pressure|sign)/,'cherry_wood'],[/^(mud_brick|packed_mud)/,'mud_bricks'],[/^mud$|muddy_mangrove/,'mud'],[/^(pale_)?moss_(block|carpet)$|hanging_moss/,'moss'],
+  [/^honey_block$/,'honey'],[/^slime_block$/,'slime'],[/^(?!dead_).*coral_block$/,'coral'],[/^(?!dead_).*coral(_fan)?$/,'wet_grass'],[/powder_snow/,'powder_snow'],[/^snow/,'snow'],[/^cobweb$/,'cobweb'],[/froglight/,'froglight'],
+  [/decorated_pot/,'pot'],[/^(dirt_path|mycelium|podzol)$/,'grass'],[/^(wheat|carrots|potatoes|beetroots|sweet_berry_bush|melon_stem|pumpkin_stem)$/,'crop'],[/^(vine|cave_vines|glow_lichen|hanging_roots|spore_blossom)/,'vine'],
+  [/^end_rod$/,'wood'],[/candle/,'candle'],[/sponge/,'sponge'],[/^lily_pad$/,'lily'],[/^(fire|soul_fire)$/,'wool'],[/^(sea_lantern|glowstone|redstone_lamp|beacon|end_portal_frame)$|glass|ice$/,'glass']];
+function sndMapBlocks(){SND_MAPPED=true;if(typeof MCID==='undefined')return;for(let i=0;i<B.length;i++){const b=B[i],m=MCID[i];if(!b||!m||m.indexOf('minecraft:')!==0)continue;const nm=m.slice(10);for(const [re,g] of SND_RULES)if(re.test(nm)){b.snd=g;break}}}
+// 발소리 낼 블록: 발 칸에 카펫 · 눈 층 같은 얇은 게 있으면 그것 (마크 INSIDE_STEP_SOUND_BLOCKS 비슷하게)
+function stepMat(x,y,z,ub){const f=getB(Math.floor(x),Math.floor(y+.01),Math.floor(z)),b=B[f];if(f&&b&&b.snd&&typeof MCID!=='undefined'&&/carpet$|:snow$/.test(MCID[f]||''))return b.snd;return B[ub]&&B[ub].snd}
+// ── 몹 소리 (마크: 평소 소리 = 4초 + 틱마다 (쌓인 틱)/1000 확률 · 볼륨 1 · 음높이 (r−r)×0.2+1, 새끼 +0.5 · 걸음 0.15) ──
+// a 평소 · h 아픔 · d 죽음: 목소리 설정이면 아픔 (짧고 높게) · 죽음 (길고 내려가게) 은 평소 것에서 만들어요 · 함수면 그 소리 · null 이면 조용
+// c 분류 · st 걸음 (없으면 밟은 블록 소리, null 이면 안 내요) · v 볼륨 (가스트 5 = 80칸까지)
+const vx=P=>()=>svox(P),vh=P=>({...P,d:Math.min(P.d,.42),f:[P.f[0]*1.3,P.f[1]*1.35,P.f[2]*1.15],syl:null,at:.008,rl:.12}),vd=P=>({...P,d:P.d*1.15+.25,f:[P.f[0]*1.25,P.f[1]*1.1,P.f[2]*.55],syl:null,rl:.4});
+const MSND={
+  pig:{c:'neutral',a:{d:.5,f:[255,300,210],v:[VW.o,VW.u],syl:[[0,.17],[.25,.2]],sf:1,br:.38,gr:[48,.5]},h:{d:.32,f:[430,540,380],v:[VW.e,VW.a],br:.25},st:'animal'},
+  cow:{c:'neutral',a:{d:1.15,f:[118,134,96],v:[VW.m,VW.u,VW.o,VW.u],br:.08,vib:[5,.015],at:.09,rl:.35,q:6},st:'animal'},
+  sheep:{c:'neutral',a:{d:.75,f:[300,325,280],v:[VW.e,VW.a,VW.e],vib:[8,.06],br:.15,gr:[24,.4]},st:'animal'},
+  goat:{c:'neutral',a:{d:.6,f:[380,420,350],v:[VW.e,VW.a],vib:[10,.07],br:.22,gr:[30,.45]},st:'animal'},
+  chicken:{c:'neutral',a:{d:.5,f:[700,820,620],v:[VW.o,VW.a],syl:[[0,.06],[.12,.07],[.3,.13]],sf:1,br:.3},st:'chicken'},
+  parrot:{c:'neutral',a:{d:.4,f:[1300,1700,1200],v:[VW.e,VW.i],syl:[[0,.08],[.14,.1],[.28,.1]],sf:1,br:.2,fs:1.3},st:null},
+  horse:{c:'neutral',a:{d:1.2,f:[520,720,360],vib:[11,.09],v:[VW.e,VW.a,VW.o],br:.25,rl:.4},st:'animal'},
+  wolf:{c:'neutral',a:{d:.5,f:[480,520,300],v:[VW.a,VW.o],syl:[[0,.13],[.25,.15]],sf:1,br:.4,q:4},h:{d:.3,f:[900,1150,700],v:[VW.i,VW.e],br:.15},d:{d:.9,f:[820,700,380],vib:[6,.05],v:[VW.e,VW.u],br:.2},st:'animal'},
+  cat:{c:'neutral',a:{d:.7,f:[520,780,430],v:[VW.i,VW.a,VW.u],br:.1,vib:[5,.02],q:7}},
+  fox:{c:'neutral',a:{d:.35,f:[950,1150,700],v:[VW.e,VW.a],br:.35,q:5}},
+  rabbit:{c:'neutral',a:{d:.12,f:[1500,1700,1300],v:[VW.i,VW.i],br:.3},st:null,v:.6},
+  panda:{c:'neutral',a:{d:.5,f:[180,210,150],v:[VW.o,VW.u],br:.3,gr:[20,.3]}},
+  polar_bear:{c:'neutral',a:{d:.9,f:[110,130,88],v:[VW.o,VW.a,VW.o],gr:[30,.7],br:.3},st:'animal'},
+  frog:{c:'neutral',a:{d:.4,f:[130,140,120],v:[VW.o,VW.u],gr:[22,.85],br:.1,q:4}},
+  axolotl:{c:'neutral',a:{d:.18,f:[1400,1700,1500],v:[VW.i,VW.e],br:.1},st:null},
+  turtle:{c:'neutral',a:{d:.3,f:[160,175,140],v:[VW.u,VW.u],br:.5},st:null},
+  bat:{c:'ambient',a:{d:.25,f:[3200,3700,3000],v:[VW.i,VW.i],fs:1.8,syl:[[0,.04],[.08,.04],[.16,.05]],sf:1,br:.2},st:null,v:.1},
+  squid:{c:'neutral',a:()=>ssq(500,.5,2),h:()=>ssq(700,.3,1),d:()=>ssq(450,.8,3),st:null,v:.4},
+  dolphin:{c:'neutral',a:()=>{const o=svox({d:.5,f:[1800,2600,2100],v:[VW.i,VW.e],br:.05,q:9});for(let i=0;i<6;i++)sgr(o,.5*R_(),.006,'hp',3000,.7,.6);return o},st:null},
+  bee:{c:'neutral',a:{d:.9,f:[215,225,210],sq:1,v:[VW.e,VW.e],br:.05,q:3,gr:[9,.3],lp:2500},st:null,v:.6},
+  strider:{c:'neutral',a:{d:.6,f:[520,720,460],vib:[15,.12],v:[VW.o,VW.e],br:.15}},
+  villager:{c:'neutral',a:{d:.45,f:[195,235,175],v:[VW.m,VW.m,VW.u],q:7,br:.04},h:{d:.3,f:[260,300,210],v:[VW.m,VW.u],q:6,br:.1},d:{d:.8,f:[240,200,130],v:[VW.m,VW.u],q:6,br:.1}},
+  iron_golem:{c:'neutral',a:null,h:()=>sclank(rr(160,220),.35),d:()=>{const o=sclank(130,.6);for(let i=0;i<10;i++)smo(o,R_()*.5,rr(200,900),.04,.3);return o},st:'golem'},
+  zombie:{c:'hostile',a:{d:1.1,f:[95,112,78],v:[VW.u,VW.o,VW.u],gr:[16,.55],br:.18,j:.06},st:'zombie'},
+  husk:{c:'hostile',a:{d:1.1,f:[88,104,72],v:[VW.u,VW.o,VW.u],gr:[14,.5],br:.45,j:.06,fs:.9},st:'zombie'},
+  drowned:{c:'hostile',a:{d:1.1,f:[92,108,74],v:[VW.u,VW.o,VW.u],gr:[34,.7],br:.2,j:.08,fs:.85,lp:1800},st:'zombie'},
+  zpiglin:{c:'hostile',a:{d:.8,f:[150,175,115],v:[VW.o,VW.u],gr:[34,.6],br:.35},st:'zombie'},
+  piglin:{c:'hostile',a:{d:.7,f:[210,260,170],v:[VW.o,VW.u,VW.o],syl:[[0,.22],[.32,.3]],sf:1,br:.42,gr:[40,.5]}},
+  piglin_brute:{c:'hostile',a:{d:.7,f:[160,195,130],v:[VW.o,VW.u,VW.o],syl:[[0,.22],[.32,.3]],sf:1,br:.42,gr:[34,.55]}},
+  hoglin:{c:'hostile',a:{d:.7,f:[115,140,92],v:[VW.o,VW.u],syl:[[0,.3],[.38,.3]],sf:1,br:.45,gr:[24,.65]},st:'animal'},
+  zoglin:{c:'hostile',a:{d:.8,f:[105,125,80],v:[VW.u,VW.o],gr:[18,.7],br:.4,j:.08},st:'animal'},
+  skeleton:{c:'hostile',a:()=>srat(1800,7,.45),h:()=>srat(2200,10,.25,1),d:()=>srat(1700,22,.9,1),st:'skeleton'},
+  stray:{c:'hostile',a:()=>{const o=srat(1900,6,.45);sgr(o,0,.45,'bp',3000,1.5,.25,.15);return o},h:()=>srat(2300,10,.25,1),d:()=>srat(1800,22,.9,1),st:'skeleton'},
+  bogged:{c:'hostile',a:()=>{const o=srat(1500,6,.45);swet(o,.1,600,.12,.6);return o},h:()=>srat(1900,10,.25,1),d:()=>srat(1500,22,.9,1),st:'skeleton'},
+  wskel:{c:'hostile',a:()=>srat(1100,7,.5),h:()=>srat(1400,10,.25,1),d:()=>srat(1000,22,1,1),st:'skeleton'},
+  spider:{c:'hostile',a:()=>shis(2600,.6,[32,.7]),h:()=>shis(3200,.3,[45,.6]),d:()=>shis(2200,1,[28,.8]),st:'spider'},
+  silverfish:{c:'hostile',a:{d:.4,f:[2600,3000,2400],v:[VW.i,VW.i],syl:[[0,.05],[.1,.05],[.2,.05],[.3,.06]],sf:1,br:.4,fs:1.6},st:null},
+  creeper:{c:'hostile',a:null,h:()=>scrk(.3,30,3500),d:()=>scrk(.7,60,3000)},
+  enderman:{c:'hostile',a:{d:.9,f:[320,190,420],v:[VW.o,VW.e,VW.u],gr:[85,.6],j:.25,br:.15},h:{d:.45,f:[420,620,260],v:[VW.a,VW.e],gr:[120,.7],j:.2},d:{d:1.4,f:[500,300,90],v:[VW.e,VW.o,VW.u],gr:[70,.7],j:.3}},
+  witch:{c:'hostile',a:{d:.75,f:[430,500,380],v:[VW.e,VW.a],syl:[[0,.1],[.16,.1],[.32,.1],[.5,.14]],sf:1,br:.35}},
+  pillager:{c:'hostile',a:{d:.55,f:[165,200,140],v:[VW.m,VW.o,VW.m],br:.2,gr:[20,.3]}},
+  slime:{c:'hostile',a:null,h:()=>ssq(600,.25,1),d:()=>ssq(500,.4,2),st:null},
+  magma:{c:'hostile',a:null,h:()=>{const o=ssq(380,.3,1);sgr(o,0,.3,'hp',3000,.7,.15,.05);return o},d:()=>ssq(330,.5,2),st:null},
+  ghast:{c:'hostile',a:{d:1.7,f:[680,800,560],v:[VW.u,VW.o,VW.u],vib:[5,.04],br:.2,q:8,at:.25,rl:.7,echo:1},h:{d:.7,f:[950,1200,800],v:[VW.a,VW.e],vib:[7,.05],br:.25,echo:1},d:{d:1.6,f:[1100,850,380],v:[VW.a,VW.o,VW.u],vib:[6,.05],br:.25,echo:1},st:null,v:5},
+  blaze:{c:'hostile',a:()=>{const o=shis(700,1.2,[3,.6],.9),c=scrk(1.2,20,2600);for(let i=0;i<o.length&&i<c.length;i++)o[i]+=c[i]*.6;return o},h:{d:.4,f:[300,350,250],v:[VW.o,VW.a],gr:[90,.7],br:.6},d:()=>{const o=scrk(1,70,2200);smo(o,0,200,.3,.4,80);return o},st:null},
+  phantom:{c:'hostile',a:{d:1,f:[1100,1350,850],v:[VW.e,VW.i,VW.e],gr:[60,.55],br:.3},st:null},
+  shulker:{c:'hostile',a:()=>{const o=sbf(.6);sgr(o,0,.5,'bp',900,1.5,1,.15);return o},h:()=>{const o=sbf(.3);smo(o,0,300,.04,1,220);sgr(o,0,.04,'bp',1500,1.5,.5);return o},d:()=>{const o=sbf(.6);smo(o,0,260,.08,1,140);sgr(o,0,.3,'bp',1200,1,.5,.02);return o},st:null},
+  creaking:{c:'hostile',a:{d:.9,f:[45,62,40],v:[VW.r,VW.o],gr:[9,.8],br:.1,q:3}}};
+const MSND_AL={mooshroom:'cow',cave_spider:'spider',slime_s:'slime',glow_squid:'squid',shadow:'enderman'};
+// 몹 걸음 소리
+const SSTEP={zombie:()=>{const o=sbf(.2);sgr(o,0,.12,'lp',700,.8,1,.01);smo(o,0,90,.03,.5);return snorm(o)},skeleton:()=>snorm(srat(1600,2,.05)),
+  spider:()=>{const o=sbf(.12);sgr(o,0,.015,'bp',1500,1.5,1);sgr(o,.05,.015,'bp',1300,1.5,.7);return snorm(o)},animal:()=>{const o=sbf(.18);smo(o,0,rr(110,140),.025,.7);sgr(o,0,.06,'bp',rr(1400,2400),1,.5,.004);return snorm(o)},
+  chicken:()=>{const o=sbf(.08);sgr(o,0,.02,'bp',2500,1.5,1);smo(o,0,420,.01,.4);return snorm(o)},golem:()=>{const o=sbf(.4);smo(o,0,68,.07,1,45);sgr(o,0,.12,'lp',500,.8,.7);smo(o,0,620,.05,.15);return snorm(o)}};
+for(const k in SSTEP)sdef('step.'+k,4,SSTEP[k]);
+sdef('mob.slime.sq',3,()=>ssq(550,.3,1));
+function mobCat(m){const E=MSND[MSND_AL[m.type]||m.type];return E?E.c:m.D&&m.D.hostile&&!m.D.neutral?'hostile':'neutral'}
+// k = a 평소 · h 아픔 · d 죽음
+function sndMob(m,k){const T=MSND_AL[m.type]||m.type,E=MSND[T],pos={x:m.pos.x,y:m.pos.y+(m.h||1)*.85,z:m.pos.z};
+  if(!E){const s=m.D&&m.D.snd;if(k==='a'){if(s&&s!=='warden_none')sfx(s,null,1,pos)}else sfx(m.D&&m.D.hostile?'zhurt':'animal_'+m.type,null,1,pos);return}   // 드래곤 · 워든 · 브리즈 … 예전 소리
+  const src=E[k];if(k==='a'&&!src)return;const name='mob.'+T+'.'+k;
+  if(!SDEF[name]){const g=typeof src==='function'?src:src?vx(src):E.a&&typeof E.a==='object'?vx(k==='h'?vh(E.a):vd(E.a)):null;if(!g)return;sdef(name,k==='a'?3:2,g)}
+  snd(name,E.c,E.v||1,((m.baby?1.5:1)+(R_()-R_())*.2)*(E.p||1),pos)}
+function sndMobStep(m){const E=MSND[MSND_AL[m.type]||m.type],st=E?E.st:undefined,c=mobCat(m),pos={x:m.pos.x,y:m.pos.y,z:m.pos.z};if(st===null)return;
+  if(st)snd('step.'+st,c,st==='golem'?1:.15,1,pos);else{const ub=getB(Math.floor(m.pos.x),Math.floor(m.pos.y-.2),Math.floor(m.pos.z));if(B[ub]&&B[ub].snd)sndMat('step',B[ub].snd,pos,c)}}
+// ── 그 밖의 소리 ──
+const SMISC={
+  click:[1,()=>{const o=sbf(.06);sgr(o,0,.012,'hp',1800,.7,.7);smo(o,0,1150,.005,.6);smo(o,.002,330,.012,.8);return snorm(o)}],
+  pop:[3,()=>{const o=sbf(.1);smo(o,0,360,.03,1,780,.003);return snorm(o)}],
+  xp:[3,()=>{const o=sbf(.5);smo(o,0,1568,.11,.7,null,.002);smo(o,0,3136,.05,.3);smo(o,.005,2350,.08,.25);return snorm(o)}],
+  levelup:[1,()=>{const o=sbf(1.3);[523,659,784,1046,1318].forEach((f,i)=>{smo(o,i*.045,f,.35,.5,null,.004);smo(o,i*.045,f*2,.15,.15)});return snorm(o)}],
+  eat:[3,()=>{const o=sbf(.2);for(let i=0;i<9;i++)sgr(o,Math.pow(R_(),1.4)*.1,rr(.006,.02),'bp',rr(900,3800),1.2,rr(.4,1));smo(o,0,150,.02,.4);return snorm(o)}],
+  drink:[3,()=>{const o=sbf(.45);for(let k=0;k<2;k++){const t=k*.17;sgr(o,t,.12,'bp',x=>300+x*5000,5,1,.01);smo(o,t,140,.04,.5,260)}return snorm(o)}],
+  burp:[2,vx({d:.45,f:[150,138,105],v:[VW.o,VW.a,VW.o],gr:[38,.7],br:.25})],
+  hurt:[3,()=>{const o=svox({d:.24,f:[205,228,150],v:[VW.u,VW.o],br:.12,at:.008,rl:.12,q:5});smo(o,0,120,.03,.35);return o}],
+  hurt_fire:[2,()=>{const o=svox({d:.24,f:[205,228,150],v:[VW.u,VW.o],br:.12,at:.008,rl:.12,q:5});sgr(o,0,.22,'hp',3000,.7,.25,.02);return o}],
+  hurt_drown:[2,()=>{const o=svox({d:.28,f:[190,210,140],v:[VW.u,VW.o],br:.2,gr:[30,.6],lp:1600});for(let i=0;i<4;i++)smo(o,R_()*.2,rr(400,700),.02,.3,rr(900,1400));return o}],
+  small_fall:[1,()=>{const o=sbf(.2);smo(o,0,95,.035,1,60);sgr(o,0,.07,'lp',700,.8,.6);return snorm(o)}],
+  big_fall:[1,()=>{const o=sbf(.35);smo(o,0,75,.06,1,45);sgr(o,0,.14,'lp',1000,.8,.7);for(let i=0;i<8;i++)sgr(o,R_()*.08,.02,'bp',rr(600,2400),1,.35);return snorm(o)}],
+  'atk.strong':[2,()=>{const o=sbf(.3);sgr(o,0,.14,'bp',t=>Math.max(500,2600-t*14000),2,.6,.03);smo(o,.05,170,.03,.8,110);sgr(o,.05,.03,'bp',1500,1,.6);return snorm(o)}],
+  'atk.weak':[2,()=>{const o=sbf(.2);sgr(o,0,.1,'bp',t=>Math.max(400,1800-t*8000),2,.6,.03);smo(o,.04,240,.015,.3);return snorm(o,.6)}],
+  'atk.crit':[2,()=>{const o=sbf(.3);sgr(o,0,.012,'hp',2500,.7,1);smo(o,0,180,.035,.9,100);sgr(o,0,.08,'bp',3200,2,.6);return snorm(o)}],
+  'atk.sweep':[2,()=>{const o=sbf(.4);sgr(o,0,.3,'bp',t=>3600*Math.exp(-t*7)+400,1.6,1,.06);return snorm(o)}],
+  'atk.knockback':[2,()=>{const o=sbf(.3);smo(o,0,110,.05,1,70);sgr(o,0,.1,'lp',800,.8,.6);return snorm(o)}],
+  bow:[2,()=>{const o=sbf(.45),P=SSR/rr(170,230)|0,dl=new Float32Array(P);for(let i=0;i<P;i++)dl[i]=R_()*2-1;let k=0;   // 줄 튕김 (Karplus-Strong)
+    for(let i=0;i<o.length*.8;i++){const v=dl[k];dl[k]=(v+dl[(k+1)%P])*.497;o[i]=v*Math.exp(-i/SSR/.12);k=(k+1)%P}sgr(o,0,.18,'bp',t=>1500-t*4000,1.5,.35,.02);return snorm(o)}],
+  'arrow.hit':[3,()=>{const o=sbf(.25);smo(o,0,rr(260,340),.02,1,200);sgr(o,0,.05,'bp',1200,1.2,.6);sgr(o,0,.006,'hp',3000,.7,.5);return snorm(o)}],
+  explode:[4,()=>{const o=sbf(2.6);sgr(o,0,2.4,'lp',t=>1400*Math.exp(-t*3)+70,.9,1,.004);smo(o,0,62,.35,.9,32);for(let i=0;i<40;i++)sgr(o,.05+Math.pow(R_(),2)*1.6,rr(.005,.03),'bp',rr(400,2500),1,rr(.05,.25));return snorm(o,.95)}],
+  fuse:[1,()=>{const o=sbf(1.6);sgr(o,0,1.55,'hp',3200,.7,1,.06);for(let i=0;i<o.length;i++)o[i]*=.75+.25*Math.sin(i/SSR*6.2832*23*(1+.3*Math.sin(i/SSR*3)));return snorm(o,.7)}],
+  'door.open':[2,()=>{const o=svox({d:.32,f:[75,105,90],v:[VW.r,VW.o],gr:[40,.8],br:.3,q:3,at:.03,rl:.1});smo(o,.28,260,.03,.6,200);sgr(o,.28,.02,'bp',1800,2,.4);return snorm(o,.8)}],
+  'door.close':[2,()=>{const o=sbf(.3);smo(o,0,rr(190,240),.04,1,150);smo(o,0,520,.015,.35);sgr(o,0,.03,'bp',1400,1.5,.5);smo(o,.07,rr(200,250),.02,.3);return snorm(o,.85)}],
+  'trap.open':[2,()=>{const o=sbf(.25);smo(o,0,rr(320,420),.025,1,280);sgr(o,0,.03,'bp',2000,2,.5);return snorm(o,.8)}],
+  'trap.close':[2,()=>{const o=sbf(.25);smo(o,0,rr(260,330),.03,1,210);sgr(o,0,.025,'bp',1600,2,.5);return snorm(o,.85)}],
+  'idoor.open':[2,()=>{const o=sclank(rr(210,260),.25,.7);sgr(o,0,.3,'bp',t=>900+t*1500,6,.4,.05);return snorm(o,.8)}],
+  'idoor.close':[2,()=>snorm(sclank(rr(170,210),.3),.85)],
+  'chest.open':[1,()=>{const o=svox({d:.4,f:[85,120,100],v:[VW.r,VW.o],gr:[35,.75],br:.35,q:3,at:.04});smo(o,0,230,.03,.6,180);return snorm(o,.8)}],
+  'chest.close':[1,()=>{const o=sbf(.3);smo(o,0,170,.05,1,120);sgr(o,0,.04,'bp',1100,1.5,.6);return snorm(o,.85)}],
+  'barrel.open':[1,()=>{const o=sbf(.35);smo(o,0,140,.06,1,110);smo(o,0,410,.03,.4);sgr(o,0,.05,'bp',900,1.5,.5);return snorm(o,.8)}],
+  'barrel.close':[1,()=>{const o=sbf(.3);smo(o,0,120,.05,1,95);sgr(o,0,.04,'lp',900,.8,.6);return snorm(o,.85)}],
+  'echest.open':[1,()=>{const o=sbf(1);sgr(o,0,.3,'bp',t=>400+t*900,3,.6,.05);for(let i=0;i<6;i++)smo(o,.05+i*.06,rr(900,1800),.12,.3,null,.01);return snorm(o,.8)}],
+  'echest.close':[1,()=>{const o=sbf(.6);sgr(o,0,.25,'bp',t=>Math.max(200,700-t*1200),3,.6,.03);smo(o,.2,150,.05,.8,110);return snorm(o,.8)}],
+  lever:[1,()=>{const o=sbf(.08);sgr(o,0,.01,'hp',2200,.7,.8);smo(o,0,900,.008,.7);smo(o,.004,260,.012,.6);return snorm(o)}],
+  'bucket.fill':[2,()=>{const o=sbf(.6);sgr(o,0,.45,'bp',t=>300+t*1600,3,1,.03);for(let i=0;i<5;i++)smo(o,R_()*.35,rr(350,600),.025,.4,rr(800,1300));return snorm(o,.8)}],
+  'bucket.empty':[2,()=>{const o=sbf(.6);sgr(o,0,.45,'bp',t=>Math.max(300,1100-t*1500),3,1,.02);for(let i=0;i<5;i++)smo(o,R_()*.35,rr(300,500),.025,.4,rr(700,1100));return snorm(o,.8)}],
+  'bucket.lava':[2,()=>{const o=sbf(.7);sgr(o,0,.55,'lp',t=>500+t*300,2,1,.04);for(let i=0;i<4;i++)smo(o,R_()*.4,rr(120,220),.04,.6,rr(250,400));return snorm(o,.8)}],
+  fizz:[2,()=>{const o=sbf(.7);sgr(o,0,.6,'hp',t=>2500+t*2000,.7,1,.01);return snorm(o,.7)}],
+  splash:[2,()=>{const o=sbf(.8);sgr(o,0,.6,'bp',t=>2600*Math.exp(-t*3)+300,1.2,1,.01);for(let i=0;i<10;i++)smo(o,.05+R_()*.5,rr(400,900),.02,.35,rr(1000,1800));return snorm(o,.85)}],
+  splash_high:[2,()=>{const o=sbf(1.2);sgr(o,0,1,'bp',t=>3000*Math.exp(-t*2)+250,1,1,.005);smo(o,0,90,.06,.6);for(let i=0;i<16;i++)smo(o,.05+R_()*.9,rr(350,900),.025,.35,rr(900,1800));return snorm(o,.9)}],
+  swim:[4,()=>{const o=sbf(.5);sgr(o,0,.4,'bp',t=>500+800*Math.sin(t*8),2,1,.08);for(let i=0;i<3;i++)smo(o,R_()*.3,rr(300,600),.03,.3,rr(700,1200));return snorm(o,.7)}],
+  'water.amb':[3,()=>{const o=sbf(2);for(let i=0;i<26;i++)smo(o,R_()*1.7,rr(300,900),rr(.015,.035),rr(.2,.6),rr(900,2000),.004);sgr(o,0,1.9,'bp',800,.7,.15,.4);return snorm(o,.6)}],
+  'lava.pop':[3,()=>{const o=sbf(.15);smo(o,0,rr(160,260),.02,1,rr(350,500),.002);sgr(o,0,.03,'bp',900,1,.4);return snorm(o)}],
+  'lava.amb':[2,()=>{const o=sbf(2.2);sgr(o,0,2,'lp',260,.8,.8,.5);for(let i=0;i<10;i++)smo(o,R_()*1.8,rr(90,180),rr(.04,.08),rr(.3,.6),rr(200,320),.01);return snorm(o,.6)}],
+  'fire.amb':[3,()=>snorm(scrk(1.4,40,2400),.6)],campfire:[3,()=>snorm(scrk(.6,18,2000),.6)],
+  'portal.amb':[2,()=>{const o=sbf(3.2);sgr(o,0,3,'bp',t=>500+400*Math.sin(t*2.4),4,.7,1);smo(o,0,160,1,.15,240);smo(o,.3,250,.8,.1,170);return snorm(o,.6)}],
+  'uw.loop':[1,()=>{const o=sbf(6.5),F=SSR*.5|0;sgr(o,0,6.5,'lp',t=>260+90*Math.sin(t*2.1),.8,1,.001);for(let i=0;i<o.length;i++)o[i]*=.8+.2*Math.sin(i/SSR*1.05);
+    const n=o.length-F;for(let i=0;i<F;i++){const w=i/F;o[i]=o[i]*w+o[n+i]*(1-w)}const r=o.slice(0,n);let m=0;for(const v of r)m=Math.max(m,Math.abs(v));for(let i=0;i<n;i++)r[i]*=.6/m;r.sn=1;return r}],   // 이음매 없이 되풀이
+  'uw.add':[4,()=>{const o=sbf(1.2),k=4+R_()*5;for(let i=0;i<k;i++)smo(o,R_()*.9,rr(250,600),rr(.02,.05),rr(.3,.8),rr(700,1400),.006);return snorm(o,.6)}],
+  'uw.enter':[1,()=>{const o=sbf(.8);sgr(o,0,.7,'lp',t=>2500*Math.exp(-t*5)+250,.9,1,.01);return snorm(o,.7)}],
+  'uw.exit':[1,()=>{const o=sbf(.6);sgr(o,0,.5,'bp',t=>400+t*3000,1,1,.03);return snorm(o,.6)}],
+  tbreak:[2,()=>{const o=sbf(.5);sgr(o,0,.01,'hp',2500,.7,1);for(let i=0;i<10;i++)smo(o,Math.pow(R_(),1.5)*.3,rr(1200,3000),rr(.01,.03),rr(.2,.5));smo(o,0,300,.03,.6,200);return snorm(o)}],
+  enchant:[2,()=>{const o=sbf(1.6);for(let i=0;i<10;i++)smo(o,i*.07+R_()*.03,800*Math.pow(2,(R_()*24|0)/12),.25,.25,null,.01);sgr(o,0,1.2,'bp',t=>2000+t*3000,6,.15,.3);return snorm(o,.7)}]};
+for(const k in SMISC)sdef(k,SMISC[k][0],SMISC[k][1]);
+// 되풀이 소리 (물속)
+function sloop(name,cat,vol){const D=SDEF[name],a=ac();if(SND.log)SND.log.push({name,cat,vol,loop:1});if(!D||!a||muted||a.state!=='running')return{dead:1};const s=a.createBufferSource();s.buffer=sbufOf(D);s.loop=true;
+  const g=a.createGain(),t=a.currentTime;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.8);s.connect(g);g.connect(sbus(cat));s.start();return{s,g}}
+function sloopStop(L){if(!L||L.dead||!AC)return;const t=AC.currentTime;L.g.gain.cancelScheduledValues(t);L.g.gain.setValueAtTime(L.g.gain.value,t);L.g.gain.linearRampToValueAtTime(0,t+.6);try{L.s.stop(t+.7)}catch(e){}}
+// 자리 → [크기, 좌우] (예전 합성 소리용)
+function spos(pos,vol){if(!pos||typeof camera==='undefined')return[1,0];const e=sndEar(),dx=pos.x-e[0],dy=pos.y-e[1],dz=pos.z-e[2],d=Math.sqrt(dx*dx+dy*dy+dz*dz);return[Math.max(0,1-d/(16*Math.max(1,vol))),d>.01?(dx*e[3]+dy*e[4]+dz*e[5])/d*Math.min(1,d/1.5)*.85:0]}
+// 예전 합성 소리 (워든 · 드래곤 · 종 · 피스톤 …) 는 그대로 쓰되 분류 버스 · 거리로 보내요
+const SLEG={villager:'neutral',villager_yes:'neutral',villager_no:'neutral',golem:'neutral',golem_hit:'neutral',bell:'block',anvil:'block',piston:'block',wind:'hostile',trial:'block',vault:'block',slime:'hostile',bee:'neutral',portal:'ambient',ghast:'hostile',blaze:'hostile',ender:'hostile',dragon:'hostile',page:'block'};
+function sndLegacy(inner,kind,mat,vol,pos,cat){if(SND.log)SND.log.push({name:'legacy.'+kind,cat,vol:vol==null?1:+vol});const a=ac();if(!a||muted||a.state!=='running'||SVOL[cat]<=0)return;
+  const [g,pan]=spos(pos,vol==null?1:vol);if(g<.003)return;const gn=a.createGain();gn.gain.value=g;let o=gn;if(pan&&a.createStereoPanner){const p=a.createStereoPanner();p.pan.value=pan;gn.connect(p);o=p}o.connect(sbus(cat));
+  SDST=gn;try{inner(kind,mat,vol)}finally{SDST=null}setTimeout(()=>{try{o.disconnect()}catch(e){}},8000)}
+function sndQuiet(inner,kind,mat,vol){const m0=muted;muted=true;try{inner(kind,mat,vol)}finally{muted=m0}}   // 소리 말고 다른 일 (스컬크 진동 …) 만 하게
+const pp=()=>(R_()-R_())*.2+1;
+function sndMobT(type,k,pos){sndMob({type,D:MOBDEF[type]||{},pos:pos?{x:pos.x,y:pos.y-.85,z:pos.z}:{x:player.pos.x,y:player.pos.y,z:player.pos.z},h:1},k)}
+// sfx(종류, 재질/정보, 볼륨, 자리) → 새 소리. 다른 sfx 덮개들보다 바깥에서 받아요 (맨 아래에서 설치)
+function sndDispatch(inner,kind,mat,vol,pos){const v=vol==null?1:vol;
+  switch(kind){
+    case 'break':case 'place':sndMat(kind,mat,pos,'block',v);return;
+    case 'dig':sndMat('dig',mat,pos,'block');return;
+    case 'step':sndMat('step',mat,pos,'player');return;
+    case 'hurt':{const w=mat,P=player;if(w==='drown')snd('hurt_drown','player',1,pp());else if(w==='fire'||w==='lava')snd('hurt_fire','player',1,pp());else snd('hurt','player',1,pp());
+      if(w==='fall'){snd((P.lastHurt||0)>4?'big_fall':'small_fall','player',1,1);const ub=getB(Math.floor(P.pos.x),Math.floor(P.pos.y-.2),Math.floor(P.pos.z));if(B[ub]&&B[ub].snd)sndMat('fall',B[ub].snd,null,'player')}return}
+    case 'sweep':case 'crit':case 'weak':case 'strong':case 'knockback':snd('atk.'+kind,'player',1,1);return;
+    case 'levelup':snd('levelup','player',v*.75,1);return;
+    case 'enchant':snd('enchant','block',1,R_()*.1+.9,pos);return;
+    case 'xp':snd('xp','player',.1,(R_()-R_())*.35+.9);return;
+    case 'pop':snd('pop','player',.2*v,((R_()-R_())*.7+1)*2);return;
+    case 'click':snd('click','master',.25*v,1);return;   // 화면 단추 (마크 forUI: 볼륨 0.25 · 주 음량)
+    case 'lever':snd('lever','block',.3,mat==='off'?.5:.6,pos);return;
+    case 'eat':snd('eat','player',.5+.5*(R_()*2|0),pp(),pos);return;
+    case 'drink':snd('drink','player',.5,R_()*.1+.9,pos);return;
+    case 'burp':{const it=typeof lastEaten!=='undefined'&&ITEM[lastEaten];if(!(it&&it.bottleBack))snd('burp','player',.5,R_()*.1+.9);sndQuiet(inner,kind,mat,vol);return}   // 마시는 건 트림 안 해요
+    case 'bow':if(typeof mat==='number'&&mat<0)snd('bow','hostile',1,1/(R_()*.4+.8),pos);else snd('bow','player',v,1/(R_()*.4+1.2)+(typeof mat==='number'?mat:1)*.5,pos);return;
+    case 'arrowhit':snd('arrow.hit','neutral',1,1.2/(R_()*.2+.9),pos);return;
+    case 'boom':snd('explode','block',4*v,(1+(R_()-R_())*.2)*.7,pos);return;
+    case 'fuse':if(mat==='creeper')snd('fuse','hostile',1,.5,pos);else snd('fuse','block',1,1,pos);return;
+    case 'door':{const id=pos?getB(Math.floor(pos.x),Math.floor(pos.y),Math.floor(pos.z)):0,b=B[id]||{},ir=typeof IRON_DOOR_LO!=='undefined'&&(id===IRON_DOOR_LO||id===IRON_DOOR_HI)||typeof IRON_TRAPDOOR!=='undefined'&&id===IRON_TRAPDOOR;
+      snd((ir?'idoor':b.use==='trap'||b.use==='gate'?'trap':'door')+(mat==='close'?'.close':'.open'),'block',1,R_()*.1+.9,pos);return}
+    case 'bucket':snd(mat==='fill_lava'||mat==='empty_lava'?'bucket.lava':mat==='fill'?'bucket.fill':'bucket.empty','block',1,1,pos);return;
+    case 'fizz':snd('fizz','block',.5,2,pos);return;
+    case 'tbreak':snd('tbreak','player',.8,.8+R_()*.4);return;
+    case 'swim':snd('swim','player',v,1+(R_()-R_())*.4);return;
+    case 'zombie':case 'zhurt':sndMobT('zombie',kind==='zhurt'?'h':'a',pos);return;
+    case 'skel':sndMobT('skeleton','a',pos);return;case 'spider':sndMobT('spider','a',pos);return;case 'pig':sndMobT('pig','a',pos);return;}
+  if(kind.startsWith('animal_')&&MSND[MSND_AL[kind.slice(7)]||kind.slice(7)]){sndMobT(kind.slice(7),'a',pos);return}
+  sndLegacy(inner,kind,mat,vol,pos,SLEG[kind]||(/^(warden|sonic)/.test(kind)?'hostile':/^(sculk|catalyst|shriek)/.test(kind)?'block':kind.startsWith('animal_')?'neutral':'master'))}
+// ── 틱마다: 첨벙 · 물속 · 몹 걸음 · 블록 주변 소리 (마크 animateTick 처럼 근처 칸을 골라서) · 레벨 업 (5레벨마다) ──
+let sndT=0,sndWasIn=false,sndUW=null,sndLv=-1,sndLvT=-999,sndXP=-1,SND_AMB=null;
+function sndTick(){const p=player;if(!started||p.dead){if(sndUW){sloopStop(sndUW);sndUW=null}if(!started)sndLv=-1;return}sndT++;
+  // 물에 들어가면 첨벙 (Entity.doWaterSplashEffect: 플레이어 0.2 × 속도 · 0.25 넘으면 크게)
+  const inW=!!p.inWater;if(inW&&!sndWasIn&&sndT>20){const v=p.vel,f=Math.min(1,Math.sqrt(v.x*v.x*.2+v.y*v.y+v.z*v.z*.2)*TICK*.2);snd(f<.25?'splash':'splash_high','player',f,1+(R_()-R_())*.4)}sndWasIn=inW;
+  // 물속 (UnderwaterAmbientSoundHandler: 되풀이 + 1% · 0.1% · 0.01% 거품)
+  const uw=typeof underWater!=='undefined'&&underWater;if(uw&&!sndUW){if(sndT>20)snd('uw.enter','ambient',1,1);sndUW=sloop('uw.loop','ambient',.7)}else if(!uw&&sndUW){sloopStop(sndUW);sndUW=null;snd('uw.exit','ambient',1,1)}
+  if(uw){const r=R_();if(r<.01)snd('uw.add','ambient',1,r<.0001?.6:r<.001?.8:1)}
+  // 몹 걸음 (1.67칸마다) · 슬라임 착지
+  for(const m of mobs){if(m.dead)continue;const dx=m.pos.x-p.pos.x,dz=m.pos.z-p.pos.z;if(dx*dx+dz*dz>400){m._sx=undefined;continue}
+    if(m._sx===undefined){m._sx=m.pos.x;m._sz=m.pos.z;m._sd=0;m._ns=1;m._og=m.onGround;continue}
+    const h=Math.hypot(m.pos.x-m._sx,m.pos.z-m._sz);m._sx=m.pos.x;m._sz=m.pos.z;
+    if(m.onGround&&!m._og&&(m.type==='slime'||m.type==='slime_s'||m.type==='magma'))snd('mob.slime.sq','hostile',m.type==='slime_s'?.4:.8,(pp()/.8)*(m.type==='magma'?.8:1),{x:m.pos.x,y:m.pos.y,z:m.pos.z});
+    m._og=m.onGround;if(!m.onGround||h>2)continue;m._sd+=h*.6;if(m._sd>m._ns){m._ns=Math.floor(m._sd)+1;sndMobStep(m)}}
+  // 블록 주변 소리: 마크는 틱마다 ±16칸 안 667칸을 봐요 → 40칸만 보고 확률을 667/40 배
+  if(!SND_AMB){SND_AMB=new Map();const S=(k,c)=>{try{const id=eval(k);if(typeof id==='number')SND_AMB.set(id,c)}catch(e){}};S('LAVA','lava');S('WATER','water');S('FIRE','fire');S('SOUL_FIRE','fire');S('CAMPFIRE','camp');S('SOUL_CAMPFIRE','camp');S('NETHER_PORTAL','portal')}
+  const K=667/40;for(let k=0;k<40;k++){const x=Math.floor(p.pos.x+R_()*32-16),y=Math.floor(p.pos.y+R_()*32-16),z=Math.floor(p.pos.z+R_()*32-16),c=SND_AMB.get(getB(x,y,z));if(!c)continue;const P={x:x+.5,y:y+.5,z:z+.5};
+    if(c==='lava'){if(getB(x,y+1,z)===AIR){if(R_()<K/100)snd('lava.pop','block',.2+R_()*.2,.9+R_()*.15,P);if(R_()<K/200)snd('lava.amb','block',.2+R_()*.2,.9+R_()*.15,P)}}
+    else if(c==='water'){const m=getM(x,y,z);if(m!==0&&!(m&8)&&R_()<K/64)snd('water.amb','block',R_()*.25+.75,R_()+.5,P)}
+    else if(c==='fire'){if(R_()<K/24)snd('fire.amb','block',1+R_(),R_()*.7+.3,P)}else if(c==='camp'){if(R_()<K/10)snd('campfire','block',.5+R_(),R_()*.7+.6,P)}else if(c==='portal'){if(R_()<K/100)snd('portal.amb','block',.5,R_()*.4+.8,P)}}
+  // 레벨 업 소리: 5레벨마다 · 5초에 한 번 · 볼륨 min(1, 레벨/30) × 0.75 (Player.giveExperienceLevels)
+  const xp=p.xp||0;if(xp!==sndXP){sndXP=xp;const lv=xpLevel(xp)[0];if(sndLv>=0&&lv>sndLv&&lv%5===0&&sndT-sndLvT>100){sndLvT=sndT;snd('levelup','player',Math.min(1,lv/30)*.75,1)}sndLv=lv}}
+{const _h=handTick;handTick=function(){_h.apply(this,arguments);try{sndTick()}catch(e){}}}
+// 상자 · 통 · 엔더 상자 여닫는 소리 (볼륨 0.5 · 음높이 0.9~1.0)
+{const _o=openScreen,_c=closeScreen;let sc=null;
+  openScreen=function(type,tgt){const r=_o.apply(this,arguments);sc=null;if(screenOpen&&tgt&&(type==='chest'||type==='echest')){const id=getB(tgt.x,tgt.y,tgt.z),k=typeof BARREL!=='undefined'&&id===BARREL?'barrel':type==='echest'?'echest':'chest';sc={k,x:tgt.x+.5,y:tgt.y+.5,z:tgt.z+.5};snd(k+'.open','block',.5,R_()*.1+.9,sc)}return r};
+  closeScreen=function(){const s=screenOpen?sc:null;sc=null;const r=_c.apply(this,arguments);if(s)snd(s.k+'.close','block',.5,R_()*.1+.9,s);return r}}
+
 /* ═════════════ 배경음악: 직접 지은 잔잔한 피아노 (매번 새로 만들어져요) ═════════════
    마크처럼: 타이틀 화면에서 조금 뒤에 한 곡, 게임 중에는 10~20분마다 한 곡 */
 let MUS=null,musT=null,musNext=0,musPlaying=false;
 function musInit(){const a=ac();if(!a)return null;if(MUS)return MUS;const bus=a.createGain();bus.gain.value=1;const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.value=5200;const rv=a.createConvolver();
   const n=a.sampleRate*3.4|0,ir=a.createBuffer(2,n,a.sampleRate);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3)*(i<a.sampleRate*.01?i/(a.sampleRate*.01):1)}
   rv.buffer=ir;const wet=a.createGain();wet.gain.value=.42;const dry=a.createGain();dry.gain.value=.8;
-  bus.connect(lp);lp.connect(dry);dry.connect(a.destination);lp.connect(rv);rv.connect(wet);wet.connect(a.destination);MUS={a,bus,cur:null};return MUS}
+  bus.connect(lp);lp.connect(dry);dry.connect(sbus('music'));lp.connect(rv);rv.connect(wet);wet.connect(sbus('music'));MUS={a,bus,cur:null};return MUS}
 function pianoNote(t,midi,vel,dur,dest){const a=MUS.a,f=440*Math.pow(2,(midi-69)/12),out=a.createGain();out.gain.value=vel;out.connect(dest);
   const dec=Math.max(.7,3.8-(midi-40)*.05),H=[[1,1],[2,.38],[3,.16],[4,.08],[5,.045],[6,.02]];
   for(const [h,amp] of H){const fh=f*h*(1+(h*h-1)*.00035);if(fh>8000)break;const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=fh;o.detune.value=(Math.random()-.5)*3;
@@ -3848,8 +4203,8 @@ function pianoNote(t,midi,vel,dur,dest){const a=MUS.a,f=440*Math.pow(2,(midi-69)
     g.gain.setTargetAtTime(0,end,.18);o.connect(g);g.connect(out);o.start(t);o.stop(end+1.2)}
   const s=a.createBufferSource();s.buffer=NOISE;const fl=a.createBiquadFilter();fl.type='bandpass';fl.frequency.value=Math.min(6000,f*3);fl.Q.value=1;const g=a.createGain();g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.0005,t+.03);s.connect(fl);fl.connect(g);g.connect(out);s.start(t,Math.random(),.05)}
 // 곡 만들기: 조 · 빠르기 · 화음 진행 · 짧은 동기를 되풀이하며 조금씩 바꾼 멜로디 · 펼친 화음 반주
-function composePiece(seed){const r=mulberry(seed|0),pick=A=>A[Math.floor(r()*A.length)];
-  const minor=r()<.35,sc=minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11],root=48+pick([0,2,3,5,7,8,9,10]),bpm=58+Math.floor(r()*16),beat=60/bpm;
+function composePiece(seed,mood){const r=mulberry(seed|0),pick=A=>A[Math.floor(r()*A.length)];
+  const minor=r()<.35||mood==='nether'||mood==='end',sc=minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11],root=48+pick([0,2,3,5,7,8,9,10])+(mood==='nether'?-5:mood==='end'?7:0),bpm=58+Math.floor(r()*16)-(mood==='nether'||mood==='end'?10:0),beat=60/bpm;
   const progs=minor?[[0,5,2,6],[0,3,5,4],[5,6,0,0],[0,6,5,6]]:[[0,5,3,4],[0,4,5,3],[3,0,4,5],[0,2,3,3],[5,3,0,4]];
   const prog=pick(progs),deg=(d,o)=>{const k=((d%7)+7)%7,oc=Math.floor(d/7);return root+sc[k]+12*(oc+(o||0))};
   const N=[];// [beat, midi, vel, durBeats]
@@ -3868,16 +4223,21 @@ function composePiece(seed){const r=mulberry(seed|0),pick=A=>A[Math.floor(r()*A.
   N.push([bars*4,deg(prog[0],-1),.2,8]);N.push([bars*4,deg(prog[0]+4,0),.18,8]);N.push([bars*4+.5,deg(prog[0]+7,1),.22,8]);
   N.sort((a,b)=>a[0]-b[0]);return{N,beat,len:(bars*4+8)*beat}}
 function musStop(fade){clearInterval(musT);musT=null;musPlaying=false;if(!MUS||!MUS.cur)return;const a=MUS.a,t=a.currentTime,g=MUS.cur;g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(0,t+(fade||1.5));setTimeout(()=>{try{g.disconnect()}catch(e){}},(fade||1.5)*1000+3000);MUS.cur=null}
-function musPlay(){if(!musicOn||muted)return;const M=musInit();if(!M||M.a.state!=='running')return;const P=composePiece(Math.random()*1e9);const a=M.a,t0=a.currentTime+.3;let i=0;musPlaying=true;
+function musPlay(ty){if(!musicOn||muted||SVOL.music<=0)return;const M=musInit();if(!M||M.a.state!=='running')return;musCur=ty||musSit();const P=composePiece(Math.random()*1e9,musCur);const a=M.a,t0=a.currentTime+.3;let i=0;musPlaying=true;
   const pg=a.createGain();pg.connect(M.bus);pg.gain.setValueAtTime(0,a.currentTime);pg.gain.linearRampToValueAtTime(.26,t0+2);M.cur=pg;
   clearInterval(musT);musT=setInterval(()=>{const now=a.currentTime;while(i<P.N.length&&t0+P.N[i][0]*P.beat<now+2.5){const n=P.N[i++];pianoNote(t0+n[0]*P.beat,n[1],n[2],n[3]*P.beat,pg)}
-    if(i>=P.N.length&&now>t0+P.len){clearInterval(musT);musT=null;musPlaying=false;if(M.cur===pg)M.cur=null;musSchedule(musMode==='menu')}},400)}
-// 다음 곡 시간 (마크: 타이틀은 1~30초, 게임 중은 10~20분)
-function musSchedule(menu){musNext=performance.now()+(menu?(1+Math.random()*29):(600+Math.random()*600))*1000}
-let musMode='';
-function musicTick(){const mode=started?'game':menuOpen==='title'||phase==='boot'?'menu':'';if(mode!==musMode){if(musPlaying)musStop(2);musMode=mode;if(mode)musSchedule(mode==='menu');if(mode==='game')musNext=performance.now()+(30+Math.random()*60)*1000}
-  if(!musicOn||muted){if(musPlaying)musStop(1);return}if(mode&&!musPlaying&&performance.now()>musNext)musPlay()}
-function musicToggle(){if(!musicOn&&musPlaying)musStop(1);else if(musicOn)musNext=performance.now()+2000}
+    if(i>=P.N.length&&now>t0+P.len){clearInterval(musT);musT=null;musPlaying=false;if(M.cur===pg)M.cur=null;musEnded()}},400)}
+// 마크 MusicManager (틱): 타이틀 20~600 (지금 곡을 바꿔요) · 게임 · 창작 · 네더 12000~24000 · 엔드 6000~24000 (바꿔요) · 처음엔 100틱 (P2-SND)
+//   곡이 끝나면 다음까지 min(남은 시간, 무작위 최소~최대) · 바꾸는 음악이면 지금 곡을 멈추고 0~최소/2 뒤 · 네더 · 엔드는 어둡게 (단조 · 낮게/높게 · 느리게)
+const MUS_T={menu:[20,600,1],game:[12000,24000,0],creative:[12000,24000,0],nether:[12000,24000,0],end:[6000,24000,1]};
+let musDelay=100,musCur='';
+function musSit(){return started?(DIM==='end'?'end':DIM==='nether'?'nether':typeof creative==='function'&&creative()?'creative':'game'):menuOpen==='title'||phase==='boot'?'menu':''}
+function musEnded(){const T=MUS_T[musSit()];if(T)musDelay=Math.min(musDelay,T[0]+Math.floor(Math.random()*(T[1]-T[0]+1)))}
+function musicTick(){const ty=musSit(),T=MUS_T[ty];   // 1초 = 20틱마다
+  if(!musicOn||muted||SVOL.music<=0){if(musPlaying)musStop(1);return}if(!T)return;
+  if(musPlaying&&musCur!==ty&&T[2]){musStop(2);musDelay=Math.floor(Math.random()*(T[0]/2+1))}
+  musDelay=Math.min(musDelay,T[1]);if(!musPlaying&&(musDelay-=20)<=0)musPlay(ty)}
+function musicToggle(){if(!musicOn&&musPlaying)musStop(1);else if(musicOn)musDelay=Math.min(musDelay,40)}
 setInterval(musicTick,1000);
 
 /* ═════════════ 플레이어 ═════════════ */
@@ -4000,7 +4360,7 @@ let caveMood=0;
 function caveTick(){if(DIM!=='over'||muted)return;const p=player,x=Math.floor(p.pos.x+(Math.random()*17-8)),y=Math.floor(p.pos.y+1+(Math.random()*17-8)),z=Math.floor(p.pos.z+(Math.random()*17-8));if(getB(x,y,z)!==AIR)return;const l=lightAt(x,y,z);
   if(l[0]>0)caveMood-=l[0]/15*.001;else caveMood-=(l[1]-1)/6000;caveMood=clamp(caveMood,0,1);if(caveMood>=1){caveMood=0;caveSound(x-p.pos.x,z-p.pos.z)}}
 function caveSound(dx,dz){const a=ac();if(!a||a.state!=='running')return;const M=musInit();if(!M)return;const t=a.currentTime,out=a.createGain();out.gain.value=.5;const pan=a.createStereoPanner?a.createStereoPanner():null;
-  if(pan){pan.pan.value=clamp(dx/8,-1,1)*.7;out.connect(pan);pan.connect(M.bus)}else out.connect(M.bus);const k=Math.floor(Math.random()*4);
+  if(pan){pan.pan.value=clamp(dx/8,-1,1)*.7;out.connect(pan);pan.connect(sbus('ambient'))}else out.connect(sbus('ambient'));const k=Math.floor(Math.random()*4);
   if(k===0){for(const [f0,f1,d] of [[220,165,0],[233,174,.08]]){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f0,t+d);o.frequency.exponentialRampToValueAtTime(f1,t+d+2.6);g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.16,t+d+.6);g.gain.exponentialRampToValueAtTime(.001,t+d+3);o.connect(g);g.connect(out);o.start(t+d);o.stop(t+d+3.1)}}
   else if(k===1){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=160;const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.9,t+1.2);g.gain.exponentialRampToValueAtTime(.001,t+3.5);s.connect(fl);fl.connect(g);g.connect(out);s.start(t);s.stop(t+3.6)}
   else if(k===2){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='bandpass';fl.Q.value=6;fl.frequency.setValueAtTime(500,t);fl.frequency.exponentialRampToValueAtTime(1400,t+1.5);fl.frequency.exponentialRampToValueAtTime(400,t+3);const g=a.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.35,t+1);g.gain.exponentialRampToValueAtTime(.001,t+3.2);s.connect(fl);fl.connect(g);g.connect(out);s.start(t);s.stop(t+3.3)}
@@ -4091,7 +4451,7 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   // 걸은 거리 · 발소리 (Entity.move: 1.67칸마다 한 걸음)
   const hm=Math.hypot(p.pos.x-ox,p.pos.z-oz),dyM=p.pos.y-oy;
   p.walkDist+=hm*.6;p.moveDist+=(onLadder?Math.hypot(hm,dyM):hm)*.6;
-  if(p.moveDist>p.nextStep){const ub=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(ub&&(p.onGround||onLadder)){p.nextStep=Math.floor(p.moveDist)+1;const b=B[onLadder?LADDER:ub];if(b&&b.snd&&!p.inWater)sfx('step',b.snd,.8)}else if(p.inWater&&!p.onGround&&hm>.01){p.nextStep=Math.floor(p.moveDist)+1}}
+  if(p.moveDist>p.nextStep){const ub=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(ub&&(p.onGround||onLadder)){p.nextStep=Math.floor(p.moveDist)+1;const b=B[onLadder?LADDER:ub];if(b&&b.snd&&!p.inWater)sfx('step',onLadder?b.snd:stepMat(p.pos.x,p.pos.y,p.pos.z,ub));else if(p.inWater)sfx('swim',null,Math.min(1,Math.sqrt(vx*vx*.2+vy*vy+vz*vz*.2)*.35))}else if(p.inWater&&!p.onGround&&hm>.01){p.nextStep=Math.floor(p.moveDist)+1;sfx('swim',null,Math.min(1,Math.sqrt(vx*vx*.2+vy*vy+vz*vz*.2)*.35))}}
   {const h=p.onGround&&!swimming?Math.min(.1,Math.hypot(vx,vz)):0;p.bob+=(h-p.bob)*.4}
   if(p.sprint&&p.onGround&&!p.inWater&&!p.sneak)sprintDust(p);
   moveStats(p,p.pos.x-ox,dyM,p.pos.z-oz,onLadder);
@@ -4138,7 +4498,7 @@ function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void'||poe
   // 갑옷 (불에 타기 · 낙하 · 익사 · 굶주림 · 공허 · 음파 · 벽 끼임은 무시) → 내구도 −max(1, 피해/4) · 보호 마법부여 EPF (보호 1/레벨 · 가벼운 착지 3/레벨 낙하만, 20까지 = 80%)
   if(!(o&&o.noArmor)&&why!=='fall'&&why!=='void'&&why!=='starve'&&why!=='drown'&&why!=='sonic'&&why!=='wall'){const pts=armorPts(),tg=armor.reduce((s,a)=>s+(a&&ITEM[a.id].armor?ITEM[a.id].armor.tough:0),0);if(pts>0){d=d*(1-Math.min(20,Math.max(pts/5,pts-d/(2+tg/4)))/25);armor.forEach((a,i)=>{if(a&&ITEM[a.id].armor&&!ITEM[a.id].elytra){a.d=(a.d||0)+Math.max(1,Math.floor(raw0/4));if(a.d>=ITEM[a.id].armor.dur){armor[i]=null;sfx('tbreak')}}})}}
   if(why!=='void'&&why!=='sonic'&&why!=='starve'&&why!=='drown'){let epf=0;armor.forEach(a=>{if(a&&a.e&&a.e.prot)epf+=a.e.prot});if(why==='fall'&&armor[3]&&armor[3].e&&armor[3].e.fall)epf+=3*armor[3].e.fall;if(epf>0)d*=1-Math.min(20,epf)/25}
-  d=Math.round(d*2)/2;if(d<=0)return;p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt');hudHurt();
+  d=Math.round(d*2)/2;if(d<=0)return;p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt',why);hudHurt();
   // 마크: 맞은 쪽 반대로 화면이 기울어요 (bobHurt) · 넉백 0.4
   p.hurtTime=10;p.hurtDir=src?Math.atan2(src.x-p.pos.x,src.z-p.pos.z)/DEG-(180-p.yaw/DEG):(Math.random()*2|0)*180;
   if(src){const k=8*(1-armor.reduce((s,a)=>s+(a&&ITEM[a.id].armor&&ITEM[a.id].armor.mat===4?.1:0),0)),dx=src.x-p.pos.x,dz=src.z-p.pos.z,l=Math.hypot(dx,dz)||1;if(k>0){p.vel.x=p.vel.x/2-dx/l*k;p.vel.z=p.vel.z/2-dz/l*k;if(p.onGround)p.vel.y=Math.min(8,p.vel.y/2+k)}}   // 네더라이트 갑옷 한 벌마다 넉백 저항 0.1
@@ -4184,7 +4544,7 @@ function updateBreaking(dt){if(breakCD>0)breakCD-=dt;
   if(!mouseL||!target||screenOpen||player.dead){breaking=null;crackM.visible=false;return}
   if(!breaking||breaking.x!==target.x||breaking.y!==target.y||breaking.z!==target.z){breaking={x:target.x,y:target.y,z:target.z,id:target.id,t:0,snd:0}}
   if(breakCD>0)return;const need=breakTime(target.id);breaking.t+=dt;doSwing();
-  breaking.snd-=dt;if(breaking.snd<=0){breaking.snd=.2;sfx('dig',B[target.id].snd,.6)}
+  breaking.snd-=dt;if(breaking.snd<=0){breaking.snd=.2;sfx('dig',B[target.id].snd,.6,{x:target.x+.5,y:target.y+.5,z:target.z+.5})}
   breaking.pt=(breaking.pt||0)-dt;if(breaking.pt<=0&&B[target.id]&&B[target.id].tex){breaking.pt=.05;blockHitFx(target.x,target.y,target.z,target.face,target.id)}
   if(breaking.t>=need){doBreak(target.x,target.y,target.z,target.id);breaking=null;crackM.visible=false;breakCD=need===0&&!creative()?.05:.25;return}
   if(need<Infinity&&need>0){const st=Math.min(9,Math.floor(breaking.t/need*10));crackM.material.map=crackTexs[st];crackM.visible=true;const bb=blockBox(target.id,getM(target.x,target.y,target.z));crackM.scale.set(bb[0],bb[1],bb[2]);crackM.position.set(target.x+bb[3],target.y+bb[4],target.z+bb[5])}}
@@ -4194,7 +4554,7 @@ function bedPartner(x,y,z,id){const want=id===BED?BED_HEAD:BED,m=getM(x,y,z),d=F
 function doBreak(x,y,z,id){const b=B[id],harvest=canHarvest(id);if(typeof nvGuard==='function')nvGuard(x,y,z,id,false);if(!creative())dropFor(x,y,z,id,harvest);if(id===DECORATED_POT)trialPotBreak(x,y,z);if(id===BED||id===BED_HEAD){const q=bedPartner(x,y,z,id);if(q)setBlock(q[0],q[1],q[2],AIR)}
   const te=tiles.get(tkey(x,y,z));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,x+.5,y+.5,z+.5)});tiles.delete(tkey(x,y,z));mpTile(tkey(x,y,z),null);if(screenOpen&&screenTile===te)closeScreen()}
   const wet=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0]].some(([a,c,e])=>getB(x+a,y+c,z+e)===WATER);
-  blockBreakFx(x,y,z,id);setBlock(x,y,z,wet?WATER:AIR);sfx('break',b.snd);
+  blockBreakFx(x,y,z,id);setBlock(x,y,z,wet?WATER:AIR);sfx('break',b.snd,1,{x:x+.5,y:y+.5,z:z+.5});
   const above=getB(x,y+1,z);if(B[above]&&(B[above].cross||(B[above].torch&&!((above===TORCH||above===SOUL_TORCH)&&(getM(x,y+1,z)&7))))){dropFor(x,y+1,z,above,true);setBlock(x,y+1,z,AIR)}
   for(const d of HDIRS){const D=FACES[d].d,nx=x+D[0],nz=z+D[2],n=getB(nx,y,nz);if((n===TORCH||n===SOUL_TORCH)&&(getM(nx,y,nz)&7)===1+HDIRS.indexOf(d)){dropFor(nx,y,nz,n,true);setBlock(nx,y,nz,AIR)}}   // (Agent 01) 벽 횃불
   settle(x,y+1,z);if(isLog(id))scheduleDecay(x,y,z);
@@ -4237,7 +4597,7 @@ function useItem(first){const st=inv[sel];if(targetMob&&first){feedMob(targetMob
     setBlock(x,y,z,BED,false,false,HDIRS.indexOf(f));setBlock(hx,y,hz,BED_HEAD,false,false,HDIRS.indexOf(f));sfx('place',b.snd);doSwing();if(!creative()){st.n--;if(st.n<=0)inv[sel]=null}renderHotbar();useCD=.22;return}
   setBlock(x,y,z,id,false,false,placeMeta(id,target));if(b.sap)saplings.push({d:DIM,x,y,z,t:nowT()+120+Math.random()*240});if(b.sponge)spongeAbsorb(x,y,z);if(id===SUGAR_CANE)crops.push({d:DIM,x,y,z,t:nowT()+120+Math.random()*120,cane:1});if(b.use==='echest'||id===BARREL){}
   if(b.fall)settle(x,y,z);
-  sfx('place',b.snd);doSwing();if(!creative()){st.n--;if(st.n<=0)inv[sel]=null}renderHotbar();useCD=.22}
+  sfx('place',b.snd,1,{x:x+.5,y:y+.5,z:z+.5});doSwing();if(!creative()){st.n--;if(st.n<=0)inv[sel]=null}renderHotbar();useCD=.22}
 const plantOK=(b,below)=>b.onB==='any'?true:b.onB==='nether'?(below===CRIMSON_NYLIUM||below===WARPED_NYLIUM||below===NETHERRACK||below===SOUL_SOIL):b.onB==='soul'?below===SOUL_SAND:b.onB==='cane'?(below===SUGAR_CANE||below===SAND||below===GRASS||below===DIRT||below===RED_SAND):(below===GRASS||below===DIRT||below===SNOWY_GRASS||below===MYCELIUM||(b.id===DEAD_BUSH&&(below===SAND||below===RED_SAND))||((b.id===RED_MUSHROOM||b.id===BROWN_MUSHROOM)&&OP[below]));
 function hitPoint(t){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);return camera.position.clone().addScaledVector(d,t.t)}
 function boxIntersect(x,y,z,p,hw,h){return p.x+hw>x&&p.x-hw<x+1&&p.y+h>y&&p.y<y+1&&p.z+hw>z&&p.z-hw<z+1}
@@ -4250,7 +4610,7 @@ function updateUse(dt){if(useCD>0)useCD-=dt;
     if(drawT>0){let pw=drawT;pw=Math.min(1,(pw*pw+pw*2)/3);drawT=0;if(pw>=.1){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);{const pwr=inv[sel]&&inv[sel].e&&inv[sel].e.power||0,base=2+(pwr?pwr*.5+.5:0);let dm=Math.ceil(3*pw*base);if(pw>=1)dm+=Math.floor(Math.random()*(dm/2+2));   // BowItem.getPowerForTime · 화살 3칸/틱 × 힘 · 피해 ceil(속도 × 2) · 꽉 당기면 치명타
         shootArrow(camera.position.clone().addScaledVector(d,.5),d,60*pw,'player',dm);const pr=projs[projs.length-1];if(pr&&pr.owner==='player'){pr.base=base;pr.crit=pw>=1}}
       {const E=inv[sel]&&inv[sel].e||{},pr=projs[projs.length-1];if(pr&&pr.owner==='player'){pr.flame=E.flame;pr.punch=E.punch;if(E.infin)pr.noPick=1}if(!creative()&&!E.infin){const k=inv.findIndex(s=>s&&s.id===ARROW);inv[k].n--;if(!inv[k].n)inv[k]=null}if(!creative())damageHeld(1)}renderHotbar()}return}}else drawT=0}
-  if(eating){const st=inv[sel];if(!mouseR||!st||!ITEM[st.id].food||screenOpen){eating=false;eatT=0;return}eatT+=dt;if(Math.floor(eatT*5)!==Math.floor((eatT-dt)*5))sfx('eat');
+  if(eating){const st=inv[sel];if(!mouseR||!st||!ITEM[st.id].food||screenOpen){eating=false;eatT=0;return}eatT+=dt;if(eatT>.35&&Math.floor(eatT*5)!==Math.floor((eatT-dt)*5))sfx(ITEM[st.id].bottleBack?'drink':'eat');
     if(eatT>=useSec(st)){const it=ITEM[st.id],f=it.food;player.food=Math.min(20,player.food+f[0]);player.sat=Math.min(player.food,player.sat+f[1]);st.n--;if(st.n<=0)inv[sel]=null;if(it.gapple)player.hp=Math.min(20,player.hp+6);if(it.chorus)chorusTP();if(it.bowlBack)giveOrDrop({id:BOWL,n:1,d:0});if(it.bottleBack)giveOrDrop({id:GLASS_BOTTLE,n:1,d:0});eatT=0;eating=false;sfx('burp');renderHotbar();updateStats();useCD=.3}return}
   if(mouseR&&useCD<=0&&!screenOpen&&!player.dead){useItem(false)}}
 function attack(m){const p=player,st=inv[sel],tool=toolOf(st),E=st&&st.e||{};const f2=atkScale(.5),strong=f2>.9;
@@ -4263,7 +4623,7 @@ function attack(m){const p=player,st=inv[sel],tool=toolOf(st),E=st&&st.e||{};con
   const fwx=-Math.sin(p.yaw),fwz=-Math.cos(p.yaw);
   if(hit0&&!m.dead){if(E.fire)m.fireT=4*E.fire;const kb=(E.knock||0)+(sprintHit?1:0);if(kb){mobKnock(m,kb*.5,fwx,fwz);p.vel.x*=.6;p.vel.z*=.6;p.sprint=false}}
   // 휩쓸기: 맞은 몹 상자를 (1, 0.25, 1) 키운 범위 안 · 나와 3칸 안 · 길들인 동물 빼고 → 0.4 넉백 + 1 (+휩쓸기 마법) 피해
-  if(crit){critFx(m);sfx('crit')}else if(sweep){for(const o of mobs)if(o!==m&&!o.dead&&!o.tamed&&Math.abs(o.pos.x-m.pos.x)<o.hw+m.hw+1&&Math.abs(o.pos.z-m.pos.z)<o.hw+m.hw+1&&o.pos.y<m.pos.y+m.h+.25&&o.pos.y+o.h>m.pos.y-.25&&o.pos.distanceToSquared(p.pos)<9){mobKnock(o,.4,fwx,fwz);hurtMob(o,1+(E.sweep?E.sweep/(E.sweep+1)*dmg:0),p.pos)}sweepFx(m);sfx('sweep')}else if(!strong)sfx('weak');
+  if(crit){critFx(m);sfx('crit')}else if(sweep){for(const o of mobs)if(o!==m&&!o.dead&&!o.tamed&&Math.abs(o.pos.x-m.pos.x)<o.hw+m.hw+1&&Math.abs(o.pos.z-m.pos.z)<o.hw+m.hw+1&&o.pos.y<m.pos.y+m.h+.25&&o.pos.y+o.h>m.pos.y-.25&&o.pos.distanceToSquared(p.pos)<9){mobKnock(o,.4,fwx,fwz);hurtMob(o,1+(E.sweep?E.sweep/(E.sweep+1)*dmg:0),p.pos)}sweepFx(m);sfx('sweep')}else sfx(strong?'strong':'weak');if(sprintHit)sfx('knockback');
   p.atkTicker=0;doSwing();if(tool)damageHeld(tool.type==='sword'||tool.type==='mace'?1:2);p.exh+=.1}
 
 /* ── 파티클 ── */
@@ -4449,14 +4809,14 @@ function spawnMob(type,x,y,z,baby){const D=MOBDEF[type],{g,P}=makeMob(type);if(b
   const m={type,D,pos:new V3(x,y,z),vel:new V3(),yaw:Math.random()*6.28,hp:D.hp,hw:D.hw*(baby?.5:1),h:D.h*(baby?.5:1),g,P,onGround:false,hitX:false,hitZ:false,ai:{t:0,mv:false,dir:0},panic:0,hurtT:0,dead:false,deadT:0,atk:0,walk:0,burnT:0,fuse:0,snd:3+Math.random()*8,baby:baby?240:0,love:0,breedCD:0,angry:0};mobs.push(m);if(D.init)D.init(m);return m}
 function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx('break','wood')}return}if(m.dead)return;
   // 무적 10틱 (LivingEntity.hurt): 그 사이엔 더 센 피해만 차이만큼 (넉백 · 소리 없이)
-  if(m.hurtT>0){if(d<=(m.lastHurt||0))return;const raw=d;d-=m.lastHurt||0;m.lastHurt=raw;m.hp-=d;src=null}else{m.lastHurt=d;m.hp-=d;m.hurtT=.5;sfx(m.D.hostile?'zhurt':'animal_'+m.type)}
+  if(m.hurtT>0){if(d<=(m.lastHurt||0))return;const raw=d;d-=m.lastHurt||0;m.lastHurt=raw;m.hp-=d;src=null}else{m.lastHurt=d;m.hp-=d;m.hurtT=.5;if(m.hp>0)sndMob(m,'h')}
   if(src)mobKnock(m,.4,m.pos.x-src.x,m.pos.z-src.z);   // 맞으면 늘 0.4 (LivingEntity.hurt → knockback)
   if(!m.D.hostile)m.panic=4;else m.angry=30;
   if(m.D.split&&m.hp<=0)for(let k=0;k<2+Math.floor(Math.random()*2);k++)spawnMob(m.D.split,m.pos.x+(Math.random()-.5),m.pos.y+.3,m.pos.z+(Math.random()-.5));
   if(m.D.neutral&&!m.tamed){m.angry=30;if(typeof nvAnger==='function')nvAnger(m,src)}
   if(m.D.ender&&m.hp>0)enderTP(m);if(m.D.blink&&m.hp>0&&Math.random()<.35)shadowBlink(m);
   if(m.D.villager&&src&&Math.hypot(src.x-player.pos.x,src.z-player.pos.z)<6)golemAngry=40;
-  if(m.hp<=0){m.dead=true;m.deadT=0;if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y+.5,m.pos.z);if(m.type==='dragon')dragonDied(m);else dropXP(m.pos.x,m.pos.y+.5,m.pos.z,m.D.xp||(m.D.hostile?5:1+Math.floor(Math.random()*3)))}}}
+  if(m.hp<=0){m.dead=true;m.deadT=0;sndMob(m,'d');if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y+.5,m.pos.z);if(m.type==='dragon')dragonDied(m);else dropXP(m.pos.x,m.pos.y+.5,m.pos.z,m.D.xp||(m.D.hostile?5:1+Math.floor(Math.random()*3)))}}}
 function tamedAI(m,dt,dx,dz,dist){let foe=null,fd=12;for(const o of mobs)if(o!==m&&!o.dead&&o.D.hostile&&!o.tamed&&!o.D.neutral&&!o.D.boss){const d=o.pos.distanceTo(m.pos);if(d<fd){fd=d;foe=o}}
   if(foe){m.ai.dir=Math.atan2(foe.pos.x-m.pos.x,foe.pos.z-m.pos.z);m.ai.sp=m.D.sp*1.3;if(fd<1.6&&m.atk<=0){m.atk=1;hurtMob(foe,4,m.pos)}return true}
   if(dist>18){m.pos.set(player.pos.x+(Math.random()-.5)*2,player.pos.y,player.pos.z+(Math.random()-.5)*2);return false}if(dist>4){m.ai.dir=Math.atan2(dx,dz);m.ai.sp=m.D.sp;return true}return false}
@@ -4467,7 +4827,7 @@ function los(a,b){const d=new V3().subVectors(b,a),l=d.length();d.normalize();co
 const projs=[];
 function shootArrow(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.6),new THREE.MeshLambertMaterial({color:0x8a6a3e}));m.position.copy(from);scene.add(m);const sp=Math.max(.01,speed*TICK);
   // 속도는 칸/초 · 기본 피해 base: 몹은 2 + 삼각분포 (마크 setBaseDamageFromMob · 보통 난이도), 플레이어는 dmg 에 맞춰요 (활 쪽에서 base · crit 을 고쳐 써도 돼요)
-  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(speed),owner,dmg,m,life:0,stuck:false,w:.5,tk:0,src:owner==='mob'?hbShooter(from):null,base:owner==='mob'?2+hbTri(.22,.57425):dmg/sp});sfx('bow')}
+  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(speed),owner,dmg,m,life:0,stuck:false,w:.5,tk:0,src:owner==='mob'?hbShooter(from):null,base:owner==='mob'?2+hbTri(.22,.57425):dmg/sp});sfx('bow',owner==='player'?Math.min(1,speed/60):-1,1,from)}
 function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(tStopT>0&&p.owner==='mob')continue;p.life+=dt;
   if(!p.stuck){let gone=false;for(let n=hbTicks(p,dt);n>0&&!gone&&!p.stuck;n--)gone=hbArrowTick(p);   // 틱마다 움직이며 블록 · 엔티티 상자를 쓸어 봐요 (Agent 10)
     if(gone){scene.remove(p.m);projs.splice(i,1);continue}
@@ -4475,7 +4835,7 @@ function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(
   else if(p.owner==='player'&&!p.noPick&&p.life>.5&&p.pos.distanceTo(new V3(player.pos.x,player.pos.y+.8,player.pos.z))<1.5&&addItem({id:ARROW,n:1})===0){sfx('pop');renderHotbar();scene.remove(p.m);projs.splice(i,1);continue}
   else if(!boxHits(p.pos.x,p.pos.y-.06,p.pos.z,.06,.12)){p.stuck=false;p.life=0;p.vel.set(0,0,0);p.prev.copy(p.pos);p.acc=0}   // 꽂힌 블록이 없어지면 떨어져요 (마크 shouldFall)
   if(p.life>(p.stuck?60:10)){scene.remove(p.m);projs.splice(i,1)}}}
-function explode(x,y,z,r){sfx('boom');const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
+function explode(x,y,z,r){sfx('boom',null,1,{x,y,z});const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
     if(!id||id===BEDROCK||id===OBSIDIAN||B[id].liquid||CMD_NOGRIEF)continue;if(Math.random()<.3)dropFor(bx,by,bz,id,true);const te=tiles.get(tkey(bx,by,bz));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,bx+.5,by+.5,bz+.5)});tiles.delete(tkey(bx,by,bz))}setBlock(bx,by,bz,AIR,true)}
   for(let i=0;i<30;i++)smoke(x+(Math.random()-.5)*r*2,y+(Math.random()-.5)*r*2,z+(Math.random()-.5)*r*2);
   const c=new V3(x,y,z);const pd=c.distanceTo(new V3(player.pos.x,player.pos.y+.9,player.pos.z));if(pd<r*2&&!creative()){const f=1-pd/(r*2);hurtPlayer(Math.round(f*f*22+f*4),c,'creeper');player.vel.y+=f*8}
@@ -4501,7 +4861,7 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     if(br){dir=br.dir;sp=br.sp;face=br.face!=null?br.face:null}
     else if(target){dir=Math.atan2(dx,dz);face=dir;
       if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&dist<16&&m.atk<=0){m.atk=2+Math.random();const from=new V3(m.pos.x,m.pos.y+hbEye(m)-.1,m.pos.z),d=hbAim(from,D.potion?8:6);(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,32,'mob',2+Math.floor(Math.random()*3))}}
-      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3.2){sp=0;if(m.fuse===0)sfx('fuse');m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
+      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3.2){sp=0;if(m.fuse===0)sfx('fuse','creeper',1,m.pos);m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
       else{sp=dist>1.1?D.sp:0;if(dist<1.5+m.hw&&Math.abs(dy)<1.6&&m.atk<=0){m.atk=1;hurtPlayer(D.melee,m.pos,m.type);if(D.toss&&!creative()&&!player.dead)player.vel.y=Math.max(player.vel.y,9)}}}
     else if(m.panic>0){m.fuse=0;if(m.ai.t<=0){m.ai.t=.6;m.ai.dir=Math.atan2(-dx,-dz)+(Math.random()-.5)*1.4}dir=m.ai.dir;sp=D.sp*2.2}
     else if(m.tamed&&tamedAI(m,dt,dx,dz,dist)){dir=m.ai.dir;sp=m.ai.sp;face=dir}
@@ -4518,7 +4878,7 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     const fy=m.vel.y;moveEnt(m,m.vel.x*dt,m.vel.y*dt,m.vel.z*dt,m.hw,m.h);
     if(m.onGround&&fy<-17)hurtMob(m,Math.floor((fy*fy/64)-3),null);
     if(D.burn){const l=lightAt(m.pos.x,m.pos.y+1.7,m.pos.z);if(daylight>.65&&l[0]>=15&&!inW&&!isWet(m.pos.x,m.pos.y+1.7,m.pos.z))m.fireT=Math.max(m.fireT||0,8)}if(inW)m.fireT=0;
-    m.snd-=dt;if(m.snd<=0){m.snd=6+Math.random()*10;if(dist<16)sfx(D.snd||'animal_'+m.type,null,Math.max(.1,1-dist/16))}
+    m.snd-=dt;if(m.snd<=0&&Math.random()<-m.snd*.4*dt){m.snd=4;sndMob(m,'a')}
     const hs=Math.hypot(m.vel.x,m.vel.z);m.walk+=hs*dt*(m.type==='chicken'?6:3.2);const sw=Math.sin(m.walk)*Math.min(1,hs/1.5)*.8;
     if(m.type==='spider')m.P.legs.forEach((l,j)=>{l.rotation.x=Math.sin(m.walk+j*1.3)*.35*Math.min(1,hs)});
     else m.P.legs.forEach((l,j)=>l.rotation.x=(j%2?sw:-sw)*(j>1&&m.P.legs.length===4?-1:1));
@@ -4616,7 +4976,7 @@ function hbBoatHit(b,d){b.hurtT=.25;b.hp-=d>=4?4:1;sfx('dig','wood',.7);if(b.hp>
 // 화살 1틱 (마크 AbstractArrow.tick): 물이면 ×0.6 → 움직이며 맞히기 → 공기 ×0.99 → 중력 0.05. 다 쓰였으면 true
 function hbArrowTick(p){const v=p.vel,inW=hbInW(p.pos);p.prev.copy(p.pos);if(inW)v.multiplyScalar(.6);
   const a=p.pos.clone(),b=a.clone().addScaledVector(v,TICK),h=hbSweep(p,a,b);p.tk=(p.tk||0)+1;
-  if(h&&h.kind==='block'){p.pos.copy(h.pos).sub(new V3(Math.sign(v.x),Math.sign(v.y),Math.sign(v.z)).multiplyScalar(.05));p.stuck=true;p.life=0;v.set(0,0,0);sfx('dig','wood',.5);return false}
+  if(h&&h.kind==='block'){p.pos.copy(h.pos).sub(new V3(Math.sign(v.x),Math.sign(v.y),Math.sign(v.z)).multiplyScalar(.05));p.stuck=true;p.life=0;v.set(0,0,0);sfx('arrowhit',null,1,p.pos);return false}
   if(h){p.pos.copy(h.pos);if(hbArrowHit(p,h))return true}else p.pos.copy(b);
   if(!inW)v.multiplyScalar(.99);v.y-=.05/TICK;return false}
 // 화살이 엔티티에 맞음: 피해 = ⌈속도(칸/틱) × 기본 피해⌉ (+ 치명타면 0 ~ 피해/2+1) · 무적 시간이면 튕겨 나와요
@@ -4624,7 +4984,7 @@ function hbArrowHit(p,h){const sp=p.vel.length()*TICK;let d=Math.ceil(Math.max(0
   const src=h.pos.clone().addScaledVector(p.vel.clone().normalize(),-1),bounce=()=>{p.vel.multiplyScalar(-.1);p.skip=h.e;return false};
   if(h.kind==='mob'){const m=h.e;if(m.D.deflect){p.vel.multiplyScalar(-.5);p.skip=m;return false}   // 브리즈: 거꾸로 튕겨내요
     if(m.D.ender){enderTP(m);p.skip=m;return false}   // 엔더맨: 순간 이동해 피하고 화살은 지나가요
-    if(m.hurtT>0)return bounce();hurtMob(m,d,src);if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
+    if(m.hurtT>0)return bounce();sfx('arrowhit',null,1,p.pos);hurtMob(m,d,src);if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
   if(h.kind==='player'){if(creative()||player.hurtT>0)return bounce();hurtPlayer(d,src,p.owner==='mob'?'skeleton':'arrow');if(p.flame)player.burn=5;return true}
   if(h.kind==='remote'){if(p.owner!=='player'||!MPS)return bounce();const r=h.e;r.hurtT=.35;sendHit(r,d,src,p.punch||0,p.flame?1.25:0);sfx('hurt');return true}
   if(h.kind==='boat'){hbBoatHit(h.e,d);return true}
@@ -4783,7 +5143,7 @@ function evalComp(x,y,z){const id=getB(x,y,z),m=getM(x,y,z);
   else if(id===TNT){if(inputPower(x,y,z)>0)primeTNT(x,y,z)}
   else if(id===NOTE_BLOCK){const on=inputPower(x,y,z)>0;if(on&&!(m&128))noteSound(m&31);if(!!(m&128)!==on)setBlock(x,y,z,NOTE_BLOCK,true,false,(m&127)|(on?128:0))}
   else if(id===DOOR_LO||id===IRON_DOOR_LO||id===DOOR_HI||id===IRON_DOOR_HI){const lo=id===DOOR_LO||id===IRON_DOOR_LO,ly=lo?y:y-1,lid=getB(x,ly,z);if(!isDoor(lid))return;const lm=getM(x,ly,z);const on=inputPower(x,ly,z)>0||inputPower(x,ly+1,z)>0;
-    if(!!(lm&16)!==on){const nm=(lm&7)|(on?8:0)|(on?16:0);setDoor(x,ly,z,nm);sfx('door')}}}
+    if(!!(lm&16)!==on){const nm=(lm&7)|(on?8:0)|(on?16:0);setDoor(x,ly,z,nm);sfx('door',on?'open':'close',1,{x:x+.5,y:ly+.5,z:z+.5})}}}
 const pend=(x,y,z,k)=>SKEYS.has(k+'|'+x+','+y+','+z);
 function cmpCalc(x,y,z,m){const f=HDIRS[m&3],a=backPower(x,y,z,f);const l=f===0||f===1?[4,5]:[0,1];const b=Math.max(sidePower(x,y,z,l[0]),sidePower(x,y,z,l[1]));return m&4?Math.max(a-b,0):(a>=b?a:0)}
 function setDoor(x,ly,z,nm){const lid=getB(x,ly,z),hid=getB(x,ly+1,z);setBlock(x,ly,z,lid,false,false,nm);if(isDoor(hid))setBlock(x,ly+1,z,hid,false,false,nm)}
@@ -4814,12 +5174,12 @@ function pistonAct(x,y,z){const id=getB(x,y,z),m=getM(x,y,z),f=m&7,d=DV[f],want=
     if(sticky){const bx=hx+d[0],by=hy+d[1],bz=hz+d[2],b=getB(bx,by,bz),bm=getM(bx,by,bz);if(b!==AIR&&SOLID[b]&&pushable(b,bm)&&getB(hx,hy,hz)===AIR){setBlock(hx,hy,hz,b,false,false,bm);setBlock(bx,by,bz,AIR,false)}}}}
 /* TNT */
 const tnts=[];
-function primeTNT(x,y,z){if(getB(x,y,z)!==TNT)return;setBlock(x,y,z,AIR);const m=itemMesh(TNT,1);m.position.set(x+.5,y+.5,z+.5);scene.add(m);tnts.push({pos:new V3(x+.5,y,z+.5),vel:new V3((Math.random()-.5),3,(Math.random()-.5)),fuse:4,m,onGround:false,hitX:false,hitZ:false});sfx('fuse')}
+function primeTNT(x,y,z){if(getB(x,y,z)!==TNT)return;setBlock(x,y,z,AIR);const m=itemMesh(TNT,1);m.position.set(x+.5,y+.5,z+.5);scene.add(m);tnts.push({pos:new V3(x+.5,y,z+.5),vel:new V3((Math.random()-.5),3,(Math.random()-.5)),fuse:4,m,onGround:false,hitX:false,hitZ:false});sfx('fuse',null,1,{x:x+.5,y:y+.5,z:z+.5})}
 function updateTNT(dt){for(let i=tnts.length-1;i>=0;i--){const t=tnts[i];t.fuse-=dt;t.vel.y-=20*dt;t.vel.x*=.98;t.vel.z*=.98;moveEnt(t,t.vel.x*dt,t.vel.y*dt,t.vel.z*dt,.49,.98);t.m.position.set(t.pos.x,t.pos.y+.5,t.pos.z);
   const fl=Math.sin(t.fuse*12)>0;[].concat(t.m.material).forEach(mt=>mt.color.setScalar(fl?2:lightK(t.pos.x,t.pos.y+.5,t.pos.z)));t.m.scale.setScalar(t.fuse<.5?1+(.5-t.fuse)*.3:1);
   if(t.fuse<=0){scene.remove(t.m);tnts.splice(i,1);explode(t.pos.x,t.pos.y+.5,t.pos.z,4)}}}
 /* 소리 블록 */
-function noteSound(n){const a=ac();if(!a||muted)return;const t=a.currentTime,o=a.createOscillator(),g=a.createGain();o.type='triangle';o.frequency.value=185*Math.pow(2,n/12);g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.6);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+.65);
+function noteSound(n){const a=ac();if(!a||muted)return;const t=a.currentTime,o=a.createOscillator(),g=a.createGain();o.type='triangle';o.frequency.value=185*Math.pow(2,n/12);g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.6);o.connect(g);g.connect(sbus('record'));o.start(t);o.stop(t+.65);
   const nx=noteAt;if(nx)for(let k=0;k<2;k++)smoke(nx[0]+.5,nx[1]+1.2,nx[2]+.5)}
 let noteAt=null;
 /* 압력판 */
@@ -4919,12 +5279,12 @@ function worldTicks(dt){tickAcc+=dt;let guard=0;while(tickAcc>=.05&&guard++<4){t
   if(tickAcc>.2)tickAcc=0;updateTNT(dt)}
 /* 사용 */
 function rsUse(use,t){const {x,y,z}=t,m=getM(x,y,z);doSwing();
-  if(use==='trap'||use==='gate'){let nm=m^8;if(use==='gate'&&!(m&8)){nm=(nm&~3)|HDIRS.indexOf(horizFacing())}setBlock(x,y,z,getB(x,y,z),false,false,nm);sfx('door');return true}
-  if(use==='lever'){setBlock(x,y,z,LEVER,false,false,m^1);sfx('click');return true}
-  if(use==='button'){if(!(m&1)){setBlock(x,y,z,BUTTON,false,false,1);sfx('click');schedule(x,y,z,20,'btn')}return true}
+  if(use==='trap'||use==='gate'){let nm=m^8;if(use==='gate'&&!(m&8)){nm=(nm&~3)|HDIRS.indexOf(horizFacing())}setBlock(x,y,z,getB(x,y,z),false,false,nm);sfx('door',nm&8?'open':'close',1,{x:x+.5,y:y+.5,z:z+.5});return true}
+  if(use==='lever'){setBlock(x,y,z,LEVER,false,false,m^1);sfx('lever',(m^1)&1?'on':'off',1,{x:x+.5,y:y+.5,z:z+.5});return true}
+  if(use==='button'){if(!(m&1)){setBlock(x,y,z,BUTTON,false,false,1);sfx('lever','on',1,{x:x+.5,y:y+.5,z:z+.5});schedule(x,y,z,20,'btn')}return true}
   if(use==='repeater'){const d=((m>>2)&3)+1&3;setBlock(x,y,z,REPEATER,false,false,(m&~12)|(d<<2));sfx('click');return true}
   if(use==='comparator'){setBlock(x,y,z,COMPARATOR,false,false,m^4);rsMark(x,y,z);sfx('click');return true}
-  if(use==='door'){const id=getB(x,y,z),lo=id===DOOR_LO,ly=lo?y:y-1;const lm=getM(x,ly,z);setDoor(x,ly,z,lm^8);sfx('door');return true}
+  if(use==='door'){const id=getB(x,y,z),lo=id===DOOR_LO,ly=lo?y:y-1;const lm=getM(x,ly,z);setDoor(x,ly,z,lm^8);sfx('door',(lm^8)&8?'open':'close',1,{x:x+.5,y:ly+.5,z:z+.5});return true}
   if(use==='note'){const n=((m&31)+1)%25;setBlock(x,y,z,NOTE_BLOCK,false,false,(m&128)|n);noteAt=[x,y,z];noteSound(n);return true}
   return false}
 function horizFacing(){const a=((player.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);const dx=-Math.sin(a),dz=-Math.cos(a);return Math.abs(dx)>Math.abs(dz)?(dx>0?0:1):(dz>0?4:5)}
@@ -4933,9 +5293,9 @@ function placeMeta(id,t){const pb=B[id];if((id===LANTERN||id===SOUL_LANTERN)&&t.
   if(id===OAK_TRAPDOOR||id===IRON_TRAPDOOR){const hp=hitPoint(t),fy=hp.y-Math.floor(hp.y),top=t.face===3||(t.face!==2&&fy>.5);return HDIRS.indexOf(OPPD[horizFacing()])|(top?4:0)}
   if(id===OAK_GATE||id===SPRUCE_GATE)return HDIRS.indexOf(horizFacing());if(pb&&pb.mface||id===END_FRAME)return HDIRS.indexOf(faceToward(t.x,t.z));if(id===LADDER)return Math.max(0,HDIRS.indexOf(OPPD[t.face]));if(id===REPEATER||id===COMPARATOR)return HDIRS.indexOf(horizFacing());if(id===PISTON||id===STICKY_PISTON)return OPPD[lookFacing()];if(id===OBSERVER)return lookFacing();return 0}
 function bucketUse(st){const o=camera.position,d=new V3(0,0,-1).applyQuaternion(camera.quaternion);
-  if(st.id===BUCKET){let x=Math.floor(o.x),y=Math.floor(o.y),z=Math.floor(o.z);for(let t=0;t<5;t+=.05){const p=o.clone().addScaledVector(d,t);const bx=Math.floor(p.x),by=Math.floor(p.y),bz=Math.floor(p.z),id=getB(bx,by,bz);if((id===WATER||id===LAVA)&&getM(bx,by,bz)===0){setBlock(bx,by,bz,AIR);const full={id:id===WATER?WATER_BUCKET:LAVA_BUCKET,n:1,d:0};if(creative()){}else if(st.n===1)inv[sel]=full;else{st.n--;giveOrDrop(full)}sfx('bucket');renderHotbar();return true}if(id&&!B[id].liquid&&SOLID[id])return false}return false}
+  if(st.id===BUCKET){let x=Math.floor(o.x),y=Math.floor(o.y),z=Math.floor(o.z);for(let t=0;t<5;t+=.05){const p=o.clone().addScaledVector(d,t);const bx=Math.floor(p.x),by=Math.floor(p.y),bz=Math.floor(p.z),id=getB(bx,by,bz);if((id===WATER||id===LAVA)&&getM(bx,by,bz)===0){setBlock(bx,by,bz,AIR);const full={id:id===WATER?WATER_BUCKET:LAVA_BUCKET,n:1,d:0};if(creative()){}else if(st.n===1)inv[sel]=full;else{st.n--;giveOrDrop(full)}sfx('bucket',id===LAVA?'fill_lava':'fill',1,{x:bx+.5,y:by+.5,z:bz+.5});renderHotbar();return true}if(id&&!B[id].liquid&&SOLID[id])return false}return false}
   if(!target||target.face<0)return false;let x=target.x,y=target.y,z=target.z;if(!B[target.id].repl&&!B[target.id].liquid){const dd=FACES[target.face].d;x+=dd[0];y+=dd[1];z+=dd[2]}
-  if(!canReplace(getB(x,y,z)))return false;setBlock(x,y,z,st.id===WATER_BUCKET?WATER:LAVA);schedule(x,y,z,st.id===WATER_BUCKET?5:30,'liq');if(!creative())inv[sel]={id:BUCKET,n:1,d:0};sfx('bucket');renderHotbar();return true}
+  if(!canReplace(getB(x,y,z)))return false;setBlock(x,y,z,st.id===WATER_BUCKET?WATER:LAVA);schedule(x,y,z,st.id===WATER_BUCKET?5:30,'liq');if(!creative())inv[sel]={id:BUCKET,n:1,d:0};sfx('bucket',st.id===WATER_BUCKET?'empty':'empty_lava',1,{x:x+.5,y:y+.5,z:z+.5});renderHotbar();return true}
 
 /* ═════════════ 차원: 네더 · 엔드 ═════════════ */
 let DIM='over';
@@ -5350,7 +5710,7 @@ function enchOptions(){const st=enchSlots[0];if(!st||st.e||!enchCands(st).length
   return [Math.max(1,Math.floor(mx/3)),Math.max(2,Math.floor(mx*2/3)),mx].map((lv,i)=>({lv,e:rollEnch(st,lv,seed+i*131),cost:i+1}))}
 function renderEnch(){const box=$('enchOpts');if(!box)return;const opts=enchOptions(),[lv]=xpLevel(player.xp||0),lap=enchSlots[1]&&enchSlots[1].id===LAPIS?enchSlots[1].n:0;
   box.innerHTML=[0,1,2].map(i=>{const o=opts&&opts[i];if(!o||!o.e)return`<div class="eopt off"></div>`;const ok=creative()||(lv>=o.lv&&lap>=o.cost);return`<div class="eopt${ok?'':' off'}" data-o="${i}"><b>${o.lv}</b><span>${enchText(o.e)}</span><small>청금석 ${o.cost} · 레벨 ${o.cost}</small></div>`}).join('');
-  box.querySelectorAll('[data-o]').forEach(el=>el.onclick=()=>{const i=+el.dataset.o,o=opts[i],[l2,fr]=xpLevel(player.xp||0);if(!creative()&&(l2<o.lv||lap<o.cost))return;enchSlots[0].e=o.e;if(!creative()){enchSlots[1].n-=o.cost;if(!enchSlots[1].n)enchSlots[1]=null;const nl=l2-o.cost;player.xp=xpTotal(nl)+Math.floor(fr*xpNeed(nl))}player.enchSeed=Math.floor(Math.random()*1e9);sfx('levelup');updateStats();drawScreen()})}
+  box.querySelectorAll('[data-o]').forEach(el=>el.onclick=()=>{const i=+el.dataset.o,o=opts[i],[l2,fr]=xpLevel(player.xp||0);if(!creative()&&(l2<o.lv||lap<o.cost))return;enchSlots[0].e=o.e;if(!creative()){enchSlots[1].n-=o.cost;if(!enchSlots[1].n)enchSlots[1]=null;const nl=l2-o.cost;player.xp=xpTotal(nl)+Math.floor(fr*xpNeed(nl))}player.enchSeed=Math.floor(Math.random()*1e9);sfx('enchant');updateStats();drawScreen()})}
 
 /* ═════════════ 몹 추가 2 ═════════════ */
 const flatTex=(c1,c2,seed)=>mottle([c1,c2||c1,c1],seed);
@@ -5941,8 +6301,8 @@ function wardenBuild(g,P){const DK=['#0b2f36','#0d3940','#093038','#0f4249','#0a
 function ddSnd(k,x,y,z,vol){if(DIM===undefined)return;const R=16*Math.max(1,vol||1),d=Math.hypot(x-player.pos.x,y-player.pos.y,z-player.pos.z);if(d>=R)return;sfx(k,null,Math.min(1,1.15-d/R))}
 const DD_SFX={};
 {const env=(g,t,at,dur,v)=>{g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+at);g.gain.exponentialRampToValueAtTime(.001,t+dur)};
-  const O=(type,f0,f1,dur,v,d0)=>{const a=ac();if(!a||muted)return;const t=a.currentTime+(d0||0),o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t+dur);env(g,t,.01,dur,v);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.05)};
-  const N=(dur,f,q,type,v,d0)=>{const a=ac();if(!a||muted||!NOISE)return;const t=a.currentTime+(d0||0),s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=NOISE;s.playbackRate.value=.8+Math.random()*.4;fl.type=type;fl.frequency.value=f;fl.Q.value=q;env(g,t,.008,dur,v);s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(t,Math.random()*.5,dur+.05)};
+  const O=(type,f0,f1,dur,v,d0)=>{const a=ac();if(!a||muted)return;const t=a.currentTime+(d0||0),o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t+dur);env(g,t,.01,dur,v);o.connect(g);g.connect(SDST||sbus('hostile'));o.start(t);o.stop(t+dur+.05)};
+  const N=(dur,f,q,type,v,d0)=>{const a=ac();if(!a||muted||!NOISE)return;const t=a.currentTime+(d0||0),s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=NOISE;s.playbackRate.value=.8+Math.random()*.4;fl.type=type;fl.frequency.value=f;fl.Q.value=q;env(g,t,.008,dur,v);s.connect(fl);fl.connect(g);g.connect(SDST||sbus('hostile'));s.start(t,Math.random()*.5,dur+.05)};
   Object.assign(DD_SFX,{
     sculk_click:v=>{for(let i=0;i<5;i++)N(.025,3000+i*200,7,'bandpass',.55*v,i*.045)},sculk_click_stop:v=>{N(.04,2200,6,'bandpass',.4*v);N(.03,1800,6,'bandpass',.3*v,.06)},
     sculk_spread:v=>{N(.18,600,1,'lowpass',.45*v);N(.1,2400,3,'bandpass',.12*v,.05)},catalyst_bloom:v=>{O('sine',260,780,.6,.22*v);O('triangle',390,1170,.5,.1*v,.05);N(.5,1400,2,'bandpass',.25*v)},
@@ -6505,7 +6865,7 @@ function jukeSched(J){const a=J.a,up=a.currentTime-J.t0+6;while(J.i<J.L.length&&
   const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(v,at+.02);g.gain.exponentialRampToValueAtTime(.001,at+d);o.connect(g);g.connect(J.g);o.start(at);o.stop(at+d+.05)}}
 function jukeStop(k){const J=JUKE.get(k);if(!J)return;JUKE.delete(k);try{J.g.gain.setValueAtTime(0,J.a.currentTime);setTimeout(()=>{try{J.g.disconnect()}catch(e){}},200)}catch(e){}}
 function jukePlay(k,x,y,z,id){jukeStop(k);const a=ac(),kind=ITEM[id].disc,len=DISC_LEN[kind]||180;
-  if(a&&!muted){const g=a.createGain();g.gain.value=0;g.connect(a.destination);const J={x,y,z,dim:DIM,a,g,t0:a.currentTime+.1,end:a.currentTime+.1+len,L:jukeNotes(kind,len),i:0};JUKE.set(k,J);jukeSched(J)}
+  if(a&&!muted){const g=a.createGain();g.gain.value=0;g.connect(sbus('record'));const J={x,y,z,dim:DIM,a,g,t0:a.currentTime+.1,end:a.currentTime+.1+len,L:jukeNotes(kind,len),i:0};JUKE.set(k,J);jukeSched(J)}
   toast('지금 재생 중: '+(ITEM[id].lore||''));const ch=chunks.get(ck(x>>4,z>>4));if(ch&&ch.bio&&ch.bio[(x&15)|((z&15)<<4)]===BIO.MEADOW)typeof advGrant==='function'&&advGrant('minecraft:adventure/play_jukebox_in_meadows')}
 function jukeTick(){for(const [k,J] of JUKE){if(getB(J.x,J.y,J.z)!==JUKEBOX||J.a.currentTime>J.end||muted){jukeStop(k);continue}const d=Math.hypot(J.x+.5-player.pos.x,J.y+.5-player.pos.y,J.z+.5-player.pos.z);J.g.gain.value=DIM===J.dim?Math.max(0,1-d/64)*.6:0;jukeSched(J)}}
 function jukeUse(t){const k=tkey(t.x,t.y,t.z);let te=tiles.get(k);doSwing();
@@ -7146,9 +7506,11 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
     ${slider('mFov','시야',30,110,FOV,fovTxt)}${slider('mRD','렌더 거리',2,10,RD,v=>v+'청크')}
     ${slider('mSens','마우스 감도',10,200,Math.round(sens*100),v=>v+'%')}<button class="mbtn" data-m="gui">GUI 크기: ${guiOpt?guiOpt:'자동'}</button>
     <button class="mbtn" data-m="bob">화면 흔들림: ${bobView?'켬':'끔'}</button><button class="mbtn" data-m="clouds">구름: ${cloudsOn?'멋지게':'끔'}</button>
-    <button class="mbtn" data-m="snd">소리: ${muted?'끔':'켬'}</button><button class="mbtn" data-m="music">음악: ${musicOn?'켬':'끔'}</button>
+    <button class="mbtn" data-m="snd">음악과 소리...</button><button class="mbtn" data-m="music">음악: ${musicOn?'켬':'끔'}</button>
     <button class="mbtn" data-m="fb">밝기: ${FULLBRIGHT?'최대':'보통'}</button><button class="mbtn" data-m="ctrl">조작 방법...</button></div>
     <div class="tGap"></div><button class="mbtn" data-m="optsDone">완료</button>`}
+  else if(type==='sound'){h=`<h2>음악과 소리</h2><div class="mgrid">${SCAT.map((c,i)=>slider('mVol_'+c,SCAT_N[c],0,100,Math.round(SVOL[c]*100),volTxt).replace('class="mslider"',i?'class="mslider"':'class="mslider" style="grid-column:1/-1"')).join('')}</div>
+    <div class="tGap"></div><button class="mbtn" data-m="soundDone">완료</button>`}
   else if(type==='ctrl'){h=`<h2>조작 방법</h2><div class="help">${help.replace(/ · /g,'<br>')}<br>F1 화면 숨기기 · F3 디버그 화면</div><div class="tGap"></div><button class="mbtn" data-m="ctrlDone">완료</button>`}
   else if(type==='ready')h=`<div class="ready">화면을 클릭하면 시작해요</div>`;
   else if(type==='msg')h=`<h2>${esc(arg)}</h2><button class="mbtn" data-m="title">확인</button>`;
@@ -7157,9 +7519,10 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
   M.querySelectorAll('[data-m]').forEach(el=>el.addEventListener('click',e=>{if(el.tagName==='A'){save();return}e.preventDefault();ac();sfx('click');menuAct(el.dataset.m)}));
   if($('mRD'))bindSlider('mRD','렌더 거리',2,10,v=>v+'청크',v=>{RD=v;setOpt('rd',v)});
   if($('mSens'))bindSlider('mSens','마우스 감도',10,200,v=>v+'%',v=>{sens=v/100;setOpt('sens',v)});
+  if($('mVol_master'))for(const c of SCAT)bindSlider('mVol_'+c,SCAT_N[c],0,100,volTxt,v=>sndSetVol(c,v/100));   // 음량 (P2-SND)
   if($('mFov'))bindSlider('mFov','시야',30,110,fovTxt,v=>{FOV=v;setOpt('fov',v)});
   const lg=$('mcLogo');if(lg){mcLogo(c=>{lg.src=c.toDataURL();lg.style.width=`calc(${c.width*2.6}px * var(--s))`})}}
-const fovTxt=v=>v===70?'보통':v===110?'퀘이크 프로':v;let optsBack='title',ctrlBack='title',musicOn=true;try{musicOn=localStorage.getItem('bc_opt_music')!=='0'}catch(e){}
+const volTxt=v=>v?v+'%':'끔',fovTxt=v=>v===70?'보통':v===110?'퀘이크 프로':v;let optsBack='title',ctrlBack='title',musicOn=true;try{musicOn=localStorage.getItem('bc_opt_music')!=='0'}catch(e){}
 let _logoC=null;
 function mcLogo(cb){if(_logoC){cb(_logoC);return}const make=()=>{const t=cv(160,20),g=t.getContext('2d');g.font='11px Galmuri11';g.textBaseline='top';g.fillStyle='#fff';const txt='블록크래프트',w=Math.ceil(g.measureText(txt).width)+2;
     g.fillText(txt,1,2);g.fillText(txt,2,2);const d=g.getImageData(0,0,160,20).data,on=(x,y)=>x>=0&&y>=0&&x<160&&y<20&&d[(y*160+x)*4+3]>110;
@@ -7194,8 +7557,8 @@ function menuAct(a){if(a==='news'){openNews();return}if(a==='fb'){FULLBRIGHT=!FU
   else if(a==='gui'){guiOpt=(guiOpt+1)%5;setOpt('gui',guiOpt);applyGui();showMenu(menuOpen)}
   else if(a==='bob'){bobView=!bobView;setOpt('bob',bobView?1:0);showMenu(menuOpen)}
   else if(a==='clouds'){cloudsOn=!cloudsOn;setOpt('clouds',cloudsOn?1:0);showMenu(menuOpen)}
-  else if(a==='music'){musicOn=!musicOn;setOpt('music',musicOn?1:0);if(typeof musicToggle==='function')musicToggle();showMenu(menuOpen)}
-  else if(a==='snd'){muted=!muted;showMenu(menuOpen)}
+  else if(a==='music'){sndSetVol('music',musicOn?0:(SVOL.music||1));showMenu(menuOpen)}
+  else if(a==='snd'){showMenu('sound')}else if(a==='soundDone'){showMenu('opts')}
   else if(a==='view'){viewMode=(viewMode+1)%3;showMenu(menuOpen)}
   else if(a==='quit'){quitToTitle()}}
 function seedOf(s){s=String(s||'').trim();if(!s)return Math.floor(Math.random()*2e9)-1e9;if(/^-?\d+$/.test(s))return +s|0;let h=0;for(const c of s)h=Math.imul(h,31)+c.charCodeAt(0)|0;return h}
@@ -8866,12 +9229,12 @@ let nvSnd=null,nvAmbAcc=0;
 function nvSndStop(){const s=nvSnd;if(!s)return;nvSnd=null;clearInterval(s.iv);try{s.g.gain.setTargetAtTime(0,s.a.currentTime,.3)}catch(e){}setTimeout(()=>{try{s.src.stop();s.lfo.stop()}catch(e){}},2000)}
 function nvAmbSound(){const a=AC;if(muted||!a||a.state!=='running'||!NOISE||player.dead){nvSndStop();return}const bm=nBio(player.pos.x,player.pos.z),t=a.currentTime;
   if(!nvSnd){const src=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain(),lfo=a.createOscillator(),lg=a.createGain();src.buffer=NOISE;src.loop=true;fl.type='lowpass';g.gain.value=0;lfo.frequency.value=.07;
-    lfo.connect(lg);lg.connect(fl.frequency);src.connect(fl);fl.connect(g);g.connect(a.destination);src.start();lfo.start();
+    lfo.connect(lg);lg.connect(fl.frequency);src.connect(fl);fl.connect(g);g.connect(sbus('ambient'));src.start();lfo.start();
     nvSnd={a,src,fl,g,lfo,lg,bm:-1,at:0,iv:setInterval(()=>{if(nvSnd&&performance.now()-nvSnd.at>1500)nvSndStop()},500)}}   // 멈춤 화면 · 타이틀로 가면 저절로 꺼져요
   nvSnd.at=performance.now();
   if(bm!==nvSnd.bm){nvSnd.bm=bm;const L=NV_LOOP[bm];nvSnd.fl.frequency.setTargetAtTime(L[0],t,1);nvSnd.lg.gain.setTargetAtTime(L[0]*.3,t,1);nvSnd.fl.Q.setTargetAtTime(L[1],t,1);nvSnd.g.gain.setTargetAtTime(L[2],t,1)}
   if(Math.random()<.0111)nvAddition(bm)}
-function nvAddition(bm){const M=musInit();if(!M)return;const a=M.a,t=a.currentTime,out=a.createGain(),pan=a.createStereoPanner?a.createStereoPanner():null;out.gain.value=.5;if(pan){pan.pan.value=(Math.random()*2-1)*.7;out.connect(pan);pan.connect(M.bus)}else out.connect(M.bus);
+function nvAddition(bm){const M=musInit();if(!M)return;const a=M.a,t=a.currentTime,out=a.createGain(),pan=a.createStereoPanner?a.createStereoPanner():null;out.gain.value=.5;if(pan){pan.pan.value=(Math.random()*2-1)*.7;out.connect(pan);pan.connect(sbus('ambient'))}else out.connect(sbus('ambient'));
   const osc=(ty,f0,f1,v,at,d,st)=>{const o=a.createOscillator(),g=a.createGain();o.type=ty;o.frequency.setValueAtTime(f0,t+st);o.frequency.exponentialRampToValueAtTime(f1,t+st+d);g.gain.setValueAtTime(0,t+st);g.gain.linearRampToValueAtTime(v,t+st+at);g.gain.exponentialRampToValueAtTime(.001,t+st+d);o.connect(g);g.connect(out);o.start(t+st);o.stop(t+st+d+.05)};
   const nz=(ty,f,q,v,at,d,st)=>{const s=a.createBufferSource(),fl=a.createBiquadFilter(),g=a.createGain();s.buffer=NOISE;s.loop=true;fl.type=ty;fl.frequency.value=f;fl.Q.value=q;g.gain.setValueAtTime(0,t+st);g.gain.linearRampToValueAtTime(v,t+st+at);g.gain.exponentialRampToValueAtTime(.001,t+st+d);s.connect(fl);fl.connect(g);g.connect(out);s.start(t+st,Math.random());s.stop(t+st+d+.05)};
   if(bm===0){osc('sine',70,52,.09,.8,3,0);osc('triangle',105,78,.04,.8,2.6,.1)}   // 황무지: 멀리서 낮게 우는 소리
@@ -10561,6 +10924,8 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   saveT+=dt;if(saveT>30){saveT=0;save()}}
 let vigB=0;
 requestAnimationFrame(frame);
+// ── 소리: 모든 sfx(종류, 재질, 볼륨, 자리) 를 새 소리 엔진으로 (P2-SND · 다른 sfx 덮개들보다 바깥이라 맨 아래에 둬요) ──
+{const _in=sfx;sfx=function(kind,mat,vol,pos){return sndDispatch(_in,kind,mat,vol,pos)}}
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
 window.__BC={get camera(){return camera},getB:(x,y,z)=>getB(x,y,z),B,set xpDelay(v){xpDelay=v},setWx(r,t){rainLvl=rainO=r;thunLvl=thunO=t},get wx(){return [rainLvl,thunLvl,skyFlash,weatherOv]},lightning:(x,z)=>lightning(x,z),get xpOrbs(){return xpOrbs},dropXP:(x,y,z,n)=>dropXP(x,y,z,n),selectSlot:i=>selectSlot(i),attack:m=>attack(m),get worldTime(){return worldTime},set worldTime(v){worldTime=v},DAYLEN,setMouseR(v){mouseR=v;if(v){useItem(true);useCD=.25}},TEX,tileList,sfx:(...a)=>sfx(...a),composePiece,musPlay,musStop,get musPlaying(){return musPlaying},setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
