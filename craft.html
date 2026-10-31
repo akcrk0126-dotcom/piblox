@@ -7350,7 +7350,7 @@ function updateWaypoint(){const el=$('waypt');if(!el)return;if(!WAYPT||WAYPT.dim
   const dx=WAYPT.x-player.pos.x,dz=WAYPT.z-player.pos.z,d=Math.hypot(dx,dz);if(d<6){chatLine(WAYPT.n+'에 도착했어요!','#55ff55');WAYPT=null;el.classList.add('hide');return}
   // 화면 기준 방향: 플레이어가 보는 쪽이 위
   const a=Math.atan2(dx,-dz)+player.yaw;el.classList.remove('hide');
-  el.innerHTML=`<i style="transform:rotate(${a}rad)">▲</i><b>${WAYPT.n}</b> ${Math.round(d)}칸`+(WAYPT.y!=null?` · Y ${WAYPT.y-YO}`:'')}
+  el.innerHTML=`<i style="transform:rotate(${a}rad)">▲</i><b>${WAYPT.n}</b> ${Math.round(d)}칸`+(WAYPT.y!=null?` · Y ${WAYPT.y-cYO()}`:'')}
 // 순간이동: 도착한 곳 청크가 준비될 때까지 잠깐 멈춰 있다가, 블록 안이면 위로 올려 줘요
 function tpTo(x,y,z,surface){const p=player;p.pos.set(x,y==null?SEA+40:y,z);p.vel.set(0,0,0);p.fallStart=null;p.tpHold=8;p.tpSurface=!!surface||y==null}
 function tpFix(){const p=player;if(!(p.tpHold>0))return false;const ch=chunks.get(ck(Math.floor(p.pos.x)>>4,Math.floor(p.pos.z)>>4));
@@ -7479,6 +7479,8 @@ const cmdBlockMC=id=>MCID[id]||'minecraft:air';
 const cmdItemName=id=>(ITEM[id]&&ITEM[id].n)||mcN(MCID[id]||'?');
 // ── 차원 · 개체 ──
 const MCDIM={over:'minecraft:overworld',nether:'minecraft:the_nether',end:'minecraft:the_end',time:'blockcraft:time_chamber'},MCDIM_KEY={};for(const k in MCDIM)MCDIM_KEY[MCDIM[k]]=k;
+// 화면 Y = 게임 안 y − cYO (P2-BUG): 네더 · 엔드는 마크처럼 y 0 부터라 게임 안 y 그대로예요 (오버월드 · 시간의 방만 YO). ctx 가 있으면 그 차원 (execute in) 으로
+const cYO=ctx=>{const k=ctx&&ctx.dim&&MCDIM_KEY[ctx.dim]||DIM;return k==='nether'||k==='end'?0:YO};
 const MCDIM_SCALE={over:1,nether:8,end:1,time:1};   // 마크 coordinate_scale (execute in 이 좌표를 나눠요)
 // 몹 종류 → 마크 개체 아이디 (게임 안 이름이 다른 것만 적어요. 나머지는 이름 그대로 minecraft:<이름>)
 const MOB_MC={zpiglin:'zombified_piglin',wskel:'wither_skeleton',magma:'magma_cube',dragon:'ender_dragon',slime_s:'slime',shadow:'blockcraft:shadow'};
@@ -7572,7 +7574,7 @@ function nbtMatch(o,v){for(const k in v){const w=v[k];if(k==='Tags'){if(!Array.i
 // 고르개 → 개체 목록 (실행할 때): 위치 기준은 ctx.pos, x/y/z 는 마크 좌표
 function selFind(S,ctx){if(S.uuid)return[];
   if(S.name!=null){const n=S.name.toLowerCase();return cmdPlayers().filter(p=>cmdEntName(p).toLowerCase()===n)}
-  const b=ctx.pos,P={x:S.x!=null?S.x:b.x,y:S.y!=null?S.y+YO:b.y,z:S.z!=null?S.z:b.z};
+  const b=ctx.pos,P={x:S.x!=null?S.x:b.x,y:S.y!=null?S.y+cYO(ctx):b.y,z:S.z!=null?S.z:b.z};
   let box=null;if(S.dx!=null||S.dy!=null||S.dz!=null){const dx=S.dx||0,dy=S.dy||0,dz=S.dz||0;box=[P.x+Math.min(0,dx),P.y+Math.min(0,dy),P.z+Math.min(0,dz),P.x+Math.max(0,dx)+1,P.y+Math.max(0,dy)+1,P.z+Math.max(0,dz)+1]}
   const d2=o=>{const q=cmdEntPos(o);return(q.x-P.x)**2+(q.y-P.y)**2+(q.z-P.z)**2};
   const test=o=>{if(S.alive&&!cmdEntAlive(o))return false;if(S.player&&cmdEntType(o)!=='minecraft:player')return false;if(!S.ents&&cmdEntType(o)!=='minecraft:player')return false;
@@ -7599,7 +7601,7 @@ function cmdCoordGet(c,ctx){const b=ctx.pos;
     const f0=Math.cos((R.yaw+90)*D),f1=Math.sin((R.yaw+90)*D),f2=Math.cos(-R.pitch*D),f3=Math.sin(-R.pitch*D),f4=Math.cos((-R.pitch+90)*D),f5=Math.sin((-R.pitch+90)*D);
     const F=[f0*f2,f3,f1*f2],U=[f0*f4,f5,f1*f4],Lf=[-(F[1]*U[2]-F[2]*U[1]),-(F[2]*U[0]-F[0]*U[2]),-(F[0]*U[1]-F[1]*U[0])];
     return{x:b.x+F[0]*f+U[0]*u+Lf[0]*l,y:b.y+a+F[1]*f+U[1]*u+Lf[1]*l,z:b.z+F[2]*f+U[2]*u+Lf[2]*l}}
-  const [X,Y,Z]=c.v;return{x:X.rel?b.x+X.d:X.d,y:Y.rel?b.y+Y.d:Y.d+YO,z:Z.rel?b.z+Z.d:Z.d}}
+  const [X,Y,Z]=c.v;return{x:X.rel?b.x+X.d:X.d,y:Y.rel?b.y+Y.d:Y.d+cYO(ctx),z:Z.rel?b.z+Z.d:Z.d}}
 const cmdCoordBlock=(c,ctx)=>{const p=cmdCoordGet(c,ctx);return{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}};
 function cmdRotParse(r){const st=r.i;if(!r.can())throw r.err('rot2');const v=[];for(let k=0;k<2;k++){if(k){if(!(r.can()&&r.peek()===' '))throw r.at(st,'rot2');r.skip()}if(!r.can())throw r.err('coord_exp');
     const rel=r.peek()==='~';if(rel)r.skip();v.push({rel,d:r.can()&&r.peek()!==' '?r.dbl():0})}return v}
@@ -7682,7 +7684,7 @@ function selSug(b,ctx){const q=b.rem;
   if(v&&(vals?vals.includes(v)||vals.includes('minecraft:'+v):true)){const c=b.st+q.length;b.add(',',null,c);b.add(']',null,c)}}
 const CM_SELOPT={distance:'거리',dx:'x 부터 x + dx 사이',dy:'y 부터 y + dy 사이',dz:'z 부터 z + dz 사이',gamemode:'게임 모드',level:'경험치 레벨',limit:'최대 개수',name:'이름',nbt:'NBT',predicate:'조건',scores:'점수',sort:'정렬',tag:'태그',team:'팀',type:'개체 종류',x:'x 좌표',y:'y 좌표',z:'z 좌표',x_rotation:'위아래 각도',y_rotation:'좌우 각도',advancements:'발전 과제'};
 // 좌표 후보: ~ · ~ ~ · ~ ~ ~ (보고 있는 블록이 있으면 그 좌표)
-function cmdCoordSug(b,n){const q=b.rem,T=typeof target!=='undefined'&&target&&target.face>=0?[String(target.x),String(target.y-YO),String(target.z)]:null,loc=q.startsWith('^'),D=loc?['^','^','^']:T||['~','~','~'];
+function cmdCoordSug(b,n){const q=b.rem,T=typeof target!=='undefined'&&target&&target.face>=0?[String(target.x),String(target.y-cYO()),String(target.z)]:null,loc=q.startsWith('^'),D=loc?['^','^','^']:T||['~','~','~'];
   const parts=q?q.split(' '):[];if(!q){b.add(D[0]);b.add(D[0]+' '+D[1]);if(n===3)b.add(D.join(' '));return}
   if(parts.length===1&&n===3){b.add(q+' '+D[1]);b.add(q+' '+D[1]+' '+D[2])}else if(parts.length===2&&n===3)b.add(q+' '+D[2]);else if(parts.length===1&&n===2)b.add(q+' '+D[1])}
 // ── 명령어 나무 (Brigadier): cLit('이름',…자식, 실행) · cArg('이름', 인수종류, …) · {perm, redirect} 도 넣을 수 있어요 ──
@@ -7841,7 +7843,7 @@ function tpMove(c,o,P,rot,look){const dk=MCDIM_KEY[c.dim]||DIM;if(Math.abs(P.x)>
   if(o===player&&dk!==DIM){cmdDimTp(dk,P,RR);return true}if(dk!==DIM){if(cmdEntKind(o)==='mob'){scene.remove(o.g);mobs.splice(mobs.indexOf(o),1);return true}return false}
   return cmdEntTp(o,P.x,P.y,P.z,RR)}
 function tpPos(c,L,pos,rot,look){const P=cmdCoordGet(pos,c),R=rot?cmdRotGet(rot,c):null;let n=0;for(const o of L)if(tpMove(c,o,P,R,look))n++;
-  if(L.length===1)cFb(c,'tp_pos1',cmdEntName(L[0]),cmdF6(P.x),cmdF6(P.y-YO),cmdF6(P.z));else cFb(c,'tp_posN',L.length,cmdF6(P.x),cmdF6(P.y-YO),cmdF6(P.z));return L.length}
+  if(L.length===1)cFb(c,'tp_pos1',cmdEntName(L[0]),cmdF6(P.x),cmdF6(P.y-cYO(c)),cmdF6(P.z));else cFb(c,'tp_posN',L.length,cmdF6(P.x),cmdF6(P.y-cYO(c)),cmdF6(P.z));return L.length}
 function tpEnt(c,L,S){const D=selFind(S,c);if(!D.length)cFail('no_ent');const d=D[0],P=cmdEntPos(d),R=cmdEntRot(d);for(const o of L)tpMove(c,o,{x:P.x,y:P.y,z:P.z},R,null);
   if(L.length===1)cFb(c,'tp_ent1',cmdEntName(L[0]),cmdEntName(d));else cFb(c,'tp_entN',L.length,cmdEntName(d));return L.length}
 {const facing=cLit('facing',cArg('facingLocation',CmdArg.vec3(),(c,a)=>tpPos(c,cTargets(c,a.targets),a.location,null,()=>cmdCoordGet(a.facingLocation,c))),
@@ -7899,7 +7901,7 @@ function cmdDestroy(x,y,z,id){const te=tiles.get(tkey(x,y,z));if(te)(te.items||t
 function cmdPut(x,y,z,id,meta,lazy){tiles.delete(tkey(x,y,z));return setBlock(x,y,z,id,!!lazy,false,meta)}
 function setblockDo(c,a,mode){const P=cmdCoordBlock(a.pos,c);cLoaded(P);const nb=a.block,old=getB(P.x,P.y,P.z),om=getM(P.x,P.y,P.z);
   if(mode==='keep'&&old!==AIR)cFail('sb_fail');if(old===nb.id&&om===nb.meta)cFail('sb_fail');if(mode==='destroy'&&old!==AIR)cmdDestroy(P.x,P.y,P.z,old);
-  cmdPut(P.x,P.y,P.z,nb.id,nb.meta,false);cFb(c,'sb_ok',P.x,P.y-YO,P.z);return 1}
+  cmdPut(P.x,P.y,P.z,nb.id,nb.meta,false);cFb(c,'sb_ok',P.x,P.y-cYO(c),P.z);return 1}
 cmdReg(cLit('setblock',cArg('pos',CmdArg.bpos(),cArg('block',CmdArg.block(),(c,a)=>setblockDo(c,a,'replace'),...['destroy','keep','replace','strict'].map(m=>cLit(m,(c,a)=>setblockDo(c,a,m)))))));
 function cmdBlockMatch(f,id,meta){if(f.ids?!f.ids.includes(id):(MCID[id]!==f.mc))return false;const ks=Object.keys(f.p||{});if(!ks.length)return true;const P=bsProps(id,meta);return ks.every(k=>P[k]==null||P[k]===f.p[k])}
 function fillDo(c,a,mode,f){const A=cmdCoordBlock(a.from,c),Bq=cmdCoordBlock(a.to,c),x0=Math.min(A.x,Bq.x),x1=Math.max(A.x,Bq.x),y0=Math.min(A.y,Bq.y),y1=Math.max(A.y,Bq.y),z0=Math.min(A.z,Bq.z),z1=Math.max(A.z,Bq.z);
@@ -7925,7 +7927,7 @@ function locStructFind(id,x,z){const s=mcN(id),m=STRUCT_LOC[s]||[s],L=LOCATORS[m
     for(let r=-8;r<=8;r++)for(let q=-8;q<=8;q++){const v=villageIn(cx+r,cz+q);if(!v||v.S!==VSTYLE[m[1]])continue;const d=Math.hypot(v.x-x,v.z-z);if(d<bd){bd=d;best={x:v.x,y:v.y,z:v.z}}}return best}
   try{return L.find(x,z)}catch(e){return null}}
 // 결과 글: "가장 가까운 X: [x, ~, z] (N칸 떨어져 있어요)" · 좌표를 누르면 채팅 칸에 /tp @s … 가 들어가요
-function locShow(c,name,f,withY,label){const sx=Math.floor(c.pos.x),sy=Math.floor(c.pos.y),sz=Math.floor(c.pos.z),fy=withY?String(f.y-YO):'~';
+function locShow(c,name,f,withY,label){const sx=Math.floor(c.pos.x),sy=Math.floor(c.pos.y),sz=Math.floor(c.pos.z),fy=withY?String(f.y-cYO(c)):'~';
   const d=Math.floor(withY?Math.hypot(f.x-sx,f.y-sy,f.z-sz):Math.hypot(f.x-sx,f.z-sz)),co=`[${f.x}, ${fy}, ${f.z}]`;
   cFbHtml(c,esc(cmdMsg('loc_ok',name,'\u0001',d)).replace('\u0001',`<span class="cmdLink" style="color:#55ff55" data-cmd="/tp @s ${f.x} ${fy} ${f.z}" title="${esc(cmdMsg('loc_tip'))}">${co}</span>`));
   if(c.src===player&&!c.silent&&d>=6)setWaypoint({x:f.x,y:withY?f.y:null,z:f.z,n:label||mcN(name),dim:DIM});return d}
@@ -7977,7 +7979,7 @@ function gameRuleSet(c,k,v){const old=gameRule(k);if(old===v)cFail('gr_same',k,v
 // /spawnpoint · /setworldspawn (방향 [yaw, pitch] 까지)
 function spawnDo(c,L,pos,rot){const P=pos?cmdCoordBlock(pos,c):{x:Math.floor(c.pos.x),y:Math.floor(c.pos.y),z:Math.floor(c.pos.z)},R=rot?cmdRotGet(rot,c):{yaw:0,pitch:0},dk=MCDIM_KEY[c.dim]||DIM;
   for(const p of L)if(p===player)player.spawn={x:P.x+.5,y:P.y,z:P.z+.5,dim:dk==='over'?undefined:dk,yaw:R.yaw,pitch:R.pitch,own:1};
-  const a=[P.x,P.y-YO,P.z,cmdFloat(R.yaw),cmdFloat(R.pitch),c.dim];if(L.length===1)cFb(c,'sp1',...a,cmdEntName(L[0]));else cFb(c,'spN',...a,L.length);return L.length}
+  const a=[P.x,P.y-cYO(c),P.z,cmdFloat(R.yaw),cmdFloat(R.pitch),c.dim];if(L.length===1)cFb(c,'sp1',...a,cmdEntName(L[0]));else cFb(c,'spN',...a,L.length);return L.length}
 cmdReg(cLit('spawnpoint',c=>spawnDo(c,[cSelfP(c)],null,null),cArg('targets',CmdArg.ent(false,true),(c,a)=>spawnDo(c,cTargets(c,a.targets,true),null,null),cArg('pos',CmdArg.bpos(),(c,a)=>spawnDo(c,cTargets(c,a.targets,true),a.pos,null),cArg('rotation',CmdArg.rot(),(c,a)=>spawnDo(c,cTargets(c,a.targets,true),a.pos,a.rotation))))));
 function wspDo(c,pos,rot){if((MCDIM_KEY[c.dim]||DIM)!=='over')cFail('wsp_over');const P=pos?cmdCoordBlock(pos,c):{x:Math.floor(c.pos.x),y:Math.floor(c.pos.y),z:Math.floor(c.pos.z)},R=rot?cmdRotGet(rot,c):{yaw:0,pitch:0};
   const o=dimState.wsp,s=player.spawn;dimState.wsp={x:P.x,y:P.y,z:P.z,yaw:R.yaw,pitch:R.pitch};if(!s||!s.own&&!s.bed)player.spawn={x:P.x+.5,y:P.y,z:P.z+.5,yaw:R.yaw,pitch:R.pitch};
@@ -8007,7 +8009,7 @@ function execRun(c,T,i){let n=0;
   while(i<T.length){const k=T[i],at=T.pos[i];const need=(m)=>{if(i+m>=T.length)throw new CmdError(cmdMsg('unknown_cmd'),c._line.length,c._line)};
     if(k==='run'){need(1);return n+execCmd('',{src:c.src,pos:c.pos,rot:c.rot,dim:c.dim,anchor:c.anchor,perm:c.perm,silent:c.silent,_line:c._line,_at:T.pos[i+1]})}
     if(k==='in'){need(1);const r=new CmdReader(c._line.slice(0,T.pos[i+1]+T[i+1].length),T.pos[i+1]),id=r.id();if(r.can())throw r.err('sep');const d=MCDIM_KEY[id];if(!d)throw new CmdError(cmdMsg('dim_bad',id));
-      const from=MCDIM_KEY[c.dim]||DIM,s=MCDIM_SCALE[from]/MCDIM_SCALE[d];c=Object.assign({},c,{dim:id,pos:{x:c.pos.x*s,y:c.pos.y,z:c.pos.z*s}});i+=2;continue}
+      const from=MCDIM_KEY[c.dim]||DIM,s=MCDIM_SCALE[from]/MCDIM_SCALE[d];c=Object.assign({},c,{dim:id,pos:{x:c.pos.x*s,y:c.pos.y-cYO(c)+cYO({dim:id}),z:c.pos.z*s}});i+=2;continue}
     if(k==='as'||k==='at'){need(1);const L=c.targets(T[i+1]);for(const e of L){const p=cmdEntPos(e);n+=execRun(Object.assign({},c,k==='as'?{src:e}:{pos:{x:p.x,y:p.y,z:p.z},rot:cmdEntRot(e)}),T,i+2)}return n}
     if(k==='positioned'){need(1);if(T[i+1]==='as'){need(2);const L=c.targets(T[i+2]);for(const e of L){const p=cmdEntPos(e);n+=execRun(Object.assign({},c,{pos:{x:p.x,y:p.y,z:p.z}}),T,i+3)}return n}
       need(3);c=Object.assign({},c,{pos:c.vec3(T[i+1],T[i+2],T[i+3])});i+=4;continue}
@@ -8117,7 +8119,7 @@ die=function(why){const keep=gameRule('keep_inventory'),S=keep?{inv:inv.slice(),
   if(gameRule('immediate_respawn'))setTimeout(()=>{if(player.dead)respawn()},0)};
 // 다시 살아날 때: /spawnpoint 로 다른 차원에 정한 스폰 · 스폰 방향
 const _respawn0=respawn;
-respawn=function(){const s=player.spawn;player.burn=0;if(typeof GAP!=='undefined')Object.assign(GAP,{regen:0,abs:0,absT:0,res:0,fire:0});   // 죽으면 불 · 효과가 꺼져요 (P2-BUG)
+respawn=function(){const s=player.spawn;player.burn=0;player.buffT=0;if(typeof GAP!=='undefined')Object.assign(GAP,{regen:0,abs:0,absT:0,res:0,fire:0});   // 죽으면 불 · 효과가 꺼져요 (P2-BUG)
   if(s&&s.dim&&s.dim!=='over'&&MCDIM[s.dim]){const p=player;$('dead').classList.add('hide');p.dead=false;p.hp=20;p.food=20;p.sat=5;p.exh=0;p.air=15;p.hurtTime=0;p.deathTime=0;p.fallDist=0;p.fallStart=null;
     const R={yaw:s.yaw||0,pitch:s.pitch||0};if(DIM!==s.dim)switchDim(s.dim,s.x,s.y,s.z,()=>{cmdEntTp(player,s.x,s.y,s.z,R);updateStats()});else{cmdEntTp(player,s.x,s.y,s.z,R);updateStats();lockPointer()}return}
   _respawn0();if(s&&s.yaw!=null&&DIM==='over'&&!dimBusy){player.yaw=Math.PI-s.yaw*DEG;player.pitch=-(s.pitch||0)*DEG}};
@@ -10555,7 +10557,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
       const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),face=Math.abs(fx)>Math.abs(fz)?(fx>0?'east (Towards positive X)':'west (Towards negative X)'):(fz>0?'south (Towards positive Z)':'north (Towards negative Z)');
       let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=DIM==='nether'?['nether_wastes','soul_sand_valley','crimson_forest','warped_forest','basalt_deltas'][nBiome(bx,bz)]:DIM==='time'?'time_chamber':DIM==='end'?endBiomeKey(bx,bz):deepDarkAt(bx,by,bz)?'deep_dark':cbF===1?'dripstone_caves':cbF===2?'lush_caves':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
       const L=[`Blockcraft 1.20 (craft.html/vanilla)`,`${fps} fps T: inf vsync fancy fancy-clouds B: 2`,`C: ${chunks.size} loaded  D: ${RD}  E: ${mobs.length}  I: ${ents.length}  P: ${parts.length}`,'',
-        `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-YO).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-YO} ${bz} [${bx&15} ${(by-YO)&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-YO)>>4} ${bz>>4}`,
+        `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-cYO()).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-cYO()} ${bz} [${bx&15} ${(by-cYO())&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-cYO())>>4} ${bz>>4}`,
         `Facing: ${face} (${my.toFixed(1)} / ${(-p.pitch/DEG).toFixed(1)})`,`Client Light: ${Math.max(l[0],l[1])} (${l[0]} sky, ${l[1]} block)`,`Biome: minecraft:${bk}`,`Day ${Math.floor(worldTime/DAYLEN)}  Time ${Math.floor((worldTime%DAYLEN)/DAYLEN*24000)}`,`Seed: ${SEED}`+(MPS?`  Server: ${MPS.sid} (${MPS.count})`:'')];
       $('debug').innerHTML=L.map(t=>t?`<div>${esc(t)}</div>`:'<div class="gap"></div>').join('')}}
   drawHUD();$('cross').style.visibility=hideGui||viewMode||!started||player.dead||$('hud').classList.contains('hide')?'hidden':'';$('chat').style.visibility=hideGui&&!chatOpen?'hidden':'';
