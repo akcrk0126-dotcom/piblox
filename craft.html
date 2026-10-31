@@ -4081,6 +4081,7 @@ const SMISC={
   'atk.knockback':[2,()=>{const o=sbf(.3);smo(o,0,110,.05,1,70);sgr(o,0,.1,'lp',800,.8,.6);return snorm(o)}],
   bow:[2,()=>{const o=sbf(.45),P=SSR/rr(170,230)|0,dl=new Float32Array(P);for(let i=0;i<P;i++)dl[i]=R_()*2-1;let k=0;   // 줄 튕김 (Karplus-Strong)
     for(let i=0;i<o.length*.8;i++){const v=dl[k];dl[k]=(v+dl[(k+1)%P])*.497;o[i]=v*Math.exp(-i/SSR/.12);k=(k+1)%P}sgr(o,0,.18,'bp',t=>1500-t*4000,1.5,.35,.02);return snorm(o)}],
+  throw:[2,()=>{const o=sbf(.3);sgr(o,0,.22,'bp',t=>900+t*3000,2,1,.05);return snorm(o,.6)}],
   'arrow.hit':[3,()=>{const o=sbf(.25);smo(o,0,rr(260,340),.02,1,200);sgr(o,0,.05,'bp',1200,1.2,.6);sgr(o,0,.006,'hp',3000,.7,.5);return snorm(o)}],
   explode:[4,()=>{const o=sbf(2.6);sgr(o,0,2.4,'lp',t=>1400*Math.exp(-t*3)+70,.9,1,.004);smo(o,0,62,.35,.9,32);for(let i=0;i<40;i++)sgr(o,.05+Math.pow(R_(),2)*1.6,rr(.005,.03),'bp',rr(400,2500),1,rr(.05,.25));return snorm(o,.95)}],
   fuse:[1,()=>{const o=sbf(1.6);sgr(o,0,1.55,'hp',3200,.7,1,.06);for(let i=0;i<o.length;i++)o[i]*=.75+.25*Math.sin(i/SSR*6.2832*23*(1+.3*Math.sin(i/SSR*3)));return snorm(o,.7)}],
@@ -4150,6 +4151,7 @@ function sndDispatch(inner,kind,mat,vol,pos){const v=vol==null?1:vol;
     case 'drink':snd('drink','player',.5,R_()*.1+.9,pos);return;
     case 'burp':{const it=typeof lastEaten!=='undefined'&&ITEM[lastEaten];if(!(it&&it.bottleBack))snd('burp','player',.5,R_()*.1+.9);sndQuiet(inner,kind,mat,vol);return}   // 마시는 건 트림 안 해요
     case 'bow':if(typeof mat==='number'&&mat<0)snd('bow','hostile',1,1/(R_()*.4+.8),pos);else snd('bow','player',v,1/(R_()*.4+1.2)+(typeof mat==='number'?mat:1)*.5,pos);return;
+    case 'throw':snd('throw','neutral',.5,.4/(R_()*.4+.8),pos);return;   // 눈덩이 · 달걀 · 엔더 진주
     case 'arrowhit':snd('arrow.hit','neutral',1,1.2/(R_()*.2+.9),pos);return;
     case 'boom':snd('explode','block',4*v,(1+(R_()-R_())*.2)*.7,pos);return;
     case 'fuse':if(mat==='creeper')snd('fuse','hostile',1,.5,pos);else snd('fuse','block',1,1,pos);return;
@@ -4856,7 +4858,7 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     if(m.dead){m.deadT+=dt;m.g.rotation.z=Math.min(1,Math.sqrt(Math.max(0,(m.deadT*20-1)/20*1.6)))*Math.PI/2;tintMob(m,lightK(m.pos.x,m.pos.y+.5,m.pos.z));if(m.deadT>=1){poofFx(m.pos.x,m.pos.y,m.pos.z,m.hw*2,m.h);scene.remove(m.g);mobs.splice(i,1)}continue}
     if(m.fireT>0){m.fireT-=dt;m.fireK=(m.fireK||0)+dt;if(isWet(m.pos.x,m.pos.y+m.h*.5,m.pos.z))m.fireT=0;if(m.fireK>=1){m.fireK=0;m.hurtT=0;hurtMob(m,1,null);if(m.dead)continue}}
     if(D.custom){D.custom(m,dt);continue}
-    if(D.ender&&m.angry<=0&&!player.dead&&!creative()&&m.pos.distanceTo(pp)<24){const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),hv=new V3(m.pos.x,m.pos.y+2.5,m.pos.z).sub(camera.position);const hl=hv.length();if(hv.normalize().dot(cd)>1-.025/Math.max(1,hl/8)&&los(camera.position,new V3(m.pos.x,m.pos.y+2.5,m.pos.z))){m.angry=30;sfx('ender')}}
+    if(D.ender&&m.angry<=0&&!player.dead&&!creative()&&m.pos.distanceTo(pp)<24){const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),hv=new V3(m.pos.x,m.pos.y+2.5,m.pos.z).sub(camera.position);const hl=hv.length();if(hv.normalize().dot(cd)>1-.025/Math.max(1,hl/8)&&los(camera.position,new V3(m.pos.x,m.pos.y+2.5,m.pos.z))){m.angry=30;sfx('ender',null,1,m.pos)}}
     const dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,dist=Math.hypot(dx,dz),dy=pp.y-m.pos.y;
     if(dist>112||(D.hostile&&!D.boss&&!D.persist&&!m.keep&&dist>32&&Math.random()<dt*.025)){scene.remove(m.g);mobs.splice(i,1);continue}
     if(!chunks.has(ck(Math.floor(m.pos.x/16),Math.floor(m.pos.z/16))))continue;
@@ -5556,7 +5558,7 @@ function throwThing(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion
   const m=itemMesh(st.id,.25);m.position.copy(o);scene.add(m);
   if(kind==='eye'){const s=nearestStronghold(o.x,o.z);if(DIM!=='over'||!s){scene.remove(m);toast('엔더의 눈이 아무 데로도 날아가지 않아요');return}const dx=s.x-o.x,dz=s.z-o.z,l=Math.hypot(dx,dz)||1;throwns.push({kind,m,pos:o.clone(),vel:new V3(dx/l*8,4,dz/l*8),t:0,near:l<14})}
   else throwns.push({kind,owner:'player',m,pos:o.clone(),prev:o.clone(),vel:d.multiplyScalar(30),t:0,w:.25,tk:0});   // 마크: 1.5칸/틱
-  if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}sfx('bow');doSwing()}
+  if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}sfx('throw');doSwing()}
 function updateThrowns(dt){for(let i=throwns.length-1;i>=0;i--){const t=throwns[i];t.t+=dt;
   if(t.kind==='eye'){if(t.t<1.6){t.pos.addScaledVector(t.vel,dt);t.vel.y*=Math.exp(-dt*2)}else{if(t.near)t.pos.y-=dt*3;}
     t.m.position.copy(t.pos);t.m.rotation.y+=dt*4;if(Math.random()<.5)smoke(t.pos.x,t.pos.y,t.pos.z);
@@ -5623,7 +5625,7 @@ Object.assign(MOBDEF,{
   dragon:{n:'엔더 드래곤',hp:200,hw:3,h:3,sp:14,hostile:1,fly:1,fireproof:1,boss:1,drops:()=>[],snd:'dragon',build:buildDragon,custom:dragonAI}});
 
 // ── 화염구
-function shootFire(from,dir,speed,big){const m=new THREE.Mesh(new THREE.BoxGeometry(big?.9:.35,big?.9:.35,big?.9:.35),new THREE.MeshBasicMaterial({color:big?0xff6a10:0xffa030}));m.position.copy(from);scene.add(m);projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(2),owner:'mob',src:hbShooter(from),dmg:big?6:5,m,life:0,stuck:false,fire:big?2:1,w:big?1:.3125,tk:0});sfx('blaze')}   // 마크: 0.1칸/틱으로 떠나 틱마다 0.1씩 빨라져요 (끝 속도 1.9칸/틱)
+function shootFire(from,dir,speed,big){const m=new THREE.Mesh(new THREE.BoxGeometry(big?.9:.35,big?.9:.35,big?.9:.35),new THREE.MeshBasicMaterial({color:big?0xff6a10:0xffa030}));m.position.copy(from);scene.add(m);projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(2),owner:'mob',src:hbShooter(from),dmg:big?6:5,m,life:0,stuck:false,fire:big?2:1,w:big?1:.3125,tk:0});sfx('blaze',null,1,from)}   // 마크: 0.1칸/틱으로 떠나 틱마다 0.1씩 빨라져요 (끝 속도 1.9칸/틱)
 // 화살 처리에 화염구 추가
 const _updateProjs=updateProjs;
 updateProjs=function(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(!p.fire)continue;if(tStopT>0&&p.owner==='mob')continue;p.life+=dt;let gone=p.life>8;
@@ -5759,7 +5761,7 @@ function phantomAI(m,dt){if(!mobCommon(m,dt))return;const pp=player.pos,A=m.ai;A
   else{flyMove(m,pp.x+Math.cos(A.ang)*14,pp.y+16,pp.z+Math.sin(A.ang)*14,9,dt);if(A.t<=0){A.dive=true;A.t=0}}
   if(Math.hypot(m.vel.x,m.vel.z)>.3)m.yaw=Math.atan2(m.vel.x,m.vel.z);m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*Math.sin(performance.now()/150)*.5)}
 function shootPotion(from,dir,speed,owner,dmg){const m=new THREE.Mesh(new THREE.BoxGeometry(.25,.3,.25),new THREE.MeshBasicMaterial({color:0x9a3ad0}));m.position.copy(from);scene.add(m);const near=Math.hypot(player.pos.x-from.x,player.pos.z-from.z)<=2;
-  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(near?9:15),owner,src:owner==='mob'?hbShooter(from):null,dmg:4,m,life:0,stuck:false,fire:3,w:.25,tk:0});sfx('bow')}   // 마크 마녀: 0.75칸/틱 (2칸 안이면 0.45) · 중력 0.05
+  projs.push({pos:from.clone(),prev:from.clone(),vel:dir.clone().normalize().multiplyScalar(near?9:15),owner,src:owner==='mob'?hbShooter(from):null,dmg:4,m,life:0,stuck:false,fire:3,w:.25,tk:0});sfx('throw',null,1,from)}   // 마크 마녀: 0.75칸/틱 (2칸 안이면 0.45) · 중력 0.05
 function spongeAbsorb(x,y,z){let n=0;for(let dy=-4;dy<=4;dy++)for(let dz=-4;dz<=4;dz++)for(let dx=-4;dx<=4;dx++){if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)>6)continue;if(getB(x+dx,y+dy,z+dz)===WATER){setBlock(x+dx,y+dy,z+dz,AIR,true);n++}}if(n)setBlock(x,y,z,WET_SPONGE)}
 /* ═════════════ 몹 추가 3: 박쥐 · 오징어 · 발광 오징어 · 돌고래 · 거북 · 고양이 · 말 · 무시룸 · 동굴 거미 · 좀벌레 · 아홀로틀 ═════════════ */
 // 물속 몹: 물 안에서만 둥둥 헤엄쳐요 (물 밖이면 퍼덕이다 떨어져요)
@@ -6057,7 +6059,7 @@ const VDOORS=[];function openDoorAhead(m){const fx=Math.floor(m.pos.x+Math.sin(m
 function golemBrain(m,dt,dx,dz,dist){m.ai.cd=(m.ai.cd||0)-dt;let foe=null,fd=16;
   for(const o of mobs)if(o!==m&&!o.dead&&o.D.hostile&&o.type!=='creeper'&&!o.D.boss&&o.type!=='warden'){const d=o.pos.distanceTo(m.pos);if(d<fd){fd=d;foe=o}}
   if(golemAngry>0&&!player.dead&&!creative()&&dist<20){if(dist<2.2&&m.ai.cd<=0){m.ai.cd=1.2;m.atk=1;hurtPlayer(7+Math.floor(Math.random()*15),m.pos,'golem');player.vel.y+=8}return{dir:Math.atan2(dx,dz),sp:m.D.sp*1.6,face:Math.atan2(dx,dz)}}
-  if(foe){const fx=foe.pos.x-m.pos.x,fz=foe.pos.z-m.pos.z;if(fd<2.4&&m.ai.cd<=0){m.ai.cd=1.2;m.atk=1;foe.hurtT=0;hurtMob(foe,7+Math.floor(Math.random()*15),m.pos);foe.vel.y=9;sfx('golem_hit')}return{dir:Math.atan2(fx,fz),sp:m.D.sp*1.6,face:Math.atan2(fx,fz)}}
+  if(foe){const fx=foe.pos.x-m.pos.x,fz=foe.pos.z-m.pos.z;if(fd<2.4&&m.ai.cd<=0){m.ai.cd=1.2;m.atk=1;foe.hurtT=0;hurtMob(foe,7+Math.floor(Math.random()*15),m.pos);foe.vel.y=9;sfx('golem_hit',null,1,m.pos)}return{dir:Math.atan2(fx,fz),sp:m.D.sp*1.6,face:Math.atan2(fx,fz)}}
   const v=m.vill;if(v){const hx=v.cx-m.pos.x,hz=v.cz-m.pos.z;if(Math.hypot(hx,hz)>20)return{dir:Math.atan2(hx,hz),sp:m.D.sp}}
   if(m.ai.t<=0){m.ai.t=4+Math.random()*8;m.ai.mv=Math.random()<.4;m.ai.dir=Math.random()*Math.PI*2}return m.ai.mv?{dir:m.ai.dir,sp:m.D.sp*.5}:{dir:m.yaw,sp:0}}
 let golemAngry=0;
@@ -9216,7 +9218,7 @@ function nvTick(dt){if(!started||!player)return;const p=player;nvT-=dt;nvMT+=dt;
   if(DIM==='nether'&&WORLD&&!p.dead){const bm=nBio(p.pos.x,p.pos.z),k='bc_nbio_'+WORLD.id;let v=0;try{v=+(localStorage.getItem(k)||0)}catch(e){}if(!(v&(1<<bm))){v|=1<<bm;try{localStorage.setItem(k,v)}catch(e){}if(v===31&&typeof advGrant==='function')advGrant('minecraft:nether/explore_nether')}}}
 // 좀비화: 피글린 · 피글린 야수 → 좀비 피글린, 호글린 → 조글린 (자리 · 방향 · 새끼 그대로)
 function nvZombify(m){const t=m.type==='hoglin'?'zoglin':'zpiglin',i=mobs.indexOf(m);if(i<0)return;scene.remove(m.g);mobs.splice(i,1);if(m.barter>0&&m.held)spawnItem({id:m.held,n:1},m.pos.x,m.pos.y+1,m.pos.z);
-  const z=spawnMob(t,m.pos.x,m.pos.y,m.pos.z,m.baby>0);if(z){z.yaw=m.yaw;z.keep=m.keep;if(m.baby>0)z.baby=1e9}for(let k=0;k<8;k++)smoke(m.pos.x,m.pos.y+1,m.pos.z);sfx('zhurt')}
+  const z=spawnMob(t,m.pos.x,m.pos.y,m.pos.z,m.baby>0);if(z){z.yaw=m.yaw;z.keep=m.keep;if(m.baby>0)z.baby=1e9}for(let k=0;k<8;k++)smoke(m.pos.x,m.pos.y+1,m.pos.z);sfx('zhurt',null,1,m.pos)}
 // ── 네더 바이옴 분위기 (Agent 03): 공기 알갱이 · 바이옴 소리
 //    알갱이: 마크 ambient_particle 그대로 (영혼 모래 골짜기 재 0.00625 · 진홍빛 숲 포자 0.025 · 뒤틀린 숲 포자 0.01428 · 현무암 삼각주 흰 재 0.118, 그림은 generic_0 = 가장 작은 점)
 //    마크는 틱마다 둘레 16칸 · 32칸에서 667자리씩 뽑아요 → 여기서는 가까운 8칸 안에서 같은 빽빽함으로 100자리만 뽑아요
@@ -10091,7 +10093,7 @@ const DFB=[];let dfbT=10;
 function dragonFireTick(dt){for(let i=DFB.length-1;i>=0;i--){const f=DFB[i];f.t-=dt;const steps=Math.ceil(f.v.length()*dt/.4);let hit=f.t<=0;
     for(let k=0;k<steps&&!hit;k++){f.p.addScaledVector(f.v,dt/steps);if(SOLID[getB(Math.floor(f.p.x),Math.floor(f.p.y),Math.floor(f.p.z))]||f.p.distanceTo(new V3(player.pos.x,player.pos.y+1,player.pos.z))<1.2)hit=true}
     f.m.position.copy(f.p);if(Math.random()<.5)smoke(f.p.x,f.p.y,f.p.z);
-    if(hit){scene.remove(f.m);DFB.splice(i,1);let y=Math.floor(f.p.y);while(y>1&&!SOLID[getB(Math.floor(f.p.x),y-1,Math.floor(f.p.z))]&&y>f.p.y-6)y--;sfx('blaze');
+    if(hit){scene.remove(f.m);DFB.splice(i,1);let y=Math.floor(f.p.y);while(y>1&&!SOLID[getB(Math.floor(f.p.x),y-1,Math.floor(f.p.z))]&&y>f.p.y-6)y--;sfx('blaze',null,1,f.p);
       for(let k=0;k<5;k++){const a=k*1.2566,r=k?1.6:0;breath.push({x:f.p.x+Math.cos(a)*r,z:f.p.z+Math.sin(a)*r,y,t:15})}}}
   if(DIM!=='end'||!dragon||dragon.dead||player.dead||creative()){return}
   if(crystals.some(c=>c.beam))dragon.hp=Math.min(dragon.D.hp,dragon.hp+dt);
@@ -10178,7 +10180,7 @@ Object.assign(MOBDEF,{shadow:{n:'그림자 분신',armsDown:1,blink:1,hp:30,hw:.
   build(g,P){humanoid(g,P,0x1d1b24,0x26232f,0x16141c,T_SHADF);g.traverse(o=>{if(o.isMesh)o.material.forEach(m=>{m.transparent=true;m.opacity=.84})})}}});
 function shadowBlink(m){const p=player.pos,fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw),x=p.x-fx*2.2,z=p.z-fz*2.2,y=Math.floor(p.y),bx=Math.floor(x),bz=Math.floor(z);
   if(getB(bx,y,bz)!==AIR||getB(bx,y+1,bz)!==AIR||!SOLID[getB(bx,y-1,bz)])return;
-  for(let k=0;k<5;k++)smoke(m.pos.x,m.pos.y+1,m.pos.z);m.pos.set(x,y,z);m.vel.set(0,0,0);m.yaw=Math.atan2(p.x-x,p.z-z);for(let k=0;k<5;k++)smoke(x,y+1,z);sfx('ender')}
+  for(let k=0;k<5;k++)smoke(m.pos.x,m.pos.y+1,m.pos.z);m.pos.set(x,y,z);m.vel.set(0,0,0);m.yaw=Math.atan2(p.x-x,p.z-z);for(let k=0;k<5;k++)smoke(x,y+1,z);sfx('ender',null,1,m.pos)}
 
 // ── 모래시계: 6초 동안 시간이 멈춰요 (몹 · 몹이 쏜 화살 · 셜커 탄) · 다시 쓰려면 24초 · 16번 쓰면 깨져요
 let tStopT=0,tStopCD=0,buffK=0;
