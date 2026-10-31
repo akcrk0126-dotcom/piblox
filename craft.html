@@ -3970,7 +3970,7 @@ function mobKnock(m,s,dx,dz){s*=1-((m.D&&m.D.kbres)??KB_RES[m.type]??0);const l=
 // 피해 3 이상이면 내구도 1 + ⌊피해⌋ (방패 336) · 때린 몹은 0.5 넉백
 function shieldBlocks(d,src,why,o){const p=player;if(!p.blocking||!src||d<=0||o&&o.noArmor||/^(fall|void|starve|drown|wall|fire|lava|cactus|sonic|magic)$/.test(why))return false;
   const dx=p.pos.x-src.x,dz=p.pos.z-src.z,l=Math.hypot(dx,dz);if(l<1e-6||(dx*-Math.sin(p.yaw)+dz*-Math.cos(p.yaw))/l>=0)return false;
-  const st=inv[sel];if(st&&d>=3&&!creative()){st.d=(st.d||0)+1+Math.floor(d);if(st.d>=336){inv[sel]=null;sfx('tbreak')}renderHotbar()}
+  const st=p.shieldOff?offh[0]:inv[sel];if(st&&d>=3&&!creative()){st.d=(st.d||0)+1+Math.floor(d);if(st.d>=336){if(p.shieldOff)offh[0]=null;else inv[sel]=null;sfx('tbreak')}renderHotbar()}
   const m=mobs.find(q=>q.pos===src);if(m)mobKnock(m,.5,m.pos.x-p.pos.x,m.pos.z-p.pos.z);sfx('place','wood');return true}
 // 먹고 마시는 시간 (consume_seconds): 꿀이 든 병 2초 · 나머지 1.6초 (32틱)
 const useSec=st=>st&&st.id===HONEY_BOTTLE?2:1.6;
@@ -4015,7 +4015,7 @@ function updatePlayer(dt){const p=player;p.prev.copy(p.pos);p.walkDistO=p.walkDi
   p.sneak=sneakKey&&!p.fly;p.shiftKey=sneakKey;
   let fw=clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)-joy.y,-1,1),st=clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+joy.x,-1,1);
   if(p.pose==='crouch'||p.pose==='swim'&&!p.inWater){const ss=p.pose==='crouch'?sneakSpeed():.3;fw*=ss;st*=ss}   // 웅크리기 · 기기 (isMovingSlowly) · 신속한 잠행 (Agent 07)
-  const shUse=!!(inv[sel]&&inv[sel].id===SHIELD&&mouseR&&!screenOpen&&!p.boat);p.shieldT=shUse?(p.shieldT||0)+1:0;p.blocking=p.shieldT>=5;   // 방패: 5틱 들고 있으면 막아요
+  p.shieldOff=!(inv[sel]&&inv[sel].id===SHIELD)&&offShield();const shUse=!!((inv[sel]&&inv[sel].id===SHIELD||p.shieldOff)&&mouseR&&!screenOpen&&!p.boat);p.shieldT=shUse?(p.shieldT||0)+1:0;p.blocking=p.shieldT>=5;   // 방패: 5틱 들고 있으면 막아요 · 왼손 방패도 (P2-CAM)
   const using=eating||drawT>0||shUse;if(using){fw*=.2;st*=.2}
   const fx=Math.floor(p.pos.x),fz=Math.floor(p.pos.z);
   const feet=getB(fx,Math.floor(p.pos.y+.1),fz),mid=getB(fx,Math.floor(p.pos.y+.9),fz);
@@ -6657,7 +6657,7 @@ function updateHand(dt){const p=player,pt=PT;
   const ps=camShake(new PoseS(),pt);
   // 손이 시선을 살짝 늦게 따라와요 (xBob · yBob)
   ps.rx((lerp(p.xBobO,p.xBob,pt)-p.pitch)/DEG*.1).ry((lerp(p.yBobO,p.yBob,pt)-p.yaw)/DEG*.1);
-  const sw=attackAnim(pt),eq=1-lerp(p.oHandH,p.handH,pt);
+  const sw=p.swingHand==='off'?0:attackAnim(pt),eq=1-lerp(p.oHandH,p.handH,pt);   // 왼손으로 휘두르면 오른손은 가만히 (P2-CAM)
   if(!id){// 빈손: renderPlayerArm
     const f1=Math.sqrt(sw),f2=-.3*Math.sin(f1*Math.PI),f3=.4*Math.sin(f1*Math.PI*2),f4=-.4*Math.sin(sw*Math.PI);
     ps.t(f2+.64000005,f3-.6+eq*-.6,f4-.71999997).ry(45);const f5=Math.sin(sw*sw*Math.PI),f6=Math.sin(f1*Math.PI);ps.ry(f6*70).rz(f5*-20);
@@ -6675,7 +6675,7 @@ function updateHand(dt){const p=player,pt=PT;
     else{const s1=Math.sin(Math.sqrt(sw)*Math.PI);ps.t(-.4*s1,.2*Math.sin(Math.sqrt(sw)*Math.PI*2),-.2*Math.sin(sw*Math.PI));
       ps.t(.56,-.52+eq*-.6,-.72);const f=Math.sin(sw*sw*Math.PI);ps.ry(45+f*-20).rz(s1*-20).rx(s1*-80).ry(-45)}
     // 아이템 모델 표시 변환 (block.json / generated.json 의 firstperson_righthand)
-    if(obj.userData.block)ps.ry(45).s(.4);else ps.t(1.13/16,3.2/16,1.13/16).ry(-90).rz(25).s(.68)}
+    if(obj.userData.block)ps.ry(45).s(.4);else if(id===CROSSBOW)ps.t(1.13/16,3.2/16,1.13/16).rx(-90).rz(-55).s(.68);else ps.t(1.13/16,3.2/16,1.13/16).ry(-90).rz(25).s(.68)}   // 쇠뇌는 crossbow.json (−90, 0, −55)
   obj.matrix.copy(ps.m)}
 
 /* ═════════════ 조합법 · 화로 ═════════════ */
@@ -7066,7 +7066,7 @@ addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('wheel',e=>{if(document.pointerLockElement!==cvs)return;wheelSlot(e)},{passive:true});
 let lastSpace=0;
 addEventListener('keydown',e=>{if(chatOpen)return;if(e.repeat&&!/^Key[WASDQ]$|Space/.test(e.code))return;   // Q 는 누르고 있으면 계속 버려요 (키 반복)
-  if(screenOpen){if(e.code==='KeyE'||e.code==='Escape'){closeScreen();e.preventDefault()}else if(/^Digit[1-9]$/.test(e.code)&&hoverSlot){const k=+e.code.slice(5)-1,c=hoverSlot.dataset.c,i=+hoverSlot.dataset.i;if(c!=='res'){const arr=arrOf(c);const a=arr[i],b=inv[k];if(!b||accepts(c,i,b)){arr[i]=b;inv[k]=a;drawScreen()}}}else if(e.code==='KeyQ'&&hoverSlot&&!cursor){const c=hoverSlot.dataset.c,i=+hoverSlot.dataset.i;if(c!=='res'){const arr=arrOf(c),st=arr[i];if(st){if(e.ctrlKey){throwItem(st);arr[i]=null}else{throwItem({id:st.id,n:1,d:st.d});st.n--;if(!st.n)arr[i]=null}drawScreen()}}}return}
+  if(screenOpen){if(e.code==='KeyE'||e.code==='Escape'){closeScreen();e.preventDefault()}else if(/^Digit[1-9]$/.test(e.code)&&hoverSlot){const k=+e.code.slice(5)-1,c=hoverSlot.dataset.c,i=+hoverSlot.dataset.i;if(c!=='res'){const arr=arrOf(c);const a=arr[i],b=inv[k];if(!b||accepts(c,i,b)){arr[i]=b;inv[k]=a;drawScreen()}}}else if(e.code==='KeyF'&&hoverSlot&&!cursor&&typeof offh!=='undefined'){const c=hoverSlot.dataset.c,i=+hoverSlot.dataset.i;if(c!=='res'&&c!=='off'){const arr=arrOf(c),a=arr[i],b=offh[0];if(arr&&(!b||accepts(c,i,b))){arr[i]=b;offh[0]=a;drawScreen()}}}else if(e.code==='KeyQ'&&hoverSlot&&!cursor){const c=hoverSlot.dataset.c,i=+hoverSlot.dataset.i;if(c!=='res'){const arr=arrOf(c),st=arr[i];if(st){if(e.ctrlKey){throwItem(st);arr[i]=null}else{throwItem({id:st.id,n:1,d:st.d});st.n--;if(!st.n)arr[i]=null}drawScreen()}}}return}
   if(menuOpen||!started)return;
   keys[e.code]=true;
   if(e.code==='KeyW'&&!e.repeat){const now=performance.now();if(now-lastW<350)player.sprint=true;lastW=now}   // 마크 sprintTriggerTime 7틱
@@ -7076,6 +7076,7 @@ addEventListener('keydown',e=>{if(chatOpen)return;if(e.repeat&&!/^Key[WASDQ]$|Sp
   if(e.code==='Slash'){e.preventDefault();keys[e.code]=false;openChat('/');return}
   if(e.code==='Space'&&!e.repeat&&creative()){const now=performance.now();if(now-lastSpace<350&&!player.swimming){player.fly=!player.fly;player.vel.y=0;lastSpace=0}else lastSpace=now}   // 마크 jumpTriggerTime 7틱 · 수영 중엔 안 돼요
   if(e.code==='KeyQ'&&inv[sel]&&!player.dead){dropHeld(e.ctrlKey);doSwing()}   // 버리면 팔을 휘둘러요
+  if(e.code==='KeyF'&&!e.repeat&&!player.dead&&GAMEMODE!=='spectator')swapHands();   // F: 양손 바꾸기 (P2-CAM)
   if(e.code==='F5'){viewMode=(viewMode+1)%3;e.preventDefault()}
   if(e.code==='F1'){hideGui=!hideGui;e.preventDefault()}
   if(e.code==='F3')e.preventDefault();   // 디버그 화면은 F3 을 뗄 때 켜고 꺼요 (P2-CAM · F3 조합)
@@ -7118,7 +7119,6 @@ function takeShot(){try{const c=document.createElement('canvas');c.width=cvs.wid
     const d=new Date(),z=n=>String(n).padStart(2,'0'),name=`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}_${z(d.getHours())}.${z(d.getMinutes())}.${z(d.getSeconds())}.png`;
     c.toBlob(b=>{if(!b){chatLine('스크린샷을 저장하지 못했어요','#ff5555');return}const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
       chatLine(`스크린샷을 <a href="${u}" target="_blank" style="color:inherit;text-decoration:underline">${name}</a> (으)로 저장했어요`,'#fff',true)},'image/png')}catch(e){chatLine('스크린샷을 저장하지 못했어요','#ff5555')}}
-{const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);if(shotReq){shotReq=false;takeShot()}return r}}
 // F11 전체 화면
 function toggleFS(){try{if(document.fullscreenElement)document.exitFullscreen();else{const r=document.documentElement.requestFullscreen();if(r&&r.catch)r.catch(()=>{})}}catch(e){}}
 // F3 조합 (KeyboardHandler.handleDebugKeys): F3 을 누른 채 누른 키는 원래 동작을 안 해요 · 조합을 안 쓰고 F3 을 떼면 디버그 화면을 켜고 꺼요
@@ -7168,6 +7168,42 @@ function chunkBorders(){if(!showCB||!started){if(cbLines)cbLines.visible=false;r
   for(const [i,j] of [[0,0],[16,0],[0,16],[16,16]])V(x0+i,z0+j,Y);
   const g=cbLines.geometry;g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('color',new THREE.Float32BufferAttribute(C,3));g.computeBoundingSphere()}
 {const _ob=scene.onBeforeRender;scene.onBeforeRender=function(r,s,c,t){_ob.call(this,r,s,c,t);chunkBorders()}}
+// ── 왼손 (P2-CAM): F 로 바꿔 들기 · 저장 · 죽으면 떨어뜨려요 · 1인칭 왼손에 그려요 · 오른손이 할 게 없으면 왼손의 방패 · 블록을 써요 ──
+const offh=[null];let offUse=false;
+{const _ao=arrOf;arrOf=function(c){return c==='off'?offh:_ao(c)}}
+{const _ap=applyPlayer;applyPlayer=function(d){offh[0]=d&&d.off&&d.off[0]||null;return _ap.apply(this,arguments)}}
+{const _d=die;die=function(why){const p=player;if(offh[0]&&!p.dead&&!(typeof gameRule==='function'&&gameRule('keep_inventory'))){if(!(offh[0].e&&offh[0].e.vanish))spawnItem(offh[0],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));offh[0]=null}return _d.apply(this,arguments)}}
+function swapHands(){const t=inv[sel];inv[sel]=offh[0];offh[0]=t;eating=false;drawT=0;renderHotbar()}
+// 휘두르는 손 (LivingEntity.swing(hand) → swingingArm): 새로 휘두를 때만 바뀌어요
+{const _ds=doSwing;doSwing=function(){const r=_ds.apply(this,arguments);if(player.swingTime===-1)player.swingHand=offUse?'off':'main';return r}}
+// 왼손 높이 (ItemInHandRenderer.tick: offHandHeight 는 쿨타임과 상관없이 0.4씩)
+{const _ht=handTick;handTick=function(){const r=_ht.apply(this,arguments),p=player,st=offh[0];p.oOffH=p.offH??1;if(p.offH==null)p.offH=1;
+  if(p.offItem===undefined)p.offItem=st;const same=p.offItem===st||(p.offItem&&st&&p.offItem.id===st.id&&p.offItem.n===st.n);if(same)p.offItem=st;
+  p.offH+=clamp((same?1:0)-p.offH,-.4,.4);if(p.offH<.1)p.offItem=st;return r}}
+// 오른쪽 클릭: 오른손이 아무것도 안 하면 왼손 블록 (횃불 등) 을 놓아요 · 반복은 4틱 (rightClickDelay)
+{const _ui=useItem;useItem=function(first){const p=player,st=inv[sel],n0=st?st.n:0,cd=useCD,eat=eating,sw=p.swingTime,sg=p.swinging,so=screenOpen;let r=_ui.apply(this,arguments);
+  const did=inv[sel]!==st||(st&&st.n!==n0)||useCD!==cd||eating!==eat||p.swingTime!==sw||p.swinging!==sg||screenOpen!==so||!!screenOpen;
+  if(!did&&offh[0]&&ITEM[offh[0].id]&&ITEM[offh[0].id].block&&!p.dead){const o=offh[0],on=o.n,h0=p.handH;offUse=true;inv[sel]=o;offh[0]=st;try{r=_ui.call(this,first)}finally{offh[0]=inv[sel];inv[sel]=st;offUse=false}
+    if(offh[0]!==o||(o&&o.n!==on)){p.offH=0;p.handH=h0}renderHotbar()}
+  if(useCD!==cd&&useCD>.2&&useCD<.26)useCD=.2;return r}}
+function offShield(){const st=inv[sel],o=offh[0];if(!o||o.id!==SHIELD||(st&&st.id===SHIELD))return false;if(!st)return true;const it=ITEM[st.id]||{};return !(it.food||st.id===BOW||st.id===CROSSBOW||(it.block&&target))}
+// 1인칭 왼손 (renderArmWithItem, 팔 방향 −1 · 표시 변환은 오른손 값을 거울처럼: Y · Z 회전 반대 · X 이동 반대)
+const offCache={};
+function offRender(){const p=player,st=p.offItem;if(!st||!started||p.dead||viewMode||hideGui)return;const id=st.id,pt=PT;let o=offCache[id];if(!o){o=heldObj(id).clone();o.matrixAutoUpdate=false;offCache[id]=o}
+  const ps=camShake(new PoseS(),pt);ps.rx((lerp(p.xBobO,p.xBob,pt)-p.pitch)/DEG*.1).ry((lerp(p.yBobO,p.yBob,pt)-p.yaw)/DEG*.1);
+  const sw=p.swingHand==='off'?attackAnim(pt):0,eq=1-lerp(p.oOffH??1,p.offH??1,pt);
+  if(id===SHIELD&&p.shieldT>0&&p.shieldOff){ps.t(-.56,-.52+eq*-.6,-.72);const k=Math.min(1,(p.shieldT-1+pt)/5);ps.t(.5*k,.2*k,.1*k).rz(25*k).ry(-25*k)}
+  else{const s1=Math.sin(Math.sqrt(sw)*Math.PI);ps.t(.4*s1,.2*Math.sin(Math.sqrt(sw)*Math.PI*2),-.2*Math.sin(sw*Math.PI));ps.t(-.56,-.52+eq*-.6,-.72);const f=Math.sin(sw*sw*Math.PI);ps.ry(-(45+f*-20)).rz(s1*20).rx(s1*-80).ry(45)}
+  if(o.userData.block)ps.ry(-225).s(.4);else if(id===CROSSBOW)ps.t(-1.13/16,3.2/16,1.13/16).rx(-90).rz(55).s(.68);else ps.t(-1.13/16,3.2/16,1.13/16).ry(90).rz(-25).s(.68);
+  o.matrix.copy(ps.m);handScene.add(o)}
+{const _uh=updateHand;updateHand=function(){const r=_uh.apply(this,arguments);offRender();return r}}
+// HUD: 핫바 왼쪽 왼손 칸 (hotbar_offhand_left: 핫바 왼쪽 29칸 · 아이템은 +3, +4)
+function drawOffSlot(){const st=offh[0];if(!st||!started||hideGui||$('hud').classList.contains('hide')||typeof SPR==='undefined'||!SPR.bar)return;const s=GS*(devicePixelRatio||1),cx=Math.floor(innerWidth/GS/2),x=cx-91-29,y=innerHeight/GS-23,R=v=>Math.round(v*s);
+  hg.setTransform(1,0,0,1,0,0);hg.imageSmoothingEnabled=false;hg.drawImage(SPR.bar,0,0,21,22,R(x),R(y+1),R(21),R(22));hg.drawImage(SPR.bar,181,0,1,22,R(x+21),R(y+1),R(1),R(22));
+  hg.drawImage(iconC(st.id),R(x+3),R(y+4),R(16),R(16));const t=toolOf(st);if(t&&st.d){const f=Math.max(0,1-st.d/t.dur);hg.fillStyle='#000';hg.fillRect(R(x+5),R(y+17),R(13),R(2));hg.fillStyle=`hsl(${f*120},100%,50%)`;hg.fillRect(R(x+5),R(y+17),R(Math.round(13*f)),R(1))}
+  if(st.n>1){const n=String(st.n);drawNum(n,x+3+19-2-n.length*6+1,y+4+6+3,'#fff','#3f3f3f')}}
+{const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);drawOffSlot();return r}}
+{const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);if(shotReq){shotReq=false;takeShot()}return r}}
 // F3 + H 고급 툴팁: 이름 아래에 아이디 (minecraft:...) 를 회색으로
 $('screen').addEventListener('pointerover',e=>{if(!advTips)return;const el=e.target.closest&&e.target.closest('.slot'),tip=$('tip');if(!el||tip.classList.contains('hide')||el.dataset.c==='trash'||typeof arrOf!=='function')return;
   const st=el.dataset.c==='res'?craftOut():arrOf(el.dataset.c)[+el.dataset.i];if(st&&MCID[st.id])tip.insertAdjacentHTML('beforeend',`<small style="color:#555">${MCID[st.id]}</small>`)});
@@ -7299,7 +7335,7 @@ function worldsList(){try{return JSON.parse(localStorage.getItem(WKEY))||[]}catc
 function saveWorldsList(l){try{localStorage.setItem(WKEY,JSON.stringify(l))}catch(e){toast('저장 공간이 부족해요')}}
 (function migrate(){try{const old=localStorage.getItem('blockcraft_v1');if(old&&!worldsList().length){const d=JSON.parse(old);const w={id:'w'+Date.now().toString(36),name:'나의 세계',mode:'survival',type:'default',seed:d.seed,last:Date.now()};localStorage.setItem('bc_w_'+w.id,old);saveWorldsList([w])}if(old)localStorage.removeItem('blockcraft_v1')}catch(e){}})();
 function playerData(){const p=player;return{pos:[p.pos.x,p.pos.y,p.pos.z],yaw:p.yaw,pitch:p.pitch,hp:p.hp,food:p.food,sat:p.sat,spawn:p.spawn,dead:p.dead,fly:p.fly}}
-function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,ds:dimState,inv,sel,arm:armor,xp:player.xp||0,pl:playerData(),time:worldTime,rest:player.lastRest};
+function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,ds:dimState,inv,sel,arm:armor,off:offh,xp:player.xp||0,pl:playerData(),time:worldTime,rest:player.lastRest};
   if(WORLD.mp)localStorage.setItem('bc_mp_'+WORLD.mp,JSON.stringify(base));
   else{localStorage.setItem('bc_w_'+WORLD.id,JSON.stringify(Object.assign(base,{seed:SEED,edits,tiles:[...(DIM==='over'?tiles:tilesByDim.over)],tilesD:{nether:[...(DIM==='nether'?tiles:tilesByDim.nether)],end:[...(DIM==='end'?tiles:tilesByDim.end)],time:[...(DIM==='time'?tiles:tilesByDim.time)]},dim:DIM,ds:dimState,saplings,crops,vill:VSTATE})));const L=worldsList(),w=L.find(x=>x.id===WORLD.id);if(w){w.last=Date.now();saveWorldsList(L)}}}catch(e){toast('저장 공간이 부족해요')}}
 function applyPlayer(d){if(!d)return false;(d.inv||[]).forEach((s,i)=>inv[i]=s);(d.arm||[]).forEach((s,i)=>armor[i]=s);player.xp=d.xp||0;sel=d.sel||0;const q=d.pl;if(!q)return false;player.pos.set(q.pos[0],q.pos[1],q.pos[2]);player.yaw=q.yaw;player.pitch=q.pitch;player.hp=q.hp;player.food=q.food;player.sat=q.sat;player.spawn=q.spawn;player.fly=!!q.fly;
