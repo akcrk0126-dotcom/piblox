@@ -11598,6 +11598,29 @@ STRUCT_DEFS.push(MONUMENT,MANSION,TRAILR);Object.assign(STAMPERS,{monument:stamp
 SURF_DEFS.push(MANSION);SURF_BOX.mansion=[-21,21,-21,21];
 for(const [D,n] of [[MONUMENT,'Ocean Monument'],[MANSION,'Woodland Mansion'],[TRAILR,'Trail Ruins']])LOCATORS[D.kind]={n,dim:'over',find(x,z){const s=nearestOf(D,x,z,6);return s?{x:s.x,y:s.y,z:s.z}:null}};
 LOOT2.woodland_mansion=a=>{a(GOLDEN_APPLE,1,1,.2);a(NAME_TAG,1,1,.2);a(IRON,1,4,.5);a(GOLD,1,4,.3);a(BREAD,1,4,.5);a(WHEAT,1,4,.4);a(REDSTONE,1,4,.4);a(COAL,1,4,.4);a(BONE,1,8,.5);a(FLESH,1,8,.5);a(DIAMOND,1,2,.1);a(BEET_SEEDS,2,4,.3)};
+// ── (P4-WORLD) GEN 6: 폐허가 된 차원문 종류 (마크 ruined_portal · _desert · _jungle · _swamp · _mountain · _ocean) — 놓이는 곳 (땅 위 · 반쯤 묻힘 · 산속 · 바다 밑) 과 이끼
+const V6_RPMT=V6B('badlands','eroded_badlands','wooded_badlands','windswept_hills','windswept_forest','windswept_gravelly_hills','savanna_plateau','windswept_savanna','stony_shore',...V6_MOUNT);
+RPORTAL.t6=(x,z,r)=>{const h=terrainH(x,z),bm=v6bio(x,v6surf(x,z),z),ax=r()<.5,big=r()<.12;
+  if(isOcean(bm))return{y:h+1,ax,big,moss:.8,wet:1,v:'ocean'};
+  if(bm===BIO.SWAMP||bm===BIO.MANGROVE)return{y:h<SEA?h+1:h-1,ax,big,moss:.5,wet:h<SEA?1:0,v:'swamp'};
+  if(h<=SEA)return null;
+  if(bm===BIO.DESERT)return{y:h-1-Math.floor(r()*3),ax,big,moss:0,v:'desert'};
+  if(bm===BIO.JUNGLE||bm===BIO.BAMBOO_JUNGLE||bm===BIO.SPARSE_JUNGLE)return{y:h+1,ax,big,moss:.8,v:'jungle'};
+  if(V6_RPMT.has(bm))return{y:r()<.5?h+1:Math.max(mcY(-10),h-8-Math.floor(r()*12)),ax,big,moss:.2,v:'mountain'};
+  return{y:r()<.5?h+1:h-1-Math.floor(r()*2),ax,big,moss:.2,v:'standard'}};
+{const _rp=STAMPERS.ruined_portal;STAMPERS.ruined_portal=function(B_,s){if(s.moss==null)return _rp(B_,s);const P=Object.create(B_);
+  P.set=(x,y,z,id,m)=>{if(id===STONE_BRICKS&&hash3(x,y,z,s.seed|0)<s.moss)id=MOSSY_SB;else if(id===LAVA&&s.wet)id=MAGMA;B_.set(x,y,z,id,m)};
+  if(s.v==='mountain'&&s.y<terrainH(s.x,s.z)-3){const W=s.big?6:4,Hh=s.big?7:5;for(let u=-1;u<=W;u++)for(let v=-2;v<=2;v++)for(let y=0;y<=Hh;y++)B_.set(s.ax?s.x+u:s.x+v,s.y+y,s.ax?s.z+v:s.z+u,AIR)}   // 산속: 빈 공간 (air_pocket)
+  return _rp(P,s)}}
+// ── 네더 화석 (nether_fossil): 영혼 모래 골짜기 · 2/1 청크 · 뼈 블록 등뼈와 갈비뼈
+V6.nether_fossil={sp:2,sep:1,salt:14357921};
+function stampNFossil(b,ox,oz){const cx=ox>>4,cz=oz>>4,V=V6.nether_fossil,p=v6pot(V,Math.floor(cx/2),Math.floor(cz/2));if(p[0]!==cx||p[1]!==cz||nBiome(ox+8,oz+8)!==1)return;
+  const r=mulberry(v6h32(cx,cz,V.salt));let y=N_LAVA+8+Math.floor(r()*70);while(y>N_LAVA+1&&!(b[bi(8,y,8)]===AIR&&b[bi(8,y-1,8)]!==AIR&&b[bi(8,y-1,8)]!==LAVA))y--;if(y<=N_LAVA+1)return;
+  const ax=r()<.5,L=4+Math.floor(r()*4),dy=r()<.4?-1:0,set=(u,h,v)=>{const lx=ax?8-(L>>1)+u:8+v,lz=ax?8+v:8-(L>>1)+u,yy=y+h+dy;if(lx<0||lx>15||lz<0||lz>15||yy<1||yy>=H-1)return;b[bi(lx,yy,lz)]=BONE_BLOCK};
+  for(let u=0;u<L;u++){set(u,0,0);if(u%2===1){const hh=1+Math.floor(r()*2);set(u,0,-1);set(u,0,1);for(let k=1;k<=hh;k++){set(u,k,-2);set(u,k,2)}set(u,hh+1,-1);set(u,hh+1,1)}}}
+{const _sb=stampBastions;stampBastions=function(b,ox,oz){_sb(b,ox,oz);if(GEN>=6&&WTYPE!=='flat')stampNFossil(b,ox,oz)}}
+LOCATORS.nether_fossil={n:'Nether Fossil',dim:'nether',find(x,z){return GEN>=6&&WTYPE!=='flat'?v6near('nether_fossil',x,z,40):null}};
+{const _g=v6get;v6get=function(kind,rx,rz){if(kind==='nether_fossil'){const p=v6pot(V6.nether_fossil,rx,rz);return nBiome(p[0]*16+8,p[1]*16+8)===1?{cx:p[0],cz:p[1],y:64}:null}return _g(kind,rx,rz)}}
 /* ═════════════ 보트 · 플레이어끼리 싸우기 ═════════════ */
 // 보트: 물 위에 놓고 우클릭으로 타요. W/S 앞뒤, A/D 방향, Shift 내리기, 왼클릭 4번이면 부서져요
 const boats=[];let targetBoat=null,targetRemote=null;
