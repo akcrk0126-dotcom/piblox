@@ -5369,7 +5369,8 @@ function explode(x,y,z,r){sfx('boom',null,1,{x,y,z});const rr=r+.5;for(let dy=-r
   camKick=.6}
 const smokeMat=new THREE.MeshBasicMaterial({color:0xdddddd,transparent:true,opacity:.8,depthWrite:false});
 function smoke(x,y,z){spriteP({x,y,z,xd:(Math.random()-.5)*.1,yd:.05+Math.random()*.1,zd:(Math.random()-.5)*.1,grav:-.1,fric:.9,col:.75+Math.random()*.2,s:.1*(Math.random()*Math.random()*6+1),life:Math.floor(16/(Math.random()*.8+.2))+2,frames:8,row:0,phys:false})}   // (P2-GFX) 마크 poof 연기 (그림 파티클로 · 메시를 만들지 않아요)
-function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,pp.y+eyeH(),pp.z),night=daylight<.45;
+function updateMobs(dt){return p5mCore(dt)}   // (P5-MP) 멀티: 권한자만 몹을 돌려요
+function updateMobsCore(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,pp.y+eyeH(),pp.z),night=daylight<.45;
   for(let i=mobs.length-1;i>=0;i--){const m=mobs[i],D=m.D;
     if(m.dead){m.deadT+=dt;m.g.rotation.z=Math.min(1,Math.sqrt(Math.max(0,(m.deadT*20-1)/20*1.6)))*Math.PI/2;tintMob(m,lightK(m.pos.x,m.pos.y+.5,m.pos.z));if(m.deadT>=1){poofFx(m.pos.x,m.pos.y,m.pos.z,m.hw*2,m.h);scene.remove(m.g);mobs.splice(i,1)}continue}
     if(m.fireT>0){m.fireT-=dt;m.fireK=(m.fireK||0)+dt;if(isWet(m.pos.x,m.pos.y+m.h*.5,m.pos.z))m.fireT=0;if(m.fireK>=1){m.fireK=0;m.hurtT=0;hurtMob(m,1,null);if(m.dead)continue}}
@@ -5512,7 +5513,7 @@ function hbArrowHit(p,h){const sp=p.vel.length()*TICK;let d=Math.ceil(Math.max(0
     if(m.D.ender){enderTP(m);p.skip=m;return false}   // 엔더맨: 순간 이동해 피하고 화살은 지나가요
     if(m.hurtT>0)return bounce();sfx('arrowhit',null,1,p.pos);hurtMob(m,d,src);if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
   if(h.kind==='player'){if(creative()||player.hurtT>0)return bounce();hurtPlayer(d,src,p.owner==='mob'?'skeleton':'arrow');if(p.flame)player.burn=5;return true}
-  if(h.kind==='remote'){if(p.owner!=='player'||!MPS)return bounce();const r=h.e;r.hurtT=.35;sendHit(r,d,src,p.punch||0,p.flame?1.25:0);sfx('hurt');return true}
+  if(h.kind==='remote'){if(p.owner==='mob'&&MPS&&p5mIsAuth()&&h.e.uid){p5mHit(h.e.uid,d,src,'skeleton');return true}if(p.owner!=='player'||!MPS)return bounce();const r=h.e;r.hurtT=.35;sendHit(r,d,src,p.punch||0,p.flame?1.25:0);sfx('hurt');return true}
   if(h.kind==='boat'){hbBoatHit(h.e,d);return true}
   if(h.kind==='crystal'){breakCrystal(crystals.indexOf(h.e));return true}return true}
 // 몹이 쏠 때 겨냥 (마크 AbstractSkeleton.performRangedAttack): 목표 키의 1/3 높이 + 수평 거리 × 0.2 만큼 위로 · 흩어짐 14 - 난이도×4 (보통 = 6)
@@ -8804,7 +8805,7 @@ function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');
 function mpStart(sid,meta,lw,tt){const uid=window.__mpUid,base='bc_'+sid+'/players/';
   MPS={sid,uid,meta,host:meta.host===uid,base,q:{},qt:0,st:0,count:1,refs:[],tq:{},lw:lw||{},tt:tt||{},watched:new Set(),mine:[],dq:{},kq:{},claimed:new Set(),myClaims:[]};
   const me=dbr(base+uid);MPS.me=me;me.child('p').onDisconnect().remove();me.child('d').remove().catch(()=>{});me.child('k').remove().catch(()=>{});
-  if(!MPS.host)me.child('m').set(Object.assign({},meta,{guest:1})).catch(()=>{});p5Join();
+  if(!MPS.host)me.child('m').set(Object.assign({},meta,{guest:1})).catch(()=>{});p5Join();p5mJoin();
   const root=dbr(base);root.on('child_added',s=>watchUser(s.key));MPS.refs.push(root);
   mpHeartbeat();chatLine(`서버 '${meta.name}'에 접속했어요 · 코드 ${sid}`,'#ffff55')}
 function watchUser(u){if(!MPS||MPS.watched.has(u))return;MPS.watched.add(u);const b=MPS.base+u,mine=u===MPS.uid;
@@ -8819,6 +8820,8 @@ function watchUser(u){if(!MPS||MPS.watched.has(u))return;MPS.watched.add(u);cons
     const dr=dbr(b+'/d');dr.on('child_added',s=>{const v=s.val();if(!v||!MPS||MPS.claimed.has(s.key)||v.dm!==DIM||now()-(v.t||0)>290000||ents.some(e=>e.net&&e.net.k===s.key))return;let ee=null;try{ee=v.e?JSON.parse(v.e):null}catch(_){}
       spawnItem({id:v.id,n:v.n,d:v.d||0,e:ee||undefined},v.x,v.y,v.z,new V3(v.vx||0,v.vy||0,v.vz||0),.4,{k:s.key,o:u})});dr.on('child_removed',s=>removeNetEnt(s.key,u));MPS.refs.push(dr);
     const sr=dbr(b+'/s');sr.on('value',s=>{if(!MPS)return;const v=s.val();MPS.sty[u]=v;const r=remotes.get(u);if(r)p5Style(r,v)});MPS.refs.push(sr);   // (P5-MP) 장비 · 스킨
+    const or=dbr(b+'/o'),onO=s=>p5mRecv(u,s.key,s.val());or.on('child_added',onO);or.on('child_changed',onO);or.on('child_removed',s=>p5mRecv(u,s.key,null));MPS.refs.push(or);   // (P5-MP) 몹
+    const ar=dbr(b+'/a').limitToLast(30);ar.on('child_added',s=>p5mOnAct(u,s.val()));MPS.refs.push(ar);
     const hr=dbr(b+'/h').limitToLast(6);hr.on('child_added',s=>pvpHit(s.val()||{}));MPS.refs.push(hr);
     const kr=dbr(b+'/k');kr.on('child_added',s=>{if(!MPS)return;MPS.claimed.add(s.key);removeNetEnt(s.key,u)});MPS.refs.push(kr);
     if(u===MPS.meta.host){const mr=dbr(b+'/m/time');mr.on('value',s=>{const t=s.val();if(t!=null&&Math.abs(t-worldTime)>20)worldTime=t});MPS.refs.push(mr)}}
@@ -8831,7 +8834,7 @@ function mpDropTaken(e){if(!MPS||!e.net)return;const k=e.net.k;MPS.claimed.add(k
 // 다른 사람이 주웠으면 그 사람 쪽으로 날아가며 사라져요
 function removeNetEnt(k,u){const i=ents.findIndex(e=>e.net&&e.net.k===k);if(i<0)return;const e=ents[i];ents.splice(i,1);if(MPS&&e.net.o===MPS.uid)MPS.dq[k]=null;
   const r=remotes.get(u);if(r)flyPickup(e,()=>r.S.g.position.clone().add(new V3(0,1.1,0)));else{scene.remove(e.m)}}
-function mpLeave(){if(!MPS)return;try{MPS.me.child('p').remove();MPS.refs.forEach(r=>r.off())}catch(e){}for(const r of remotes.values())p5Drop(r);remotes.clear();MPS=null}
+function mpLeave(){if(!MPS)return;try{MPS.me.child('p').remove();MPS.refs.forEach(r=>r.off())}catch(e){}for(const r of remotes.values())p5Drop(r);remotes.clear();p5mLeave();MPS=null}
 function mpEdit(cx,cz,i,v){if(!MPS)return;const t=now(),k=ek(cx,cz)+'/'+i;MPS.lw[k]=t;MPS.q[k]={v,t}}
 function mpTile(k,te){if(!MPS)return;const kk=dimPre()+k.replace(/,/g,'_'),t=now();MPS.tt[kk]=t;MPS.tq[kk]={j:te?JSON.stringify(te):'',t}}
 function mpChat(t){if(!MPS)return;const r=MPS.me.child('c').push({n:myName(),t:t.slice(0,120),ts:now()});MPS.mine.push(r.key);while(MPS.mine.length>15)MPS.me.child('c/'+MPS.mine.shift()).remove().catch(()=>{})}
@@ -8840,7 +8843,7 @@ function mpHeartbeat(){if(!MPS)return;const m=MPS.meta;dbr('bc_list/players/'+MP
 function mpTick(dt){if(!MPS)return;MPS.qt+=dt;MPS.st+=dt;MPS.ht=(MPS.ht||0)+dt;
   if(MPS.qt>.15){MPS.qt=0;if(Object.keys(MPS.q).length){MPS.me.child('e').update(MPS.q).catch(e=>{if(!MPS.warned){MPS.warned=1;chatLine('블록 저장 실패: '+errMsg(e),'#ff5555')}});MPS.q={}}if(Object.keys(MPS.tq).length){MPS.me.child('t').update(MPS.tq).catch(()=>{});MPS.tq={}}if(Object.keys(MPS.dq).length){MPS.me.child('d').update(MPS.dq).catch(()=>{});MPS.dq={}}if(Object.keys(MPS.kq).length){MPS.me.child('k').update(MPS.kq).catch(()=>{});MPS.kq={}}}
   if(MPS.st>.1){MPS.st=0;const p=player,st=inv[sel];MPS.me.child('p').set(p5Out({n:myName(),x:+p.pos.x.toFixed(2),y:+p.pos.y.toFixed(2),z:+p.pos.z.toFixed(2),ya:+p.yaw.toFixed(2),pi:+p.pitch.toFixed(2),sw:player.swinging?1:0,sn:p.sneak?1:0,h:st?st.id:0,d:p.dead?1:0,bt:p.boat?+p.boat.yaw.toFixed(2):null})).catch(()=>{})}
-  p5Tick(dt);
+  p5Tick(dt);p5mTick(dt);
   if(MPS.ht>30){MPS.ht=0;mpHeartbeat()}
   for(const r of remotes.values())p5Remote(r,dt)}   // (P5-MP) 갑옷 · 손 · 자세 · 스킨 · 이름표
 function addRemote(uid,d){let h=0;for(const c of uid)h=Math.imul(h,31)+c.charCodeAt(0)|0;const cols=['#3f7d4a','#c0392b','#27ae60','#8e44ad','#d35400','#2c3e50','#f1c40f','#e84393'];const skin=makeSkin(cols[Math.abs(h)%cols.length],['#3a3a9a','#4a3a2a','#2a2a2a','#5a5a6a'][Math.abs(h>>3)%4]);
@@ -8870,7 +8873,7 @@ function p5EqLocal(){const L=armor.slice(0,4).map(p5Code);L.push(p5Code(player.h
 function p5StyleLocal(){const s={e:p5EqLocal(),sl:skinSlim()?1:0,pt:p5Parts(),mh:optGet('mainHand',1)?1:0},k=p5Skin();if(k){s.k=k.k;s.v=k.v}return s}
 function p5PoseLocal(){const p=player;return p.dead?'':sleeping&&P5.bed?'l':p.glide?'g':p.pose==='swim'?(p.inWater?'w':'c'):(p.ride||p.boat)?'r':''}
 function p5UseLocal(){const p=player,st=inv[sel];if(eating&&st)return['e',0];if(drawT>0&&st)return[st.id===CROSSBOW?'x':'b',0];if(p.shieldT>0)return['k',p.shieldOff?1:0];return['',0]}
-function p5Out(o){const p=player,po=p5PoseLocal();if(po)o.po=po;if(po==='l')o.bd=P5.bed;const [u,uo]=p5UseLocal();if(u){o.u=u;o.ut=p.useTicks|0;if(uo)o.uo=1}if(P5.hu)o.hu=P5.hu;if(p.swinging&&p.swingHand==='off')o.sh=1;return o}
+function p5Out(o){const p=player,po=p5PoseLocal();o.dm=DIM;o.gm=GAMEMODE;o.mb=1;if(po)o.po=po;if(po==='l')o.bd=P5.bed;const [u,uo]=p5UseLocal();if(u){o.u=u;o.ut=p.useTicks|0;if(uo)o.uo=1}if(P5.hu)o.hu=P5.hu;if(p.swinging&&p.swingHand==='off')o.sh=1;return o}
 function p5Tick(dt){if(player.hurtTime>P5.lht)P5.hu++;P5.lht=player.hurtTime;P5.st+=dt;if(P5.st<.25)return;P5.st=0;
   const s=p5StyleLocal(),ch={};for(const k in s)if(s[k]!==P5.last[k])ch[k]=s[k];if(!Object.keys(ch).length)return;Object.assign(P5.last,ch);MPS.me.child('s').update(ch).catch(()=>{})}
 function p5Join(){P5.last={};P5.st=1;try{MPS.me.child('s').onDisconnect().remove()}catch(e){}MPS.sty={}}
@@ -9018,7 +9021,7 @@ function p5Style(r,s){r.sty=s||null;if(!s)return;const v=s.v!=null?String(s.v):'
     if(ok)skinCanvasOf(k,c=>{if(!c||r.skV!==v)return;const g=r.tex.canvas.getContext('2d');g.clearRect(0,0,64,64);g.drawImage(c,0,0);r.tex.needsUpdate=true})}
   const sl=!!s.sl;if(sl!==!!r.S.slim)setArmModel(r.S,sl,r.tex);p5PartsVis(r.S,s.pt==null?127:+s.pt);r.mh=s.mh===0?0:1;r.eq=String(s.e||'').split(',').slice(0,6).map(p5Parse)}
 // 다른 사람 한 명 (프레임마다)
-function p5Remote(r,dt){const d=r.d;if(!d)return;const S=r.S,g=S.g.position;r.age=(r.age||0)+dt*20;
+function p5Remote(r,dt){const d=r.d;if(!d)return;if((d.dm||'over')!==DIM){r.S.g.visible=r.tag.visible=false;if(r.boatM)r.boatM.visible=false;return}const S=r.S,g=S.g.position;r.age=(r.age||0)+dt*20;
   if(d.d){r.deadT=(r.deadT||0)+dt;if(r.deadT>=1&&!r.poofed){r.poofed=1;poofFx(g.x,g.y,g.z,.3,1.8)}}else{r.deadT=0;r.poofed=0}
   S.g.visible=!d.d||r.deadT<1;const k=1-Math.exp(-dt*12),ox=g.x,oy=g.y,oz=g.z,po=d.po||'',ride=po==='r'||d.bt!=null;
   if(po==='l'&&Array.isArray(d.bd)&&d.bd.length===5){const [hx,hy,hz,dx,dz]=d.bd.map(Number);g.set(hx+.5-dx*1.52,hy+.6875,hz+.5-dz*1.52);S.g.rotation.y=Math.atan2(-dx,-dz);r.by=null}
@@ -15326,6 +15329,141 @@ document.head.appendChild(Object.assign(document.createElement('style'),{textCon
   '.advtip{position:fixed;z-index:70;pointer-events:none;font-size:calc(8px * var(--s));line-height:calc(10px * var(--s));max-width:calc(200px * var(--s));transform:translate(calc(-2px * var(--s)),calc(-1px * var(--s)))}.advtip b{display:block;font-weight:normal;color:#fff;background:#0072a8;padding:calc(4px * var(--s)) calc(6px * var(--s)) calc(4px * var(--s)) calc(32px * var(--s));text-shadow:var(--tsh)}.advtip b.got{background:#c48a10}.advtip b span{margin-left:calc(8px * var(--s));color:#fff}.advtip div{background:rgba(16,0,16,.94);padding:calc(3px * var(--s)) calc(6px * var(--s));text-shadow:var(--tsh)}'+
   '#menu .strow{position:absolute;display:flex;justify-content:space-between;font-size:calc(8px * var(--s));line-height:calc(10px * var(--s));text-shadow:var(--tsh)}#menu .sthead{position:absolute;display:flex;align-items:center;justify-content:center}#menu .sthead img{width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
   '#menu .stirow{position:absolute;font-size:calc(8px * var(--s));text-shadow:var(--tsh);color:#fff}#menu .stirow img{position:absolute;left:calc(1px * var(--s));top:calc(1px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s))}#menu .stirow span{position:absolute;top:calc(6px * var(--s));transform:translateX(-100%)}#menu .stirow:nth-child(even){background:rgba(255,255,255,.06)}'}));
+/* ═════════════ (P5-MP 2) 멀티 몹 공유 — 마크 서버처럼 모두 같은 몹을 봐요 ═════════════
+   권한 (authority): 서버 주인이 있으면 주인 · 없으면 접속한 (새 코드) 사람 중 uid 가 가장 작은 사람 · 같은 차원끼리. 들어온 지 2초는 기다려요 (앞 권한자의 몹을 받아서 이어받게).
+   권한자만 몹을 낳고 (자연 생성 · 생성기 · 골렘 …) · AI · 사라짐 · 피해/죽음을 돌려요. 몹 AI 는 몹마다 가장 가까운 플레이어를 '나'로 바꿔 끼워 돌려서
+   다른 사람도 쫓고 때려요 (맞은 사람에게 hit 를 보내면 그 사람 컴퓨터가 hurtPlayer — 갑옷 계산은 그쪽).
+   보내기: 권한자의 players/<uid>/o/<몹id> = '종류|x|y|z|방향|머리|hp|깃발|부풀기|맞은수|덧붙임' (0.1초 · 바뀐 것만 · 먼 몹은 0.5초 · 2초마다 한 번은 다시) · 없어지면 null.
+   다른 사람은 몹을 만들지 않고 받은 몹을 같은 모델 · 같은 동작으로 부드럽게 그려요. 때리기 · 넉백 · 먹이/이름표/안장 … 은 players/<uid>/a 로 권한자에게 보내요.
+   떨어진 물건: 권한자 쪽에서 생겨 원래 있던 물건 동기화 (MPS.dq) 로 모두에게 · 경험치는 잡은 사람에게 보내 그 사람 컴퓨터에 생겨요. 혼자 하기는 하나도 안 바뀌어요. */
+const P5M={auth:null,state:'',t0:0,nid:0,last:new Map(),pubT:0,keepT:0,keys:[],ghost:[],creating:0,user:0,keep:new Set(),hidden:new Set(),as:null,killBy:null,seen:new Map()};
+const p5mOn=()=>typeof MPS!=='undefined'&&!!MPS;
+const p5mIsAuth=()=>p5mOn()&&P5M.state==='auth';
+const p5mIsView=()=>p5mOn()&&P5M.state!=='auth';   // 기다리는 중 ('wait') 도 몹을 돌리지 않아요
+function p5mPlayers(){const L=[{uid:MPS.uid,me:true,x:player.pos.x,y:player.pos.y,z:player.pos.z,dead:player.dead,gm:GAMEMODE,mb:1}];
+  for(const r of remotes.values()){const d=r.d;if(!d||!r.uid||(d.dm||'over')!==DIM)continue;L.push({uid:r.uid,r,x:+d.x||0,y:+d.y||0,z:+d.z||0,dead:!!d.d,gm:d.gm||'survival',sn:!!d.sn,h:d.h||0,mb:!!d.mb})}return L}
+function p5mElect(){const L=p5mPlayers().filter(p=>p.mb),host=MPS.meta&&MPS.meta.host;let a=L.find(p=>p.uid===host);if(!a)for(const p of L)if(!a||p.uid<a.uid)a=p;return a?a.uid:MPS.uid}
+function p5mSend(o){if(!p5mOn())return;o.ts=Date.now();try{const r=MPS.me.child('a').push(o);P5M.keys.push(r.key);while(P5M.keys.length>40)MPS.me.child('a/'+P5M.keys.shift()).remove().catch(()=>{})}catch(e){}}
+// 몹 → 글 · 글 → 몹
+const P5M_SKIP=new Set(['type','D','pos','vel','g','P','ai','yaw','hp','hw','h','onGround','hitX','hitZ','walk','hy','hx','snd','deadT','dead','hurtT','atk','lastHurt','nat','losK','unseen','sees','fireK','acc','nid','net','nt','lastRecv','p5hc','p5ghost','byPlayer','vill','tgt','mvT','eff']);
+function p5mPrims(m){const o={};for(const k in m){if(P5M_SKIP.has(k))continue;const v=m[k];if(typeof v==='number'||typeof v==='boolean'||typeof v==='string')o[k]=v}return o}
+function p5mSer(m){const fl=(m.dead?1:0)|(m.baby>0?2:0)|(m.angry>0?4:0)|(m.tamed?8:0)|(m.saddle?16:0)|(m.atk>0?32:0)|(m.fireT>0?64:0)|(m.onGround?128:0);
+  const ex={};if(m.cname)ex.n=m.cname;if(m.held)ex.hd=m.held;if(m.barter>0)ex.br=1;if(m.vill)ex.v={key:m.vill.key,robe:m.vill.robe,vid:m.vill.vid};if(m.sit)ex.s=1;if(m.peek)ex.pk=+(+m.peek).toFixed(2);if(m.yOff)ex.yo=+(+m.yOff).toFixed(2);
+  const e=Object.keys(ex).length?JSON.stringify(ex):'';
+  return [m.type,m.pos.x.toFixed(2),m.pos.y.toFixed(2),m.pos.z.toFixed(2),(+m.yaw||0).toFixed(2),(+m.hy||0).toFixed(2),Math.max(0,Math.ceil(m.hp*10)/10),fl,(+m.fuse||0).toFixed(2),(m.p5hc||0)%36,e].join('|')}
+function p5mParse(s){if(typeof s!=='string'||s.length>2000)return null;const a=s.split('|');if(a.length<10||!MOBDEF[a[0]])return null;let ex={};if(a[10])try{ex=JSON.parse(a.slice(10).join('|'))||{}}catch(e){ex={}}
+  return{t:a[0],x:+a[1],y:+a[2],z:+a[3],yaw:+a[4],hy:+a[5],hp:+a[6],fl:+a[7]|0,fuse:+a[8]||0,hc:+a[9]|0,ex}}
+// ── 권한자: 보내기 (0.1초)
+function p5mPublish(){const L=p5mPlayers(),others=L.filter(p=>!p.me&&p.mb);if(!others.length)return;const now=performance.now(),up={},seen=new Set();
+  for(const m of mobs){if(m.p5ghost||m.net)continue;if(!L.some(p=>(p.x-m.pos.x)**2+(p.z-m.pos.z)**2<16384))continue;if(!m.nid)m.nid=MPS.uid.slice(0,4).replace(/[^A-Za-z0-9]/g,'')+(++P5M.nid).toString(36)+Date.now().toString(36).slice(-3);
+    seen.add(m.nid);const s=p5mSer(m),o=P5M.last.get(m.nid);if(o){if(o.s===s&&now-o.t<2000)continue;const far=!others.some(p=>(p.x-m.pos.x)**2+(p.z-m.pos.z)**2<2304);if(far&&now-o.t<500&&o.s.split('|')[7]===s.split('|')[7])continue}
+    up[m.nid]=s;P5M.last.set(m.nid,{s,t:now})}
+  for(const k of [...P5M.last.keys()])if(!seen.has(k)){up[k]=null;P5M.last.delete(k)}
+  if(Object.keys(up).length)MPS.me.child('o').update(up).catch(()=>{})}
+// ── 보는 사람: 받기
+function p5mRecv(u,k,s){if(!p5mOn()||u===MPS.uid||P5M.state==='auth'||(P5M.state==='view'&&u!==P5M.auth))return;   // 기다리는 동안은 누구 것이든 받아 둬요 (이어받기)
+  const now=performance.now();let m=null;for(const q of mobs)if(q.nid===k){m=q;break}
+  if(s==null){if(m&&!m.dead){scene.remove(m.g);const i=mobs.indexOf(m);if(i>=0)mobs.splice(i,1)}return}
+  const v=p5mParse(s);if(!v)return;
+  if(!m||m.type!==v.t){if(m){scene.remove(m.g);mobs.splice(mobs.indexOf(m),1)}P5M.creating++;try{m=spawnMob(v.t,v.x,v.y,v.z,!!(v.fl&2))}finally{P5M.creating--}m.nid=k;m.yaw=v.yaw;m.p5hc=v.hc;m.g.position.copy(m.pos)}
+  m.net=1;m.lastRecv=now;m.nt={x:v.x,y:v.y,z:v.z,yaw:v.yaw,hy:v.hy};m.hp=v.hp;
+  if(v.fl&1&&!m.dead){m.dead=true;m.deadT=0;sndMob(m,'d')}
+  if(!(v.fl&2)&&m.baby>0){m.baby=0;m.hw=m.D.hw;m.h=m.D.h;hbFit(m)}else if(v.fl&2&&!(m.baby>0)){m.baby=240;hbFit(m)}
+  if(v.hc!==(m.p5hc||0)%36){m.p5hc=v.hc;if(!m.dead){m.hurtT=.5;sndMob(m,'h')}}
+  m.angry=v.fl&4?30:0;m.tamed=!!(v.fl&8)||undefined;m.saddle=!!(v.fl&16)||undefined;m.atk=v.fl&32?1:0;m.fireT=v.fl&64?1:0;m.onGround=!!(v.fl&128);
+  if(m.fuse===0&&v.fuse>0)sfx('fuse','creeper',1,m.pos);m.fuse=v.fuse;const e=v.ex;m.cname=e.n||undefined;m.held=e.hd||0;m.barter=e.br?1:0;m.sit=!!e.s;m.peek=e.pk||0;m.yOff=e.yo||0;
+  if(e.v&&!m.vill&&typeof rebuildVillager==='function'){m.vill={key:String(e.v.key),robe:e.v.robe,vid:e.v.vid};try{rebuildVillager(m)}catch(er){}}}
+// 보는 사람의 몹 그리기 (updateMobs 의 움직임 부분과 같은 식)
+function p5mVis(dt){const now=performance.now(),pp=player.pos;
+  for(let i=mobs.length-1;i>=0;i--){const m=mobs[i],D=m.D;if(!m.net){continue}
+    if(m.dead){m.deadT+=dt;m.g.rotation.z=Math.min(1,Math.sqrt(Math.max(0,(m.deadT*20-1)/20*1.6)))*Math.PI/2;tintMob(m,lightK(m.pos.x,m.pos.y+.5,m.pos.z));if(m.deadT>=1){poofFx(m.pos.x,m.pos.y,m.pos.z,m.hw*2,m.h);scene.remove(m.g);mobs.splice(i,1)}continue}
+    if(now-(m.lastRecv||0)>6000){scene.remove(m.g);mobs.splice(i,1);continue}
+    const t=m.nt;if(t){const k=1-Math.exp(-dt*10),ox=m.pos.x,oz=m.pos.z;if(m.pos.distanceTo(new V3(t.x,t.y,t.z))>8)m.pos.set(t.x,t.y,t.z);else{m.pos.x+=(t.x-m.pos.x)*k;m.pos.y+=(t.y-m.pos.y)*k;m.pos.z+=(t.z-m.pos.z)*k}
+      m.vel.set((m.pos.x-ox)/Math.max(dt,1e-3),0,(m.pos.z-oz)/Math.max(dt,1e-3));let dy=t.yaw-m.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;m.yaw+=dy*k;m.hy=(m.hy||0)+((t.hy||0)-(m.hy||0))*k}
+    if(m.hurtT>0)m.hurtT-=dt;
+    const hs=Math.hypot(m.vel.x,m.vel.z);m.walk+=hs*dt*(m.type==='chicken'?6:3.2);const sw=Math.sin(m.walk)*Math.min(1,hs/1.5)*.8;
+    if(m.P.legs){if(m.type==='spider')m.P.legs.forEach((l,j)=>{l.rotation.x=Math.sin(m.walk+j*1.3)*.35*Math.min(1,hs)});else m.P.legs.forEach((l,j)=>l.rotation.x=(j%2?sw:-sw)*(j>1&&m.P.legs.length===4?-1:1))}
+    if(m.P.arms)m.P.arms.forEach((a,j)=>a.rotation.x=D.armsDown?(j?sw:-sw)*.5-(m.atk>.5?1.3:0):-Math.PI/2+(j?sw:-sw)*.15-(m.atk>.75&&D.melee?.6:0));
+    if(m.P.wings)m.P.wings.forEach((w,j)=>w.rotation.z=(j?1:-1)*(m.onGround?0:Math.abs(Math.sin(now/60))*.9));
+    if(m.P.head&&!D.villager)m.P.head.rotation.y=m.hy||0;
+    if(m.P.tail&&!D.water)m.P.tail.rotation.y=Math.sin(now/(m.tamed?120:400)+m.walk)*(m.tamed?.6:.25);
+    const sc=(m.baby>0?.5:1)*(1+(m.fuse||0)*.12);m.g.scale.set(sc*(1+(m.fuse||0)*.05),sc,sc*(1+(m.fuse||0)*.05));
+    m.g.position.copy(m.pos);if(m.yOff)m.g.position.y+=m.yOff;m.g.rotation.y=m.yaw;tintMob(m,lightK(m.pos.x,m.pos.y+m.h*.6,m.pos.z))}}
+// ── 권한자: 다른 사람을 '나'로 잠깐 바꿔 끼우기 (몹 AI · 생성 거리 · 사라짐이 그 사람 기준으로)
+function p5mAs(P,fn){const p=player,S={pos:p.pos.clone(),prev:p.prev.clone(),vel:p.vel.clone(),dead:p.dead,sneak:p.sneak,pose:p.pose,gm:GAMEMODE,eff:p.eff,fly:p.fly,boat:p.boat,ride:p.ride,ht:p.hurtTime,hp:p.hp,held:inv[sel],burn:p.burn};
+  try{p.pos.set(P.x,P.y,P.z);p.prev.copy(p.pos);p.vel.set(0,0,0);p.dead=P.dead;p.sneak=!!P.sn;p.pose=P.sn?'crouch':'stand';GAMEMODE=P.gm||'survival';p.eff={};p.fly=false;p.boat=null;p.ride=null;p.hurtTime=0;inv[sel]=P.h&&ITEM[P.h]?{id:P.h,n:1}:null;P5M.as=P;return fn()}
+  finally{P5M.as=null;p.pos.copy(S.pos);p.prev.copy(S.prev);p.vel.copy(S.vel);p.dead=S.dead;p.sneak=S.sneak;p.pose=S.pose;GAMEMODE=S.gm;p.eff=S.eff;p.fly=S.fly;p.boat=S.boat;p.ride=S.ride;p.hurtTime=S.ht;p.hp=S.hp;inv[sel]=S.held;p.burn=S.burn}}
+function p5mNearest(L,x,y,z){let b=null,bd=1e18;for(const p of L){if(p.dead||p.gm==='spectator')continue;const d=(p.x-x)**2+(p.y-y)**2+(p.z-z)**2;if(d<bd){bd=d;b=p}}return b}
+// updateMobs 의 몸통: 권한자는 몹을 가장 가까운 사람별로 나눠 돌리고 · 보는 사람은 그리기만
+function p5mCore(dt){if(!p5mOn())return updateMobsCore(dt);
+  if(P5M.state!=='auth'){p5mVis(dt);return}
+  const L=p5mPlayers().filter(p=>p.mb||p.me);if(L.length<2)return updateMobsCore(dt);
+  const G=new Map(),all=mobs.slice();for(const m of all){const P=p5mNearest(L,m.pos.x,m.pos.y,m.pos.z)||L[0];if(!G.has(P))G.set(P,[]);G.get(P).push(m)}
+  const out=[];for(const [P,arr] of G){mobs.length=0;mobs.push(...arr);try{if(P.me)updateMobsCore(dt);else p5mAs(P,()=>updateMobsCore(dt))}finally{out.push(...mobs)}}
+  mobs.length=0;mobs.push(...out)}
+// 나는 권한자 · 다른 사람을 때린 것 → 그 사람에게
+function p5mHit(uid,d,src,why){p5mSend({k:'hit',to:uid,d:+(+d).toFixed(2),x:+(src?src.x:0).toFixed(2),y:+(src?src.y:0).toFixed(2),z:+(src?src.z:0).toFixed(2),w:String(why||'')})}
+// 받은 일 (권한자에게 온 것 · 나에게 온 것)
+function p5mOnAct(u,v){if(!p5mOn()||!v||v.to!==MPS.uid||Date.now()-(v.ts||0)>8000)return;const S=P5M.seen;const key=u+(v.ts||0)+v.k+(v.id||'');if(S.has(key))return;S.set(key,1);if(S.size>400)S.delete(S.keys().next().value);
+  const src=v.x!=null?new V3(+v.x,+v.y,+v.z):null;
+  if(v.k==='hit'){if(!player.dead)hurtPlayer(Math.max(0,+v.d||0),src,MOBDEF[v.w]?v.w:v.w==='skeleton'?'skeleton':v.w||'mob');return}
+  if(v.k==='eff'){try{effGive(player,String(v.e),+v.dur|0,+v.amp|0)}catch(e){}return}
+  if(v.k==='xp'){dropXPForce(+v.x,+v.y,+v.z,Math.min(200,+v.n|0));return}
+  if(P5M.state!=='auth')return;
+  if(v.k==='spawn'){if(!MOBDEF[v.t])return;P5M.creating++;let m;try{m=spawnMob(v.t,+v.x,+v.y,+v.z,!!v.b)}finally{P5M.creating--}p5mApply(m,v.f);return}
+  let m=null;for(const q of mobs)if(q.nid===v.id){m=q;break}if(!m||m.dead)return;
+  if(v.k==='hurt'){P5M.killBy=u;try{if(v.lb)m.byPlayer=Math.max(m.byPlayer||0,+v.lb|0);if(v.fire)m.fireT=Math.max(m.fireT||0,+v.fire);hurtMob(m,Math.max(0,+v.d||0),src)}finally{P5M.killBy=null}}
+  else if(v.k==='kb')mobKnock(m,+v.s||0,+v.dx||0,+v.dz||0);
+  else if(v.k==='set')p5mApply(m,v.f)}
+function p5mApply(m,f){if(!m||!f||typeof f!=='object')return;for(const k in f){if(P5M_SKIP.has(k)||k.startsWith('__'))continue;const v=f[k];if(typeof v==='number'||typeof v==='boolean'||typeof v==='string')m[k]=v}}
+// 보는 사람이 몹에게 한 일: 몹 값이 어떻게 바뀌었는지 보내요
+function p5mDiff(m,before){if(!m||!m.net||!before)return;const now=p5mPrims(m),f={};for(const k in now)if(now[k]!==before[k])f[k]=now[k];for(const k in before)if(!(k in now))f[k]=false;
+  delete f.angry;delete f.panic;delete f.fireT;if(Object.keys(f).length)p5mSend({k:'set',to:P5M.auth,id:m.nid,f})}
+// ── 권한 바꾸기 (0.25초마다)
+function p5mElectTick(){const now=performance.now();if(!P5M.t0)P5M.t0=now;if(now-P5M.t0<2000){P5M.state='wait';return}
+  const a=p5mElect(),was=P5M.state;P5M.auth=a;const me=a===MPS.uid;
+  if(me&&was!=='auth'){P5M.state='auth';P5M.last.clear();if(mobs.some(m=>m.net))for(let i=mobs.length-1;i>=0;i--)if(!mobs[i].net){scene.remove(mobs[i].g);mobs.splice(i,1)}for(const m of mobs){if(m.net){delete m.net;m.nt=null;m.ai={t:0,mv:false,dir:m.yaw}}}}   // 이어받기: 지금 보이는 몹을 그대로 내 몹으로
+  else if(!me&&was!=='view'){P5M.state='view';for(let i=mobs.length-1;i>=0;i--){const m=mobs[i];if(was==='auth'&&!m.dead){if(!m.nid)m.nid=MPS.uid.slice(0,4).replace(/[^A-Za-z0-9]/g,'')+(++P5M.nid).toString(36)+Date.now().toString(36).slice(-3);m.net=1;m.lastRecv=now;m.nt={x:m.pos.x,y:m.pos.y,z:m.pos.z,yaw:m.yaw,hy:m.hy||0}}else if(!m.net){scene.remove(m.g);mobs.splice(i,1)}}
+    P5M.last.clear();try{MPS.me.child('o').remove().catch(()=>{})}catch(e){}}}
+// ── 권한자: 다른 사람 둘레 청크도 (반지름 4 · 메시는 숨김) 들고 있어요 → 그 둘레에서도 몹이 생기고 움직여요
+const P5M_R=4;
+function p5mKeepTick(){const K=new Set();if(P5M.state==='auth')for(const p of p5mPlayers()){if(p.me||!p.mb)continue;const cx=Math.floor(p.x)>>4,cz=Math.floor(p.z)>>4;for(let dz=-P5M_R;dz<=P5M_R;dz++)for(let dx=-P5M_R;dx<=P5M_R;dx++)K.add(ck(cx+dx,cz+dz))}
+  P5M.keep=K;const pcx=Math.floor(player.pos.x)>>4,pcz=Math.floor(player.pos.z)>>4,R0=(RD+.5)*(RD+.5);let gen=0;
+  for(const k of K){let ch=chunks.get(k);const [cx,cz]=k.split(',').map(Number);const far=(cx-pcx)**2+(cz-pcz)**2>R0;if(!far)continue;
+    if(!ch){if(gen<2){genChunk(cx,cz);gen++}continue}
+    if(!ch.sky&&nbReady(cx,cz)&&gen<3){buildChunk(ch);gen++}
+    if(ch.mesh&&ch.mesh.visible){ch.mesh.visible=false;P5M.hidden.add(k)}if(ch.wmesh&&ch.wmesh.visible){ch.wmesh.visible=false;P5M.hidden.add(k)}}
+  for(const k of P5M.hidden){const ch=chunks.get(k);if(!ch){P5M.hidden.delete(k);continue}if((ch.cx-pcx)**2+(ch.cz-pcz)**2<=R0){if(ch.mesh)ch.mesh.visible=true;if(ch.wmesh)ch.wmesh.visible=true;P5M.hidden.delete(k)}}}
+{const _del=chunks.delete.bind(chunks);chunks.delete=function(k){if(p5mOn()&&P5M.keep.has(k)){const ch=chunks.get(k);if(ch){ch.dirty=true;ch.mesh=null;ch.wmesh=null}return false}return _del(k)}}
+// ── 한 프레임 (mpTick 끝에서)
+function p5mTick(dt){P5M.eT=(P5M.eT||0)+dt;if(P5M.eT>=.25){P5M.eT=0;p5mElectTick()}
+  for(const m of P5M.ghost){const i=mobs.indexOf(m);if(i>=0){mobs.splice(i,1);scene.remove(m.g)}if(m.p5ghost==='req'&&P5M.auth&&P5M.auth!==MPS.uid)p5mSend({k:'spawn',to:P5M.auth,t:m.type,x:+m.pos.x.toFixed(2),y:+m.pos.y.toFixed(2),z:+m.pos.z.toFixed(2),b:m.baby>0?1:0,f:p5mPrims(m)})}P5M.ghost.length=0;
+  if(P5M.state==='auth'){P5M.pubT+=dt;if(P5M.pubT>=.1){P5M.pubT=0;p5mPublish()}}
+  P5M.keepT+=dt;if(P5M.keepT>=.5){P5M.keepT=0;p5mKeepTick()}}
+function p5mJoin(){Object.assign(P5M,{auth:null,state:'',t0:0,last:new Map(),keys:[],ghost:[],keep:new Set(),hidden:new Set(),seen:new Map()});try{MPS.me.child('o').onDisconnect().remove();MPS.me.child('o').remove().catch(()=>{});MPS.me.child('a').remove().catch(()=>{})}catch(e){}}
+function p5mLeave(){P5M.state='';P5M.keep=new Set();for(const k of P5M.hidden){const ch=chunks.get(k);if(ch&&ch.mesh)ch.mesh.visible=true}P5M.hidden.clear();for(let i=mobs.length-1;i>=0;i--)if(mobs[i].net){scene.remove(mobs[i].g);mobs.splice(i,1)}}
+// ── 감싸기 (모두 MPS 가 있을 때만 달라져요)
+{const _sm=spawnMob;spawnMob=function(t,x,y,z,b){const m=_sm.apply(this,arguments);if(m&&p5mIsView()&&!P5M.creating){m.p5ghost=P5M.user>0?'req':'drop';P5M.ghost.push(m)}return m}}
+{const _hm=hurtMob;hurtMob=function(m,d,src){if(m&&m.net&&p5mIsView()){if(m.dead||m.hurtT>.2)return;m.hurtT=.5;sndMob(m,'h');
+    const st=inv[sel],E=st&&st.e||{};p5mSend({k:'hurt',to:P5M.auth,id:m.nid,d:+(+d).toFixed(2),x:src?+src.x.toFixed(2):null,y:src?+src.y.toFixed(2):0,z:src?+src.z.toFixed(2):0,lb:E.loot||0});return}
+  if(m&&m.net)return;const h0=m&&m.hurtT;const r=_hm.apply(this,arguments);if(m&&p5mIsAuth()&&m.hurtT===.5&&h0!==.5)m.p5hc=(m.p5hc||0)+1;return r}}
+{const _mk=mobKnock;mobKnock=function(m,s,dx,dz){if(m&&m.net&&p5mIsView()){p5mSend({k:'kb',to:P5M.auth,id:m.nid,s:+(+s).toFixed(3),dx:+(+dx).toFixed(3),dz:+(+dz).toFixed(3)});return}return _mk.apply(this,arguments)}}
+{const _at=attack;attack=function(m){if(!(m&&m.net&&p5mIsView()))return _at.apply(this,arguments);const b=p5mPrims(m),f0=m.fireT||0;const r=_at.apply(this,arguments);
+  if((m.fireT||0)>f0)p5mSend({k:'hurt',to:P5M.auth,id:m.nid,d:0,fire:m.fireT,x:null});p5mDiff(m,b);return r}}
+{const _ui=useItem;useItem=function(first){if(!p5mOn())return _ui.apply(this,arguments);const tm=targetMob&&targetMob.net?targetMob:null,b=tm?p5mPrims(tm):null;P5M.user++;try{return _ui.apply(this,arguments)}finally{P5M.user--;if(tm)p5mDiff(tm,b)}}}
+{const _rc=runCmd;runCmd=function(){if(!p5mOn())return _rc.apply(this,arguments);P5M.user++;try{return _rc.apply(this,arguments)}finally{P5M.user--}}}
+{const _hp=hurtPlayer;hurtPlayer=function(d,src,why,o){if(P5M.as){if(!P5M.as.dead&&P5M.as.gm!=='creative'&&P5M.as.gm!=='spectator')p5mHit(P5M.as.uid,d,src,why);return}return _hp.apply(this,arguments)}}
+{const _eg=effGive;effGive=function(o,id,dur,amp,opt){if(P5M.as&&o===player){p5mSend({k:'eff',to:P5M.as.uid,e:id,dur,amp});return true}return _eg.apply(this,arguments)}}
+{const _dx=dropXP;dropXP=function(x,y,z,n){if(P5M.killBy&&p5mIsAuth()){p5mSend({k:'xp',to:P5M.killBy,x:+x.toFixed(2),y:+y.toFixed(2),z:+z.toFixed(2),n});return}return _dx.apply(this,arguments)}}
+{const _st=spawnTick;spawnTick=function(dt){if(p5mIsView())return;return _st.apply(this,arguments)}}
+{const _cg=nsChunkGen;nsChunkGen=function(){if(p5mIsView())return;return _cg.apply(this,arguments)}}
+{const _es=entStashTick;entStashTick=function(){if(!p5mOn())return _es.apply(this,arguments);if(p5mIsView())return;const L=p5mPlayers().filter(p=>!p.me),keep=[];for(let i=mobs.length-1;i>=0;i--){const m=mobs[i];if(L.some(p=>Math.hypot(p.x-m.pos.x,p.z-m.pos.z)<=100)){keep.push(m);mobs.splice(i,1)}}try{return _es.apply(this,arguments)}finally{mobs.push(...keep)}}}
+// 생성: 청크는 모든 사람 둘레를 합쳐서 (상한도 합친 청크 수로) · 거리 (24칸 · 128칸) 는 가장 가까운 사람 기준
+{const _nc=nsChunks;nsChunks=function(){if(!p5mIsAuth())return _nc.apply(this,arguments);const P=p5mPlayers().filter(p=>p.me||p.mb);if(P.length<2)return _nc.apply(this,arguments);let n=0;const L=[];
+  for(const ch of chunks.values()){if(!ch.sky)continue;if(P.some(p=>Math.max(Math.abs(ch.cx-(Math.floor(p.x)>>4)),Math.abs(ch.cz-(Math.floor(p.z)>>4)))<=8))n++;if(P.some(p=>(ch.cx*16+8-p.x)**2+(ch.cz*16+8-p.z)**2<16384))L.push(ch)}
+  for(let i=L.length-1;i>0;i--){const j=nsR(i+1),t=L[i];L[i]=L[j];L[j]=t}return{n,L}}}
+{const _ca=nsCatAt;nsCatAt=function(cat,x,y,z,st){if(!p5mIsAuth()||P5M.as)return _ca.apply(this,arguments);const L=p5mPlayers().filter(p=>p.me||p.mb);if(L.length<2)return _ca.apply(this,arguments);
+  const P=p5mNearest(L,x,y,z);if(!P||P.me)return _ca.apply(this,arguments);return p5mAs(P,()=>_ca.call(this,cat,x,y,z,st))}}
 </script>
 </body>
 </html>
