@@ -8796,6 +8796,7 @@ function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');
   showMenu('connect');
   dbr('bc_'+sid+'/players').once('value').then(s=>{if(connAbort)return;const all=s.val()||{};let meta=null;for(const u in all){const m=all[u]&&all[u].m;if(m&&(!meta||m.host===u))meta=m}
     if(!meta){showMenu('disc',{r:'그런 서버를 찾을 수 없어요 (코드 '+sid+')'});return}
+    {const blk=p5oJoinBlock(all,meta);if(blk){showMenu('disc',blk);return}}   // (P5-MP) 차단 · 화이트리스트
     const lw={},ed={},tl={},tt={};
     for(const u in all){const e=all[u]&&all[u].e||{};for(const c in e){const o=e[c]||{};for(const i in o){const r=o[i];if(!r||r.v==null)continue;const k=c+'/'+i;if((r.t||0)>=(lw[k]||0)){lw[k]=r.t||0;(ed[c]||(ed[c]={}))[i]=r.v}}}
       const t=all[u]&&all[u].t||{};for(const k in t){const r=t[k];if(!r)continue;if((r.t||0)>=(tt[k]||0)){tt[k]=r.t||0;tl[k]=r.j}}}
@@ -8805,10 +8806,11 @@ function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');
 function mpStart(sid,meta,lw,tt){const uid=window.__mpUid,base='bc_'+sid+'/players/';
   MPS={sid,uid,meta,host:meta.host===uid,base,q:{},qt:0,st:0,count:1,refs:[],tq:{},lw:lw||{},tt:tt||{},watched:new Set(),mine:[],dq:{},kq:{},claimed:new Set(),myClaims:[]};
   const me=dbr(base+uid);MPS.me=me;me.child('p').onDisconnect().remove();me.child('d').remove().catch(()=>{});me.child('k').remove().catch(()=>{});
-  if(!MPS.host)me.child('m').set(Object.assign({},meta,{guest:1})).catch(()=>{});p5Join();p5mJoin();
+  if(!MPS.host)me.child('m').set(Object.assign({},meta,{guest:1})).catch(()=>{});p5Join();p5mJoin();Object.assign(P5O,{ops:{},bans:{},wl:{},wlOn:false});
   const root=dbr(base);root.on('child_added',s=>watchUser(s.key));MPS.refs.push(root);
   mpHeartbeat();chatLine(`서버 '${meta.name}'에 접속했어요 · 코드 ${sid}`,'#ffff55')}
 function watchUser(u){if(!MPS||MPS.watched.has(u))return;MPS.watched.add(u);const b=MPS.base+u,mine=u===MPS.uid;
+  if(u===MPS.meta.host){const vr=dbr(b+'/srv');vr.on('value',s=>p5oRecv(s.val()));MPS.refs.push(vr)}   // (P5-MP) 서버 관리자 · 차단 · 화이트리스트
   if(!mine){const er=dbr(b+'/e');const onE=s=>{const c=s.key,o=s.val()||{};const pre=/^[net]/.test(c)?c[0]:'';const [cx,cz]=c.slice(pre.length).split(',').map(Number);const ch=pre===dimPre()?chunks.get(ck(cx,cz)):null;const loc=edits[c]||(edits[c]={});
       for(const i in o){const r=o[i];if(!r||r.v==null)continue;const k=c+'/'+i;if((r.t||0)<(MPS.lw[k]||0))continue;MPS.lw[k]=r.t||0;if(loc[i]===r.v)continue;loc[i]=r.v;
         if(ch){const ii=+i;setBlock(cx*16+(ii&15),ii>>8,cz*16+((ii>>4)&15),decId(r.v),true,true,decM(r.v))}}};
@@ -8825,7 +8827,7 @@ function watchUser(u){if(!MPS||MPS.watched.has(u))return;MPS.watched.add(u);cons
     const hr=dbr(b+'/h').limitToLast(6);hr.on('child_added',s=>pvpHit(s.val()||{}));MPS.refs.push(hr);
     const kr=dbr(b+'/k');kr.on('child_added',s=>{if(!MPS)return;MPS.claimed.add(s.key);removeNetEnt(s.key,u)});MPS.refs.push(kr);
     if(u===MPS.meta.host){const mr=dbr(b+'/m/time');mr.on('value',s=>{const t=s.val();if(t!=null&&Math.abs(t-worldTime)>20)worldTime=t});MPS.refs.push(mr)}}
-  const cr=dbr(b+'/c').limitToLast(10);cr.on('child_added',s=>{const m=s.val();if(m&&now()-(m.ts||0)<120000)mpChatShow(m)});MPS.refs.push(cr)}
+  const cr=dbr(b+'/c').limitToLast(10);cr.on('child_added',s=>{const m=s.val();if(m&&now()-(m.ts||0)<120000)mpChatShow(Object.assign({},m,{u}))});MPS.refs.push(cr)}
 // ── 바닥 아이템 공유: 내가 떨어뜨린 건 내 칸 d/ 에, 내가 주운 건 k/ 에 적어요 (각자 자기 칸에만 쓸 수 있어서)
 let dropSeq=0;
 function mpDropAdd(e){if(!MPS||e.net)return;const k=(MPS.uid.slice(0,5)+Date.now().toString(36)+(dropSeq++).toString(36)).replace(/[^A-Za-z0-9]/g,'');e.net={k,o:MPS.uid};const s=e.stack;
@@ -15464,6 +15466,111 @@ function p5mLeave(){P5M.state='';P5M.keep=new Set();for(const k of P5M.hidden){c
   for(let i=L.length-1;i>0;i--){const j=nsR(i+1),t=L[i];L[i]=L[j];L[j]=t}return{n,L}}}
 {const _ca=nsCatAt;nsCatAt=function(cat,x,y,z,st){if(!p5mIsAuth()||P5M.as)return _ca.apply(this,arguments);const L=p5mPlayers().filter(p=>p.me||p.mb);if(L.length<2)return _ca.apply(this,arguments);
   const P=p5mNearest(L,x,y,z);if(!P||P.me)return _ca.apply(this,arguments);return p5mAs(P,()=>_ca.call(this,cat,x,y,z,st))}}
+/* ═════════════ (P5-MP 3) 멀티 관리자 (op) · 내보내기 · 차단 · 화이트리스트 · Tab 플레이어 목록 ═════════════
+   서버 전체 목록은 서버 주인의 칸 players/<주인>/srv = {ops:{uid:{n,l}}, bans:{키:{n,r,by,t}}, wl:{키:{n}}, wlOn} 에 있어요 (DB 규칙상 주인만 쓸 수 있어요).
+   주인 = 4단계 (빼거나 내보낼 수 없어요) · 관리자 = 4단계 (마크 op-permission-level 기본) · 나머지 0단계 (help · list · me · msg · teammsg · trigger · random).
+   주인이 아닌 관리자가 바꾸면 주인에게 요청 (players/<나>/a, k:'srv') → 주인 컴퓨터가 보낸 사람의 단계를 다시 보고 써요 (주인이 접속해 있어야 해요).
+   내보내기는 대상에게 k:'kick' → 대상 컴퓨터가 보낸 사람이 관리자인지 보고 '연결이 끊어졌어요' 화면으로. 차단 · 화이트리스트는 들어올 때와 접속 중 모두 살펴요.
+   키: 접속 중인 사람은 uid · 모르는 이름은 'n:이름'. */
+const P5O={ops:{},bans:{},wl:{},wlOn:false};
+const p5oOwner=()=>typeof MPS!=='undefined'&&MPS&&MPS.meta?MPS.meta.host:null;
+function p5oLevel(uid){if(typeof MPS==='undefined'||!MPS)return 4;if(uid&&uid===p5oOwner())return 4;const v=P5O.ops[uid];return v?Math.max(1,Math.min(4,+v.l||4)):0}
+const p5oRank=uid=>uid&&uid===p5oOwner()?2:P5O.ops[uid]?1:0;   // 2 주인 · 1 관리자
+const p5oKeyName=n=>'n:'+String(n).replace(/[.#$\/\[\]\s]/g,'_').slice(0,40);
+function p5oUidOf(n){if(typeof MPS==='undefined'||!MPS)return null;if(n===myName())return MPS.uid;for(const r of remotes.values())if(r.uid&&r.name===n)return r.uid;for(const L of [P5O.ops,P5O.bans,P5O.wl])for(const k in L)if(L[k]&&L[k].n===n&&!k.startsWith('n:'))return k;return null}
+function p5oNameOf(uid){if(uid===MPS.uid)return myName();const r=remotes.get(uid);if(r)return r.name;for(const L of [P5O.ops,P5O.bans,P5O.wl])if(L[uid]&&L[uid].n)return L[uid].n;return uid}
+const p5oHas=(L,uid,n)=>!!(uid&&L[uid]||L[p5oKeyName(n)]);
+// 바꾸기: 주인이면 바로 쓰고 · 아니면 주인에게 요청
+function p5oWrite(path,val){if(MPS.host){MPS.me.child('srv/'+path).set(val==null?null:val).catch(()=>{});return true}
+  const h=p5oOwner();if(!h||!remotes.has(h)||!remotes.get(h).d)return false;p5mSend({k:'srv',to:h,p:path,v:val==null?null:val});return true}
+function p5oSrvAct(u,v){if(!MPS||!MPS.host||p5oLevel(u)<3)return;const p=String(v.p||'');if(!/^(ops|bans|wl)\/[A-Za-z0-9_:\-]{1,64}$|^wlOn$/.test(p))return;const key=p.split('/')[1];
+  if(key===MPS.uid&&p!=='wlOn'&&!p.startsWith('wl/'))return;   // 주인은 빼거나 차단할 수 없어요
+  let val=v.v;if(val!=null&&typeof val!=='object'&&typeof val!=='boolean')return;if(val&&typeof val==='object'){const o={};for(const k of ['n','r','by','l','t'])if(val[k]!=null)o[k]=typeof val[k]==='number'?val[k]:String(val[k]).slice(0,200);val=o}
+  MPS.me.child('srv/'+p).set(val==null?null:val).catch(()=>{})}
+// 받기 (주인의 srv 를 모두가 실시간으로)
+function p5oRecv(v){v=v||{};P5O.ops=v.ops||{};P5O.bans=v.bans||{};P5O.wl=v.wl||{};P5O.wlOn=!!v.wlOn;p5oCheckMe()}
+function p5oBlock(uid,n,srv){const own=MPS?p5oOwner():null;if(uid===own)return null;const B=srv.bans||{},b=B[uid]||B[p5oKeyName(n)];
+  if(b)return{t:'서버에 접속하지 못했어요',r:'이 서버에서 차단됐어요.\n이유: '+(b.r||'관리자에게 차단됐어요.')};
+  if(srv.wlOn&&!(srv.ops||{})[uid]&&!p5oHas(srv.wl||{},uid,n))return{t:'서버에 접속하지 못했어요',r:'이 서버의 화이트리스트에 없어요!'};return null}
+function p5oCheckMe(){if(!MPS||MPS.host)return;const x=p5oBlock(MPS.uid,myName(),P5O);if(x){const b=P5O.bans[MPS.uid]||P5O.bans[p5oKeyName(myName())];p5oDrop(b?{t:'연결이 끊어졌어요',r:'이 서버에서 차단됐어요.\n이유: '+(b.r||'관리자에게 차단됐어요.')}:{t:'연결이 끊어졌어요',r:'이 서버의 화이트리스트에 없어요!'})}}
+function p5oDrop(scr){setTimeout(()=>{try{if(typeof closeChat==='function'&&chatOpen)closeChat();quitToTitle();showMenu('disc',Object.assign({b:'서버 목록으로 돌아가기',m:'multi'},scr))}catch(e){}},0)}
+// 들어올 때 차단 · 화이트리스트 (joinServer 가 읽은 서버 전체에서)
+function p5oJoinBlock(all,meta){const h=meta&&meta.host,srv=h&&all[h]&&all[h].srv||{};return p5oBlock(window.__mpUid,myName(),srv)}
+// 권한: 멀티에서는 서버 목록의 단계
+{const _cp=cmdPerm;cmdPerm=function(){if(typeof MPS!=='undefined'&&MPS)return p5oLevel(MPS.uid);return _cp.apply(this,arguments)}}
+// 다른 사람의 행동 받기: srv 요청 · 내보내기
+{const _oa=p5mOnAct;p5mOnAct=function(u,v){if(MPS&&v&&v.to===MPS.uid&&Date.now()-(v.ts||0)<8000&&(v.k==='srv'||v.k==='kick')){const S=P5M.seen,key=u+(v.ts||0)+v.k+(v.p||'');if(S.has(key))return;S.set(key,1);
+    if(v.k==='srv')p5oSrvAct(u,v);else if(p5oLevel(u)>=3&&!MPS.host)p5oDrop({t:'연결이 끊어졌어요',r:String(v.r||'서버에서 내보내졌어요').slice(0,256)});return}return _oa.apply(this,arguments)}}
+// ── 명령어 (멀티는 서버 전체 · 혼자는 예전처럼 세계마다)
+cmdMsgs({op_owner:['서버 주인은 관리자에서 뺄 수 없어요','Cannot deop the server owner'],ban_owner:['서버 주인은 차단할 수 없어요','Cannot ban the server owner'],srv_nohost:['서버 주인이 접속해 있어야 바꿀 수 있어요','The server owner must be online to change this'],
+  kick_self:['자기 자신은 내보낼 수 없어요','You cannot kick yourself']});
+const p5oMP=()=>typeof MPS!=='undefined'&&!!MPS;
+function p5oNames(c,a){return profNames(c,a.targets)}
+function p5oOp(c,a,add){if(!p5oMP())return listMod(c,SRV().ops,p5oNames(c,a),add,add?'op_ok':'deop_ok',add?'op_f':'deop_f');let n=0;
+  for(const nm of p5oNames(c,a)){const uid=p5oUidOf(nm);if(!uid)cFail('pl_unknown');if(!add&&uid===p5oOwner())cFail('op_owner');const is=uid===p5oOwner()||!!P5O.ops[uid];if(add===is)continue;
+    if(!p5oWrite('ops/'+uid,add?{n:nm,l:4}:null))cFail('srv_nohost');if(add)P5O.ops[uid]={n:nm,l:4};else delete P5O.ops[uid];cFb(c,add?'op_ok':'deop_ok',nm);n++}
+  if(!n)cFail(add?'op_f':'deop_f');return n}
+cmdReg(cLit('op',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>p5oOp(c,a,true))));
+cmdReg(cLit('deop',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>p5oOp(c,a,false))));
+function p5oBan(c,a){if(!p5oMP())return banDo(c,a);const why=a.reason?msgText(c,a.reason):cmdMsg('ban_reason');let n=0;
+  for(const nm of p5oNames(c,a)){const uid=p5oUidOf(nm);if(uid&&uid===p5oOwner())cFail('ban_owner');const key=uid||p5oKeyName(nm);if(P5O.bans[key])continue;
+    if(!p5oWrite('bans/'+key,{n:nm,r:why,by:srvBy(c),t:Date.now()}))cFail('srv_nohost');P5O.bans[key]={n:nm,r:why};cFb(c,'ban_ok',nm,why);n++}if(!n)cFail('ban_f');return n}
+cmdReg(cLit('ban',{perm:3},cArg('targets',CmdArg.prof6(),p5oBan,cArg('reason',CmdArg.msg(),p5oBan))));
+cmdReg(cLit('pardon',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>{const MP=p5oMP(),S=MP?P5O.bans:SRV().bans;let n=0;
+  for(const nm of p5oNames(c,a)){const keys=MP?Object.keys(S).filter(k=>S[k]&&S[k].n===nm||k===p5oKeyName(nm)):S[nm]?[nm]:[];if(!keys.length)continue;
+    for(const k of keys){if(MP&&!p5oWrite('bans/'+k,null))cFail('srv_nohost');delete S[k]}cFb(c,'pardon_ok',nm);n++}if(!n)cFail('pardon_f');return n})));
+cmdReg(cLit('banlist',{perm:3},c=>p5oBanList(c),cLit('ips',c=>p5oMP()?(cFb(c,'bl_none'),0):banList(c,'ips')),cLit('players',c=>p5oBanList(c,'players'))));
+function p5oBanList(c,w){if(!p5oMP())return banList(c,w);const L=Object.values(P5O.bans).filter(Boolean);if(!L.length){cFb(c,'bl_none');return 0}cFb(c,'bl_list',L.length);for(const b of L)cFb(c,'bl_entry',b.n,b.by||'Server',b.r||'');return L.length}
+function p5oKick(c,a){if(!p5oMP())return kickDo(c,a);const L=cTargets(c,a.targets,true),why=a.reason?msgText(c,a.reason):cmdMsg('kick_reason');let n=0;
+  for(const p of L){if(p===player)cFail('kick_self');if(p.uid===p5oOwner())cFail('kick_owner');p5mSend({k:'kick',to:p.uid,r:why});cFb(c,'kick_ok',cmdEntName(p),why);n++}return n}
+cmdReg(cLit('kick',{perm:3},cArg('targets',CmdArg.ent(false,true),p5oKick,cArg('reason',CmdArg.msg(),p5oKick))));
+function p5oWl(c,a,add){if(!p5oMP())return listMod(c,SRV().wl,p5oNames(c,a),add,add?'wl_add':'wl_rm',add?'wl_addf':'wl_rmf');let n=0;
+  for(const nm of p5oNames(c,a)){const uid=p5oUidOf(nm),has=p5oHas(P5O.wl,uid,nm);if(has===add)continue;const keys=add?[uid||p5oKeyName(nm)]:Object.keys(P5O.wl).filter(k=>k===uid||k===p5oKeyName(nm));
+    for(const k of keys){if(!p5oWrite('wl/'+k,add?{n:nm}:null))cFail('srv_nohost');if(add)P5O.wl[k]={n:nm};else delete P5O.wl[k]}cFb(c,add?'wl_add':'wl_rm',nm);n++}if(!n)cFail(add?'wl_addf':'wl_rmf');return n}
+function p5oWlSet(c,on){if(!p5oMP()){const S=SRV();if(S.wlOn===on)cFail(on?'wl_ison':'wl_isoff');S.wlOn=on;cFb(c,on?'wl_on':'wl_off');return 1}if(P5O.wlOn===on)cFail(on?'wl_ison':'wl_isoff');if(!p5oWrite('wlOn',on))cFail('srv_nohost');P5O.wlOn=on;cFb(c,on?'wl_on':'wl_off');return 1}
+cmdReg(cLit('whitelist',{perm:3},cLit('on',c=>p5oWlSet(c,true)),cLit('off',c=>p5oWlSet(c,false)),
+  cLit('list',c=>{const L=p5oMP()?Object.values(P5O.wl).filter(Boolean).map(w=>w.n):SRV().wl;if(!L.length)cFb(c,'wl_none');else cFb(c,'wl_list',L.length,L.join(', '));return L.length}),cLit('reload',c=>{cFb(c,'wl_reload');return 1}),
+  cLit('add',cArg('targets',CmdArg.prof6(),(c,a)=>p5oWl(c,a,true))),cLit('remove',cArg('targets',CmdArg.prof6(),(c,a)=>p5oWl(c,a,false)))));
+// ── 이름 색 (대화): 주인 금색 · 관리자 하늘색 (마크엔 없어서 우리가 정한 표시)
+const P5O_COL=['#ffffff','#55ffff','#ffaa00'];
+{const _cs=mpChatShow;mpChatShow=function(m){if(m&&!m.k&&m.u&&p5oRank(m.u)){const r=p5oRank(m.u);return chatLine(`&lt;<span style="color:${P5O_COL[r]}">${esc(m.n)}</span>&gt; ${esc(m.t)}`,'#fff',true)}return _cs.apply(this,arguments)}}
+// 왕관 그림 (7×4 · 우리가 그려요)
+const P5O_CROWN=['X..X..X','XX.X.XX','XXXXXXX','XXXXXXX'];
+function p5oCrown(g,x,y,s,col){for(let j=0;j<4;j++)for(let i=0;i<7;i++)if(P5O_CROWN[j][i]==='X'){g.fillStyle='rgba(0,0,0,.45)';g.fillRect(x+(i+.5)*s,y+(j+.5)*s,s,s);g.fillStyle=col;g.fillRect(x+i*s,y+j*s,s,s)}}
+const p5oCrownURL=(()=>{const C={};return r=>{if(C[r])return C[r];const c=cv(16,10),g=c.getContext('2d');p5oCrown(g,0,2,2,P5O_COL[r]);return C[r]=c.toDataURL()}})();
+// 이름표 위 왕관: p5Tag 를 단계와 함께 다시 만들어요
+{const _t=p5Tag;p5Tag=function(name,rank){const G=_t(name);if(!rank)return G;for(const s of [G.userData.a,G.userData.b]){const tex=s.material.map,c0=tex.image,W=c0.width,H=c0.height,S4=4,c=cv(W+9*S4,H),g=c.getContext('2d');
+    g.drawImage(c0,9*S4,0);if(s===G.userData.a){g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,0,9*S4,H)}p5oCrown(g,S4,3*S4,S4,s===G.userData.a?'rgba(255,255,255,.12)':P5O_COL[rank]);
+    const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;s.material.map=t;s.material.needsUpdate=true;s.scale.x*=(W+9*S4)/W}return G}}
+{const _r=p5Remote;p5Remote=function(r,dt){if(r.uid&&typeof MPS!=='undefined'&&MPS){const k=p5oRank(r.uid);if(r.tagRank!==k){r.tagRank=k;const vis=r.tag.visible;scene.remove(r.tag);r.tag=p5Tag(r.name,k);r.tag.visible=vis;scene.add(r.tag)}}return _r.apply(this,arguments)}}
+// ── Tab 플레이어 목록 (마크 PlayerTabOverlay: 위 가운데 · 반투명 검정 · 칸마다 밝은 띠 · 머리 8×8 · 이름 · 핑 막대) — 주인/관리자는 이름 앞 작은 왕관
+let p5oTabOn=false,p5oTabT=0;
+const P5O_TABCSS=`#p5tab{position:fixed;left:50%;top:calc(10px * var(--s));transform:translateX(-50%);z-index:30;background:rgba(0,0,0,.5);padding:calc(1px * var(--s));font-size:calc(8px * var(--s));line-height:calc(8px * var(--s));pointer-events:none;white-space:nowrap;display:none}
+#p5tab .hd,#p5tab .ft{text-align:center;padding:calc(1px * var(--s)) calc(2px * var(--s));color:#fff}#p5tab .ft{color:#aaa}
+#p5tab .rw{display:flex;align-items:center;gap:calc(1px * var(--s));background:rgba(255,255,255,.125);height:calc(8px * var(--s));margin-bottom:calc(1px * var(--s));padding-right:calc(1px * var(--s))}
+#p5tab .rw img{width:calc(8px * var(--s));height:calc(8px * var(--s));image-rendering:pixelated}#p5tab .rw .cr{width:calc(8px * var(--s));height:calc(5px * var(--s))}
+#p5tab .nm{flex:1;padding-right:calc(12px * var(--s))}#p5tab .pg{width:calc(10px * var(--s));height:calc(8px * var(--s))}`;
+function p5oHead(tex){const c=cv(8,8),g=c.getContext('2d');try{const s=tex&&(tex.canvas||tex.image);if(s){g.drawImage(s,8,8,8,8,0,0,8,8);g.drawImage(s,40,8,8,8,0,0,8,8)}}catch(e){}return c.toDataURL()}
+function p5oPing(ms){const n=ms<150?5:ms<300?4:ms<600?3:ms<1000?2:1,c=cv(10,8),g=c.getContext('2d');for(let i=0;i<5;i++){const h=2+i*1.5|0;g.fillStyle=i<n?'#00e000':'#3a3a3a';g.fillRect(i*2,8-h,1,h);g.fillStyle=i<n?'#007000':'#202020';g.fillRect(i*2+1,8-h,1,h)}return c.toDataURL()}
+function p5oTabList(){const L=[];if(typeof MPS==='undefined'||!MPS){L.push({n:myName(),rank:0,tex:SKIN,ping:0});return L}
+  L.push({uid:MPS.uid,n:myName(),rank:p5oRank(MPS.uid),tex:SKIN,ping:0});const now=performance.now();
+  for(const r of remotes.values()){if(!r.d||!r.uid)continue;if(r.lastD!==r.d){r.lastD=r.d;r.lastPT=now}L.push({uid:r.uid,n:r.name,rank:p5oRank(r.uid),tex:r.tex,ping:Math.max(0,now-(r.lastPT||now)-100)})}
+  L.sort((a,b)=>b.rank-a.rank||(a.n<b.n?-1:a.n>b.n?1:0));return L}
+function p5oTabDraw(){let el=document.getElementById('p5tab');if(!el){const st=document.createElement('style');st.textContent=P5O_TABCSS;document.head.appendChild(st);el=document.createElement('div');el.id='p5tab';document.body.appendChild(el)}
+  const L=p5oTabList(),MP=typeof MPS!=='undefined'&&MPS;
+  let h=MP?`<div class="hd" translate="no">${esc(MPS.meta&&MPS.meta.name||'PlayHub')}</div>`:'';
+  for(const p of L)h+=`<div class="rw" data-uid="${esc(p.uid||'')}" data-rank="${p.rank}"><img src="${p5oHead(p.tex)}">${p.rank?`<img class="cr" src="${p5oCrownURL(p.rank)}" title="${p.rank===2?'서버 주인':'관리자'}">`:''}<span class="nm" translate="no" style="color:${P5O_COL[p.rank]}">${esc(p.n)}</span><img class="pg" src="${p5oPing(p.ping)}"></div>`;
+  if(MP)h+=`<div class="ft">서버 코드: ${esc(MPS.sid)} · 접속 ${L.length}명</div>`;
+  el.innerHTML=h;el.style.display='block'}
+function p5oTabHide(){const el=document.getElementById('p5tab');if(el)el.style.display='none'}
+addEventListener('keydown',e=>{if(e.code!=='Tab'||!started||menuOpen||chatOpen||screenOpen)return;if(!p5oTabOn){p5oTabOn=true;p5oTabT=0;p5oTabDraw()}});
+addEventListener('keyup',e=>{if(e.code==='Tab'){p5oTabOn=false;p5oTabHide()}});
+addEventListener('blur',()=>{p5oTabOn=false;p5oTabHide()});
+{const _mt=mpTick;mpTick=function(dt){const r=_mt.apply(this,arguments);if(p5oTabOn&&(p5oTabT+=dt)>1){p5oTabT=0;p5oTabDraw()}return r}}
+i18nAdd('서버 주인','Server owner');i18nAdd('관리자','Operator');i18nAdd('서버 코드: {0} · 접속 {1}명','Server code: {0} · {1} online');
+i18nAdd('연결이 끊어졌어요','Connection Lost');i18nAdd('서버에 접속하지 못했어요','Failed to connect to the server');i18nAdd('서버에서 내보내졌어요','Kicked by an operator');
+i18nAdd('이 서버에서 차단됐어요.\n이유: {0}','You are banned from this server.\nReason: {0}');i18nAdd('이 서버의 화이트리스트에 없어요!','You are not white-listed on this server!');i18nAdd('관리자에게 차단됐어요.','Banned by an operator.');
+i18nAdd('이 서버에서 차단됐어요.','You are banned from this server.');i18nAdd('이유: {0}','Reason: {0}');
 </script>
 </body>
 </html>
