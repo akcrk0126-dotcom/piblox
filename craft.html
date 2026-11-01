@@ -5703,7 +5703,9 @@ function switchDim(dest,px,py,pz,then){if(dimBusy)return;dimBusy=true;closeScree
   player.pos.set(px,py,pz);player.vel.set(0,0,0);player.fallStart=null;dimVisual();
   afterDim=()=>{dimBusy=false;portalCD=4;portalStay=true;if(then)then();if(DIM==='end')spawnEndEntities();save()};
   phase='dim';loadDone=false;$('loadTxt').textContent=DIM_N[dest]+'(으)로 이동 중';$('loadSub').textContent='지형 준비 중';$('loadBar').style.width='0%';$('loading').classList.remove('hide');sfx('portal')}
-function scanPortal(x0,z0,r){let best=null,bd=1e9;for(let z=z0-r;z<=z0+r;z++)for(let x=x0-r;x<=x0+r;x++){if(!chunks.has(ck(x>>4,z>>4)))continue;for(let y=1;y<H-1;y++){if(getB(x,y,z)===NETHER_PORTAL&&getB(x,y-1,z)!==NETHER_PORTAL){const d=(x-x0)**2+(z-z0)**2;if(d<bd){bd=d;best={x,y,z}}}}}return best}
+// (P4-FIX) 마크 PortalForcer 처럼: 오버월드에선 128칸 · 네더에선 16칸 안의 가장 가까운 포털 (예전엔 24칸만 봐서 네더에서 돌아오면 새 포털이 생겼어요) · 불러온 청크 배열을 바로 훑어요
+function scanPortal(x0,z0,r){let best=null,bd=1e9;const NP=NETHER_PORTAL;for(let cz=(z0-r)>>4;cz<=(z0+r)>>4;cz++)for(let cx=(x0-r)>>4;cx<=(x0+r)>>4;cx++){const ch=chunks.get(ck(cx,cz));if(!ch)continue;const b=ch.b,top=Math.min(H-2,ch.maxY);
+    for(let y=1;y<=top;y++){const o=y<<8;for(let c=0;c<256;c++){if(b[o|c]!==NP||b[(o-256)|c]===NP)continue;const x=cx*16+(c&15),z=cz*16+(c>>4),dx=x-x0,dz=z-z0;if(Math.abs(dx)>r||Math.abs(dz)>r)continue;const d=dx*dx+dz*dz;if(d<bd){bd=d;best={x,y,z}}}}}return best}
 function buildPortal(x,y,z){for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=3;dx++){for(let dy=0;dy<4;dy++)if(getB(x+dx,y+dy,z+dz)!==BEDROCK)setBlock(x+dx,y+dy,z+dz,AIR);if(!SOLID[getB(x+dx,y-1,z+dz)])setBlock(x+dx,y-1,z+dz,OBSIDIAN)}
   for(let dx=-1;dx<=2;dx++){setBlock(x+dx,y-1,z,OBSIDIAN);setBlock(x+dx,y+3,z,OBSIDIAN)}for(let dy=0;dy<3;dy++){setBlock(x-1,y+dy,z,OBSIDIAN);setBlock(x+2,y+dy,z,OBSIDIAN)}
   for(let dy=0;dy<3;dy++)for(let dx=0;dx<2;dx++)setBlock(x+dx,y+dy,z,NETHER_PORTAL,true,false,0);for(const ch of chunks.values())ch.dirty=true}
@@ -5712,8 +5714,16 @@ function findPortalSpot(x0,z0){const nether=DIM==='nether',yMin=nether?N_LAVA+2:
     for(let y=yMin;y<yMax;y++){const f0=getB(x,y-1,z),f1=getB(x+1,y-1,z);if(!SOLID[f0]||!SOLID[f1]||f0===BEDROCK||f1===BEDROCK)continue;let ok=true;for(let ax=0;ax<2&&ok;ax++)for(let ay=0;ay<3&&ok;ay++)if(getB(x+ax,y+ay,z)!==AIR)ok=false;if(!ok)continue;
       let open=0;for(const sz of [-1,1])for(let ax=0;ax<2;ax++)if(getB(x+ax,y,z+sz)===AIR&&getB(x+ax,y+1,z+sz)===AIR)open++;const d=dx*dx+dz*dz+Math.abs(y-yPref)*.5-open*8;if(d<bd){bd=d;best={x,y,z}}}}
   if(best)return best;for(let y=yMin;y<yMax;y++)if(getB(x0,y,z0)===AIR&&getB(x0,y+1,z0)===AIR)return{x:x0,y,z:z0};return{x:x0,y:nether?N_FY-8:Math.max(SEA+2,surfaceY(x0,z0)),z:z0}}
-function travelNether(){const toN=DIM==='over',p=player.pos,tx=toN?Math.floor(p.x/8):Math.floor(p.x*8),tz=toN?Math.floor(p.z/8):Math.floor(p.z*8);
-  switchDim(toN?'nether':'over',tx+.5,toN?N_FY:SEA+20,tz+.5,()=>{let pt=scanPortal(tx,tz,24);if(!pt){const s=findPortalSpot(tx,tz);buildPortal(s.x,s.y,s.z);pt={x:s.x,y:s.y,z:s.z}}player.pos.set(pt.x+.5+(getB(pt.x+1,pt.y,pt.z)===NETHER_PORTAL?.5:0),pt.y+.01,pt.z+.5);player.vel.set(0,0,0);toast(DIM_N[DIM]+'에 왔어요')})}
+// (P4-FIX) 포털 목록 (dimState.portals · 저장돼요): 지나간 포털 · 새로 만든 포털을 적어 두고, 멀어서 아직 안 불러온 청크의 포털도 찾아가요 (마크는 그 청크를 불러와 POI 를 찾아요)
+function portalReg(dim,x,y,z){const P=dimState.portals||(dimState.portals={}),L=P[dim]||(P[dim]=[]);if(L.some(q=>Math.abs(q[0]-x)<=3&&Math.abs(q[1]-y)<=4&&Math.abs(q[2]-z)<=3))return;L.push([x,y,z]);if(L.length>64)L.shift()}
+function portalNear(dim,x0,z0,r){const L=dimState.portals&&dimState.portals[dim];let best=null,bd=1e9;if(L)for(const q of L){const dx=q[0]-x0,dz=q[2]-z0;if(Math.abs(dx)>r||Math.abs(dz)>r)continue;const d=dx*dx+dz*dz;if(d<bd){bd=d;best=q}}return best}
+function travelNether(){const toN=DIM==='over',p=player.pos,tx=toN?Math.floor(p.x/8):Math.floor(p.x*8),tz=toN?Math.floor(p.z/8):Math.floor(p.z*8),dest=toN?'nether':'over',R=toN?16:128;
+  {const src=scanPortal(Math.floor(p.x),Math.floor(p.z),2);if(src)portalReg(DIM,src.x,src.y,src.z)}
+  const known=portalNear(dest,tx,tz,R);
+  switchDim(dest,known?known[0]+.5:tx+.5,known?known[1]+.01:toN?N_FY:SEA+20,known?known[2]+.5:tz+.5,()=>{let pt=known&&scanPortal(known[0],known[2],3);
+    if(!pt&&known){const L=dimState.portals[dest],k=L.indexOf(known);if(k>=0)L.splice(k,1)}   // 부서진 포털은 목록에서 빼요
+    if(!pt)pt=scanPortal(tx,tz,R);if(!pt){const s=findPortalSpot(tx,tz);buildPortal(s.x,s.y,s.z);pt={x:s.x,y:s.y,z:s.z}}portalReg(DIM,pt.x,pt.y,pt.z);
+    player.pos.set(pt.x+.5+(getB(pt.x+1,pt.y,pt.z)===NETHER_PORTAL?.5:0),pt.y+.01,pt.z+.5);player.vel.set(0,0,0);toast(DIM_N[DIM]+'에 왔어요')})}
 function travelEnd(){if(DIM==='end'){const s=player.spawn||{x:.5,y:SEA+20,z:.5};switchDim('over',s.x,s.y,s.z,()=>{if(!SOLID[getB(Math.floor(s.x),Math.floor(s.y)-1,Math.floor(s.z))]){const y=surfaceY(Math.floor(s.x),Math.floor(s.z));if(y>0)player.pos.y=y+.01}toast('오버월드로 돌아왔어요')});return}
   switchDim('end',60.5,END_Y+1,.5,()=>{for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){setBlock(60+dx,END_Y-1,dz,OBSIDIAN);for(let dy=0;dy<3;dy++)setBlock(60+dx,END_Y+dy,dz,AIR)}player.pos.set(60.5,END_Y+.01,.5);player.yaw=Math.PI/2;toast(dimState.dragonDead?'엔드에 왔어요':'엔더 드래곤이 기다리고 있어요!')})}
 function portalTick(dt){if(dimBusy||!started||player.dead)return;if(portalCD>0)portalCD-=dt;const p=player.pos;let inN=false,inE=false,inT=false;
@@ -7785,8 +7795,8 @@ const pAt=(x,y,inner)=>`<div class="pa" style="left:calc(${x}px * var(--s));top:
 // 인벤토리 칸: 아이템 자리 (x,y) → 칸 테두리는 (x-1,y-1)
 const invMC=y=>{let h='';for(let r=0;r<3;r++)for(let c=0;c<9;c++)h+=pAt(7+c*18,y-1+r*18,S('inv',9+r*9+c));for(let c=0;c<9;c++)h+=pAt(7+c*18,y+57,S('inv',c));return h};
 const invGrid=()=>`<div class="grid">${Array.from({length:27},(_,k)=>S('inv',9+k)).join('')}</div><div class="gap"></div><div class="grid">${Array.from({length:9},(_,k)=>S('inv',k)).join('')}</div>`;
-function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMenu();let ech=false;if(type==='echest'){type='chest';ech=true}screenOpen=type;screenTile=null;breaking=null;mouseL=mouseR=false;eating=false;
-  if(tgt&&(type==='furnace'||type==='chest')){const k=tkey(tgt.x,tgt.y,tgt.z);screenTile=tiles.get(k);if(!screenTile){screenTile=type==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:chestLoot(VCHEST.get(k))};tiles.set(k,screenTile)}}if(ech)screenTile=ECHEST;
+function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMenu();keysRelease();let ech=false;if(type==='echest'){type='chest';ech=true}screenOpen=type;screenTile=null;breaking=null;mouseL=mouseR=false;eating=false;
+  if(tgt&&(type==='furnace'||type==='chest')){const k=tkey(tgt.x,tgt.y,tgt.z);screenTile=tiles.get(k);if(!screenTile||!Array.isArray(type==='furnace'?screenTile.s:screenTile.items)){   /* (P4-FIX) 다른 블록이 남긴 블록 엔티티면 새로 (화로 자리에 상자 → 창이 깨졌어요) */screenTile=type==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:chestLoot(VCHEST.get(k))};tiles.set(k,screenTile)}}if(ech)screenTile=ECHEST;
   let h='<button id="closeInv" aria-label="닫기"></button>';
   const mcfix=type==='inv'||type==='craft'||type==='chest'||type==='furnace'||type==='enchant'||type==='anvil'||type==='smith';$('panel').className='panel'+(mcfix?' mcfix':'')+(type==='chest'?' ch':'');
   if(type==='inv')h+=[0,1,2,3].map(i=>pAt(7,7+i*18,S('arm',i))).join('')+pAt(25,7,'<div class="pv"></div>')+pTl(97,6,'제작')+[0,1,2,3].map(i=>pAt(97+(i%2)*18,17+Math.floor(i/2)*18,S('c2',i))).join('')+pAt(134,28,'<div class="arrow"></div>')+pAt(149,23,S('res',0,1))+pAt(104,61,'<button class="bookBtn" id="bookBtn" title="조합법 책"><svg viewBox="0 0 16 16" class="px"><rect x="2" y="2" width="12" height="12" fill="#2f7a24"/><rect x="2" y="2" width="12" height="2" fill="#4fa83c"/><rect x="4" y="5" width="8" height="1" fill="#b8e0a0"/><rect x="4" y="8" width="6" height="1" fill="#b8e0a0"/><rect x="2" y="12" width="12" height="2" fill="#e8d8b0"/></svg></button>')+invMC(84);
@@ -7803,7 +7813,11 @@ function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMe
   if($('bookBtn')){$('bookBtn').onclick=()=>{bookOpen=!bookOpen;renderBook()};renderBook()}else $('rbook').classList.add('hide');
   if(document.pointerLockElement)document.exitPointerLock();drawScreen();if(type!=='inv')sfx('click')}
 function closeScreen(){if(!screenOpen)return;if(screenOpen==='trade')closeTrade();if(screenOpen==='anvil')for(let k=0;k<2;k++)if(anvilIn[k]){giveOrDrop(anvilIn[k]);anvilIn[k]=null}if(screenOpen==='smith')for(let k=0;k<smithIn.length;k++)if(smithIn[k]){giveOrDrop(smithIn[k]);smithIn[k]=null}if(screenTile===ECHEST){try{localStorage.setItem('bc_echest',JSON.stringify(ECHEST.items))}catch(e){}}for(let i=0;i<2;i++)if(enchSlots[i]){giveOrDrop(enchSlots[i]);enchSlots[i]=null}if(screenTile){for(const [k,v] of tiles)if(v===screenTile){mpTile(k,v);break}}for(const g of [craft2,craft3])for(let i=0;i<g.length;i++)if(g[i]){giveOrDrop(g[i]);g[i]=null}
-  if(cursor){giveOrDrop(cursor);cursor=null}screenOpen=null;screenTile=null;drag=null;ghost=null;$('rbook').classList.add('hide');$('screen').classList.add('hide');$('cursor').classList.add('hide');$('tip').classList.add('hide');renderHotbar();if(started&&!player.dead&&!menuOpen)lockPointer()}
+  if(cursor){giveOrDrop(cursor);cursor=null}screenOpen=null;screenTile=null;drag=null;ghost=null;$('rbook').classList.add('hide');$('screen').classList.add('hide');$('cursor').classList.add('hide');$('tip').classList.add('hide');renderHotbar();keysRestore();if(started&&!player.dead&&!menuOpen)lockPointer()}
+// (P4-FIX) 마크 setScreen 처럼: 창을 열면 눌린 키를 모두 놓고 (예전엔 W 를 누른 채 E → 가방이 열린 채로 계속 걸었어요), 닫으면 아직 누르고 있는 이동 키만 다시 (KeyMapping.setAll)
+const physK={};addEventListener('keydown',e=>{physK[e.code]=true},true);addEventListener('keyup',e=>{physK[e.code]=false},true);addEventListener('blur',()=>{for(const k in physK)physK[k]=false});
+function keysRelease(){for(const k in keys)keys[k]=false}
+function keysRestore(){for(const k of ['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft'])if(physK[k])keys[k]=true}
 function giveOrDrop(st){const left=addItem(st);if(left>0)throwItem({id:st.id,n:left,d:st.d})}
 function throwItem(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);spawnItem(st,camera.position.x+d.x*.3,camera.position.y-.3,camera.position.z+d.z*.3,new V3(d.x*5,d.y*5+2,d.z*5),1.5)}
 function arrOf(c){return c==='cr'?crView:c==='trash'?[null]:c==='inv'?inv:c==='c2'?craft2:c==='c3'?craft3:c==='chest'?screenTile&&screenTile.items:c==='fur'?screenTile&&screenTile.s:c==='arm'?armor:c==='ench'?enchSlots:c==='tin'?tradeIn:c==='anv'?anvilIn:c==='smi'?smithIn:null}
@@ -8092,7 +8106,7 @@ function slider(id,label,min,max,val,fmt){return `<div class="mslider"><input ty
 function bindSlider(id,label,min,max,fmt,on){const el=$(id);el.oninput=()=>{const v=+el.value;el.nextElementSibling.style.left=`calc(${(v-min)/(max-min)*100}% - ${(v-min)/(max-min)*16}px)`;el.parentNode.querySelector('span').textContent=label+': '+fmt(v);on(v)}}
 const MODE_N={survival:'서바이벌',creative:'크리에이티브'},TYPE_N={default:'기본',flat:'평지'};
 let selWorld=null,selServer=null,newW=null,phase='boot';
-function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;if(document.pointerLockElement)document.exitPointerLock();
+function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;keysRelease();if(document.pointerLockElement)document.exitPointerLock();
   const help=isTouch?'왼쪽 조이스틱 이동 · 화면 드래그로 시점<br>꾹 누르기: 부수기 · 짧게 탭: 놓기/사용':'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl 달리기 · E 인벤토리 · T 채팅 · F5 시점<br>왼쪽 클릭 부수기/공격 · 오른쪽 클릭 놓기/사용/먹이주기 · Q 버리기 · 1~9 / 휠 핫바';
   let h='';
   if(type==='title')h=menuHTML(type);
@@ -8300,7 +8314,7 @@ function addRemote(uid,d){let h=0;for(const c of uid)h=Math.imul(h,31)+c.charCod
 let chatOpen=false;
 function chatLine(html,col,isHtml){const box=$('chatLog');const d=document.createElement('div');d.style.color=col||'#fff';if(isHtml)d.innerHTML=html;else d.textContent=html;d.dataset.t=Date.now();box.appendChild(d);while(box.children.length>60)box.firstChild.remove();box.scrollTop=1e9}
 function openChat(pre){if(!started||chatOpen)return;if(menuOpen==='ready')hideMenu();chatOpen=true;for(const k in keys)keys[k]=false;$('chat').classList.add('open');const i=$('chatIn');i.value=pre||'';hintSel=0;updateCmdHint();setTimeout(()=>i.focus(),10);if(document.pointerLockElement)document.exitPointerLock()}
-function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;$('cmdHint').classList.add('hide');$('chat').classList.remove('open');i.blur();
+function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;keysRestore();$('cmdHint').classList.add('hide');$('chat').classList.remove('open');i.blur();
   if(send&&t){if(t.startsWith('/'))runCmd(t);else if(MPS)mpChat(t);else chatLine(`<${myName()}> ${t}`)}
   if(started&&!menuOpen&&!screenOpen&&!isTouch)lockPointer()}
 // ── 명령어 (Agent 05): 마크 자바 에디션 26.3 과 똑같은 명령어 ─────────────────────────────────────
