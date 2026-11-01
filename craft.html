@@ -3602,7 +3602,7 @@ const BIO_TEMP=[.5,0,.8,.8,.7,.6,.25,0,2,2,.95,1,-.3,.8,.7,2,.9,.7,0,.5,.2,.5,.5
 // ── 새 바이옴: 창백한 정원 (1.21.4, 짙은 숲 자리 중 기묘함이 높은 곳) · 동굴 바이옴 이름 (F3 · /locate 용)
 BIO.PALE_GARDEN=50;BIO.LUSH_CAVES=51;BIO.DRIPSTONE_CAVES=52;BIO.DEEP_DARK=53;
 BIO_N.push('Pale Garden','Lush Caves','Dripstone Caves','Deep Dark');BIO_KO.push('창백한 정원','무성한 동굴','점적석 동굴','깊은 어둠');
-Object.assign(BNAME2ID,{pale_garden:50,lush_caves:51,dripstone_caves:52,deep_dark:53});
+Object.assign(BNAME2ID,{pale_garden:50,lush_caves:51,dripstone_caves:52,deep_dark:53,cherry_grove:19,mangrove_swamp:30});   // (P4-WORLD) 벚나무 숲 · 맹그로브 늪 이름이 빠져서 F3 · /locate biome 이 plains 로 나왔어요
 BIO_TEMP[50]=.7;BIO_TEMP[51]=.5;BIO_TEMP[52]=.8;BIO_TEMP[53]=.8;BIO_TINT[50]=[.47,.51,.45];VEG[50]=['paleoak',.08,.1,0];
 const PALE_SKY=new THREE.Color(.72,.72,.72),PALE_FOG=new THREE.Color(.51,.47,.44);let paleK=0;
 const HEARTS=new Set(),HEART_MOB=new Map();
@@ -6695,8 +6695,9 @@ function stampVillages(b,ox,oz,maxY,hm){if(GEN<2||DIM!=='over')return maxY;const
 function caveBio(x,z){if(GEN>=5)return caveBio5(x,z);if(GEN>=3){const n=mnoise3(x,z);return n.E<-.375?3:n.C>=.8?1:n.Hu>=.7?2:0}const n=mnoise(x,z);if(n.E<-.42&&n.C>.12)return 3;if(n.C>.6&&n.Hu<.25)return 1;if(n.Hu>.5)return 2;return 0}
 function caveDecoMC(b,ox,oz,hm){const cb=new Uint8Array(256);for(let z=0;z<16;z++)for(let x=0;x<16;x++)cb[x|z<<4]=caveBio(ox+x,oz+z);
   const stoneish=v=>v===STONE||v===DEEPSLATE||v===TUFF||v===GRAVEL||v===DIRT||v===GRANITE||v===DIORITE||v===ANDESITE;
-  for(let z=0;z<16;z++)for(let x=0;x<16;x++){const cbx=cb[x|z<<4],top=Math.min(hm[x|z<<4]-5,SEA+4),dT=ddTopW(ox+x,oz+z);
-    for(let y=2;y<top;y++){const i=bi(x,y,z);if(b[i]!==AIR)continue;const bi0=bi(x,y-1,z),ai=bi(x,y+1,z),below=b[bi0],above=b[ai],q=hash3(ox+x,y,oz+z,SEED+1621);
+  const C3=GEN>=6&&WTYPE!=='flat'?v6caveBio3(ox,oz):null;   // (P4-WORLD) GEN 6: 동굴 바이옴을 마크처럼 3D (4×4×4 칸마다) — 땅 위 가까운 동굴까지 이끼 · 점적석이 덮이지 않게
+  for(let z=0;z<16;z++)for(let x=0;x<16;x++){const cbx0=cb[x|z<<4],top=Math.min(hm[x|z<<4]-5,SEA+4),dT=ddTopW(ox+x,oz+z);
+    for(let y=2;y<top;y++){const i=bi(x,y,z);if(b[i]!==AIR)continue;const cbx=C3?C3(x,y,z):cbx0;const bi0=bi(x,y-1,z),ai=bi(x,y+1,z),below=b[bi0],above=b[ai],q=hash3(ox+x,y,oz+z,SEED+1621);
       const fl=stoneish(below),ce=stoneish(above);
       if(cbx===1&&y>dT){if(fl){if(q<.75)b[bi0]=DRIPSTONE_BLOCK;if(q>.9){const L=1+Math.floor(hash3(ox+x,y,oz+z,SEED+1631)*3);for(let k=0;k<L&&y+k<H-1&&b[bi(x,y+k,z)]===AIR;k++)b[bi(x,y+k,z)]=POINTED_DRIPSTONE}}
         if(ce){if(q<.7)b[ai]=DRIPSTONE_BLOCK;if(q<.14){const L=1+Math.floor(hash3(ox+x,y,oz+z,SEED+1637)*4);for(let k=0;k<L&&y-k>1&&b[bi(x,y-k,z)]===AIR;k++)b[bi(x,y-k,z)]=POINTED_DRIPSTONE}}}
@@ -8148,11 +8149,11 @@ function menuAct(a){if(a==='news'){openNews();return}
   else if(a==='nwDif'){keep();newW.dif=DIFFS[(DIFFS.indexOf(newW.dif||'normal')+1)%4];showMenu('create')}
   else if(a==='nwMode'||a==='nwMode2'){keep();newW.mode=newW.mode==='survival'?'creative':'survival';showMenu(a==='nwMode'?'create':'mkSrv')}
   else if(a==='nwType'||a==='nwType2'){keep();newW.type=newW.type==='default'?'flat':'default';showMenu(a==='nwType'?'create':'mkSrv')}
-  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,gen:5,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;const dif=newW.dif;newW=null;enterWorld(w,null);if(dif)dimState.dif=dif}
+  else if(a==='doCreate'){keep();const w={id:'w'+Date.now().toString(36),name:(newW.name||'새로운 세계').trim().slice(0,32)||'새로운 세계',mode:newW.mode,type:newW.type,gen:6,seed:seedOf(newW.seed),last:Date.now()};const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;const dif=newW.dif;newW=null;enterWorld(w,null);if(dif)dimState.dif=dif}
   else if(a==='play'){const w=worldsList().find(x=>x.id===selWorld);if(!w)return;let d=null;try{d=JSON.parse(localStorage.getItem('bc_w_'+w.id))}catch(e){}enterWorld(w,d)}
   else if(a==='del'){const w=worldsList().find(x=>x.id===selWorld);if(!w||!confirm(`'${w.name}' 월드를 영원히 지울까요?`))return;saveWorldsList(worldsList().filter(x=>x.id!==w.id));localStorage.removeItem('bc_w_'+w.id);selWorld=null;showMenu('single')}
   else if(a==='mkSrv'){newW=null;showMenu('mkSrv')}
-  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,gen:5,seed:seedOf(newW.seed)})}
+  else if(a==='doSrv'){keep();createServer({name:(newW.name||'서버').trim().slice(0,32),mode:newW.mode,type:newW.type,gen:6,seed:seedOf(newW.seed)})}
   else if(a==='join'){if(selServer)joinServer(selServer)}
   else if(a==='joinCode'){const c=($('srvCode').value||'').trim().toLowerCase();if(c)joinServer(c)}
   else if(a==='resume'){hideMenu();lockPointer()}
@@ -8189,7 +8190,7 @@ function resetWorld(){DIM='over';GW_EXIT.clear();GW_RING.clear();levT=0;HEARTS.c
   started=false;worldTime=DAYLEN*.04;$('hud').classList.add('hide');$('touch').classList.add('hide');$('dead').classList.add('hide');viewMode=0;heldId=-1}
 function findSpawnXZ(){if(WTYPE==='flat')return[0,0];for(let k=0;k<600;k++){const a=k*2.4,r=k*6;const x=Math.round(Math.cos(a)*r),z=Math.round(Math.sin(a)*r);const h=terrainH(x,z),bm=biomeOf(x,z,h);if(h>SEA+2&&h<SEA+24&&bm!==BIO.DESERT&&bm!==BIO.SNOWY_PEAKS)return[x,z]}return[0,0]}
 let spawnFix=false;
-function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen>=5?5:w.gen>=4?4:w.gen===3?3:w.gen===2?2:1;setDims();GAMEMODE=w.mode||'survival';
+function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen>=6?6:w.gen>=5?5:w.gen>=4?4:w.gen===3?3:w.gen===2?2:1;setDims();GAMEMODE=w.mode||'survival';
   if(mpData){edits=mpData.edits||{};(mpData.tiles||[]).forEach(([k,v])=>{if(/^[net]/.test(k))tilesByDim[{n:'nether',e:'end',t:'time'}[k[0]]].set(k.slice(1),v);else tilesByDim.over.set(k,v)})}
   else if(data){edits=data.edits||{};(data.tiles||[]).forEach(([k,v])=>tilesByDim.over.set(k,v));const td=data.tilesD||{};(td.nether||[]).forEach(([k,v])=>tilesByDim.nether.set(k,v));(td.end||[]).forEach(([k,v])=>tilesByDim.end.set(k,v));(td.time||[]).forEach(([k,v])=>tilesByDim.time.set(k,v));saplings=data.saplings||[];crops=data.crops||[];VSTATE=data.vill||{}}
   if(data&&data.ds)dimState=Object.assign({dragonDead:false,crystals:0,egg:false},data.ds);DIM=(data&&(data.pl&&data.pl.dead&&data.pl.spawn?data.pl.spawn.dim:data.dim))||'over';portalStay=true;portalT=0;for(const [k,v] of tilesByDim[DIM])tiles.set(k,v);dimVisual();
@@ -8221,7 +8222,7 @@ function loadServers(){waitMP(ok=>{const box=$('srvList');if(!box)return;if(!ok)
     if(!$('srvList'))return;$('srvList').innerHTML=L.length?L.map(x=>{const on=t-(x.upd||0)<90000;return`<div class="mitem${x.sid===selServer?' on':''}" data-s="${esc(x.sid)}"><b>${esc(x.name)}</b><small>${on?'<span style="color:#55ff55">● 접속 '+(x.players||1)+'명</span>':'<span style="color:#aaa">○ 비어 있음 (들어가면 다시 열려요)</span>'} · ${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'}</small><small>코드 ${esc(x.sid)} · 만든 사람 ${esc(x.hostName||'?')}</small></div>`}).join(''):'<div class="mempty">열린 서버가 없어요. 서버 만들기로 첫 서버를 열어 보세요</div>';
     $('srvList').querySelectorAll('[data-s]').forEach(el=>{el.onclick=()=>{selServer=el.dataset.s;$('srvList').querySelectorAll('.mitem').forEach(x=>x.classList.toggle('on',x===el));$('mJoin').disabled=false};el.ondblclick=()=>joinServer(el.dataset.s)})}).catch(e=>{if($('srvList'))$('srvList').innerHTML='<div class="mempty">서버 목록을 읽지 못했어요: '+esc(errMsg(e))+'</div>'})})}
 function createServer(o){waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}const uid=window.__mpUid,sid=Math.random().toString(36).slice(2,8);
-  const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen>=5?5:o.gen>=4?4:o.gen===3?3:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
+  const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen>=6?6:o.gen>=5?5:o.gen>=4?4:o.gen===3?3:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
   Promise.all([dbr('bc_list/players/'+uid+'/'+sid).set(meta),dbr('bc_'+sid+'/players/'+uid+'/m').set(meta)]).then(()=>joinServer(sid)).catch(e=>showMenu('msg','서버를 만들지 못했어요. '+errMsg(e)))})}
 function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}
   showMenu('msg','서버 정보를 받는 중...');
@@ -11320,7 +11321,7 @@ function stampDungeon(b,cx,cz,ox,oz){if(GEN<4||WTYPE==='flat')return;const r=mul
   const sx=x0+(W>>1),sz=z0+(D>>1),wx=ox+sx,wz=oz+sz;b[bi(sx,y0+1,sz)]=SPAWNER;SPAWNERS.set(tkey(wx,y0+1,wz),['zombie','zombie','skeleton','spider'][Math.floor(r()*4)]);
   const spots=[[x0+1,z0+1],[x0+W-2,z0+D-2],[x0+1,z0+D-2]];for(let k=0;k<1+(r()<.6?1:0);k++){const [cx2,cz2]=spots[k];b[bi(cx2,y0+1,cz2)]=CHEST;VCHEST.set(tkey(ox+cx2,y0+1,oz+cz2),'dungeon')}}
 // 사막 피라미드: 24청크 간격, 사막에만
-const DTSP=24*16,DTEMP=new Map();
+let DTSP=24*16;const DTEMP=new Map();
 function templeIn(rx,rz){const k=rx+','+rz;if(DTEMP.has(k))return DTEMP.get(k);let t=null;
   if(GEN>=4&&WTYPE!=='flat'){const r=mulberry((Math.imul(rx,73856093)^Math.imul(rz,19349663)^Math.imul(SEED,4111))|0);const x=rx*DTSP+48+Math.floor(r()*(DTSP-96)),z=rz*DTSP+48+Math.floor(r()*(DTSP-96)),h=terrainH(x,z);
     if(biomeOf(x,z,h)===BIO.DESERT&&h>SEA){let lo=h;for(const [a,c] of [[-10,-10],[10,-10],[-10,10],[10,10]])lo=Math.min(lo,terrainH(x+a,z+c));t={x,z,y:lo,seed:Math.floor(r()*1e9)};
@@ -11347,7 +11348,7 @@ function stampTemple(b,ox,oz,t){const set=(x,y,z,id)=>{const lx=x-ox,lz=z-oz;if(
 // 함정: 압력판을 밟으면 아래 TNT 가 모두 불붙어요
 function trapTick(){if(!TRAPS.size||DIM!=='over')return;const p=player.pos,k=tkey(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z));const L=TRAPS.get(k);if(!L||getB(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))!==PLATE)return;TRAPS.delete(k);sfx('click');for(const [x,y,z] of L)primeTNT(x,y,z);toast('딸깍... 함정이에요! 도망쳐요!')}
 // 묻힌 보물: 해변 모래 속 상자 (보물 지도가 가리켜요)
-const BTSP=16*16,BURIED=new Map();
+let BTSP=16*16;const BURIED=new Map();
 function buriedIn(rx,rz){const k=rx+','+rz;if(BURIED.has(k))return BURIED.get(k);let t=null;
   if(GEN>=4&&WTYPE!=='flat'){const r=mulberry((Math.imul(rx,83492791)^Math.imul(rz,29475037)^Math.imul(SEED,3307))|0);for(let a=0;a<4&&!t;a++){const x=rx*BTSP+8+Math.floor(r()*(BTSP-16)),z=rz*BTSP+8+Math.floor(r()*(BTSP-16)),h=terrainH(x,z),bm=biomeOf(x,z,h);
     if((bm===BIO.BEACH||bm===BIO.SNOWY_BEACH)&&h>=SEA){t={x,z,y:h-2};VCHEST.set(tkey(x,h-2,z),'buried')}}}
@@ -11363,6 +11364,240 @@ LOCATORS.trial_chambers.find=(x,z)=>{const s=nearestOf(TRIAL,x,z);if(!s)return n
 function useTreasureMap(){if(DIM!=='over'){toast('지도가 빙글빙글 돌아요...');return}const t=nearestBuried(player.pos.x,player.pos.z);if(!t){toast('근처 바닷가에 보물이 없어요');return}
   setWaypoint({x:t.x,y:t.y+2,z:t.z,n:'❌ Buried Treasure',dim:'over'});const d=Math.round(Math.hypot(t.x-player.pos.x,t.z-player.pos.z));chatLine(`보물 지도: ${d}칸 ${dirName(t.x-player.pos.x,t.z-player.pos.z)}쪽 바닷가 모래 밑! (삽으로 파 보세요)`,'#ffaa00');sfx('page')}
 
+/* ═════════════ (P4-WORLD) GEN 6: 구조물 자리를 마크 자바와 똑같이 — structure_set 그대로 ═════════════
+   새로 만드는 세계 (gen:6) 만 바뀌어요. 지형 · 동굴 · 바이옴은 GEN 5 (마크 노이즈 라우터) 그대로이고, 구조물 자리만
+   마크 RandomSpreadStructurePlacement (자바 Random · setLargeFeatureWithSalt · spacing/separation/salt · triangular ·
+   frequency_reduction_method · exclusion_zone) 와 ConcentricRingsStructurePlacement (요새 128개 · 바이옴 쪽으로 당기기) 로 정해요.
+   바이옴 검사도 마크처럼 구조물 출발점의 노이즈 바이옴 (확대 없이) 으로 해요. GEN 4 · 5 세계는 예전 자리 그대로예요. */
+const V6B=(...n)=>new Set(n.map(k=>BNAME2ID[k]).filter(v=>v!==undefined));
+const V6_OCEAN=['deep_frozen_ocean','deep_cold_ocean','deep_ocean','deep_lukewarm_ocean','frozen_ocean','ocean','cold_ocean','lukewarm_ocean','warm_ocean'],
+  V6_MOUNT=['meadow','frozen_peaks','jagged_peaks','stony_peaks','snowy_slopes','cherry_grove'];
+// spacing · separation 은 청크 단위 · at = 출발점 (청크 안 블록) · lo = /locate 가 알려 주는 자리 (locate_offset)
+const V6={
+  village:{sp:34,sep:8,salt:10387312},
+  desert_pyramid:{sp:32,sep:8,salt:14357617,bio:V6B('desert'),at:10},
+  igloo:{sp:32,sep:8,salt:14357618,bio:V6B('snowy_taiga','snowy_plains','snowy_slopes')},
+  jungle_pyramid:{sp:32,sep:8,salt:14357619,bio:V6B('bamboo_jungle','jungle'),at:2},
+  swamp_hut:{sp:32,sep:8,salt:14357620,bio:V6B('swamp')},
+  pillager_outpost:{sp:32,sep:8,salt:165745296,freq:.2,fm:1,ex:'village',exn:10,bio:V6B('desert','plains','savanna','snowy_plains','taiga','grove',...V6_MOUNT)},
+  ancient_city:{sp:24,sep:8,salt:20083232},
+  monument:{sp:32,sep:5,salt:10387313,tri:1,at:9,bio:V6B('deep_frozen_ocean','deep_cold_ocean','deep_ocean','deep_lukewarm_ocean')},
+  mansion:{sp:80,sep:20,salt:10387319,tri:1,bio:V6B('dark_forest','pale_garden')},
+  buried_treasure:{sp:1,sep:0,salt:0,freq:.01,fm:2,at:9,lo:9,bio:V6B('beach','snowy_beach')},
+  mineshaft:{sp:1,sep:0,salt:0,freq:.004,fm:3},
+  ruined_portal:{sp:40,sep:15,salt:34222645},
+  shipwreck:{sp:24,sep:4,salt:165745295,bio:V6B(...V6_OCEAN,'beach','snowy_beach')},
+  ocean_ruin:{sp:20,sep:8,salt:14357621,bio:V6B(...V6_OCEAN)},
+  end_city:{sp:20,sep:11,salt:10387313,tri:1},
+  nether_complex:{sp:27,sep:4,salt:30084232},
+  trail_ruins:{sp:34,sep:8,salt:83469867,bio:V6B('taiga','snowy_taiga','old_growth_pine_taiga','old_growth_spruce_taiga','old_growth_birch_forest','jungle')},
+  trial_chambers:{sp:34,sep:12,salt:94251327}};
+V6.bastion_remnant=V6.nether_complex;
+const V6_SBT=V6B('plains','sunflower_plains','snowy_plains','ice_spikes','desert','forest','flower_forest','birch_forest','dark_forest','pale_garden','old_growth_birch_forest','old_growth_pine_taiga',
+  'old_growth_spruce_taiga','taiga','snowy_taiga','savanna','savanna_plateau','windswept_hills','windswept_gravelly_hills','windswept_forest','windswept_savanna','jungle','sparse_jungle','bamboo_jungle',
+  'badlands','eroded_badlands','wooded_badlands','meadow','cherry_grove','grove','snowy_slopes','frozen_peaks','jagged_peaks','stony_peaks','mushroom_fields','dripstone_caves','lush_caves');
+// 자바 Random (G5L) 을 64비트 시드로
+const V6U=0xFFFFFFFFn,v6S=()=>BigInt(SEED|0);
+function v6R(s){s=BigInt.asUintN(64,s);return new G5L(Number(s>>32n),Number(s&V6U))}
+function v6salt(x,z,salt){return v6R(BigInt(x)*341873128712n+BigInt(z)*132897987541n+v6S()+BigInt(salt))}   // WorldgenRandom.setLargeFeatureWithSalt
+function v6nl(r){const h=r.nx(32),l=r.nx(32);return (BigInt(h)<<32n)+BigInt(l)}
+let V6LF=null;
+function v6lf(x,z){if(!V6LF||V6LF.s!==SEED){const r=v6R(v6S());V6LF={s:SEED,a:v6nl(r),b:v6nl(r)}}return v6R(BigInt(x)*V6LF.a^BigInt(z)*V6LF.b^v6S())}   // setLargeFeatureSeed
+// 구역 (rx,rz) 의 후보 청크 (getPotentialStructureChunk)
+function v6pot(V,rx,rz){const r=v6salt(rx,rz,V.salt),k=V.sp-V.sep,e=()=>V.tri?(r.nextInt(k)+r.nextInt(k))>>1:r.nextInt(k);const a=e(),b=e();return [rx*V.sp+a,rz*V.sp+b]}
+function v6freq(V,cx,cz){const f=Math.fround(V.freq);
+  if(V.fm===1){const r=v6R(BigInt((cx>>4)^((cz>>4)<<4))^v6S());r.nextInt();return r.nextInt(Math.floor(Math.fround(1/f)))===0}   // legacy_type_1 (약탈자 전초기지)
+  if(V.fm===2)return v6salt(cx,cz,10387320).nextFloat()<f;   // legacy_type_2 (묻힌 보물)
+  if(V.fm===3)return v6lf(cx,cz).nextDouble()<f;   // legacy_type_3 (폐광)
+  return v6salt(cx,cz,V.salt).nextFloat()<f}
+// 후보 + 빈도 + 다른 구조물 피하기 (exclusion_zone: 그 구조물 후보 청크가 ±n 청크 안에 있으면 안 생겨요)
+function v6cand(V,rx,rz){const p=v6pot(V,rx,rz);if(V.freq&&!v6freq(V,p[0],p[1]))return null;
+  if(V.ex){const O=V6[V.ex],n=V.exn;for(let a=Math.floor((p[0]-n)/O.sp);a<=Math.floor((p[0]+n)/O.sp);a++)for(let c=Math.floor((p[1]-n)/O.sp);c<=Math.floor((p[1]+n)/O.sp);c++){const q=v6pot(O,a,c);if(Math.abs(q[0]-p[0])<=n&&Math.abs(q[1]-p[1])<=n)return null}}
+  return p}
+// 노이즈 바이옴 (마크 Structure.isValidBiome 처럼 확대 없이 · y 는 마크 높이)
+function v6bio(x,y,z){g5init();return g5b3(g5col((x>>2)*4,(z>>2)*4),(y>>2)*4)}
+const v6surf=(x,z)=>Math.max(terrainH(x,z),SEA)-YO;
+const v6h32=(cx,cz,salt)=>(Math.imul(cx,341873128)^Math.imul(cz,132897987)^Math.imul((SEED+salt)|0,1013904223)^salt)|0;
+// 동굴 바이옴 3D (GEN 6 동굴 꾸미기): 4×4×4 칸마다 마크 노이즈 바이옴 → 1 점적석 동굴 · 2 무성한 동굴 · 0 그 밖
+function v6caveBio3(ox,oz){g5init();const NQ=(H>>2)+1,M=new Int8Array(16*NQ).fill(-1),C=[];for(let q=0;q<16;q++)C.push(g5col(ox+(q&3)*4,oz+(q>>2)*4));
+  return (x,y,z)=>{const q=(x>>2)|((z>>2)<<2),k=q*NQ+(y>>2);let v=M[k];if(v<0){const b=g5b3(C[q],((y-YO)>>2)*4);v=M[k]=b===BIO.DRIPSTONE_CAVES?1:b===BIO.LUSH_CAVES?2:0}return v}}
+const v6bname=id=>{for(const k in BNAME2ID)if(BNAME2ID[k]===id)return k;return'plains'};   // F3 바이옴 이름 (GEN 5+: 서 있는 칸의 3D 바이옴)
+// 여러 구조물이 한 세트일 때 (네더 복합체: 요새 2 · 보루 3) — 마크 ChunkGenerator 처럼 무게로 고르고, 바이옴이 안 맞으면 다음 것
+function v6nether(cx,cz){const k=v6lf(cx,cz).nextInt(5);if(k<2)return'fortress';return typeof nBiome==='function'&&nBiome(cx*16+8,cz*16+8)===4?'fortress':'bastion'}
+let V6D=null;const v6def=k=>{if(!V6D){V6D={};for(const D of STRUCT_DEFS.concat([BASTION]))V6D[D.kind]=D}return V6D[k]};
+function v6struct(kind,D,rx,rz){const V=V6[kind],p=v6cand(V,rx,rz);if(!p)return null;const at=V.at??8,x=p[0]*16+at,z=p[1]*16+at;
+  if(V.bio&&!V.bio.has(v6bio(x,V.y!=null?V.y:v6surf(x,z),z)))return null;
+  const r=mulberry(v6h32(p[0],p[1],V.salt)),s=(D.t6||D.test)(x,z,r,p);if(!s)return null;s.kind=kind;s.x=s.x??x;s.z=s.z??z;s.seed=Math.floor(r()*1e9);s.cx=p[0];s.cz=p[1];return s}
+{const _sa=spreadAt;spreadAt=function(kind,rx,rz,sp,sep,salt,test){if(GEN<6||WTYPE==='flat'||!V6[kind])return _sa.apply(this,arguments);
+  const k=kind+':'+rx+','+rz;if(STRUCTS.has(k))return STRUCTS.get(k);const s=v6struct(kind,v6def(kind)||{test},rx,rz);STRUCTS.set(k,s);return s}}
+// 구역 크기가 마크와 다르던 것 (폐광 12 → 1 청크, 보루 13 → 네더 복합체 27, 사막 피라미드 24 → 32, 묻힌 보물 16 → 1)
+Object.defineProperty(MINE,'sp',{get:()=>GEN>=6?16:12*16});Object.defineProperty(BASTION,'sp',{get:()=>GEN>=6?27*16:13*16});
+{const _sd=setDims;setDims=function(){_sd.apply(this,arguments);DTSP=GEN>=6?32*16:24*16;BTSP=GEN>=6?16:16*16}}
+// GEN 6 에서 쓰는 시험 (바이옴은 위에서 마크 태그로 이미 봤어요)
+MINE.t6=(x,z,r)=>{const h=terrainH(x,z),lo=mcY(-30),top=Math.max(lo+7,Math.min(h-14,mcY(40)));return{y:lo+Math.floor(r()*(top-lo))}};
+JTEMP.t6=(x,z,r)=>terrainH(x,z)<=SEA?null:{y:minH(x+6,z+7,6)+1,rot:r()<.5};
+WHUT.t6=(x,z)=>({y:Math.max(terrainH(x,z),SEA)+3});
+IGLOO.t6=(x,z,r)=>terrainH(x,z)<=SEA?null:{y:minH(x,z,3)+1,base:r()<.5};
+OUTPOST.t6=(x,z)=>terrainH(x,z)<=SEA?null:{y:minH(x+4,z+4,5)+1};
+SHIP.t6=(x,z,r)=>{const h=terrainH(x,z),bm=v6bio(x,v6surf(x,z),z),beach=bm===BIO.BEACH||bm===BIO.SNOWY_BEACH;if(!beach&&h>SEA-4)return null;return{y:beach?h:h-1+Math.floor(r()*2),ax:r()<.5,flip:r()<.5,mast:r()<.7,beach}};
+RUINS.t6=(x,z,r)=>{const h=terrainH(x,z),bm=v6bio(x,v6surf(x,z),z);if(h>SEA-3)return null;const warm=bm===BIO.WARM_OCEAN||bm===BIO.LUKEWARM_OCEAN||bm===BIO.DEEP_LUKEWARM_OCEAN;
+  const big=r()<.3,list=[{dx:0,dz:0,big}];const n=big?3+Math.floor(r()*4):Math.floor(r()*3);for(let i=0;i<n;i++){const a=r()*6.28,d=10+r()*14;list.push({dx:Math.round(Math.cos(a)*d),dz:Math.round(Math.sin(a)*d),big:false})}return{warm,list}};
+TRIAL.t6=(x,z,r)=>{const s=TRIAL.test(x,z,r);return s&&v6bio(x,s.y-YO,z)===BIO.DEEP_DARK?null:s};   // 깊은 어둠만 빼고 어디든 (has_structure/trial_chambers)
+BASTION.t6=(x,z,r,p)=>v6nether(p[0],p[1])!=='bastion'?null:{y:N_LAVA+5,treasure:r()<.35};
+// 마을: 구역마다 후보 하나 · 마을 바이옴 (plains · meadow → 평원, desert, savanna, snowy_plains, taiga) 이면 생겨요
+const V6VT={[BIO.PLAINS]:'plains',[BIO.MEADOW]:'plains',[BIO.DESERT]:'desert',[BIO.SAVANNA]:'savanna',[BIO.SNOWY]:'snowy',[BIO.TAIGA]:'taiga'};
+{const _vi=villageIn;villageIn=function(rx,rz){if(GEN<6||WTYPE==='flat')return _vi(rx,rz);const k=rx+','+rz;if(VPLANS.has(k))return VPLANS.get(k);let res=null;const V=V6.village,p=v6cand(V,rx,rz);
+  if(p){const x=p[0]*16+8,z=p[1]*16+8,h=terrainH(x,z),ty=V6VT[v6bio(x,v6surf(x,z),z)];if(ty&&h>SEA){res=planVillage(x,z,ty,mulberry(v6h32(p[0],p[1],V.salt)))||null;if(res){res.cx=p[0];res.cz=p[1]}}}
+  VPLANS.set(k,res);return res}}
+// 고대 도시: 24/8 · 출발점 y −27 이 깊은 어둠일 때
+{const _ac=acityAt;acityAt=function(rx,rz){if(GEN<6||WTYPE==='flat'||DIM!=='over')return _ac(rx,rz);const k=rx+','+rz;if(ACITY.has(k))return ACITY.get(k);let c=null;const p=v6cand(V6.ancient_city,rx,rz);
+  if(p){const ox=p[0]*16,oz=p[1]*16,seed=v6h32(p[0],p[1],20083232)&2147483647,q=mulberry(seed),rot=Math.floor(q()*4),v='cc'+(1+Math.floor(q()*3));
+    const [u,w]=acOff(rot,18,41,13,20),root=acPiece(v,rot,ox-u,YO-52,oz-w,0,1),cx=Math.floor((root.x0+root.x1)/2),cz=Math.floor((root.z0+root.z1)/2);
+    if(deepDarkAt(cx,YO-27,cz))c={rx,rz,x:cx,z:cz,y:root.y0+1,seed,root,q,cx0:p[0],cz0:p[1]}}
+  ACITY.set(k,c);return c}}
+// 사막 피라미드: 32/8 · 사막
+{const _tp=templeIn;templeIn=function(rx,rz){if(GEN<6||WTYPE==='flat')return _tp(rx,rz);const k=rx+','+rz;if(DTEMP.has(k))return DTEMP.get(k);let t=null;const V=V6.desert_pyramid,p=v6cand(V,rx,rz);
+  if(p){const x=p[0]*16+10,z=p[1]*16+10,h=terrainH(x,z);if(h>SEA&&V.bio.has(v6bio(x,v6surf(x,z),z))){let lo=h;for(const [a,c] of [[-10,-10],[10,-10],[-10,10],[10,10]])lo=Math.min(lo,terrainH(x+a,z+c));t={x,z,y:lo,seed:v6h32(p[0],p[1],V.salt)>>>1,cx:p[0],cz:p[1]};
+    for(const [a,c] of [[2,0],[-2,0],[0,2],[0,-2]])VCHEST.set(tkey(x+a,t.y-11,z+c),'desert_temple');TRAPS.set(tkey(x,t.y-11,z),[[x,t.y-13,z],[x+1,t.y-13,z],[x-1,t.y-13,z],[x,t.y-13,z+1],[x,t.y-13,z-1],[x+1,t.y-13,z+1],[x-1,t.y-13,z-1],[x+1,t.y-13,z-1],[x-1,t.y-13,z+1]])}}
+  DTEMP.set(k,t);return t}}
+// 묻힌 보물: 청크마다 1% (legacy_type_2) · 바닷가 · 청크 안 (9, 9)
+{const _bu=buriedIn;buriedIn=function(rx,rz){if(GEN<6||WTYPE==='flat')return _bu(rx,rz);const k=rx+','+rz;if(BURIED.has(k))return BURIED.get(k);let t=null;const V=V6.buried_treasure,p=v6cand(V,rx,rz);
+  if(p){const x=p[0]*16+9,z=p[1]*16+9,h=terrainH(x,z);if(h>=SEA&&V.bio.has(v6bio(x,v6surf(x,z),z))){t={x,z,y:h-2,cx:p[0],cz:p[1]};VCHEST.set(tkey(x,h-2,z),'buried')}}
+  BURIED.set(k,t);return t}}
+// 엔드 도시: 20/11 triangular · 섬 높이가 충분하고 바깥 섬일 때
+{const _ec=ecityIn;ecityIn=function(rx,rz){if(GEN<6)return _ec(rx,rz);const k=rx+','+rz;if(ECITY.has(k))return ECITY.get(k);let C=null;const p=v6pot(V6.end_city,rx,rz),r=mulberry(v6h32(p[0],p[1],10387313)),nI=n=>Math.floor(r()*n);
+  const x=p[0]*16+7,z=p[1]*16+7,rot=nI(4);if(Math.hypot(x,z)>=1000){const i=rot===1||rot===2?-5:5,j=rot===2||rot===3?-5:5;let y=1e9;for(const [a,c] of [[0,0],[0,j],[i,0],[i,j]]){const h=ecTop(x+a,z+c);y=Math.min(y,h<0?-1e9:h+1)}
+    if(y>=END_Y-4){const L=ecLayout(x,y,z,rot,r),bx=[1e9,1e9,1e9,-1e9,-1e9,-1e9];for(const q of L)for(let w=0;w<3;w++){bx[w]=Math.min(bx[w],q.box[w]);bx[w+3]=Math.max(bx[w+3],q.box[w+3])}C={x,y,z,rot,L,box:bx,key:'ec'+x+','+z,cx:p[0],cz:p[1]}}}
+  ECITY.set(k,C);return C}}
+// 네더 요새: 네더 복합체 (27/4) 에서 요새가 뽑힌 자리 · 예전 코드가 160칸 칸마다 묻기 때문에 그 칸 안의 것을 돌려줘요
+const V6FA=new Map();
+{const _fa=fortressAt;fortressAt=function(rx,rz){if(GEN<6)return _fa(rx,rz);const k=rx+','+rz;if(V6FA.has(k))return V6FA.get(k);const V=V6.nether_complex,S=V.sp*16;let f=null;
+  for(let a=Math.floor(rx*160/S);a<=Math.floor((rx*160+159)/S)&&!f;a++)for(let c=Math.floor(rz*160/S);c<=Math.floor((rz*160+159)/S)&&!f;c++){const p=v6pot(V,a,c),x=p[0]*16+8,z=p[1]*16+8;
+    if(Math.floor(x/160)===rx&&Math.floor(z/160)===rz&&v6nether(p[0],p[1])==='fortress')f={x,z,cx:p[0],cz:p[1]}}
+  V6FA.set(k,f);return f}}
+// 요새: 동심원 128개 (distance 32 · spread 3) · 고리마다 각도 · 거리, 둘레 112칸 안에서 바이옴 (stronghold_biased_to) 쪽으로 당겨요
+{const _s4=strongholds4;strongholds4=function(){if(GEN<6||WTYPE==='flat')return _s4();const r=v6R(v6S()),L=[],count=128,dist=32;let d0=r.nextDouble()*Math.PI*2,n=0,ring=0,spread=3;
+  for(let j=0;j<count;j++){const d1=4*dist+dist*ring*6+(r.nextDouble()-.5)*dist*2.5,kx=Math.round(Math.cos(d0)*d1),kz=Math.round(Math.sin(d0)*d1);r.nextLong();
+    const q=mulberry(v6h32(kx,kz,77));L.push({cx:kx,cz:kz,x:kx*16+8,z:kz*16+8,y:0,rot:Math.floor(q()*4),yr:q(),raw:{h:G5U.h,l:G5U.l}});
+    d0+=Math.PI*2/spread;if(++n===spread){ring++;n=0;spread+=Math.floor(2*spread/(ring+1));spread=Math.min(spread,count-j);d0+=r.nextDouble()*Math.PI*2}}
+  return L}}
+function v6shFix(s){if(!s.raw)return s;const R=new G5L(s.raw.h,s.raw.l),i=(s.cx*16+8)>>2,j=(s.cz*16+8)>>2,k=28;s.raw=null;let best=null,n=0;g5init();
+  for(let a=-k;a<=k;a++)for(let b=-k;b<=k;b++){const qx=i+b,qz=j+a;if(V6_SBT.has(g5b3(g5col(qx*4,qz*4),0))){if(best===null||R.nextInt(n+1)===0)best=[qx*4,qz*4];n++}}   // BiomeSource.findBiomeHorizontal
+  if(best){s.cx=best[0]>>4;s.cz=best[1]>>4;s.x=s.cx*16+8;s.z=s.cz*16+8}
+  s.y=Math.min(mcY(-30+Math.floor(s.yr*20)),terrainH(s.x,s.z)-40);return s}
+{const _st=stampStronghold4;stampStronghold4=function(b,ox,oz,s){if(s.raw){if(Math.abs(s.x-ox-8)>200||Math.abs(s.z-oz-8)>200)return;v6shFix(s)}return _st(b,ox,oz,s)}}
+{const _ns=nearestStronghold;nearestStronghold=function(x,z){if(GEN>=6){if(!SHOLDS)SHOLDS=strongholds4();SHOLDS.slice().sort((a,b)=>((a.x-x)**2+(a.z-z)**2)-((b.x-x)**2+(b.z-z)**2)).slice(0,3).forEach(v6shFix)}return _ns(x,z)}}
+// /locate (GEN 6): 마크처럼 가까운 구역부터 고리 모양으로 찾고, 결과는 구조물 청크의 (0, 0) (+ locate_offset) — 마크 /locate 가 알려 주는 자리 그대로
+function v6get(kind,rx,rz){if(kind==='village')return villageIn(rx,rz);if(kind==='ancient_city'){const c=acityAt(rx,rz);return c&&{cx:c.cx0,cz:c.cz0,y:c.y}}if(kind==='desert_pyramid')return templeIn(rx,rz);
+  if(kind==='buried_treasure')return buriedIn(rx,rz);if(kind==='end_city')return ecityIn(rx,rz);
+  if(kind==='fortress'){const p=v6pot(V6.nether_complex,rx,rz);return v6nether(p[0],p[1])==='fortress'?{cx:p[0],cz:p[1],y:64}:null}
+  return spreadAt(kind,rx,rz,0,0,0,null)}
+function v6near(kind,x,z,maxR,ok){const V=V6[kind==='fortress'?'nether_complex':kind],S=V.sp*16,rx0=Math.floor(x/S),rz0=Math.floor(z/S),lo=V.lo||0;let best=null,bd=1e18;
+  for(let R=0;R<=maxR;R++){for(let a=-R;a<=R;a++)for(let c=-R;c<=R;c++){if(Math.max(Math.abs(a),Math.abs(c))!==R)continue;const s=v6get(kind,rx0+a,rz0+c);if(!s||s.cx==null||ok&&!ok(s))continue;
+      const px=s.cx*16+lo,pz=s.cz*16+lo,d=Math.hypot(px-x,pz-z);if(d<bd){bd=d;best={x:px,y:s.y??SEA,z:pz}}}
+    if(best&&bd<=R*S)break}
+  return best}
+const V6LOCR={village:12,ancient_city:12,desert_pyramid:10,buried_treasure:48,end_city:16,fortress:12,mineshaft:40,bastion_remnant:12,jungle_pyramid:10,swamp_hut:10,igloo:10,pillager_outpost:10,
+  shipwreck:12,ocean_ruin:14,ruined_portal:10,trial_chambers:10,monument:10,mansion:6,trail_ruins:10};
+function v6locHook(){for(const k in V6LOCR){const L=LOCATORS[k];if(!L||L.v6)continue;const f0=L.find;L.v6=1;L.find=function(x,z){if(GEN<6||WTYPE==='flat')return f0.call(this,x,z);return v6near(k,x,z,V6LOCR[k])}}
+  const S=LOCATORS.stronghold;if(S&&!S.v6){const f0=S.find;S.v6=1;S.find=function(x,z){if(GEN<6||WTYPE==='flat')return f0.call(this,x,z);const s=nearestStronghold(x,z);return s?{x:s.cx*16,y:s.y,z:s.cz*16}:null}}}
+{const _lf=locStructFind;locStructFind=function(id,x,z){const s=mcN(id),m=STRUCT_LOC[s]||[s];v6locHook();
+  if(GEN>=6&&WTYPE!=='flat'&&m[0]==='village'&&m[1]&&DIM==='over'&&typeof VSTYLE!=='undefined')return v6near('village',x,z,12,v=>v.S===VSTYLE[m[1]]);return _lf(id,x,z)}}
+{const _rw6=resetWorld;resetWorld=function(){V6FA.clear();V6LF=null;return _rw6.apply(this,arguments)}}
+/* ═════════════ (P4-WORLD) 새 구조물: 해저 유적 (ocean monument) · 삼림 대저택 (woodland mansion) · 길 잃은 유적 (trail ruins) ═════════════
+   마크 자리 규칙 (GEN 6: 위 structure_set · GEN 4/5: 비슷한 간격 + 바이옴) · 모양은 마크 구조를 줄여서 우리 코드로 지어요 (마크 파일은 안 써요) */
+const v6susg=()=>{try{return SUSPICIOUS_GRAVEL}catch(e){return GRAVEL}};   // P4-BLOCK 이 수상한 자갈을 만들면 그걸로 (없으면 자갈)
+// 청크 안 부분만 도는 상자 반복
+function v6each(B_,x0,x1,z0,z1,f){const a=Math.max(x0,B_.ox),b=Math.min(x1,B_.ox+15),c=Math.max(z0,B_.oz),d=Math.min(z1,B_.oz+15);for(let x=a;x<=b;x++)for(let z=c;z<=d;z++)f(x,z)}
+const v6mob=(key,type,x,y,z,n)=>{if(typeof MOBDEF!=='undefined'&&MOBDEF[type])mobAt(key,type,x,y,z,n)};
+// ── 해저 유적: 깊은 바다 · 58×58 · 바닥 y 39 (마크 높이) · 프리즈머린 껍데기 안은 물 · 가운데 금 블록 8개 · 젖은 스펀지 방
+const MONUMENT={kind:'monument',sp:32*16,sep:5*16,salt:7951,rad:30,
+  test(x,z,r){const h=terrainH(x,z),bm=biomeOf(x,z,h);if(![BIO.DEEP_OCEAN,BIO.DEEP_COLD_OCEAN,BIO.DEEP_FROZEN_OCEAN,BIO.DEEP_LUKEWARM_OCEAN].includes(bm)||h>SEA-14)return null;
+    for(const [a,c] of [[-29,-29],[29,-29],[-29,29],[29,29]])if(!isOcean(bioAt(x+a,z+c)))return null;return MONUMENT.t6(x,z,r)},
+  t6(x,z,r){if(GEN>=6){for(let a=-29;a<=29;a+=8)for(let c=-29;c<=29;c+=8){const b=v6bio(x+a,63,z+c);if(!isOcean(b)&&b!==BIO.RIVER&&b!==BIO.FROZEN_RIVER)return null}}   // 둘레 29칸이 모두 바다 · 강 (required_ocean_monument_surrounding)
+    return{y:mcY(39),rot:Math.floor(r()*4),sponge:Math.floor(r()*4)}}};
+function stampMonument(B_,s){const X=s.x,Z=s.z,Y=s.y,PB=PRISMARINE_BRICKS,P=PRISMARINE,DP=DARK_PRISMARINE,SL=SEA_LANTERN;
+  // u,v: 가운데 기준 · 정면은 s.rot 쪽
+  const W=(u,v)=>{const R=s.rot;return R===0?[X+u,Z+v]:R===1?[X-v,Z+u]:R===2?[X-u,Z-v]:[X+v,Z-u]};
+  const shape=(u,v,h)=>{const au=Math.abs(u),av=Math.abs(v);   // 0 = 밖, 1 = 벽, 2 = 안 (물)
+    if(h===0)return au<=29&&av<=29?1:0;
+    const box=(U,V,h0,h1)=>au<=U&&av<=V&&h>=h0&&h<=h1?(au===U||av===V||h===h1?1:2):0;
+    return Math.max(box(21,21,1,9),box(28,12,1,7),box(14,14,9,15),box(7,7,15,21),box(5,28,1,6))};
+  const solid=v=>v>0&&v!==WATER&&v!==AIR;
+  v6each(B_,X-30,X+30,Z-30,Z+30,(x,z)=>{const du=x-X,dv=z-Z,R=s.rot,u=R===0?du:R===1?dv:R===2?-du:-dv,v=R===0?dv:R===1?-du:R===2?-dv:du;if(Math.abs(u)>29||Math.abs(v)>29)return;
+    for(let y=Y+1;y<=SEA;y++)B_.set(x,y,z,WATER);   // 유적 둘레는 바닷물 (마크처럼 땅을 파요)
+    const leg=(Math.abs(u)===29||Math.abs(u)===21||u===0)&&(Math.abs(v)===29||Math.abs(v)===21||v===0);
+    for(let y=Y-1;y>Y-30;y--){const g=B_.get(x,y,z);if(g<0||solid(g)&&g!==SAND&&g!==GRAVEL&&g!==CLAY)break;B_.set(x,y,z,leg?PB:WATER)}
+    if(leg)B_.pillar(x,Y-1,z,PB,40);
+    for(let h=0;h<=22;h++){const k=shape(u,v,h);if(!k)continue;const y=Y+h;
+      if(k===1){const edge=(Math.abs(u)%7===0)&&(Math.abs(v)%7===0);B_.set(x,y,z,h%4===0?P:edge?DP:PB);if(h%4===2&&(Math.abs(u)+Math.abs(v))%6===0&&h)B_.set(x,y,z,SL)}
+      else B_.set(x,y,z,WATER)}
+    // 정문 (정면 v=-21 · 앞마당 v=-28)
+    if(Math.abs(u)<=2&&v<=-20)for(let h=1;h<=4;h++)B_.set(x,Y+h,z,WATER);
+    // 안쪽 2층 바닥 · 기둥
+    if(Math.abs(u)<21&&Math.abs(v)<21&&(Math.abs(u)>6||Math.abs(v)>6))B_.set(x,Y+5,z,PB);
+    if(Math.abs(u)<21&&Math.abs(v)<21&&Math.abs(u)%7===3&&Math.abs(v)%7===3)for(let h=1;h<9;h++)B_.set(x,Y+h,z,P);
+    // 심장: 금 블록 2×2×2 를 짙은 프리즈머린이 감싸요
+    if(u>=-2&&u<=1&&v>=-2&&v<=1)for(let h=10;h<=13;h++)B_.set(x,Y+h,z,u>=-1&&u<=0&&v>=-1&&v<=0&&h>=11&&h<=12?GOLD_BLOCK:DP);
+    // 젖은 스펀지 방 (날개 하나의 천장)
+    const wu=s.sponge&1?24:-24,wv=s.sponge&2?6:-6;if(Math.abs(u-wu)<=3&&Math.abs(v-wv)<=3&&(u*13+v*7)%3===0)B_.set(x,Y+6,z,WET_SPONGE)});
+  const [ex,ez]=W(0,16),[a1x,a1z]=W(24,0),[a2x,a2z]=W(-24,0);
+  v6mob('mn0'+X+','+Z,'elder_guardian',ex+.5,Y+16,ez+.5,1);v6mob('mn1'+X+','+Z,'elder_guardian',a1x+.5,Y+2,a1z+.5,1);v6mob('mn2'+X+','+Z,'elder_guardian',a2x+.5,Y+2,a2z+.5,1);
+  v6mob('mng'+X+','+Z,'guardian',X+.5,Y+2,Z+.5,3)}
+// ── 삼림 대저택: 짙은 숲 · 2층 + 다락 · 조약돌 기초 · 짙은 참나무 기둥 · 판자 벽 · 유리창 · 붉은 카펫 복도 · 방마다 상자 · 책장 · 소환사 · 변명자
+const MANSION={kind:'mansion',sp:80*16,sep:20*16,salt:7961,rad:24,
+  test(x,z,r){const h=terrainH(x,z),bm=biomeOf(x,z,h);if(bm!==BIO.DARK_FOREST&&bm!==BIO.PALE_GARDEN)return null;return MANSION.t6(x,z,r)},
+  t6(x,z,r){let lo=1e9;for(const [a,c] of [[-20,-15],[20,-15],[-20,15],[20,15],[0,0]])lo=Math.min(lo,terrainH(x+a,z+c));if(lo-YO<60||lo<=SEA)return null;   // 마크: 네 귀퉁이 가장 낮은 곳이 y 60 보다 낮으면 안 생겨요
+    return{y:lo+1,rot:Math.floor(r()*4)}}};
+function stampMansion(B_,s){const X=s.x,Z=s.z,Y=s.y,U=20,V=15,r=mulberry(s.seed),R=s.rot&1,DL=DARK_OAK_LOG,DP=DARK_OAK_PLANKS,BP=BIRCH_PLANKS,RC=CARPET(14);
+  const room=(u,v)=>[Math.floor((u+U)/8),v<0?0:1];
+  v6each(B_,X-(R?V:U)-1,X+(R?V:U)+1,Z-(R?U:V)-1,Z+(R?U:V)+1,(x,z)=>{const u=R?z-Z:x-X,v=R?x-X:z-Z,au=Math.abs(u),av=Math.abs(v);
+    // 지붕 (처마 1칸) — 층마다 v 로 2칸, u 로 1칸씩 들어가요
+    for(let k=0;k<9;k++){const ru=U+1-k,rv=V+1-2*k;if(rv<0)break;if(au<=ru&&av<=rv&&(au===ru||av>=rv-1||k===8||rv<=1))B_.set(x,Y+14+k,z,DP)}
+    if(au>U||av>V)return;
+    B_.pillar(x,Y-1,z,COBBLE,16);B_.set(x,Y-1,z,COBBLE);
+    for(let h=0;h<=13;h++)B_.set(x,Y+h,z,AIR);
+    for(let y=Y+14;y<Y+23;y++){const g=B_.get(x,y,z);if(g===LEAVES||g===DARK_OAK_LEAVES||isLog(g))B_.set(x,y,z,AIR)}
+    const wall=au===U||av===V,corner=au===U&&av===V,beam=wall&&((au===U?av:au)%5===0);
+    for(const f0 of [0,7]){B_.set(x,Y+f0,z,wall?COBBLE:BP);
+      for(let h=1;h<=6;h++){const y=Y+f0+h;
+        if(wall){if(corner||beam||h===6)B_.set(x,y,z,DL);else if(h>=2&&h<=4&&((au===U?av:au)%5===2||(au===U?av:au)%5===3))B_.set(x,y,z,GLASS_PANE,(av===V)!==!!R?0:1);else B_.set(x,y,z,DP);continue}
+        // 방 칸막이 (8칸마다 · 복도 |v|≤1 쪽에 문 2칸)
+        const part=(u+U)%8===0&&av>1,cor=av===2;
+        if(part&&!(av<=3&&h<=3&&(u+U)%16===0))B_.set(x,y,z,DP);else if(cor&&!(((u+U)%8===4||(u+U)%8===5)&&h<=3))B_.set(x,y,z,DP)}
+      if(!wall&&av<=1)B_.set(x,Y+f0+1,z,RC)}
+    B_.set(x,Y+13,z,wall?DL:BP);
+    // 방 꾸미기
+    if(!wall&&av>2){const [ri,rs]=room(u,v),key=ri*2+rs+(s.seed%7),uu=(u+U)%8,vv=av;
+      for(const f0 of [0,7]){const kind=(key+f0)%5,y=Y+f0+1;
+        if(kind===0&&vv===V-1&&uu>0)B_.set(x,y,z,BOOKSHELF),B_.set(x,y+1,z,BOOKSHELF);
+        else if(kind===1&&uu===2&&vv===V-1)B_.chest(x,y,z,'woodland_mansion');
+        else if(kind===2&&uu===4&&vv===4)B_.set(x,y,z,TABLE);
+        else if(kind===3&&(uu===1||uu===7)&&(vv===3||vv===V-1))B_.set(x,y+4,z,COBWEB);
+        else if(uu===1&&vv===V-1)B_.set(x,y,z,LANTERN)}}});
+  // 정문 (정면 v=−V) · 계단
+  for(let du=-1;du<=1;du++){const u=du,v=-V,[x,z]=R?[X+v,Z+u]:[X+u,Z+v];for(let h=1;h<=3;h++)B_.set(x,Y+h,z,AIR);const [x2,z2]=R?[X+v-1,Z+u]:[X+u,Z+v-1];B_.set(x2,Y,z2,COBBLE);B_.set(x2,Y+1,z2,AIR);B_.set(x2,Y+2,z2,AIR)}
+  for(let i=0;i<4;i++){const u=-U+4+8*Math.floor(r()*5),v=(r()<.5?-1:1)*(4+Math.floor(r()*8)),[x,z]=R?[X+v,Z+u]:[X+u,Z+v];v6mob('wm'+i+X+','+Z,i===0?'evoker':'vindicator',x+.5,Y+1+(i&1)*7,z+.5,1)}}
+// ── 길 잃은 유적: 타이가 · 오래된 숲 · 정글 · 땅속 15칸쯤에 묻힌 테라코타 · 진흙 벽돌 방들 + 땅 위로 삐죽한 탑 · 수상한 자갈 (붓으로 털면 유물)
+const TRAILR={kind:'trail_ruins',sp:34*16,sep:8*16,salt:7971,rad:22,
+  test(x,z,r){const h=terrainH(x,z),bm=biomeOf(x,z,h);if(![BIO.TAIGA,BIO.SNOWY_TAIGA,BIO.OLD_PINE_TAIGA,BIO.OLD_TAIGA,BIO.OLD_BIRCH,BIO.JUNGLE].includes(bm))return null;return TRAILR.t6(x,z,r)},
+  t6(x,z,r){const h=terrainH(x,z);if(h<=SEA+2)return null;const rooms=[];const n=3+Math.floor(r()*3);for(let i=0;i<n;i++){const a=i*Math.PI*2/n+r()*.8,d=8+r()*7;rooms.push([Math.round(Math.cos(a)*d),Math.round(Math.sin(a)*d),2+Math.floor(r()*2)])}
+    return{y:h-12,top:h,rooms}}};
+function stampTrailRuins(B_,s){const X=s.x,Z=s.z,Y=s.y,r=mulberry(s.seed),M=[TERRACOTTA,TERRACOTTA,MUD_BRICKS,BRICKS,ORANGE_TC,RED_TC,YELLOW_TC,WHITE_TC,LGRAY_TC,BROWN_TC].filter(v=>v!==undefined);
+  const mat=(x,y,z)=>M[(hash3(x,y,z,s.seed|0)*M.length)|0],SG=v6susg(),fill=(x,y,z)=>hash3(x,y,z,(s.seed^77)|0)<.06?SG:GRAVEL;
+  // 방: 벽은 섞인 테라코타 · 안은 자갈 (가끔 수상한 자갈) · 바닥에 장식 항아리
+  const box=(cx,cz,R,y0,y1,tower)=>v6each(B_,cx-R,cx+R,cz-R,cz+R,(x,z)=>{const e=Math.abs(x-cx)===R||Math.abs(z-cz)===R;
+    for(let y=y0;y<=y1;y++){if(tower&&e&&y>s.top-2&&hash3(x,y,z,s.seed|0)<(y-s.top+3)*.22)continue;B_.set(x,y,z,y===y0?mat(x,y,z):e?mat(x,y,z):y>s.top-2?AIR:fill(x,y,z))}});
+  for(const [dx,dz,R] of s.rooms){box(X+dx,Z+dz,R+1,Y,Y+4,false);
+    // 길: 가운데로 이어지는 테라코타 길
+    const L=Math.max(Math.abs(dx),Math.abs(dz));for(let i=0;i<=L;i++){const x=X+Math.round(dx*i/L),z=Z+Math.round(dz*i/L);v6each(B_,x,x,z,z,()=>{B_.set(x,Y,z,mat(x,Y,z));B_.set(x,Y+1,z,fill(x,Y+1,z))})}
+    if(typeof DECORATED_POT==='number'&&r()<.7)v6each(B_,X+dx,X+dx,Z+dz,Z+dz,(x,z)=>B_.set(x,Y+1,z,DECORATED_POT))}
+  box(X,Z,2,Y,s.top+3,true)}
+// 등록: 구조물 목록 · 찍기 · /locate · 나무 피하기 · 전리품
+STRUCT_DEFS.push(MONUMENT,MANSION,TRAILR);Object.assign(STAMPERS,{monument:stampMonument,mansion:stampMansion,trail_ruins:stampTrailRuins});V6D=null;
+SURF_DEFS.push(MANSION);SURF_BOX.mansion=[-21,21,-21,21];
+for(const [D,n] of [[MONUMENT,'Ocean Monument'],[MANSION,'Woodland Mansion'],[TRAILR,'Trail Ruins']])LOCATORS[D.kind]={n,dim:'over',find(x,z){const s=nearestOf(D,x,z,6);return s?{x:s.x,y:s.y,z:s.z}:null}};
+LOOT2.woodland_mansion=a=>{a(GOLDEN_APPLE,1,1,.2);a(NAME_TAG,1,1,.2);a(IRON,1,4,.5);a(GOLD,1,4,.3);a(BREAD,1,4,.5);a(WHEAT,1,4,.4);a(REDSTONE,1,4,.4);a(COAL,1,4,.4);a(BONE,1,8,.5);a(FLESH,1,8,.5);a(DIAMOND,1,2,.1);a(BEET_SEEDS,2,4,.3)};
 /* ═════════════ 보트 · 플레이어끼리 싸우기 ═════════════ */
 // 보트: 물 위에 놓고 우클릭으로 타요. W/S 앞뒤, A/D 방향, Shift 내리기, 왼클릭 4번이면 부서져요
 const boats=[];let targetBoat=null,targetRemote=null;
@@ -11523,9 +11758,9 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
   statT+=dt;if(statT>.25&&started){statT=0;updateStats();
     if(showDebug){const l=lightAt(p.pos.x,p.pos.y+1,p.pos.z),bm=biomeOf(Math.floor(p.pos.x),Math.floor(p.pos.z),terrainH(Math.floor(p.pos.x),Math.floor(p.pos.z)));
       const fx=-Math.sin(p.yaw),fz=-Math.cos(p.yaw),face=Math.abs(fx)>Math.abs(fz)?(fx>0?'east (Towards positive X)':'west (Towards negative X)'):(fz>0?'south (Towards positive Z)':'north (Towards negative Z)');
-      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=DIM==='nether'?['nether_wastes','soul_sand_valley','crimson_forest','warped_forest','basalt_deltas'][nBiome(bx,bz)]:DIM==='time'?'time_chamber':DIM==='end'?endBiomeKey(bx,bz):deepDarkAt(bx,by,bz)?'deep_dark':cbF===1?'dripstone_caves':cbF===2?'lush_caves':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
+      let my=(Math.PI-p.yaw)/DEG%360;if(my>180)my-=360;if(my<=-180)my+=360;const bx=Math.floor(p.pos.x),by=Math.floor(p.pos.y),bz=Math.floor(p.pos.z),cbF=DIM==='over'&&GEN>=2&&p.pos.y<terrainH(bx,bz)-8?caveBio(bx,bz):0,bk=DIM==='over'&&GEN>=5&&WTYPE!=='flat'?v6bname(biome5At(bx,by,bz)):DIM==='nether'?['nether_wastes','soul_sand_valley','crimson_forest','warped_forest','basalt_deltas'][nBiome(bx,bz)]:DIM==='time'?'time_chamber':DIM==='end'?endBiomeKey(bx,bz):deepDarkAt(bx,by,bz)?'deep_dark':cbF===1?'dripstone_caves':cbF===2?'lush_caves':Object.keys(BNAME2ID).find(k=>BNAME2ID[k]===bm)||'plains';
       const L=[`Blockcraft 1.21 (craft.html/vanilla)`,`${fps} fps T: inf vsync fancy fancy-clouds B: 2`,`C: ${chunks.size} loaded  D: ${RD}  E: ${mobs.length}  I: ${ents.length}  P: ${parts.length}`,'',
-        `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-cYO()).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-cYO()} ${bz} [${bx&15} ${(by-cYO())&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-cYO())>>4} ${bz>>4}`,
+        `XYZ: ${p.pos.x.toFixed(3)} / ${(p.pos.y-cYO()).toFixed(5)} / ${p.pos.z.toFixed(3)}`,`Block: ${bx} ${by-cYO()} ${bz} [${bx&15} ${(by-cYO())&15} ${bz&15}]`,`Chunk: ${bx>>4} ${(by-cYO())>>4} ${bz>>4} [${(bx>>4)&31} ${(bz>>4)&31} in r.${bx>>9}.${bz>>9}.mca]`,
         `Facing: ${face} (${my.toFixed(1)} / ${(-p.pitch/DEG).toFixed(1)})`,`Client Light: ${Math.max(l[0],l[1])} (${l[0]} sky, ${l[1]} block)`,`Biome: minecraft:${bk}`,`Day ${Math.floor(worldTime/DAYLEN)}  Time ${Math.floor((worldTime%DAYLEN)/DAYLEN*24000)}`,`Seed: ${SEED}`+(MPS?`  Server: ${MPS.sid} (${MPS.count})`:'')];
       $('debug').innerHTML=L.map(t=>t?`<div>${esc(t)}</div>`:'<div class="gap"></div>').join('')+debugRight()}}
   drawHUD();$('cross').style.visibility=hideGui||viewMode||!started||player.dead||$('hud').classList.contains('hide')?'hidden':'';$('chat').style.visibility=hideGui&&!chatOpen?'hidden':'';
