@@ -8866,7 +8866,8 @@ cmdReg(cLit('summon',cArg('entity',Object.assign(CmdArg.res('minecraft:entity_ty
 // /setblock · /fill: 블록 놓기 (destroy 는 원래 블록을 떨어뜨리고, keep 은 공기 자리에만)
 function cLoaded(P){if(!chunks.has(ck(P.x>>4,P.z>>4)))cFail('unloaded');if(P.y<0||P.y>=H)cFail('out_world')}
 function cmdDestroy(x,y,z,id){const te=tiles.get(tkey(x,y,z));if(te)(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,x+.5,y+.5,z+.5)});if(B[id]&&!B[id].liquid){dropFor(x,y,z,id);sfx('break',B[id].snd)}}
-function cmdPut(x,y,z,id,meta,lazy){tiles.delete(tkey(x,y,z));return setBlock(x,y,z,id,!!lazy,false,meta)}
+function cmdPut(x,y,z,id,meta,lazy){const k=tkey(x,y,z);tiles.delete(k);VCHEST.delete(k);const r=setBlock(x,y,z,id,!!lazy,false,meta),b=B[id];   // 상자 · 화로 · 통은 빈 블록 개체로 (P4-CMD: 예전엔 열 때 무작위 전리품이 생겼어요)
+  if(r&&b&&(b.use==='chest'||b.use==='furnace'||typeof BARREL!=='undefined'&&id===BARREL))tiles.set(k,b.use==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:new Array(27).fill(null)});return r}
 function setblockDo(c,a,mode){const P=cmdCoordBlock(a.pos,c);cLoaded(P);const nb=a.block,old=getB(P.x,P.y,P.z),om=getM(P.x,P.y,P.z);
   if(mode==='keep'&&old!==AIR)cFail('sb_fail');if(old===nb.id&&om===nb.meta)cFail('sb_fail');if(mode==='destroy'&&old!==AIR)cmdDestroy(P.x,P.y,P.z,old);
   cmdPut(P.x,P.y,P.z,nb.id,nb.meta,false);cFb(c,'sb_ok',P.x,P.y-cYO(c),P.z);return 1}
@@ -8992,7 +8993,7 @@ if(!CMDS.execute)regCmd('execute',(c,T)=>{if(!T.length)throw new CmdError(cmdMsg
 // ── 채팅에서 친 명령어 실행 · 오류 보여 주기 (마크처럼: 빨간 오류 + "…앞글자" + 빨간 밑줄 나머지 + <--[여기]) ──
 function cLine(t,col,html){chatLine(t,col,html);return $('chatLog').lastChild}
 function cmdErrLine(t){return cLine(t,'#ff5555')}
-function cmdShowErr(e){if(!(e instanceof CmdError)){const d=cmdErrLine(cmdMsg('failed'));if(d&&e)d.title=String(e&&e.message||e);return}
+function cmdShowErr(e){if(e&&e.silent6)return;if(!(e instanceof CmdError)){const d=cmdErrLine(cmdMsg('failed'));if(d&&e)d.title=String(e&&e.message||e);return}
   cmdErrLine(e.message);if(e.input==null||e.cursor<0)return;const off=e.input[0]==='/'?1:0,s=e.input.slice(off),i=Math.max(0,Math.min(s.length,e.cursor-off));
   const h=`<span style="color:#aaa">${i>10?'...':''}${esc(s.slice(Math.max(0,i-10),i))}</span><span style="color:#ff5555;text-decoration:underline">${esc(s.slice(i))}</span><i style="color:#ff5555">${esc(CMD_MSG.here)}</i>`;
   const d=cLine(h,'#aaa',true);if(d){d.classList.add('cmdLink');d.dataset.cmd='/'+s}}
@@ -10167,7 +10168,7 @@ const GLOW6=new Map(),glowMatA=new THREE.MeshBasicMaterial({colorWrite:false,dep
 function glowMk(src){const a=src.clone(true),b=src.clone(true),mb=new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,depthWrite:false,fog:false,stencilWrite:true,stencilRef:1,stencilFunc:THREE.NotEqualStencilFunc,stencilFail:THREE.KeepStencilOp,stencilZFail:THREE.KeepStencilOp,stencilZPass:THREE.KeepStencilOp});
   const S=[],A=[],Bq=[];src.traverse(o=>S.push(o));a.traverse(o=>A.push(o));b.traverse(o=>Bq.push(o));for(const [L,mt,ro] of[[A,glowMatA,990],[Bq,mb,991]])for(const o of L){if(o.isMesh){o.material=mt;o.renderOrder=ro;o.frustumCulled=false}else if(o.isSprite)o.material=mt}
   scene.add(a);scene.add(b);return{a,b,S,A,B:Bq,mb}}
-function glowSync(){const want=new Map();if(started)for(const m of mobs)if(!m.dead&&m.eff&&effLv(m,'glowing'))want.set(m.g,holderOf(m));if(started&&viewMode>0&&!player.dead&&effLv(player,'glowing'))want.set(me.g,myName());
+function glowSync(){const want=new Map();if(started)for(const m of mobs)if(!m.dead&&(m.glow6||m.eff&&effLv(m,'glowing')))want.set(m.g,holderOf(m));if(started&&viewMode>0&&!player.dead&&effLv(player,'glowing'))want.set(me.g,myName());
   for(const [g,G] of GLOW6)if(!want.has(g)){scene.remove(G.a);scene.remove(G.b);G.mb.dispose();GLOW6.delete(g)}
   for(const [g,h] of want){let G=GLOW6.get(g),n=0;g.traverse(()=>n++);if(G&&G.S.length!==n){scene.remove(G.a);scene.remove(G.b);G.mb.dispose();G=null}if(!G){G=glowMk(g);GLOW6.set(g,G)}
     G.S.forEach((o,i)=>{const x=G.A[i],y=G.B[i];for(const q of[x,y]){q.position.copy(o.position);q.quaternion.copy(o.quaternion);q.scale.copy(o.scale);q.visible=i===0||o.visible}if(o.isMesh)y.scale.multiplyScalar(1.12)});
@@ -10185,6 +10186,399 @@ function cmdLoad6(){const p=player,D=dimState||{};p.eff=D.pe||{};p.abs=D.pab||0;
 // /gamerule random_tick_speed → Agent 09 의 randomTickSpeed
 {const _grc6=gameRuleChanged;gameRuleChanged=function(k,v){const r=_grc6.apply(this,arguments);if(k==='random_tick_speed')randomTickSpeed=v;return r}}
 // ── 명령어 더 끝 (Agent 06) ──
+// ── 명령어 더 (P4-CMD): data · loot · place · fillbiome · tick · return · function · schedule · spectate · swing · version + execute if/store data ──
+//    NBT 값: 숫자는 {__n:'b|s|i|l|f|d', v} · 숫자 배열 {__a:'B|I|L', v:[…]} · 글자 = 문자열 · 목록 = 배열 · 묶음 = 객체 (저장할 때 JSON 그대로)
+Object.assign(CMD_MSG,{np_bad:'NBT 경로 요소가 잘못됐어요',np_none:'%s 에 맞는 요소를 찾지 못했어요',nbt_arr:'숫자 배열에는 숫자만 넣을 수 있어요',
+  d_eq:'%s의 개체 데이터는 다음과 같아요: %s',d_eget:'%2$s의 %1$s 값에 %3$s배를 하면 %4$s(이)에요',d_emod:'%s의 개체 데이터를 바꿨어요',d_einv:'플레이어 데이터는 바꿀 수 없어요',
+  d_bq:'%s, %s, %s 블록의 데이터는 다음과 같아요: %s',d_bget:'%2$s, %3$s, %4$s 블록의 %1$s 값에 %5$s배를 하면 %6$s(이)에요',d_bmod:'%s, %s, %s 블록의 데이터를 바꿨어요',d_binv:'대상 블록은 블록 개체가 아니에요',
+  d_sq:'저장소 %s의 내용은 다음과 같아요: %s',d_sget:'저장소 %2$s의 %1$s 값에 %3$s배를 하면 %4$s(이)에요',d_smod:'저장소 %s을(를) 바꿨어요',
+  d_ginv:'%s 을(를) 가져올 수 없어요. 숫자 태그만 돼요',d_gmul:'이 인수에는 NBT 값 하나만 쓸 수 있어요',d_gunk:'%s 을(를) 가져올 수 없어요. 그런 태그가 없어요',
+  d_same:'아무것도 바뀌지 않았어요. 이미 그 값이에요',d_xlist:'목록이 필요해요. 받은 것: %s',d_xobj:'오브젝트가 필요해요. 받은 것: %s',d_xval:'값이 필요해요. 받은 것: %s',d_idx:'잘못된 목록 번호예요: %s',d_sub:'잘못된 부분 문자열 위치예요: %s 부터 %s 까지'});
+const NBV=(t,v)=>({__n:t,v}),NBR=(t,v)=>({__a:t,v});
+const nbN=x=>x!==null&&typeof x==='object'&&x.__n!=null,nbA=x=>x!==null&&typeof x==='object'&&x.__a!=null,nbL=x=>Array.isArray(x),nbC=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&x.__n==null&&x.__a==null;
+const jint=v=>isNaN(v)?0:v>=2147483647?2147483647:v<=-2147483648?-2147483648:Math.trunc(v);
+const nbCast=(t,v)=>t==='b'?(jint(v)<<24)>>24:t==='s'?(jint(v)<<16)>>16:t==='i'?jint(v):t==='l'?(Math.trunc(v)||0):t==='f'?Math.fround(v):+v;
+const nbNum=x=>nbN(x)?x.v:typeof x==='boolean'?+x:typeof x==='number'?x:null;
+const nbCp=x=>x==null?x:JSON.parse(JSON.stringify(x));
+function nbEq(a,b){if(a===b)return true;if(nbN(a)||nbN(b))return nbN(a)&&nbN(b)&&a.__n===b.__n&&a.v===b.v;if(nbA(a)||nbA(b))return nbA(a)&&nbA(b)&&a.__a===b.__a&&a.v.length===b.v.length&&a.v.every((x,i)=>x===b.v[i]);
+  if(nbL(a)||nbL(b))return nbL(a)&&nbL(b)&&a.length===b.length&&a.every((x,i)=>nbEq(x,b[i]));if(nbC(a)&&nbC(b)){const ka=Object.keys(a);return ka.length===Object.keys(b).length&&ka.every(k=>k in b&&nbEq(a[k],b[k]))}return false}
+// NbtUtils.compareNbt: 묶음은 패턴의 열쇠만 · 목록은 (부분 비교면) 패턴 원소마다 맞는 것이 하나라도
+function nbMatch(p,t,part){if(t==null)return false;if(nbC(p)){if(!nbC(t))return false;for(const k in p)if(!nbMatch(p[k],t[k],part))return false;return true}
+  if(nbL(p)&&part){if(!nbL(t))return false;if(!p.length)return!t.length;return p.every(x=>t.some(y=>nbMatch(x,y,part)))}return nbEq(p,t)}
+// 글자 → NBT (마크 SNBT: 1b 2s 3 4L 5.0f 6.0d true "글" [I;1,2] {a:1})
+function nbParse(r){r.ws();if(!r.can())throw r.err('nbt_val');const c=r.peek();
+  if(c==='{'){r.skip();r.ws();const o={};while(r.can()&&r.peek()!=='}'){const ks=r.i,k=r.str();if(!k)throw r.at(ks,'nbt_key');r.ws();r.expect(':');o[k]=nbParse(r);r.ws();if(r.can()&&r.peek()===','){r.skip();r.ws();continue}break}r.expect('}');return o}
+  if(c==='['){r.skip();let ta=null;if(r.can(2)&&/[BIL]/.test(r.peek())&&r.peek(1)===';'){ta=r.peek();r.i+=2}r.ws();const L=[];
+    while(r.can()&&r.peek()!==']'){const st=r.i,v=nbParse(r);if(ta){const n=nbNum(v);if(n==null)throw r.at(st,'nbt_arr');L.push(ta==='L'?Math.trunc(n):nbCast(ta==='B'?'b':'i',n))}else L.push(v);r.ws();if(r.can()&&r.peek()===','){r.skip();r.ws();continue}break}
+    r.expect(']');return ta?NBR(ta,L):L}
+  if(c==='"'||c==="'")return r.quoted();
+  const st=r.i;while(r.can()&&/[0-9A-Za-z_\-.+]/.test(r.peek()))r.i++;const t=r.s.slice(st,r.i);if(!t)throw r.err('nbt_val');
+  if(t==='true')return NBV('b',1);if(t==='false')return NBV('b',0);
+  const m=/^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)([bslfd]?)$/i.exec(t);if(!m)return t;const s=m[2].toLowerCase(),v=+m[1],isInt=/^[-+]?\d+$/.test(m[1]);
+  if(!s)return isInt?NBV('i',nbCast('i',v)):NBV('d',v);if((s==='b'||s==='s'||s==='l')&&!isInt)return t;return NBV(s,nbCast(s,v))}
+// 보통 자바스크립트 값 → NBT (정수 → int · 소수 → double · 참/거짓 → byte)
+function nbOf(v){if(v==null)return null;if(nbN(v)||nbA(v))return v;if(typeof v==='boolean')return NBV('b',+v);if(typeof v==='number')return Number.isInteger(v)?NBV('i',jint(v)):NBV('d',v);if(typeof v==='string')return v;
+  if(Array.isArray(v))return v.map(nbOf);const o={};for(const k in v)if(v[k]!=null)o[k]=nbOf(v[k]);return o}
+// NBT → 글자 (Java Float/Double.toString 처럼 · 열쇠는 abc 순 · 색은 마크 TextComponentTagVisitor)
+function jnum(v,f){if(!isFinite(v))return v>0?'Infinity':v<0?'-Infinity':'NaN';if(f)for(let p=1;p<=9;p++){const q=+v.toPrecision(p);if(Math.fround(q)===v){v=q;break}}
+  const a=Math.abs(v);if(a!==0&&(a>=1e7||a<1e-3)){let [m,e]=v.toExponential().split('e');if(!m.includes('.'))m+='.0';return m+'E'+(+e)}const s=String(v);return s.includes('.')?s:s+'.0'}
+const NB_SFX={b:'b',s:'s',i:'',l:'L',f:'f',d:'d'};
+const nbNumTxt=x=>x.__n==='f'?jnum(Math.fround(x.v),1):x.__n==='d'?jnum(x.v,0):String(x.v);
+const nbQ=s=>{const q=s.includes('"')&&!s.includes("'")?"'":'"';return q+s.replace(/\\/g,'\\\\').split(q).join('\\'+q)+q};
+const htEsc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function nbFmt(x,H){const S=(col,t)=>H?'<span style="color:'+col+'">'+htEsc(t)+'</span>':t,P=t=>H?htEsc(t):t;
+  if(nbN(x))return S('#ffaa00',nbNumTxt(x))+(NB_SFX[x.__n]?S('#ff5555',NB_SFX[x.__n]):'');
+  if(nbA(x)){const sf=x.__a==='B'?'B':x.__a==='L'?'L':'';return P('[')+S('#ff5555',x.__a)+P('; ')+x.v.map(n=>S('#ffaa00',String(n))+(sf?S('#ff5555',sf):'')).join(P(', '))+P(']')}
+  if(typeof x==='string')return S('#55ff55',nbQ(x));if(nbL(x))return P('[')+x.map(e=>nbFmt(e,H)).join(P(', '))+P(']');
+  if(nbC(x)){const ks=Object.keys(x).sort();return P('{')+ks.map(k=>S('#55ffff',/^[A-Za-z0-9._+\-]+$/.test(k)?k:nbQ(k))+P(': ')+nbFmt(x[k],H)).join(P(', '))+P('}')}return P(String(x))}
+const nbStr=x=>nbFmt(x,false);
+// 결과 줄: 마지막 %s 자리에 색칠한 NBT
+function dFbTag(c,k,args,tag){if(c.silent||!gameRule('send_command_feedback'))return;const m=cmdMsg(k,...args.map(String),'\u0001');chatLine(htEsc(m).replace('\u0001',nbFmt(tag,true)),'#fff',true)}
+
+// ── NBT 경로 (마크 NbtPathArgument): a.b[0].c · a[] · a[{id:"x"}] · a{b:1} · "글자 열쇠" · 맨 앞 {..} ──
+function npParse(r){const st=r.i,N=[];
+  if(r.can()&&r.peek()==='{')N.push({t:'root',m:nbParse(r)});
+  while(r.can()&&r.peek()!==' '){const ns=r.i,c=r.peek();
+    if(c==='['){r.skip();if(!r.can())throw r.at(ns,'np_bad');const d=r.peek();
+      if(d==='{'){const m=nbParse(r);r.expect(']');N.push({t:'match',m})}else if(d===']'){r.skip();N.push({t:'all'})}else{const i=r.int();r.expect(']');N.push({t:'idx',i})}}
+    else if(c==='{'){throw r.at(ns,'np_bad')}
+    else{let k;if(c==='"'||c==="'")k=r.quoted();else{const s0=r.i;while(r.can()&&!/[\s"'\[\]\.{}]/.test(r.peek()))r.i++;k=r.s.slice(s0,r.i);if(!k)throw r.at(ns,'np_bad')}
+      if(r.can()&&r.peek()==='{')N.push({t:'keym',k,m:nbParse(r)});else N.push({t:'key',k})}
+    if(!r.can())break;const e=r.peek();if(e!==' '&&e!=='['&&e!=='{')r.expect('.')}
+  if(!N.length)throw r.at(st,'np_bad');return{N,s:r.s.slice(st,r.i)}}
+CmdArg.nbtPath=()=>({parse:r=>npParse(r)});
+CmdArg.nbtTag=()=>({parse:r=>nbParse(r)});
+CmdArg.nbtCmp=()=>({parse(r){if(!r.can()||r.peek()!=='{')throw r.err('nbt_cmp');return nbParse(r)}});
+// 한 단계: 부모들 → 자식들 (만들기 = 없으면 만들어요 · mk 는 마지막 단계에서 만들 값)
+function npStep(n,L,mk){const out=[];
+  for(const t of L){
+    if(n.t==='root'){if(nbMatch(n.m,t,true))out.push(t)}
+    else if(n.t==='key'||n.t==='keym'){if(!nbC(t))continue;let v=t[n.k];if(v===undefined&&mk){v=n.t==='keym'?nbCp(n.m):mk();t[n.k]=v}if(v===undefined)continue;if(n.t==='keym'&&!nbMatch(n.m,v,true))continue;out.push(v)}
+    else if(n.t==='idx'){const A=nbL(t)?t:nbA(t)?t.v:null;if(!A)continue;const i=n.i<0?A.length+n.i:n.i;if(i>=0&&i<A.length)out.push(nbL(t)?A[i]:NBV(t.__a==='B'?'b':t.__a==='L'?'l':'i',A[i]))}
+    else if(n.t==='all'){if(nbL(t))out.push(...t);else if(nbA(t))out.push(...t.v.map(v=>NBV(t.__a==='B'?'b':t.__a==='L'?'l':'i',v)))}
+    else if(n.t==='match'){if(!nbL(t))continue;let hit=false;for(const e of t)if(nbMatch(n.m,e,true)){out.push(e);hit=true}if(!hit&&mk){const e=nbCp(n.m);t.push(e);out.push(e)}}}
+  return out}
+const npMk=n=>n.t==='idx'||n.t==='all'||n.t==='match'?()=>[]:()=>({});
+function npGet(p,root,soft){let L=[root];for(const n of p.N){L=npStep(n,L,null);if(!L.length)break}if(!L.length&&!soft)cFail('np_none',p.s);return L}
+const npCount=(p,root)=>npGet(p,root,true).length;
+function npParents(p,root,create){let L=[root];const N=p.N;for(let i=0;i<N.length-1;i++){L=npStep(N[i],L,create?npMk(N[i+1]):null);if(!L.length)break}if(!L.length&&!create)cFail('np_none',p.s);return L}
+function npGetOrCreate(p,root,mk){const N=p.N;let L=npParents(p,root,true);L=npStep(N[N.length-1],L,mk);if(!L.length)cFail('np_none',p.s);return L}
+// 마지막 단계에 값 넣기 · 지우기 → 바뀐 수
+function npSet(p,root,val){const N=p.N,n=N[N.length-1],L=npParents(p,root,true);let c=0;
+  for(const t of L){
+    if(n.t==='root'){cFail('np_bad')}
+    else if(n.t==='key'){if(!nbC(t))continue;if(!nbEq(t[n.k],val)){t[n.k]=nbCp(val);c++}else if(t[n.k]===undefined){t[n.k]=nbCp(val);c++}}
+    else if(n.t==='keym'){if(!nbC(t))continue;const v=t[n.k];if(v===undefined||nbMatch(n.m,v,true)){if(!nbEq(v,val)){t[n.k]=nbCp(val);c++}}}
+    else if(n.t==='idx'){const A=nbL(t)?t:nbA(t)?t.v:null;if(!A)continue;const i=n.i<0?A.length+n.i:n.i;if(i<0||i>=A.length)cFail('d_idx',n.i);
+      if(nbA(t)){const v=nbNum(val);if(v==null)cFail('d_xval',nbStr(val));if(A[i]!==v){A[i]=v;c++}}else if(!nbEq(A[i],val)){A[i]=nbCp(val);c++}}
+    else if(n.t==='all'){if(nbL(t)){if(!t.length){t.push(nbCp(val));c++}else for(let i=0;i<t.length;i++)if(!nbEq(t[i],val)){t[i]=nbCp(val);c++}}}
+    else if(n.t==='match'){if(!nbL(t))continue;let hit=false;for(let i=0;i<t.length;i++)if(nbMatch(n.m,t[i],true)){hit=true;if(!nbEq(t[i],val)){t[i]=nbCp(val);c++}}if(!hit&&nbMatch(n.m,val,true)){t.push(nbCp(val));c++}}}
+  return c}
+function npRemove(p,root){const N=p.N,n=N[N.length-1],L=npParents(p,root,false);let c=0;
+  for(const t of L){
+    if(n.t==='key'||n.t==='keym'){if(nbC(t)&&t[n.k]!==undefined&&(n.t==='key'||nbMatch(n.m,t[n.k],true))){delete t[n.k];c++}}
+    else if(n.t==='idx'){const A=nbL(t)?t:nbA(t)?t.v:null;if(!A)continue;const i=n.i<0?A.length+n.i:n.i;if(i>=0&&i<A.length){A.splice(i,1);c++}}
+    else if(n.t==='all'){const A=nbL(t)?t:nbA(t)?t.v:null;if(A&&A.length){c+=A.length;A.length=0}}
+    else if(n.t==='match'){if(!nbL(t))continue;for(let i=t.length-1;i>=0;i--)if(nbMatch(n.m,t[i],true)){t.splice(i,1);c++}}}
+  return c}
+// ── 아이템 · 개체 · 블록 개체 → NBT (마크 26.3 저장 모양) 그리고 거꾸로 ──
+const ENCH_MC_R={};for(const k in ENCH_MC)ENCH_MC_R[ENCH_MC[k]]='minecraft:'+k;
+function nbStack(st,slot){if(!st||!st.id||!(st.n>0))return null;const t={};if(slot!=null)t.Slot=NBV('b',slot);t.id=MCID[st.id]?MCID[st.id].replace(/\[.*$/,''):'minecraft:air';t.count=NBV('i',st.n);
+  const C={};if(st.d)C['minecraft:damage']=NBV('i',st.d);if(st.e){const E={};for(const k in st.e)if(ENCH_MC_R[k]&&st.e[k]>0)E[ENCH_MC_R[k]]=NBV('i',st.e[k]);if(Object.keys(E).length)C['minecraft:enchantments']=E}
+  if(Object.keys(C).length)t.components=C;return t}
+function nbToStack(t){if(!nbC(t))return null;const g=idOfMC(String(t.id||''));if(g<0)return null;const n=Math.max(1,Math.min(99,nbNum(t.count)??nbNum(t.Count)??1));
+  const comp={};const C=nbC(t.components)?t.components:{};for(const k in C){const v=C[k];comp[mcFull(k)]=nbC(v)?Object.fromEntries(Object.entries(v).map(([a,b])=>[a,nbNum(b)??b])):nbNum(v)??v}
+  return cmdItemStack({id:g,comp},n)}
+function p4UUID(o){if(o===player||cmdEntKind(o)==='remote'){const nm=cmdEntName(o);let h=[0x811c9dc5,0x1234567,0x9e3779b9,0x7f4a7c15];for(let i=0;i<nm.length;i++)for(let k=0;k<4;k++)h[k]=Math.imul(h[k]^nm.charCodeAt(i),16777619+k*2);return h.map(v=>v|0)}
+  const s=x6UUID(o).replace(/-/g,'');return[0,8,16,24].map(i=>parseInt(s.slice(i,i+8),16)|0)}
+const p4Living=o=>o===player||cmdEntKind(o)==='mob';
+function entNbt(o){const k=cmdEntKind(o),P=cmdEntPos(o),Y=cYO(),R=cmdEntRot(o),T={},d=v=>NBV('d',v);
+  if(k!=='player'&&k!=='remote')T.id=cmdEntType(o);
+  T.Pos=[d(P.x),d(P.y-Y),d(P.z)];const v=o.vel||(o.d&&{x:0,y:0,z:0})||{x:0,y:0,z:0};T.Motion=[d(v.x/20),d(v.y/20),d(v.z/20)];T.Rotation=[NBV('f',R.yaw),NBV('f',R.pitch)];
+  T.FallDistance=d(o===player?Math.max(0,player.fallDist||0):0);T.Fire=NBV('s',o===player?(player.burn>0?Math.round(player.burn*20):-20):o.fireT>0?Math.round(o.fireT*20):-1);
+  T.Air=NBV('s',o===player?Math.round((player.air??15)*20):300);T.OnGround=NBV('b',o.onGround?1:0);T.Invulnerable=NBV('b',o.invul6||(o===player&&(GAMEMODE==='creative'||GAMEMODE==='spectator'))?1:0);T.PortalCooldown=NBV('i',0);T.UUID=NBR('I',p4UUID(o));
+  const tg=cmdEntTags(o);if(tg.length)T.Tags=tg.slice();if(o.cname)T.CustomName=o.cname;if(o.silent6)T.Silent=NBV('b',1);if(o.glow6)T.Glowing=NBV('b',1);if(o.nograv6)T.NoGravity=NBV('b',1);
+  if(p4Living(o)){T.Health=NBV('f',o===player?player.hp:o.hp);T.HurtTime=NBV('s',o===player?(player.hurtTime|0):Math.round(Math.max(0,o.hurtT||0)*20));T.DeathTime=NBV('s',o.dead?Math.min(20,Math.round((o.deadT||0)*20)):0);
+    T.AbsorptionAmount=NBV('f',o.abs||0);T.FallFlying=NBV('b',o===player&&player.gliding?1:0);
+    const E=o.eff||{},EL=[];for(const id in E){const e=E[id];if(!(e.dur===-1||e.dur>0))continue;EL.push({id:'minecraft:'+id,amplifier:NBV('b',e.amp|0),duration:NBV('i',e.dur),ambient:NBV('b',e.amb?1:0),show_particles:NBV('b',e.vis===false?0:1),show_icon:NBV('b',e.icon===false?0:1)})}if(EL.length)T.active_effects=EL;
+    const AL=[];for(const id in ATTRS){if(o!==player&&(id==='block_break_speed'||id==='mining_efficiency'||id==='submerged_mining_speed'||id==='block_interaction_range'||id==='entity_interaction_range'||id==='sneaking_speed'))continue;const a={id:'minecraft:'+id,base:d(attrBase(o,id))},M=o.attrM&&o.attrM[id];
+      if(M&&Object.keys(M).length)a.modifiers=Object.keys(M).map(mk=>({id:mk,amount:d(M[mk][0]),operation:M[mk][1]}));AL.push(a)}T.attributes=AL;
+    const eq={},SLN=['head','chest','legs','feet'];
+    if(o===player){const IL=[];for(let i=0;i<36;i++){const s=nbStack(inv[i],i);if(s)IL.push(s)}T.Inventory=IL;T.SelectedItemSlot=NBV('i',sel);
+      armor.forEach((a,i)=>{const s=nbStack(a);if(s)eq[SLN[i]]=s});if(typeof offh!=='undefined'&&offh[0]){const s=nbStack(offh[0]);if(s)eq.offhand=s}
+      const [lv,fr]=xpLevel(player.xp||0);T.XpLevel=NBV('i',lv);T.XpP=NBV('f',fr);T.XpTotal=NBV('i',player.xp||0);T.Score=NBV('i',player.xp||0);
+      T.foodLevel=NBV('i',player.food);T.foodSaturationLevel=NBV('f',player.sat);T.foodExhaustionLevel=NBV('f',player.exh||0);T.foodTickTimer=NBV('i',player.foodT||0);
+      T.playerGameType=NBV('i',GM_ALL.indexOf(GAMEMODE));T.Dimension=MCDIM[DIM]||'minecraft:overworld';
+      T.abilities={flying:NBV('b',player.fly?1:0),mayfly:NBV('b',GAMEMODE==='creative'||GAMEMODE==='spectator'?1:0),instabuild:NBV('b',GAMEMODE==='creative'?1:0),invulnerable:NBV('b',GAMEMODE==='creative'||GAMEMODE==='spectator'?1:0),mayBuild:NBV('b',GAMEMODE==='adventure'||GAMEMODE==='spectator'?0:1),flySpeed:NBV('f',.05),walkSpeed:NBV('f',.1)};
+      if(typeof ECHEST!=='undefined'){const EL2=[];ECHEST.items.forEach((s,i)=>{const q=nbStack(s,i);if(q)EL2.push(q)});T.EnderItems=EL2}
+      if(player.spawn)T.respawn={pos:NBR('I',[Math.floor(player.spawn.x),Math.floor(player.spawn.y-cYO({dim:MCDIM[player.spawn.dim||'over']})),Math.floor(player.spawn.z)]),dimension:MCDIM[player.spawn.dim||'over']||'minecraft:overworld',yaw:NBV('f',0),pitch:NBV('f',0)};
+      T.DataVersion=NBV('i',5023)}
+    else{T.NoAI=NBV('b',o.noAI?1:0);T.PersistenceRequired=NBV('b',o.keep?1:0);T.LeftHanded=NBV('b',0);T.CanPickUpLoot=NBV('b',0);if(o.D&&o.D.baby!==false&&o.baby!=null)T[/zombie|piglin|zoglin|husk|drowned/.test(o.type)?'IsBaby':'Age']=/zombie|piglin|zoglin|husk|drowned/.test(o.type)?NBV('b',o.baby?1:0):NBV('i',o.baby?-24000:0);
+      const hand=o.hand6||o.held;if(hand&&hand.id){const s=nbStack(hand);if(s)eq.mainhand=s}}
+    if(Object.keys(eq).length)T.equipment=eq}
+  else if(k==='item'){T.Item=nbStack(o.stack)||{id:'minecraft:air',count:NBV('i',1)};T.Age=NBV('s',Math.round((o.age||0)*20));T.PickupDelay=NBV('s',Math.max(0,Math.round((o.pick||0)*20)));T.Health=NBV('s',5)}
+  else if(k==='xp'){T.Value=NBV('s',o.v||o.n||1);T.Count=NBV('i',1);T.Age=NBV('s',0)}
+  else if(k==='tnt'){T.fuse=NBV('s',Math.max(0,Math.round((o.fuse||0)*20)));T.block_state={Name:'minecraft:tnt'};T.explosion_power=NBV('f',4)}
+  return T}
+// 개체 NBT 바꾸기 (마크 Entity.load 와 같은 열쇠만 · 모르는 열쇠는 넘겨요)
+function entNbtSet(o,T){const k=cmdEntKind(o);if(k==='player'||k==='remote')cFail('d_einv');const num=(key,f)=>{const v=nbNum(T[key]);if(v!=null)f(v)},Y=cYO();
+  if(nbL(T.Pos)&&T.Pos.length===3){const [x,y,z]=T.Pos.map(nbNum);if([x,y,z].every(v=>v!=null&&isFinite(v))){o.pos.set(x,y+Y,z);if(o.prev)o.prev.copy(o.pos);if(o.m&&o.m.position)o.m.position.set(x,y+Y+(k==='tnt'?.5:0),z)}}
+  if(nbL(T.Motion)&&T.Motion.length===3&&o.vel){const [x,y,z]=T.Motion.map(v=>nbNum(v)||0);o.vel.set(Math.max(-10,Math.min(10,x))*20,Math.max(-10,Math.min(10,y))*20,Math.max(-10,Math.min(10,z))*20)}
+  if(nbL(T.Rotation)&&T.Rotation.length===2&&k==='mob'){const yw=nbNum(T.Rotation[0]);if(yw!=null)o.yaw=-yw*DEG}
+  o.tags=nbL(T.Tags)?T.Tags.filter(x=>typeof x==='string'):[];
+  o.cname=typeof T.CustomName==='string'?T.CustomName:nbC(T.CustomName)&&typeof T.CustomName.text==='string'?T.CustomName.text:undefined;
+  o.silent6=!!nbNum(T.Silent);o.glow6=!!nbNum(T.Glowing);o.nograv6=!!nbNum(T.NoGravity);o.invul6=!!nbNum(T.Invulnerable);
+  if(k==='mob'){num('Health',v=>{o.hp=Math.max(0,Math.min(attrVal(o,'max_health'),v));if(o.hp<=0&&!o.dead)hurtMob(o,1e6,null)});o.noAI=!!nbNum(T.NoAI);o.keep=!!nbNum(T.PersistenceRequired);
+    num('Fire',v=>{o.fireT=v>0?v/20:0});num('AbsorptionAmount',v=>{o.abs=Math.max(0,v)});
+    const bb=T.IsBaby!==undefined?!!nbNum(T.IsBaby):T.Age!==undefined?(nbNum(T.Age)||0)<0:null;if(bb!=null&&bb!==!!o.baby&&o.g){o.baby=bb;o.g.scale.setScalar(bb?.5:1)}
+    if(T.active_effects!==undefined||o.eff){const want=nbL(T.active_effects)?T.active_effects:[];effClearAll(o);for(const e of want){if(!nbC(e))continue;const id=mcN(String(e.id||''));if(EFFECTS[id])effGive(o,id,nbNum(e.duration)??0,nbNum(e.amplifier)||0,{amb:!!nbNum(e.ambient),vis:nbNum(e.show_particles)!==0,icon:nbNum(e.show_icon)!==0})}}}
+  if(k==='item'&&T.Item!==undefined){const s=nbToStack(T.Item);if(s){o.stack=s;if(o.m&&typeof groundItemMesh==='function'){const p=o.m.parent;if(p){const nm=groundItemMesh(s.id);nm.position.copy(o.m.position);p.remove(o.m);p.add(nm);o.m=nm}}}num('PickupDelay',v=>{o.pick=Math.max(0,v/20)})}
+  if(k==='tnt')num('fuse',v=>{o.fuse=Math.max(0,v/20)});if(k==='xp')num('Value',v=>{o.v=Math.max(1,v|0)})}
+// 블록 개체: 상자 · 통 · 화로 · 주크박스 (열어 본 적 없는 상자는 마크처럼 LootTable)
+const LOOT_KIND={'chests/abandoned_mineshaft':'mineshaft','chests/ancient_city':'ancient','chests/ancient_city_ice_box':'ancient_ice','chests/bastion_bridge':'bastion_bridge','chests/bastion_hoglin_stable':'bastion_hoglin_stable','chests/bastion_other':'bastion_other',
+  'chests/bastion_treasure':'bastion_treasure','chests/buried_treasure':'buried','chests/desert_pyramid':'desert_temple','chests/end_city_treasure':'end_city','chests/igloo_chest':'igloo','chests/jungle_temple':'jungle_temple','chests/nether_bridge':'nether_bridge',
+  'chests/pillager_outpost':'outpost','chests/ruined_portal':'ruined_portal','chests/shipwreck_map':'ship_map','chests/shipwreck_supply':'ship_supply','chests/shipwreck_treasure':'ship_treasure','chests/simple_dungeon':'dungeon','chests/stronghold_corridor':'sh_corridor',
+  'chests/stronghold_crossing':'sh_cross','chests/stronghold_library':'sh_library','chests/trial_chambers/corridor':'trial_corridor','chests/trial_chambers/intersection':'trial_intersection','chests/trial_chambers/intersection_barrel':'trial_intersection_barrel',
+  'chests/trial_chambers/supply':'trial_supply','chests/trial_chambers/reward':'trial_reward','chests/underwater_ruin_big':'ruin_big','chests/underwater_ruin_small':'ruin_small','chests/village/village_weaponsmith':'smith','chests/village/village_toolsmith':'smith',
+  'chests/village/village_plains_house':'vhouse','chests/end_city_treasure_ship':'end_ship','chests/spawn_bonus_chest':''};
+const KIND_LOOT={};for(const k in LOOT_KIND)if(LOOT_KIND[k]&&!KIND_LOOT[LOOT_KIND[k]])KIND_LOOT[LOOT_KIND[k]]='minecraft:'+k;KIND_LOOT.fortress='minecraft:chests/nether_bridge';KIND_LOOT.bastion='minecraft:chests/bastion_other';
+function blkTE(P,create){const k=tkey(P.x,P.y,P.z),id=getB(P.x,P.y,P.z),b=B[id];let te=tiles.get(k);if(te)return te;const use=b&&b.use,isBarrel=typeof BARREL!=='undefined'&&id===BARREL;
+  if(use==='chest'||use==='furnace'||isBarrel||id===CHEST||id===FURNACE||id===FURNACE_LIT||typeof JUKEBOX!=='undefined'&&id===JUKEBOX){if(!create)return{virt:true,id};
+    te=use==='furnace'||id===FURNACE||id===FURNACE_LIT?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:typeof JUKEBOX!=='undefined'&&id===JUKEBOX?{t:'jukebox',items:[null]}:{t:'chest',f:4,items:VCHEST.has(k)?chestLoot(VCHEST.get(k)):new Array(27).fill(null)};VCHEST.delete(k);tiles.set(k,te);return te}
+  return null}
+function blkNbt(P,te){const id=getB(P.x,P.y,P.z),T={};T.id=(MCID[id]||'minecraft:chest').replace(/\[.*$/,'');T.x=NBV('i',P.x);T.y=NBV('i',P.y-cYO());T.z=NBV('i',P.z);
+  if(te.virt){const kd=VCHEST.get(tkey(P.x,P.y,P.z));if(kd&&KIND_LOOT[kd]){T.LootTable=KIND_LOOT[kd];T.LootTableSeed=NBV('l',0)}else if(te.id===FURNACE||te.id===FURNACE_LIT){T.Items=[];T.lit_time_remaining=NBV('s',0);T.lit_total_time=NBV('s',0);T.cooking_time_spent=NBV('s',0);T.cooking_total_time=NBV('s',0)}else T.Items=[];return T}
+  if(te.t==='furnace'){T.Items=te.s.map((s,i)=>nbStack(s,i)).filter(Boolean);T.lit_time_remaining=NBV('s',Math.round((te.burn||0)*20));T.lit_total_time=NBV('s',Math.round((te.burnMax||0)*20));T.cooking_time_spent=NBV('s',Math.round((te.cook||0)*20));T.cooking_total_time=NBV('s',200)}
+  else if(te.t==='jukebox'){const s=nbStack(te.items[0]);if(s)T.RecordItem=s}
+  else{T.Items=te.items.map((s,i)=>nbStack(s,i)).filter(Boolean)}if(te.cname6)T.CustomName=te.cname6;return T}
+function blkNbtSet(P,te,T){if(te.virt)te=blkTE(P,true);const k=tkey(P.x,P.y,P.z);
+  if(te.t==='furnace'){const S=[null,null,null];if(nbL(T.Items))for(const e of T.Items){const i=nbNum(e.Slot);if(i>=0&&i<3)S[i]=nbToStack(e)}te.s=S;const v=nbNum(T.lit_time_remaining);if(v!=null)te.burn=Math.max(0,v/20);const w=nbNum(T.lit_total_time);if(w!=null)te.burnMax=Math.max(0,w/20);const c=nbNum(T.cooking_time_spent);if(c!=null)te.cook=Math.max(0,c/20)}
+  else if(te.t==='jukebox'){te.items[0]=T.RecordItem?nbToStack(T.RecordItem):null}
+  else{const n=te.items.length,S=new Array(n).fill(null);if(nbL(T.Items))for(const e of T.Items){const i=nbNum(e&&e.Slot);if(i>=0&&i<n)S[i]=nbToStack(e)}te.items=S;if(T.LootTable&&typeof T.LootTable==='string'){const kd=LOOT_KIND[mcN(T.LootTable)];if(kd!=null){te.items=chestLoot(kd)}}}
+  te.cname6=typeof T.CustomName==='string'?T.CustomName:undefined;if(typeof mpTile==='function')mpTile(k,te);if(screenOpen&&typeof drawScreen==='function')drawScreen()}
+// 저장소 (세계마다 · 차원과 상관없이)
+const STOR=()=>dimState.stor||(dimState.stor={});
+// 접근자: {get() → 묶음 사본, set(묶음), q(태그) 결과 줄, g(경로,배율,값), mod()}
+function dAcc(c,kind,v){
+  if(kind==='entity'){const L=selFind(v,c);if(!L.length)cFail('no_ent');const o=L[0],nm=cmdEntName(o);
+    return{o,get:()=>entNbt(o),set:t=>entNbtSet(o,t),q:t=>dFbTag(c,'d_eq',[nm],t),g:(p,s,n)=>cFb(c,'d_eget',p,nm,cNum6(s),n),mod:()=>cFb(c,'d_emod',nm)}}
+  if(kind==='block'){const P=cmdCoordBlock(v,c);cLoaded(P);const te=blkTE(P,false);if(!te)cFail('d_binv');const X=P.x,Yy=P.y-cYO(c),Z=P.z;
+    return{get:()=>blkNbt(P,te),set:t=>blkNbtSet(P,te,t),q:t=>dFbTag(c,'d_bq',[X,Yy,Z],t),g:(p,s,n)=>cFb(c,'d_bget',p,X,Yy,Z,cNum6(s),n),mod:()=>cFb(c,'d_bmod',X,Yy,Z)}}
+  const id=v;return{get:()=>nbCp(STOR()[id]||{}),set:t=>{STOR()[id]=nbCp(t)},q:t=>dFbTag(c,'d_sq',[id],t),g:(p,s,n)=>cFb(c,'d_sget',p,id,cNum6(s),n),mod:()=>cFb(c,'d_smod',id)}}
+const cNum6=s=>jnum(s,0);
+// ── /data get · merge · modify · remove (마크 DataCommands) ──
+function nbMergeInto(t,s){for(const k in s){const v=s[k];if(nbC(v)&&nbC(t[k]))nbMergeInto(t[k],v);else t[k]=nbCp(v)}return t}
+const nbPrimStr=t=>nbN(t)?nbNumTxt(t):typeof t==='string'?t:null;
+function dGet(c,A,p,scale){const T=A.get();if(!p){A.q(T);return 1}const L=npGet(p,T);if(L.length>1)cFail('d_gmul');const t=L[0];
+  if(scale==null){let n;if(nbN(t))n=Math.floor(t.v);else if(nbL(t))n=t.length;else if(nbA(t))n=t.v.length;else if(nbC(t))n=Object.keys(t).length;else if(typeof t==='string')n=t.length;else cFail('d_gunk',p.s);A.q(t);return jint(n)}
+  if(!nbN(t))cFail('d_ginv',p.s);const n=jint(Math.floor(t.v*scale));A.g(p.s,scale,n);return n}
+function dMerge(c,A,nbt){const T=A.get(),N=nbMergeInto(nbCp(T),nbt);if(nbEq(T,N))cFail('d_same');A.set(N);A.mod();return 1}
+function dRemove(c,A,p){const T=A.get(),n=npRemove(p,T);if(!n)cFail('d_same');A.set(T);A.mod();return n}
+// 원본 값들: from (경로 없으면 묶음 전체) · value · string (부분 문자열)
+function dSrc(c,a,how,k2){if(how==='value')return[a.value];const S=dAcc(c,k2,a.source).get();const L=a.sourcePath?npGet(a.sourcePath,S):[S];if(how==='from')return L;
+  return L.map(t=>{const s=nbPrimStr(t);if(s==null)cFail('d_xval',nbStr(t));const n=s.length;let b=a.start==null?0:a.start<0?n+a.start:a.start,e=a.end==null?n:a.end<0?n+a.end:a.end;if(b<0||e>n||b>e)cFail('d_sub',a.start??0,a.end??n);return s.slice(b,e)})}
+function dModify(c,k,a,op,how,k2){const A=dAcc(c,k,a.target),T=A.get(),src=dSrc(c,a,how,k2),p=a.targetPath;let n=0;
+  if(op==='set'){if(!src.length)cFail('d_same');n=npSet(p,T,src[src.length-1])}
+  else if(op==='merge'){const L=npGetOrCreate(p,T,()=>({}));for(const t of L){if(!nbC(t))cFail('d_xobj',nbStr(t));const before=nbCp(t);for(const s of src){if(!nbC(s))cFail('d_xobj',nbStr(s));nbMergeInto(t,s)}if(!nbEq(before,t))n++}}
+  else{const L=npGetOrCreate(p,T,()=>[]);for(const t of L){const arr=nbL(t)?t:nbA(t)?t.v:null;if(!arr)cFail('d_xlist',nbStr(t));const sz=arr.length;let i=op==='append'?sz:op==='prepend'?0:a.index<0?sz+a.index+1:a.index;if(i<0||i>sz)cFail('d_idx',a.index);
+      const add=src.map(s=>{if(nbA(t)){const v=nbNum(s);if(v==null)cFail('d_xval',nbStr(s));return t.__a==='L'?Math.trunc(v):nbCast(t.__a==='B'?'b':'i',v)}return nbCp(s)});if(add.length){arr.splice(i,0,...add);n++}}}
+  if(!n)cFail('d_same');A.set(T);A.mod();return n}
+{const KS=['block','entity','storage'],tgt=(k,name,...kids)=>cArg(name,k==='block'?CmdArg.bpos():k==='entity'?CmdArg.ent(true,false):CmdArg.resLoc(()=>Object.keys(STOR())),...kids);
+  const srcs=(k,op)=>{const R=(how,k2)=>(c,a)=>dModify(c,k,a,op,how,k2);return[
+    cLit('from',...KS.map(k2=>cLit(k2,tgt(k2,'source',R('from',k2),cArg('sourcePath',CmdArg.nbtPath(),R('from',k2)))))),
+    cLit('string',...KS.map(k2=>cLit(k2,tgt(k2,'source',R('string',k2),cArg('sourcePath',CmdArg.nbtPath(),R('string',k2),cArg('start',CmdArg.int(),R('string',k2),cArg('end',CmdArg.int(),R('string',k2)))))))),
+    cLit('value',cArg('value',CmdArg.nbtTag(),R('value')))]};
+  cmdReg(cLit('data',
+    cLit('get',...KS.map(k=>cLit(k,tgt(k,'target',(c,a)=>dGet(c,dAcc(c,k,a.target)),cArg('path',CmdArg.nbtPath(),(c,a)=>dGet(c,dAcc(c,k,a.target),a.path),cArg('scale',CmdArg.num(),(c,a)=>dGet(c,dAcc(c,k,a.target),a.path,a.scale))))))),
+    cLit('merge',...KS.map(k=>cLit(k,tgt(k,'target',cArg('nbt',CmdArg.nbtCmp(),(c,a)=>dMerge(c,dAcc(c,k,a.target),a.nbt)))))),
+    cLit('modify',...KS.map(k=>cLit(k,tgt(k,'target',cArg('targetPath',CmdArg.nbtPath(),...['append','merge','prepend','set'].map(op=>cLit(op,...srcs(k,op))),cLit('insert',cArg('index',CmdArg.int(),...srcs(k,'insert')))))))),
+    cLit('remove',...KS.map(k=>cLit(k,tgt(k,'target',cArg('path',CmdArg.nbtPath(),(c,a)=>dRemove(c,dAcc(c,k,a.target),a.path))))))));
+  // /execute if|unless data … · store result|success block|entity|storage <경로> <종류> <배율>
+  const EX=CROOT.ch.find(n=>n.n==='execute'),kid=(nd,n)=>nd&&nd.ch.find(x=>x.n===n);
+  if(EX){const Rd={redirect:EX};
+    for(const w of['if','unless']){const D=kid(kid(EX,w),'data');if(!D)continue;D.ch=KS.map(k=>cLit(k,tgt(k,'source',cArg('path',CmdArg.nbtPath(),Object.assign({},Rd,exCond(w==='if',(c,a)=>npCount(a.path,dAcc(c,k,a.source).get()),true))))))}
+    const TY={byte:'b',short:'s',int:'i',long:'l',float:'f',double:'d'};
+    for(const res of['result','success']){const S=kid(kid(EX,'store'),res);if(!S)continue;
+      for(const k of KS){const i=S.ch.findIndex(x=>x.n===k);if(i<0)continue;
+        S.ch[i]=cLit(k,tgt(k,k==='block'?'targetPos':'target',cArg('path',CmdArg.nbtPath(),...Object.keys(TY).map(ty=>cLit(ty,cArg('scale',CmdArg.num(),Object.assign({},Rd,{fork6:(c,a)=>{const tv=k==='block'?a.targetPos:a.target;dAcc(c,k,tv);
+          const f=(s,v)=>{const A=dAcc(c,k,tv),T=A.get();npSet(a.path,T,NBV(TY[ty],nbCast(TY[ty],(res==='result'?v:s?1:0)*a.scale)));A.set(T)};return[exC(c,{_st6:(c._st6||[]).concat([f])})]}})))))))}}}}
+// ── /loot (마크 LootCommand): give · insert · spawn · replace  ×  loot · kill · mine · fish ──
+Object.assign(CMD_MSG,{drop1:'전리품 표 %3$s에서 %2$s %1$s개를 떨어뜨렸어요',dropN:'전리품 표 %2$s에서 아이템 %1$s개를 떨어뜨렸어요',drop_noheld:'개체가 아이템을 가질 수 없어요',drop_nolt:'%s 개체에는 전리품 표가 없어요'});
+// 게임의 떨어뜨리기 코드를 그대로 쓰되, 땅에 놓는 대신 모아요
+function p4Collect(f){const L=[],o1=spawnItem,o2=typeof dropXP==='function'?dropXP:null;
+  spawnItem=function(st){if(st&&st.id&&st.n>0)L.push({id:st.id,n:st.n,d:st.d||0,...(st.e?{e:Object.assign({},st.e)}:{})});return{pos:new V3(),vel:new V3(),stack:st,m:{position:new V3()}}};if(o2)dropXP=()=>{};
+  try{f()}finally{spawnItem=o1;if(o2)dropXP=o2}return L}
+// 낚시 (gameplay/fishing: 물고기 85% · 쓰레기 10% · 보물 5%)
+function p4Fish(kind){const r=Math.random,pick=W=>{let t=W.reduce((s,w)=>s+w[1],0)*r();for(const w of W){t-=w[1];if(t<0)return w[0]}return W[W.length-1][0]},I=n=>idOfMC('minecraft:'+n);
+  const fish=[['cod',60],['salmon',25],['tropical_fish',2],['pufferfish',13]],junk=[['lily_pad',17],['leather',10],['leather_boots',10],['rotten_flesh',10],['stick',5],['string',5],['bowl',10],['bone',10],['ink_sac',1],['tripwire_hook',10]],
+    treasure=[['name_tag',1],['saddle',1],['bow',1],['fishing_rod',1],['enchanted_book',1],['nautilus_shell',1]];
+  const T=kind==='fish'?fish:kind==='junk'?junk:kind==='treasure'?treasure:pick([[fish,85],[junk,10],[treasure,5]]);const ok=T.map(w=>[I(w[0]),w[1]]).filter(w=>w[0]>0);if(!ok.length)return[];return[{id:pick(ok),n:1,d:0}]}
+const LT_FISH=['gameplay/fishing','gameplay/fishing/fish','gameplay/fishing/junk','gameplay/fishing/treasure'];
+const lootTables=()=>Object.keys(LOOT_KIND).concat(LT_FISH,Object.keys(MOBDEF).map(t=>'entities/'+mcN(mobMC(t))),Object.keys(MC_BLOCK).map(b=>'blocks/'+mcN(b))).map(x=>'minecraft:'+x);
+function lootTableRoll(id){const n=mcN(id);if(n in LOOT_KIND)return chestLoot(LOOT_KIND[n]||null).filter(s=>s&&s.n>0).map(s=>Object.assign({},s));
+  if(LT_FISH.includes(n))return p4Fish(n.split('/')[2]||'');
+  if(n.startsWith('entities/')){const t=mcMob('minecraft:'+n.slice(9));if(t)return MOBDEF[t].drops(Math.random()).filter(([,k])=>k>0).map(([g,k])=>({id:g,n:k,d:0}));if(n==='entities/player')return[];return null}
+  if(n.startsWith('blocks/')){const L=MC_BLOCK['minecraft:'+n.slice(7)];if(!L)return null;return p4Collect(()=>dropFor(0,0,0,L[0],canHarvest(L[0])))}return null}
+CmdArg.lootTable=()=>({parse(r){const st=r.i,id=r.id();if(!lootTables().includes(id))throw r.at(st,'res_bad',id,'minecraft:loot_table');return id},sug:b=>cmdSugRes(b,lootTables())});
+// 원본: [아이템들, 전리품 표 이름]
+function lootTool(c,a,which,fn){const k=sel,s0=inv[k];if(which==='tool')inv[k]=cmdItemStack(a.tool,1);else if(which==='offhand')inv[k]=typeof offh!=='undefined'?offh[0]:null;try{return fn()}finally{inv[k]=s0}}
+function lootSrc(c,a,kind,which){
+  if(kind==='loot')return[lootTableRoll(a.loot_table)||[],a.loot_table];
+  if(kind==='fish'){const P=cmdCoordBlock(a.pos,c);cLoaded(P);return[lootTool(c,a,which,()=>lootTableRoll(a.loot_table))||[],a.loot_table]}
+  if(kind==='kill'){const L=selFind(a.target,c);if(!L.length)cFail('no_ent');const o=L[0],k=cmdEntKind(o);if(k==='player'||k==='remote')return[[],'minecraft:entities/player'];if(k!=='mob')cFail('drop_nolt',cmdEntName(o));
+    if(o.baby)return[[],'minecraft:entities/'+mcN(cmdEntType(o))];const lb=(inv[sel]&&inv[sel].e&&inv[sel].e.loot)||0;return[o.D.drops(Math.random()).filter(([,n])=>n>0).map(([g,n])=>({id:g,n:n+(lb?Math.floor(Math.random()*(lb+1)):0),d:0})),'minecraft:entities/'+mcN(cmdEntType(o))]}
+  const P=cmdCoordBlock(a.pos,c);cLoaded(P);const id=getB(P.x,P.y,P.z),mc=(MCID[id]||'minecraft:air').replace(/\[.*$/,'');if(id===AIR)return[[],'minecraft:blocks/air'];
+  return[lootTool(c,a,which,()=>p4Collect(()=>dropFor(P.x,P.y,P.z,id,canHarvest(id)))),mc.replace('minecraft:','minecraft:blocks/')]}
+function lootFb(c,L,tbl){if(L.length===1)cFb(c,'drop1',L[0].n,'['+cmdItemName(L[0].id)+']',tbl);else cFb(c,'dropN',L.length,tbl);return L.length}
+function contInsert(items,st){const mx=maxStack(st.id);let n=st.n;for(let i=0;i<items.length&&n>0;i++){const s=items[i];if(s&&s.id===st.id&&(s.d||0)===(st.d||0)&&!s.e&&!st.e&&s.n<mx){const k=Math.min(mx-s.n,n);s.n+=k;n-=k}}
+  for(let i=0;i<items.length&&n>0;i++)if(!items[i]){const k=Math.min(mx,n);items[i]=Object.assign({},st,{n:k});n-=k}return n<st.n}
+function lootDo(c,a,tgt,kind,which){const [L,tbl]=lootSrc(c,a,kind,which);
+  if(tgt==='spawn'){const P=cmdCoordGet(a.targetPos,c);for(const s of L)spawnItem(s,P.x,P.y,P.z,new V3((Math.random()-.5)*2,2,(Math.random()-.5)*2));return lootFb(c,L,tbl)}
+  if(tgt==='give'){const T=cTargets(c,a.players,true);for(const p of T){if(p!==player)continue;for(const s of L){const st=Object.assign({},s),r=addItem(st);if(r>0){st.n=r;spawnItem(st,player.pos.x,player.pos.y+1.2,player.pos.z,new V3(0,0,0),0)}}}renderHotbar();if(screenOpen)drawScreen();if(L.length)sfx('pop');return lootFb(c,L,tbl)}
+  if(tgt==='insert'){const o=blkCont(c,a.targetPos,false),items=o.te.items||o.te.s,done=[];for(const s of L)if(contInsert(items,Object.assign({},s)))done.push(s);if(typeof mpTile==='function')mpTile(o.k,o.te);if(screenOpen)drawScreen();return lootFb(c,done,tbl)}
+  // replace: 칸 번호부터 count 칸 (모자라면 비워요)
+  const cnt=a.count==null?L.length:a.count,m=/^(.*)\.(\d+)$/.exec(a.slot),keys=i=>{const nm=m?m[1]+'.'+(+m[2]+i):i?null:a.slot;return nm&&SLOT6[nm]?SLOT6[nm]:[]};
+  const objs=tgt==='block'?[blkCont(c,a.targetPos,false)]:cTargets(c,a.entities).filter(o=>o===player);if(tgt!=='block'&&!objs.length)cFail('drop_noheld');const used=[];
+  for(const o of objs)for(let i=0;i<cnt;i++){for(const kk of keys(i)){const A=slotAcc(o,kk);if(!A)continue;const st=i<L.length?Object.assign({},L[i]):null;A[1](st);if(st&&!used.includes(L[i]))used.push(L[i])}}
+  renderHotbar();if(screenOpen)drawScreen();for(const o of objs)if(o.blk6&&typeof mpTile==='function')mpTile(o.k,o.te);return lootFb(c,used,tbl)}
+{const srcs=tgt=>{const R=(k,w)=>(c,a)=>lootDo(c,a,tgt,k,w),tool=k=>[R(k,'mainhand'),cLit('mainhand',R(k,'mainhand')),cLit('offhand',R(k,'offhand')),cArg('tool',CmdArg.item(),R(k,'tool'))];
+    return[cLit('fish',cArg('loot_table',CmdArg.lootTable(),cArg('pos',CmdArg.bpos(),...tool('fish')))),cLit('kill',cArg('target',CmdArg.ent(true,false),R('kill'))),cLit('loot',cArg('loot_table',CmdArg.lootTable(),R('loot'))),cLit('mine',cArg('pos',CmdArg.bpos(),...tool('mine')))]};
+  const repl=tgt=>cArg('slot',CmdArg.slot6b(),cArg('count',CmdArg.int(0),...srcs(tgt)),...srcs(tgt));
+  cmdReg(cLit('loot',cLit('give',cArg('players',CmdArg.ent(false,true),...srcs('give'))),cLit('insert',cArg('targetPos',CmdArg.bpos(),...srcs('insert'))),
+    cLit('replace',cLit('block',cArg('targetPos',CmdArg.bpos(),repl('block'))),cLit('entity',cArg('entities',CmdArg.ent(false,false),repl('entity')))),cLit('spawn',cArg('targetPos',CmdArg.vec3(),...srcs('spawn')))))}
+
+// ── /place feature · structure · jigsaw · template (게임에 있는 나무 · 구조물 만드는 코드를 그대로) ──
+Object.assign(CMD_MSG,{pf_ok:'"%s"을(를) %s, %s, %s에 놓았어요',pf_fail:'지형지물을 놓지 못했어요',pf_bad:'"%s" 종류의 지형지물은 없어요',ps_ok:'"%s" 구조물을 %s, %s, %s에 만들었어요',ps_fail:'구조물을 놓지 못했어요',ps_bad:'"%s" 종류의 구조물은 없어요',
+  pj_ok:'%s, %s, %s에 직소 구조물을 만들었어요',pj_fail:'직소 구조물을 만들지 못했어요',pj_bad:'"%s" 종류의 템플릿 풀은 없어요',pt_fail:'템플릿을 놓지 못했어요',pt_bad:'"%s" 아이디의 템플릿은 없어요'});
+const FEAT_IDS='acacia amethyst_geode azalea_tree bamboo_no_podzol bamboo_some_podzol bamboo_vegetation basalt_blobs basalt_pillar berry_bush birch birch_bees_0002 birch_bees_0002_leaf_litter birch_bees_002 birch_bees_005 birch_leaf_litter birch_tall blackstone_blobs blue_ice bonus_chest brown_mushroom bush cactus cave_vine cave_vine_in_moss cherry cherry_bees_005 chorus_plant clay_pool_with_dripleaves clay_with_dripleaves crimson_forest_vegetation crimson_forest_vegetation_bonemeal crimson_fungus crimson_fungus_planted crimson_roots dark_forest_vegetation dark_oak dark_oak_leaf_litter dead_bush delta desert_well disk_clay disk_grass disk_gravel disk_sand dripleaf dripstone_cluster dry_grass end_gateway_delayed end_gateway_return end_island end_platform end_spike fallen_birch_tree fallen_jungle_tree fallen_oak_tree fallen_spruce_tree fallen_super_birch_tree fancy_oak fancy_oak_bees fancy_oak_bees_0002_leaf_litter fancy_oak_bees_002 fancy_oak_bees_005 fancy_oak_leaf_litter firefly_bush flower_cherry flower_default flower_flower_forest flower_meadow flower_pale_garden flower_plain flower_swamp forest_flowers forest_rock fossil_coal fossil_diamonds freeze_top_layer glow_lichen glowstone_extra grass grass_jungle huge_brown_mushroom huge_red_mushroom ice_patch ice_spike iceberg_blue iceberg_packed jungle_bush jungle_tree jungle_tree_no_vine kelp lake_lava large_basalt_columns large_dripstone large_fern leaf_litter lush_caves_clay mangrove mangrove_vegetation meadow_trees mega_jungle_tree mega_pine mega_spruce melon monster_room moss_patch moss_patch_bonemeal moss_patch_ceiling moss_vegetation mushroom_island_vegetation nether_sprouts nether_sprouts_bonemeal oak oak_bees_0002_leaf_litter oak_bees_002 oak_bees_005 oak_leaf_litter ore_ancient_debris_large ore_ancient_debris_small ore_andesite ore_blackstone ore_clay ore_coal ore_coal_buried ore_copper_large ore_copper_small ore_diamond_buried ore_diamond_large ore_diamond_medium ore_diamond_small ore_diorite ore_dirt ore_emerald ore_gold ore_gold_buried ore_granite ore_gravel ore_gravel_nether ore_infested ore_iron ore_iron_small ore_lapis ore_lapis_buried ore_magma ore_nether_gold ore_quartz ore_redstone ore_soul_sand ore_tuff pale_forest_flower pale_garden_vegetation pale_moss_patch pale_moss_patch_bonemeal pale_moss_vegetation pale_oak pale_oak_bonemeal pale_oak_creaking patch_fire patch_soul_fire pile_hay pile_ice pile_melon pile_pumpkin pile_snow pine pointed_dripstone pumpkin red_mushroom rooted_azalea_tree rooted_sulfur_spring sculk_patch_ancient_city sculk_patch_deep_dark sculk_vein sea_pickle seagrass_mid seagrass_short seagrass_slightly_less_short seagrass_tall small_basalt_columns spore_blossom spring_lava_frozen spring_lava_nether spring_lava_overworld spring_nether_closed spring_nether_open spring_water spruce sugar_cane sulfur_pool sulfur_spike sulfur_spike_cluster sulfur_spring sunflower super_birch_bees super_birch_bees_0002 swamp_oak taiga_grass tall_grass tall_mangrove trees_badlands trees_birch trees_birch_and_oak_leaf_litter trees_flower_forest trees_grove trees_jungle trees_old_growth_pine_taiga trees_old_growth_spruce_taiga trees_plains trees_savanna trees_snowy trees_sparse_jungle trees_taiga trees_water trees_windswept_hills twisting_vines twisting_vines_bonemeal underwater_magma vines void_start_platform warm_ocean_vegetation warped_forest_vegetation warped_forest_vegetation_bonemeal warped_fungus warped_fungus_planted weeping_vines wildflower'.split(' ');
+// 지형지물 → 게임의 나무 종류 (placeTree)
+const FEAT_TREE={oak:'oak',fancy_oak:'oak',fancy_oak_bees:'oak',fancy_oak_bees_002:'oak',fancy_oak_bees_005:'oak',oak_bees_002:'oak',oak_bees_005:'oak',oak_leaf_litter:'oak',fancy_oak_leaf_litter:'oak',oak_bees_0002_leaf_litter:'oak',fancy_oak_bees_0002_leaf_litter:'oak',trees_plains:'oak',
+  birch:'birch',birch_bees_0002:'birch',birch_bees_002:'birch',birch_bees_005:'birch',birch_leaf_litter:'birch',birch_bees_0002_leaf_litter:'birch',trees_birch:'birch',birch_tall:'tallbirch',super_birch_bees:'tallbirch',super_birch_bees_0002:'tallbirch',
+  spruce:'spruce',pine:'spruce',trees_taiga:'spruce',trees_snowy:'spruce',mega_spruce:'megaspruce',mega_pine:'megaspruce',trees_old_growth_spruce_taiga:'megaspruce',trees_old_growth_pine_taiga:'megaspruce',
+  jungle_tree:'jungle',jungle_tree_no_vine:'jungle',mega_jungle_tree:'jungle',trees_jungle:'jungle',trees_sparse_jungle:'jungle',acacia:'savanna',trees_savanna:'savanna',dark_oak:'darkoak',dark_oak_leaf_litter:'darkoak',
+  cherry:'cherry',cherry_bees_005:'cherry',mangrove:'mangrove',tall_mangrove:'mangrove',pale_oak:'paleoak',pale_oak_bonemeal:'paleoak',pale_oak_creaking:'paleoak',swamp_oak:'swamp',trees_water:'swamp',
+  huge_red_mushroom:'hugemush',huge_brown_mushroom:'hugemush',ice_spike:'spike',bamboo_no_podzol:'bamboo',bamboo_some_podzol:'bamboo',cactus:'cactus'};
+CmdArg.feature=()=>({parse(r){const st=r.i,id=r.id();if(!id.startsWith('minecraft:')||!FEAT_IDS.includes(mcN(id)))throw r.at(st,'pf_bad',id);return id},sug:b=>cmdSugRes(b,FEAT_IDS.map(x=>'minecraft:'+x))});
+function placeFeature(c,id,pos){const P=pos?cmdCoordBlock(pos,c):{x:Math.floor(c.pos.x),y:Math.floor(c.pos.y),z:Math.floor(c.pos.z)};cLoaded(P);const kind=FEAT_TREE[mcN(id)];
+  const below=getB(P.x,P.y-1,P.z),here=getB(P.x,P.y,P.z);if(!kind||!SOLID[below]||!(here===AIR||canReplace(here)||B[here]&&B[here].sap))cFail('pf_fail');let n=0;
+  placeTree(kind,P.x,P.y-1,P.z,Math.random(),(x,y,z,b,m)=>{const o=getB(x,y,z);if(isLog(b)||canReplace(o)||B[o]&&B[o].sap||o===AIR){setBlock(x,y,z,b,true,false,m|0);n++}else if(b===DIRT&&o===GRASS)setBlock(x,y,z,DIRT,true)});
+  if(!n)cFail('pf_fail');cFb(c,'pf_ok',id,P.x,P.y-cYO(c),P.z);return 1}
+// 구조물: 세계 붓 (청크 안 붓과 같은 모양) · 청크 붓을 쓰는 것은 불러온 청크 사본에 찍고 바뀐 칸만 놓아요
+function worldBrush(){const B_={set(x,y,z,id,m){if(y<1||y>=H-1)return;setBlock(x,y,z,id,true,false,m|0)},get(x,y,z){if(!chunks.has(ck(x>>4,z>>4))||y<0||y>=H)return -1;return getB(x,y,z)},
+  soft(x,y,z,id,m){const v=B_.get(x,y,z);if(v===AIR||v===WATER||v===TALLGRASS||v===FERN||(B[v]&&B[v].cross)||v===SNOW_LAYER)B_.set(x,y,z,id,m)},chest(x,y,z,kind){B_.set(x,y,z,CHEST);VCHEST.set(tkey(x,y,z),kind)},spawner(x,y,z,type){B_.set(x,y,z,SPAWNER);SPAWNERS.set(tkey(x,y,z),type)},
+  pillar(x,y,z,id,lim=20){for(let k=0;k<lim;k++){const v=B_.get(x,y-k,z);if(v<0)return;if(SOLID[v]&&v!==LEAVES&&!(B[v]&&B[v].cut))return;B_.set(x,y-k,z,id)}}};return B_}
+function stampLoaded(x0,z0,x1,z1,fn){let n=0;for(let cx=x0>>4;cx<=x1>>4;cx++)for(let cz=z0>>4;cz<=z1>>4;cz++){const ch=chunks.get(ck(cx,cz));if(!ch)continue;const b=ch.b.slice(),ox=cx*16,oz=cz*16;b.__meta=new Map();fn(b,ox,oz);
+    for(let i=0;i<b.length;i++){const m=b.__meta.get(i);if(b[i]!==ch.b[i]||m!=null&&m!==ch.m[i]){setBlock(ox+(i&15),i>>8,oz+((i>>4)&15),b[i],true,false,m|0);n++}}}return n}
+const STRUCT_ALIAS={mineshaft_mesa:'mineshaft',shipwreck_beached:'shipwreck',ocean_ruin_cold:'ocean_ruin',ocean_ruin_warm:'ocean_ruin',ruined_portal_desert:'ruined_portal',ruined_portal_jungle:'ruined_portal',ruined_portal_mountain:'ruined_portal',ruined_portal_nether:'ruined_portal',ruined_portal_ocean:'ruined_portal',ruined_portal_swamp:'ruined_portal'};
+const VILLAGE_TY={village_plains:'plains',village_desert:'desert',village_savanna:'savanna',village_snowy:'snowy',village_taiga:'taiga'};
+const placeStructList=()=>{const s=new Set(Object.keys(STRUCT_ALIAS).concat(STRUCT_DEFS.map(d=>d.kind),Object.keys(VILLAGE_TY),['desert_pyramid','buried_treasure']));return[...s].map(x=>'minecraft:'+x)};
+const P4_MCSTRUCTS='abandoned_camp_bamboo_jungle abandoned_camp_birch_forest abandoned_camp_cherry_grove abandoned_camp_dappled_forest abandoned_camp_flower_forest abandoned_camp_forest abandoned_camp_meadow abandoned_camp_old_growth_birch_forest abandoned_camp_old_growth_pine_taiga abandoned_camp_old_growth_spruce_taiga abandoned_camp_pale_garden abandoned_camp_savanna abandoned_camp_snowy_taiga abandoned_camp_sparse_jungle abandoned_camp_swamp abandoned_camp_taiga abandoned_camp_windswept_forest abandoned_camp_wooded_badlands ancient_city bastion_remnant buried_treasure desert_pyramid end_city fortress igloo jungle_pyramid mansion mineshaft mineshaft_mesa monument nether_fossil ocean_ruin_cold ocean_ruin_warm pillager_outpost ruined_portal ruined_portal_desert ruined_portal_jungle ruined_portal_mountain ruined_portal_nether ruined_portal_ocean ruined_portal_swamp shipwreck shipwreck_beached stronghold swamp_hut trail_ruins trial_chambers village_desert village_plains village_savanna village_snowy village_taiga'.split(' ');
+CmdArg.structure=()=>({parse(r){const st=r.i,id=r.id();if(!placeStructList().includes(id)&&!P4_MCSTRUCTS.includes(mcN(id)))throw r.at(st,'ps_bad',id);return id},sug:b=>cmdSugRes(b,[...new Set(placeStructList().concat(P4_MCSTRUCTS.map(x=>'minecraft:'+x)))])});
+function placeStruct(c,id,pos){const P=pos?cmdCoordBlock(pos,c):{x:Math.floor(c.pos.x),y:Math.floor(c.pos.y),z:Math.floor(c.pos.z)};cLoaded(P);const nm=mcN(id),kind=STRUCT_ALIAS[nm]||nm,x=P.x,z=P.z,seed=Math.floor(Math.random()*1e9);
+  const D=STRUCT_DEFS.find(d=>d.kind===kind);let n=0;
+  if(D&&STAMPERS[kind]){let s=null;for(let t=0;t<16&&!s;t++)s=D.test(x,z,mulberry(seed+t*7919));const r=mulberry(seed);
+    s=Object.assign({x,z,y:kind==='mineshaft'?Math.min(P.y,terrainH(x,z)-14):kind==='trial_chambers'?Math.min(P.y,mcY(-20)):kind==='shipwreck'||kind==='ocean_ruin'?terrainH(x,z):minH(x,z,4)+1,rot:r()<.5,base:r()<.5,ax:r()<.5,flip:r()<.5,big:r()<.15,warm:/warm/.test(nm)},s||{},{kind,x,z,seed});
+    if(/ocean_ruin_(warm|cold)/.test(nm))s.warm=nm==='ocean_ruin_warm';const B_=worldBrush();STAMPERS[kind](B_,s);n=1}
+  else if(VILLAGE_TY[nm]&&typeof planVillage==='function'){const V=planVillage(x,z,VILLAGE_TY[nm],mulberry(seed));const o=villagesNear;villagesNear=()=>[V];
+    try{n=stampLoaded(x-110,z-110,x+110,z+110,(b,ox,oz)=>{const hm=new Int16Array(256);for(let i=0;i<256;i++){let y=H-2;while(y>0&&!SOLID[b[bi(i&15,y,i>>4)]])y--;hm[i]=y}stampVillages(b,ox,oz,SEA,hm)})}finally{villagesNear=o}if(n&&typeof spawnVillage==='function'){VSPAWNED.add(V.id);spawnVillage(V)}}
+  else if(nm==='desert_pyramid'&&typeof stampTemple==='function'){let lo=terrainH(x,z);for(const [a,b2] of [[-10,-10],[10,-10],[-10,10],[10,10]])lo=Math.min(lo,terrainH(x+a,z+b2));const t={x,z,y:lo,seed};
+    for(const [a,b2] of [[2,0],[-2,0],[0,2],[0,-2]])VCHEST.set(tkey(x+a,t.y-11,z+b2),'desert_temple');if(typeof TRAPS!=='undefined')TRAPS.set(tkey(x,t.y-11,z),[[x,t.y-13,z],[x+1,t.y-13,z],[x-1,t.y-13,z],[x,t.y-13,z+1],[x,t.y-13,z-1],[x+1,t.y-13,z+1],[x-1,t.y-13,z-1],[x+1,t.y-13,z-1],[x-1,t.y-13,z+1]]);
+    n=stampLoaded(x-24,z-24,x+24,z+24,(b,ox,oz)=>stampTemple(b,ox,oz,t))}
+  else if(nm==='buried_treasure'){const y=terrainH(x,z)-2;setBlock(x,y,z,CHEST,true);VCHEST.set(tkey(x,y,z),'buried');n=1}
+  if(!n)cFail('ps_fail');cFb(c,'ps_ok',id,x,P.y-cYO(c),z);return 1}
+function placeJigsaw(c,a,pos){const m=/^minecraft:village\/(plains|desert|savanna|snowy|taiga)\//.exec(a.pool);if(!m)cFail('pj_fail');const P=pos?cmdCoordBlock(pos,c):{x:Math.floor(c.pos.x),y:Math.floor(c.pos.y),z:Math.floor(c.pos.z)};
+  const q=Object.assign({},c,{feedback(){}});try{placeStruct(q,'minecraft:village_'+m[1],{local:false,v:[{rel:false,d:P.x},{rel:false,d:P.y-cYO(c)},{rel:false,d:P.z}]})}catch(e){cFail('pj_fail')}cFb(c,'pj_ok',P.x,P.y-cYO(c),P.z);return 1}
+cmdReg(cLit('place',
+  cLit('feature',cArg('feature',CmdArg.feature(),(c,a)=>placeFeature(c,a.feature,null),cArg('pos',CmdArg.bpos(),(c,a)=>placeFeature(c,a.feature,a.pos)))),
+  cLit('jigsaw',cArg('pool',{parse(r){const st=r.i,id=r.id();if(!/^minecraft:(village|bastion|pillager_outpost|ancient_city|trail_ruins|trial_chambers|abandoned_camp)\//.test(id))throw r.at(st,'pj_bad',id);return id}},cArg('target',CmdArg.resLoc(()=>[]),cArg('max_depth',CmdArg.int(1,20),(c,a)=>placeJigsaw(c,a,null),cArg('position',CmdArg.bpos(),(c,a)=>placeJigsaw(c,a,a.position)))))),
+  cLit('structure',cArg('structure',CmdArg.structure(),(c,a)=>placeStruct(c,a.structure,null),cArg('pos',CmdArg.bpos(),(c,a)=>placeStruct(c,a.structure,a.pos)))),
+  cLit('template',cArg('template',{parse(r){const st=r.i,id=r.id();throw r.at(st,'pt_bad',id)}},c=>cFail('pt_fail')))));
+// ── /fillbiome (바이옴 칸 = 4×4 기둥 · 세계마다 저장 · 다시 만든 청크에도 그대로) ──
+Object.assign(CMD_MSG,{fb_okN:'%s, %s, %s 부터 %s, %s, %s 까지 바이옴 칸 %7$s개를 바꿨어요',fb_none:'바뀐 바이옴 칸이 없어요',fb_big:'정한 범위에 블록이 너무 많아요 (최대 %s개인데 %s개예요)',fb_cant:'이 차원에서는 %s 바이옴으로 바꿀 수 없어요'});
+const FBD=()=>{const F=dimState.fb||(dimState.fb={});return F[DIM]||(F[DIM]={})};
+const fbGet=(x,z)=>{const F=dimState.fb&&dimState.fb[DIM];return F?F[(x>>2)+','+(z>>2)]:undefined};
+function fbApply(ch,cx,cz){const F=dimState.fb&&dimState.fb[DIM];if(!F||!ch||!ch.bio)return;for(let i=0;i<256;i++){const v=F[((cx*16+(i&15))>>2)+','+((cz*16+(i>>4))>>2)];if(v!=null)ch.bio[i]=v}}
+{const _gc=genChunk;genChunk=function(cx,cz){const ch=_gc.apply(this,arguments);try{fbApply(ch||chunks.get(ck(cx,cz)),cx,cz)}catch(e){}return ch}}
+{const _ba=biomeAtMC;biomeAtMC=function(x,z,cave){if(!cave){const v=fbGet(Math.floor(x),Math.floor(z));if(v!=null&&CMD_BIONAME[v])return CMD_BIONAME[v]}return _ba.apply(this,arguments)}}
+function fillBiome(c,a){const A=cmdCoordBlock(a.from,c),Bq=cmdCoordBlock(a.to,c),q=v=>(v>>2)<<2;
+  const x0=q(Math.min(A.x,Bq.x)),x1=q(Math.max(A.x,Bq.x)),y0=q(Math.min(A.y,Bq.y)),y1=q(Math.max(A.y,Bq.y)),z0=q(Math.min(A.z,Bq.z)),z1=q(Math.max(A.z,Bq.z));
+  const vol=(x1-x0+1)*(y1-y0+1)*(z1-z0+1),mx=gameRule('max_block_modifications')||32768;if(vol>mx)cFail('fb_big',mx,vol);
+  if(y0<0||y1>=H)cFail('out_world');for(let x=x0;;x=Math.min(x1,x+16)){for(let z=z0;;z=Math.min(z1,z+16)){cLoaded({x,y:y0,z});if(z===z1)break}if(x===x1)break}
+  const want=BNAME2ID[mcN(a.biome)];if(DIM!=='over'||want==null)cFail('fb_cant',a.biome);
+  const F=FBD(),yq=(y1-y0)/4+1,flt=a.filter;let n=0;const dirty=new Set();
+  for(let qx=x0>>2;qx<=x1>>2;qx++)for(let qz=z0>>2;qz<=z1>>2;qz++){const bx=qx*4,bz=qz*4,cur=biomeAtMC(bx,bz,false);
+    if(flt){if(flt.tag){const L=(MC_TAGS.biome||{})[flt.tag];if(!L)cFail('tag_bad',flt.tag,'minecraft:worldgen/biome');if(!L.includes(cur))continue}else if(flt.id!==cur)continue}
+    if(cur===CMD_BIONAME[want])continue;F[qx+','+qz]=want;n+=yq;for(let i=0;i<4;i++)for(let k=0;k<4;k++){const ch=chunks.get(ck((bx+i)>>4,(bz+k)>>4));if(ch&&ch.bio){ch.bio[((bx+i)&15)|(((bz+k)&15)<<4)]=want;dirty.add(((bx+i)>>4)+','+((bz+k)>>4))}}}
+  if(!n)cFail('fb_none');for(const k of dirty){const [cx,cz]=k.split(',').map(Number);for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){const ch=chunks.get(ck(cx+i,cz+j));if(ch)ch.dirty=true}}
+  cFb(c,'fb_okN',x0,y0-cYO(c),z0,x1,y1-cYO(c),z1,n);return n}
+cmdReg(cLit('fillbiome',cArg('from',CmdArg.bpos(),cArg('to',CmdArg.bpos(),cArg('biome',CmdArg.res('minecraft:worldgen/biome',cmdAllBiomes),fillBiome,
+  cLit('replace',cArg('filter',CmdArg.resTag('minecraft:worldgen/biome',cmdAllBiomes,()=>Object.keys(MC_TAGS.biome||{})),fillBiome)))))));
+
+// ── /tick (마크 TickCommand): query · rate · freeze · unfreeze · step · sprint ──
+Object.assign(CMD_MSG,{tk_rate:'목표 틱 속도를 초당 %s(으)로 정했어요',tk_q1:'목표 틱 속도: 초당 %s',tk_q2:'틱마다 평균 시간: %sms (목표: %sms)',tk_qs1:'목표 틱 속도: 초당 %s (빨리 돌리는 중이라 참고용이에요)',tk_qs2:'틱마다 평균 시간: %sms',
+  tk_pct:'백분위수: P50: %sms P95: %sms P99: %sms. 표본: %s',tk_frozen:'게임이 멈췄어요',tk_running:'게임이 보통으로 돌아가고 있어요',tk_sprinting:'게임을 빨리 돌리고 있어요',tk_lag:'게임이 돌아가고 있지만 목표 틱 속도를 따라가지 못해요',
+  tk_step:'%s틱 진행해요',tk_stepfail:'게임을 진행할 수 없어요. 먼저 게임을 멈춰야 해요',tk_stepstop:'지금 하던 틱 진행을 멈췄어요',tk_stepnone:'진행 중인 틱이 없어요',
+  tk_sprep:'빨리 돌리기가 끝났어요: 초당 %s틱, 틱마다 %sms',tk_spstop:'지금 하던 빨리 돌리기를 멈췄어요',tk_spnone:'빨리 돌리는 중이 아니에요'});
+const TK={rate:20,frozen:false,step:0,sprint:0,spDone:0,spT0:0,spC:null,vn:null,real:null,off:0,slow:0,ms:[],sv:null};
+const tkF1=v=>(Math.round(v*10)/10).toFixed(1),tkF2=v=>v.toFixed(2);
+// 멈춤: 세계 쪽 일만 (플레이어는 그대로 움직여요 · 마크와 같음)
+function tkSwap(on){if(on){TK.sv=[worldTicks,updateThrowns,updateXP,crystalTick,updateMobs,updateBoats,updateProjs,updateEnts,furnaceTick,spawnTick,decayTick,saplingTick,cropTick,weatherTick,fireTick];const N=()=>{};
+    worldTicks=N;updateThrowns=N;updateXP=N;crystalTick=N;updateMobs=N;updateBoats=N;updateProjs=N;updateEnts=N;furnaceTick=N;spawnTick=N;decayTick=N;saplingTick=N;cropTick=N;weatherTick=N;fireTick=N}
+  else if(TK.sv){[worldTicks,updateThrowns,updateXP,crystalTick,updateMobs,updateBoats,updateProjs,updateEnts,furnaceTick,spawnTick,decayTick,saplingTick,cropTick,weatherTick,fireTick]=TK.sv;TK.sv=null}}
+// 세계 한 틱 (진행 · 빨리 돌리기)
+function tkWorld(dt){if(DIM==='time')dimState.tc=(dimState.tc||0)+dt*TC_SPEED;else worldTime+=dt;worldTicks(dt);updateThrowns(dt);updateXP(dt);crystalTick(dt);updateMobs(dt);updateBoats(dt);updateProjs(dt);updateEnts(dt);furnaceTick(DIM==='time'?dt*TC_SPEED:dt);spawnTick(dt);weatherTick();fireTick();
+  TK.slow+=dt;if(TK.slow>=1){TK.slow=0;decayTick();saplingTick();cropTick()}}
+function tkSprintEnd(){const el=performance.now()-TK.spT0,n=TK.spDone,c=TK.spC;TK.sprint=0;TK.spC=null;if(c&&!c.silent&&gameRule('send_command_feedback'))chatLine(cmdMsg('tk_sprep',tkF2(n/Math.max(.001,el/1000)),tkF2(el/Math.max(1,n))),'#fff')}
+{const _fr=frame;frame=function(now){if(TK.real==null)TK.real=now;if(TK.rate!==20&&TK.sprint<=0)TK.off+=(now-TK.real)*(1-TK.rate/20);TK.real=now;TK.vn=TK.off?now-TK.off:now;const t0=performance.now();
+  if(TK.frozen&&started&&TK.sprint<=0){const wt=worldTime,tc=dimState.tc;tkSwap(true);try{_fr(TK.vn)}finally{tkSwap(false);worldTime=wt;dimState.tc=tc}if(TK.step>0){tkWorld(TICK);TK.step--}}
+  else _fr(TK.vn);
+  if(TK.sprint>0&&started){const s=performance.now();while(TK.sprint>0&&performance.now()-s<25){tkWorld(TICK);TK.sprint--;TK.spDone++}if(TK.sprint<=0)tkSprintEnd()}
+  TK.ms.push(performance.now()-t0);if(TK.ms.length>100)TK.ms.shift()}}
+function tkQuery(c){const L=TK.ms.slice().sort((a,b)=>a-b),avg=L.length?L.reduce((s,v)=>s+v,0)/L.length:0,P=k=>L.length?L[Math.min(L.length-1,Math.floor(L.length*k))]:0,mspt=1000/TK.rate;
+  if(TK.sprint>0){cFb(c,'tk_sprinting');cFb(c,'tk_qs1',tkF1(TK.rate));cFb(c,'tk_qs2',tkF1(avg))}else{cFb(c,TK.frozen?'tk_frozen':avg>mspt?'tk_lag':'tk_running');cFb(c,'tk_q1',tkF1(TK.rate));cFb(c,'tk_q2',tkF1(avg),tkF1(mspt))}
+  cFb(c,'tk_pct',tkF1(P(.5)),tkF1(P(.95)),tkF1(P(.99)),L.length);return TK.rate|0}
+cmdReg(cLit('tick',{perm:3},
+  cLit('query',tkQuery),cLit('rate',cArg('rate',CmdArg.num(1,10000),(c,a)=>{TK.rate=Math.fround(a.rate);cFb(c,'tk_rate',tkF1(TK.rate));return TK.rate|0})),
+  cLit('freeze',c=>{if(TK.sprint>0){TK.sprint=0;TK.spC=null}TK.frozen=true;cFb(c,'tk_frozen');return 1}),cLit('unfreeze',c=>{TK.frozen=false;TK.step=0;cFb(c,'tk_running');return 1}),
+  cLit('step',c=>{if(!TK.frozen)cFail('tk_stepfail');TK.step=1;cFb(c,'tk_step',1);return 1},cLit('stop',c=>{if(TK.step<=0)cFail('tk_stepnone');TK.step=0;cFb(c,'tk_stepstop');return 1}),
+    cArg('time',CmdArg.time(1),(c,a)=>{if(!TK.frozen)cFail('tk_stepfail');TK.step=a.time;cFb(c,'tk_step',a.time);return 1})),
+  cLit('sprint',cLit('stop',c=>{if(TK.sprint<=0)cFail('tk_spnone');tkSprintEnd();cFb(c,'tk_spstop');return 1}),
+    cArg('time',CmdArg.time(1),(c,a)=>{if(TK.sprint>0){tkSprintEnd();cFb(c,'tk_spstop')}TK.sprint=a.time;TK.spDone=0;TK.spT0=performance.now();TK.spC=c;cFb(c,'tk_sprinting');return 1}))));
+
+// ── /return · /function · /schedule (함수 팩이 없어서 이름은 마크처럼 "알 수 없는 함수") ──
+Object.assign(CMD_MSG,{sch_none:'아이디가 %s인 예약이 없어요'});
+cmdReg(cLit('return',cLit('value',cArg('value',CmdArg.int(),(c,a)=>a.value)),cLit('fail',c=>{throw Object.assign(new CmdError(''),{silent6:true})}),cLit('run',{redirect:CROOT})));
+cmdReg(cLit('function',cArg('name',CmdArg.fn6('f'),c=>0)));
+cmdReg(cLit('schedule',cLit('function',cArg('function',CmdArg.fn6('f'),cArg('time',CmdArg.time(0),c=>0))),cLit('clear',cArg('function',CmdArg.resLoc(()=>[]),(c,a)=>cFail('sch_none',a.function)))));
+
+// ── /spectate (관전자만: 대상 눈으로 따라가요 · 웅크리기로 나와요) ──
+Object.assign(CMD_MSG,{spec_ok:'이제 %s을(를) 관전해요',spec_stop:'더 이상 개체를 관전하지 않아요',spec_self:'자기 자신은 관전할 수 없어요',spec_not:'%s은(는) 관전자 모드가 아니에요',spec_cant:'%s은(는) 관전할 수 없어요'});
+function specDo(c,tg,pl){const p=pl?selFind(pl,c)[0]:cSelfP(c);if(!p)cFail('no_pl');const t=tg?selFind(tg,c)[0]:null;if(tg&&!t)cFail('no_ent');if(t===p)cFail('spec_self');
+  if(p===player&&GAMEMODE!=='spectator')cFail('spec_not',cmdEntName(p));if(t&&cmdEntKind(t)!=='mob'&&cmdEntKind(t)!=='remote'&&cmdEntKind(t)!=='item'&&cmdEntKind(t)!=='boat')cFail('spec_cant',cmdEntName(t));
+  if(p===player)player.spec6=t||null;if(t)cFb(c,'spec_ok',cmdEntName(t));else cFb(c,'spec_stop');return 1}
+cmdReg(cLit('spectate',c=>specDo(c,null,null),cArg('target',CmdArg.ent(true,false),(c,a)=>specDo(c,a.target,null),cArg('player',CmdArg.ent(true,true),(c,a)=>specDo(c,a.target,a.player)))));
+function specTick(){const p=player,t=p.spec6;if(!t)return;const alive=cmdEntKind(t)==='mob'?!t.dead&&mobs.includes(t):cmdEntKind(t)==='remote'?[...remotes.values()].includes(t):cmdEnts().includes(t);
+  if(GAMEMODE!=='spectator'||!alive||keys.ShiftLeft||keys.ShiftRight){p.spec6=null;return}const P=cmdEntPos(t),R=cmdEntRot(t);p.pos.set(P.x,P.y+cmdEntEye(t)-eyeH(),P.z);p.vel.set(0,0,0);p.yaw=Math.PI-R.yaw*DEG;p.pitch=-R.pitch*DEG}
+{const _up=updatePlayer;updatePlayer=function(dt){const r=_up.apply(this,arguments);try{specTick()}catch(e){player.spec6=null}return r}}
+
+// ── /swing · /version ──
+Object.assign(CMD_MSG,{sw1:'%s의 팔을 휘두르게 했어요',swN:'개체 %s개의 팔을 휘두르게 했어요',sw_fail:'팔을 휘두를 수 있는 생명체를 찾지 못했어요',ver_h:'서버 버전 정보:'});
+function swingDo(c,tg,hand){const L=(tg?selFind(tg,c):[cSelf(c)]).filter(o=>p4Living(o)||cmdEntKind(o)==='remote');if(!L.length)cFail('sw_fail');
+  for(const o of L){if(o===player)doSwing();else if(o.g)o.swing6=performance.now()}if(L.length===1)cFb(c,'sw1',cmdEntName(L[0]));else cFb(c,'swN',L.length);return L.length}
+cmdReg(cLit('swing',c=>swingDo(c,null,'mainhand'),cArg('targets',CmdArg.ent(false,false),(c,a)=>swingDo(c,a.targets,'mainhand'),cLit('mainhand',(c,a)=>swingDo(c,a.targets,'mainhand')),cLit('offhand',(c,a)=>swingDo(c,a.targets,'offhand')))));
+cmdReg(cLit('version',c=>{for(const t of[cmdMsg('ver_h'),'id = 26.3','name = 26.3','data = 5023','series = main','protocol = 777 (0x309)','build_time = 2026-09-15T11:20:48+00:00','pack_resource = 97.1','pack_data = 121.0','stable = yes'])c.feedback(t);return 1}));
+
+// ── 개체 NBT 가 실제로 하는 일: NoAI (움직이지 않아요) · Invulnerable · Silent ──
+{const _um=updateMobs;updateMobs=function(dt){const held=[];for(let i=mobs.length-1;i>=0;i--){const m=mobs[i];if(m.noAI&&!m.dead){held.push(m);mobs.splice(i,1)}}
+  try{return _um.apply(this,arguments)}finally{for(const m of held){mobs.push(m);if(m.vel)m.vel.set(0,0,0);if(m.g){m.g.position.copy(m.pos);if(m.yOff)m.g.position.y+=m.yOff;m.g.rotation.y=m.yaw||0}}}}}
+{const _hm=hurtMob;hurtMob=function(m,d,src){if(m&&m.invul6&&d<1e6&&!(src===player.pos&&creative()))return;return _hm.apply(this,arguments)}}
+{const _sm=sndMob;sndMob=function(m){if(m&&m.silent6)return;return _sm.apply(this,arguments)}}
+// /summon 의 NBT: 게임이 원래 읽던 것 말고도 Motion · Rotation · Invulnerable · Silent · Glowing · NoGravity · Fire · active_effects · Item … (Pos 는 명령어 좌표가 이겨요)
+{const _sd=summonDo;summonDo=function(c,id,pos,nbt){const before=new Set(cmdEnts()),r=_sd.apply(this,arguments);if(nbt&&typeof nbt==='object'){const N=nbOf(nbt);delete N.Pos;delete N.UUID;
+    for(const e of cmdEnts())if(!before.has(e)&&cmdEntKind(e)!=='player'){try{const T=nbMergeInto(entNbt(e),N);entNbtSet(e,T)}catch(err){}}}return r}}
+// /setblock <블록>{NBT}: 블록 개체 데이터까지 (상자 Items · 화로 …)
+{const _sb=setblockDo;setblockDo=function(c,a,mode){const r=_sb.apply(this,arguments);if(a.block&&a.block.nbt&&typeof a.block.nbt==='object'){const P=cmdCoordBlock(a.pos,c),te=blkTE(P,true);if(te){try{blkNbtSet(P,te,nbMergeInto(blkNbt(P,te),nbOf(a.block.nbt)))}catch(e){}}}return r}}
+// ── 명령어 더 끝 (P4-CMD) ──
 /* ═════════════ 보물: 던전 · 사막 피라미드 (TNT 함정) · 묻힌 보물 + 보물 지도 ═════════════ */
 const TRAPS=new Map();   // 압력판 자리 → 터질 TNT 자리들
 /* ═════════════ 구조물 더: 폐광 · 정글 사원 · 마녀의 오두막 · 이글루 · 약탈자 전초기지 · 난파선 · 바다 폐허 · 폐허가 된 차원문 · 사막 우물 · 화석 ═════════════
