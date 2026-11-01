@@ -5046,7 +5046,7 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     if(D.custom){D.custom(m,dt);continue}
     if(D.ender&&m.angry<=0&&!player.dead&&!creative()&&m.pos.distanceTo(pp)<24){const cd=new V3(0,0,-1).applyQuaternion(camera.quaternion),hv=new V3(m.pos.x,m.pos.y+2.5,m.pos.z).sub(camera.position);const hl=hv.length();if(hv.normalize().dot(cd)>1-.025/Math.max(1,hl/8)&&los(camera.position,new V3(m.pos.x,m.pos.y+2.5,m.pos.z))){m.angry=30;sfx('ender',null,1,m.pos)}}
     const dx=pp.x-m.pos.x,dz=pp.z-m.pos.z,dist=Math.hypot(dx,dz),dy=pp.y-m.pos.y;
-    if(dist>112||(D.hostile&&!D.boss&&!D.persist&&!m.keep&&dist>32&&Math.random()<dt*.025)){scene.remove(m.g);mobs.splice(i,1);continue}
+    if(nsDespawn(m,dt)){scene.remove(m.g);mobs.splice(i,1);continue}   // (P4-MOB) 마크 checkDespawn
     if(!chunks.has(ck(Math.floor(m.pos.x/16),Math.floor(m.pos.z/16))))continue;
     m.ai.t-=dt;if(m.hurtT>0)m.hurtT-=dt;if(m.atk>0)m.atk-=dt;if(m.panic>0)m.panic-=dt;if(m.love>0)m.love-=dt;if(m.breedCD>0)m.breedCD-=dt;if(m.angry>0)m.angry-=dt;
     if(m.baby>0){m.baby-=dt;if(m.baby<=0){m.g.scale.setScalar(1);m.hw=D.hw;m.h=D.h}}
@@ -5259,33 +5259,241 @@ function packSpawn(t,x,y,z,ok,room){const n=Math.min(packN(t),room),pp=player.po
     if(Math.hypot(px+.5-pp.x,pz+.5-pp.z,y-pp.y)<24||!spawnSpot(px,y,pz)||!ok(px,y,pz))continue;spawnMob(t,px+.5,y,pz+.5);c++}return c}
 const slimeChunk=(x,z)=>hash2(x>>4,z>>4,SEED+987)<.1;
 let aniT=0;
-function spawnTick(dt){if(typeof nvTick==='function')nvTick(dt);endTick(dt);timeTick(dt);trialTick(dt);windTick(dt);villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);creakTick(dt);aniT-=dt;spawnT-=dt;if(spawnT>0)return;spawnT=1;extraSpawns3();const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
-  if(DIM!=='over'){dimSpawn(hos);return}
-  // 청크가 처음 만들어질 때 동물 무리 (마크: 청크당 10%)
-  for(let k=pendingAnimals.length-1;k>=0;k--){const [cx,cz]=pendingAnimals[k];const ch=chunks.get(ck(cx,cz));if(!ch){pendingAnimals.splice(k,1);continue}if(!ch.sky)continue;pendingAnimals.splice(k,1);if(ani>=40)continue;
-    const x=cx*16+4+Math.floor(Math.random()*8),z=cz*16+4+Math.floor(Math.random()*8),bm=ch.bio[(x&15)|((z&15)<<4)],list=ANIMALS_BY[bm];if(!list)continue;const type=list[Math.floor(Math.random()*list.length)];
-    const y=surfaceY(x,z);if(y<0||!SOLID[getB(x,y-1,z)]||isLeaf(getB(x,y-1,z)))continue;const n=packN(type);for(let i=0;i<n;i++){const ox=x+(i%2)+(i>>2)*2,oz=z+((i>>1)&1);if(!SOLID[getB(ox,y,oz)]&&SOLID[getB(ox,y-1,oz)])spawnMob(type,ox+.5,y,oz+.5);ani++}}
-  // 몬스터 상한: 마크는 플레이어 주변 17×17 청크에 70마리 → 불러온 청크 수에 비례
-  const cap=clamp(Math.round(70*chunks.size/289),8,30);
-  for(let at=0;at<3&&hos<cap;at++){
-    const a=Math.random()*Math.PI*2,r=24+Math.random()*40,x=Math.floor(pp.x+Math.cos(a)*r),z=Math.floor(pp.z+Math.sin(a)*r);
-    const ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)continue;const bm=ch.bio[(x&15)|((z&15)<<4)];if(bm===BIO.MUSHROOM)continue;   // 버섯 들판엔 몬스터가 안 생겨요
-    if(at<2){const y=surfaceY(x,z);if(y>0&&darkOK(x,y,z)){const t=pickHostile(bm,y,true);hos+=packSpawn(t,x,y,z,darkOK,cap-hos)}}
-    else{const cy=2+Math.floor(Math.random()*Math.max(1,Math.min(H-4,pp.y+16)));if(spawnSpot(x,cy,z)){
-      if(cy<mcY(40)&&slimeChunk(x,z)&&Math.random()<.35)hos+=packSpawn('slime',x,cy,z,()=>true,cap-hos);
-      else if(darkOK(x,cy,z))hos+=packSpawn(pickHostile(bm,cy,false),x,cy,z,darkOK,cap-hos)}}}
+function spawnTick(dt){if(typeof nvTick==='function')nvTick(dt);endTick(dt);timeTick(dt);trialTick(dt);windTick(dt);villageTick(dt);deepDarkTick(dt);spawnerTick(dt);structMobTick(dt);creakTick(dt);aniT-=dt;spawnT-=dt;nsStep(dt);if(spawnT>0)return;spawnT=1;const pp=player.pos;let ani=0,hos=0;for(const m of mobs){if(m.D.hostile)hos++;else ani++}
+  // (P4-MOB) 자연 생성은 nsStep (마크 NaturalSpawner · 모든 차원 · 바이옴 표). 여기는 시간의 방 · 청크 생성 동물 · 팬텀 · 벌만
+  if(DIM!=='over'){pendingAnimals.length=0;if(DIM==='time')dimSpawn(hos);return}
+  for(let k=pendingAnimals.length-1;k>=0;k--){const [cx,cz]=pendingAnimals[k];const ch=chunks.get(ck(cx,cz));if(!ch){pendingAnimals.splice(k,1);continue}if(!ch.sky)continue;pendingAnimals.splice(k,1);if(ani<80)nsChunkGen(cx,cz)}
   const a=Math.random()*Math.PI*2,r=24+Math.random()*28,x=Math.floor(pp.x+Math.cos(a)*r),z=Math.floor(pp.z+Math.sin(a)*r);
   const ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)return;
-  extraSpawns(ch,x,z,hos,ani);
-  // 동물 재스폰: 마크처럼 20초(400틱)마다, 상한 10, 잔디 위 + 빛 9 이상
-  if(aniT<=0){aniT=20;if(ani<10){const y=surfaceY(x,z),bm=ch.bio[(x&15)|((z&15)<<4)],list=ANIMALS_BY[bm];
-    if(y>0&&list&&getB(x,y-1,z)===GRASS){const lit=(px,py,pz)=>{const l=lightAt(px,py,pz);return getB(px,py-1,pz)===GRASS&&Math.max(l[1],Math.round(l[0]*clamp((daylight-.2)/.8,0,1)))>8};packSpawn(list[Math.floor(Math.random()*list.length)],x,y,z,lit,10-ani)}}}}
+  extraSpawns(ch,x,z,hos,ani)}
 function extraSpawns(ch,x,z,hos,ani){const bm=ch.bio[(x&15)|((z&15)<<4)],night=daylight<.45,pp=player.pos;
-  if(night&&hos<16&&[0,21,22,37,38,1,40,41].includes(bm)&&Math.random()<.25&&getB(x,SEA-2,z)===WATER)spawnMob('drowned',x+.5,SEA-2,z+.5);
   if(night&&hos<16&&worldTime-(player.lastRest??(player.lastRest=worldTime))>=DAYLEN*3&&Math.random()<.04&&mobs.filter(m=>m.type==='phantom').length<3&&pp.y>SEA-2&&lightAt(pp.x,pp.y+1,pp.z)[0]>12)spawnMob('phantom',pp.x+(Math.random()-.5)*20,pp.y+20,pp.z+(Math.random()-.5)*20);
   if(!night&&ani<20&&[17,23,36,3].includes(bm)&&Math.random()<.06&&mobs.filter(m=>m.type==='bee').length<6){const y=surfaceY(x,z);if(y>0)spawnMob('bee',x+.5,y+2,z+.5)}
-  if(!night&&ani<20&&[10,25,26].includes(bm)&&Math.random()<.06&&mobs.filter(m=>m.type==='parrot').length<5){const y=surfaceY(x,z);if(y>0)spawnMob('parrot',x+.5,y+3,z+.5)}}
+}
 function surfaceY(x,z){const ch=chunks.get(ck(x>>4,z>>4));if(!ch)return -1;for(let yy=Math.min(H-3,ch.maxY+1);yy>1;yy--){const id=getB(x,yy,z);if(SOLID[id]&&!isLeaf(id)){if(!SOLID[getB(x,yy+1,z)]&&!SOLID[getB(x,yy+2,z)]&&getB(x,yy+1,z)!==WATER)return yy+1;return -1}if(id===WATER)return -1}return -1}
+/* ═════════════ 몹 자연 생성 — 마크 자바 NaturalSpawner (26.3) 그대로 (P4-MOB) ═════════════
+   매 틱 · 플레이어 128칸 안 청크마다 · 분류마다 한 번: 청크 안 무작위 (x,z), y = 바닥..지표+1 → 무리 3번 × 무리 크기만큼 (±5칸씩 걸어요).
+   상한 = 분류 최대 × (8청크 안 불러온 청크 수) / 289 · 동물 (creature) 은 400틱마다 · 몬스터는 24칸 밖, 128칸 넘으면 바로 사라져요.
+   바이옴 표 = vanilla worldgen/biome 의 natural_mob_spawns (이 게임에 없는 몹은 뺐어요) · 구조물 표 = spawn_overrides. */
+const SPAWN_L='bat 10 8 8|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4|spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1|glow_squid 10 4 6|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,chicken 10 4 4,parrot 40 1 2,panda 80 1 2|strider 60 1 2|ghast 40 1 1,magma 100 2 5|turtle 5 2 5|pig 1 1 2,rabbit 2 2 6,sheep 2 2 4|spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,drowned 5 1 1|squid 3 1 4|zpiglin 1 2 4,hoglin 9 3 4,piglin 5 3 4|polar_bear 1 1 2|squid 1 1 4|squid 8 1 4,dolphin 2 1 2|squid 1 1 4,dolphin 1 1 2|rabbit 12 2 3|spider 100 4 4,zombie 19 4 4,skeleton 50 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,husk 80 4 4|spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,drowned 95 4 4|enderman 10 4 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,rabbit 4 2 3|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,wolf 5 4 4|goat 5 1 3|spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,drowned 1 1 1|squid 2 1 4|wolf 1 1 1,rabbit 8 2 3,fox 4 2 4|rabbit 10 2 3,polar_bear 1 1 2|spider 100 4 4,zombie 95 4 4,skeleton 20 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,stray 80 4 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,chicken 10 4 4,parrot 40 1 2,panda 1 1 2|squid 10 1 2,dolphin 2 1 2|axolotl 10 4 6|frog 10 2 5|spider 100 4 4,zombie 95 4 4,skeleton 70 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,slime 1 1 1,bogged 30 4 4|rabbit 2 2 6,sheep 2 2 4|mooshroom 8 4 8|ghast 50 4 4,zpiglin 100 4 4,magma 2 4 4,enderman 1 4 4,piglin 15 4 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,wolf 8 4 4,rabbit 4 2 3,fox 8 2 4|spider 100 4 4,zombie 100 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,horse 5 2 6|spider 100 4 4,zombie 90 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1|spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,drowned 100 1 1|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,horse 1 2 6|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,horse 1 2 6,wolf 8 4 8|spider 100 4 4,zombie 90 4 4,skeleton 20 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1,stray 80 4 4|rabbit 4 2 3,goat 5 1 3|skeleton 20 5 5,ghast 50 4 4,enderman 1 4 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,chicken 10 4 4,wolf 8 2 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,frog 10 2 5|drowned 5 1 1,spider 100 4 4,zombie 95 4 4,skeleton 100 4 4,creeper 100 4 4,slime 100 4 4,enderman 10 1 4,witch 5 1 1|squid 10 4 4,dolphin 2 1 2|enderman 1 4 4|sheep 12 4 4,pig 10 4 4,chicken 10 4 4,cow 8 4 4,wolf 2 4 8'.split('|');
+const SPAWN_B='badlands:a0c1m2u3 bamboo_jungle:a0c4m2u3 basalt_deltas:c5m6 beach:a0c7m2u3 birch_forest:a0c1m2u3 cherry_grove:a0c8m2u3 cold_ocean:a0m9u3w10 crimson_forest:c5m11 dark_forest:a0c1m2u3 deep_cold_ocean:a0m9u3w10 deep_dark: deep_frozen_ocean:a0c12m9u3w13 deep_lukewarm_ocean:a0m9u3w14 deep_ocean:a0m9u3w15 desert:a0c16m17u3 dripstone_caves:a0m18u3 end_barrens:m19 end_highlands:m19 end_midlands:m19 eroded_badlands:a0c1m2u3 flower_forest:a0c20m2u3 forest:a0c21m2u3 frozen_ocean:a0c12m9u3w13 frozen_peaks:a0c22m2u3 frozen_river:a0m23u3w24 grove:a0c25m2u3 ice_spikes:a0c26m27u3 jagged_peaks:a0c22m2u3 jungle:a0c28m2u3 lukewarm_ocean:a0m9u3w29 lush_caves:a0x30m2u3 mangrove_swamp:a0c31m32u3 meadow:a0c33m2u3 mushroom_fields:a0c34u3 nether_wastes:c5m35 ocean:a0m9u3w15 old_growth_birch_forest:a0c1m2u3 old_growth_pine_taiga:a0c36m37u3 old_growth_spruce_taiga:a0c36m2u3 pale_garden:a0m2u3 plains:a0c38m39u3 river:a0m40u3w24 savanna:a0c41m39u3 savanna_plateau:a0c42m39u3 small_end_islands:m19 snowy_beach:a0m2u3 snowy_plains:a0c26m43u3 snowy_slopes:a0c44m2u3 snowy_taiga:a0c36m2u3 soul_sand_valley:c5m45 sparse_jungle:a0c46m2u3 stony_peaks:a0m2u3 stony_shore:a0m2u3 sunflower_plains:a0c38m39u3 swamp:a0c47m32u3 taiga:a0c36m2u3 the_end:m19 warm_ocean:a0m48u3w49 warped_forest:c5m50 windswept_forest:a0c1m2u3 windswept_gravelly_hills:a0c1m2u3 windswept_hills:a0c1m2u3 windswept_savanna:a0c41m39u3 wooded_badlands:a0c51m2u3';
+const SPAWN_COST={"soul_sand_valley":{"enderman":[0.7,0.15],"ghast":[0.7,0.15],"skeleton":[0.7,0.15],"strider":[0.7,0.15]},"warped_forest":{"enderman":[1.0,0.12]}};
+const NS_CAT={monster:[70,128],creature:[10,128],ambient:[15,128],axolotls:[5,128],underground_water_creature:[5,128],water_creature:[5,128],water_ambient:[20,64]};
+const NS_CATS=Object.keys(NS_CAT),NS_CK={m:'monster',c:'creature',a:'ambient',x:'axolotls',u:'underground_water_creature',w:'water_creature',f:'water_ambient'};
+const SPAWN_TAB={};{const P=SPAWN_L.map(s=>s.split(',').map(e=>{const q=e.split(' ');return{t:q[0],w:+q[1],a:+q[2],b:+q[3]}}));
+  for(const e of SPAWN_B.split(' ')){const [k,v]=e.split(':'),o=SPAWN_TAB[k]={};for(const m of (v||'').matchAll(/([a-z])(\d+)/g))o[NS_CK[m[1]]]=P[+m[2]]}}
+const NS_GENP={badlands:.03,eroded_badlands:.03,wooded_badlands:.04,ice_spikes:.07,snowy_plains:.07};   // creature_world_gen_spawn_probability (나머지 0.1)
+const NS_SE=(t,w,a,b)=>({t,w,a,b});
+const NS_STRUCT={swamp_hut:{monster:[NS_SE('witch',1,1,1)],creature:[NS_SE('cat',1,1,1)]},pillager_outpost:{monster:[NS_SE('pillager',1,1,1)]},
+  fortress:{monster:[NS_SE('blaze',10,2,3),NS_SE('zpiglin',5,4,4),NS_SE('wskel',8,5,5),NS_SE('skeleton',2,5,5),NS_SE('magma',3,4,4)]}};
+const NS_MOBCAT={};
+'zombie husk drowned skeleton stray bogged creeper spider cave_spider enderman witch slime magma phantom pillager blaze ghast zpiglin piglin piglin_brute hoglin zoglin wskel silverfish shulker breeze creaking warden guardian endermite vindicator evoker vex dragon'.split(' ').forEach(t=>NS_MOBCAT[t]='monster');
+'pig cow sheep chicken horse wolf fox rabbit goat panda parrot polar_bear mooshroom cat turtle frog bee strider ocelot llama donkey camel armadillo sniffer'.split(' ').forEach(t=>NS_MOBCAT[t]='creature');
+NS_MOBCAT.bat='ambient';NS_MOBCAT.axolotl='axolotls';NS_MOBCAT.glow_squid='underground_water_creature';NS_MOBCAT.squid=NS_MOBCAT.dolphin='water_creature';
+'villager iron_golem snow_golem wandering_trader allay'.split(' ').forEach(t=>NS_MOBCAT[t]='misc');
+const NS_MONSTER_CLS=new Set('zombie husk drowned skeleton stray bogged creeper spider cave_spider enderman witch blaze wskel zpiglin piglin piglin_brute silverfish zoglin guardian'.split(' '));   // class Monster → 길찾기 빛 값 ≤ 0.5
+const NS_GRASSY=new Set('pig cow sheep chicken horse panda'.split(' '));   // Animal.checkAnimalSpawnRules (잔디 위)
+const NS_CLUSTER={wolf:8,ghast:1};   // getMaxSpawnClusterSize (나머지 4)
+const NS_WATER=new Set(['squid','glow_squid','dolphin','drowned','axolotl','guardian']),NS_LAVA=new Set(['strider']);   // SpawnPlacementTypes IN_WATER · IN_LAVA (나머지 ON_GROUND)
+let nsAcc=0,nsT=0,nsIds=null;
+const nsR=n=>Math.floor(Math.random()*n);
+const nsDim=()=>DIM==='nether'?{blim:15,ll:7,amb:.1,sky:false}:DIM==='end'?{blim:0,ll:15,amb:.25,sky:false}:{blim:0,ll:-1,amb:0,sky:true};   // dimension_type: monster_spawn_block_light_limit · monster_spawn_light_level · ambient_light (엔드 하늘빛은 예전처럼 0 으로 봐요: 26.x 엔드 하늘빛 15 면 엔더맨이 못 생겨요)
+// 블록 무리: 마크 이름으로 찾아요 (다른 에이전트가 블록을 더해도 따라와요)
+function nsBuildIds(){const S=s=>{const r=new Set();for(const n of s.split(' ')){const id=typeof idOfMC==='function'?idOfMC(n):-1;if(id>=0)r.add(id)}return r};
+  const all=Object.keys(typeof MC_ITEM!=='undefined'?MC_ITEM:{}).map(k=>k.replace(/^minecraft:/,'')),pick=re=>S(all.filter(n=>re.test(n)).join(' '));
+  nsIds={grass:S('grass_block'),rabbit:S('grass_block snow snow_block sand'),fox:S('grass_block snow snow_block podzol coarse_dirt'),wolf:S('grass_block snow snow_block coarse_dirt podzol'),
+    goat:S('stone snow snow_block packed_ice gravel grass_block'),frog:S('grass_block mud mangrove_roots muddy_mangrove_roots'),moosh:S('mycelium'),sand:S('sand red_sand suspicious_sand'),
+    axo:S('clay'),polarAlt:S('ice packed_ice blue_ice frosted_ice'),wart:S('nether_wart_block'),powder:S('powder_snow'),nylium:S('crimson_nylium'),
+    never:S('bedrock barrier tinted_glass glass ice frosted_ice'),soft:S('soul_sand mud'),
+    signal:new Set([...pick(/_button$|_pressure_plate$|^redstone_(wire|torch|wall_torch|block)$|^(lever|repeater|comparator|observer|target|daylight_detector|tripwire_hook|trapped_chest|sculk_sensor|calibrated_sculk_sensor|lightning_rod|detector_rail)$/),...CONNECTS.reduce((a,v,i)=>(v&&a.push(i),a),[])]),
+    rail:pick(/rail$/),danger:new Set([...S('fire soul_fire lava magma_block campfire soul_campfire wither_rose sweet_berry_bush cactus powder_snow'),FIRE,SOUL_FIRE,LAVA,MAGMA,CAMPFIRE,SOUL_CAMPFIRE,WITHER_ROSE,SWEET_BERRY,CACTUS]),
+    glassy:pick(/(^|_)glass$|stained_glass$/)};
+  for(let i=1;i<NB;i++)if(B[i]&&B[i].self&&SOLID[i]&&!OP[i])nsIds.never.add(i);   // 유리처럼 (자기끼리 면을 지우는) 블록 위에는 안 생겨요
+  return nsIds}
+const nsI=()=>nsIds||nsBuildIds();
+// 블록 성질 (마크 BlockState)
+const nsFull=id=>SOLID[id]&&!SHAPED[id]&&BH[id]===1&&!(B[id]&&B[id].shape);   // isCollisionShapeFullBlock
+const nsConductor=id=>nsFull(id)&&OP[id];   // isRedstoneConductor (유리 · 잎 · 얼음은 아니에요)
+function nsTopSturdy(id,x,y,z){if(!SOLID[id])return false;if(nsFull(id)||nsI().soft.has(id))return true;for(const b of shapeBoxes(id,getM(x,y,z),x,y,z))if(b[0]<=0&&b[2]<=0&&b[3]>=1&&b[5]>=1&&b[4]>=1)return true;return false}
+// BlockState.isValidSpawn (아래 블록): 윗면이 꽉 차고 빛 < 14 · 유리/기반암/장벽은 안 돼요 · 잎은 앵무새 · 얼음은 북극곰 · 마그마는 불에 안 타는 몹만
+function nsValidFloor(t,x,y,z){const id=getB(x,y,z),I=nsI();if(isLeaf(id))return t==='parrot'||t==='ocelot';if(id===ICE)return t==='polar_bear';if(id===MAGMA)return !!(MOBDEF[t]&&MOBDEF[t].fireproof);
+  if(I.never.has(id)||EM[id]>=14)return false;return nsTopSturdy(id,x,y,z)}
+// NaturalSpawner.isValidEmptySpawnBlock
+function nsEmpty(t,x,y,z,noFluid){const id=getB(x,y,z),I=nsI();if(nsFull(id))return false;if(I.signal.has(id))return false;if(!noFluid&&(id===WATER||id===LAVA))return false;if(I.rail.has(id))return false;
+  if(I.danger.has(id)&&!(MOBDEF[t]&&MOBDEF[t].fireproof&&id!==WITHER_ROSE&&id!==SWEET_BERRY&&id!==CACTUS))return false;return true}
+// SpawnPlacements.isSpawnPositionOk
+function nsPlaceOK(t,x,y,z){if(y<1||y>=H-1)return false;
+  if(NS_WATER.has(t))return getB(x,y,z)===WATER&&!nsConductor(getB(x,y+1,z));
+  if(NS_LAVA.has(t))return getB(x,y,z)===LAVA;
+  if(t==='phantom')return true;
+  return nsValidFloor(t,x,y-1,z)&&nsEmpty(t,x,y,z)&&nsEmpty(t,x,y+1,z)}
+// 빛: [하늘, 블록] (네더는 하늘빛이 없어요)
+function nsLight(x,y,z){const l=lightAt(x,y,z);return nsDim().sky?l:[0,l[1]]}
+// level.getSkyDarken(): 해 각도 · 비 · 뇌우 → 0~11
+function nsSkyDarken(){if(DIM!=='over')return 0;const a=celestial(worldTime/DAYLEN);let d=1-(Math.cos(a*Math.PI*2)*2+.5);d=clamp(d,0,1);d=1-d;d*=1-(rainLvl||0)*5/16;d*=1-(thunLvl||0)*5/16;d=1-d;return Math.floor(d*11)}
+const nsThunder=()=>DIM==='over'&&(thunLvl||0)>.9&&(rainLvl||0)>.2;
+function nsRawMax(x,y,z,dk){const l=nsLight(x,y,z);return Math.max(l[0]-(dk??nsSkyDarken()),l[1])}
+// DimensionType.brightness → getLightLevelDependentMagicValue
+function nsBright(l){const f=l/15,b=f/(4-3*f),a=nsDim().amb;return a+(1-a)*b}
+// Monster.isDarkEnoughToSpawn
+function nsDark(x,y,z){const P=nsDim(),l=nsLight(x,y,z);if(l[0]>nsR(32))return false;if(P.blim<15&&l[1]>P.blim)return false;
+  const j=nsThunder()?nsRawMax(x,y,z,10):nsRawMax(x,y,z);return j<=(P.ll<0?nsR(8):P.ll)}
+const nsDiffOK=()=>cmdDiff()!=='peaceful';
+const nsBrightEnough=(x,y,z)=>{const l=nsLight(x,y,z);return Math.max(l[0],l[1])>8};   // Animal.isBrightEnoughToSpawn: getRawBrightness(pos,0) > 8
+const nsBelowIn=(set,x,y,z)=>set.has(getB(x,y-1,z));
+function nsMon(t,x,y,z,r){return nsDiffOK()&&nsDark(x,y,z)&&(r==='s'||nsValidFloor(t,x,y-1,z))}
+// SpawnPlacements.checkSpawnRules (몹마다 · r: 'n' 자연 · 'g' 지형 생성 · 's' 생성기)
+function nsRule(t,x,y,z,r){const I=nsI(),sp=r==='s',S=SEA;
+  switch(t){
+    case 'husk':return nsMon(t,x,y,z,r)&&(sp||nsLight(x,y,z)[0]>=15);
+    case 'stray':{let yy=y;while(I.powder.has(getB(x,yy,z)))yy++;return nsMon(t,x,y,z,r)&&(sp||nsLight(x,yy,z)[0]>=15)}
+    case 'drowned':{if(getB(x,y-1,z)!==WATER&&!sp)return false;const ok=nsDiffOK()&&nsDark(x,y,z)&&(sp||getB(x,y,z)===WATER);if(ok&&sp)return true;
+      const k=nsBiomeKey(x,y,z);if(k==='river'||k==='frozen_river')return nsR(15)===0&&ok;return nsR(40)===0&&y<S-5&&ok}
+    case 'slime':{if(!nsDiffOK())return false;if(sp)return true;const k=nsBiomeKey(x,y,z);
+      if((k==='swamp'||k==='mangrove_swamp')&&y>mcY(50)&&y<mcY(70)&&Math.random()<.5&&Math.random()<[1,.75,.5,.25,0,.25,.5,.75][Math.floor(worldTime/DAYLEN)%8]&&nsRawMax(x,y,z)<=nsR(8))return nsValidFloor(t,x,y-1,z);
+      return nsR(10)===0&&slimeChunk(x,z)&&y<mcY(40)&&nsValidFloor(t,x,y-1,z)}
+    case 'magma':return nsDiffOK();
+    case 'blaze':return nsDiffOK()&&(sp||nsValidFloor(t,x,y-1,z));
+    case 'silverfish':return nsDiffOK()&&(sp||nsValidFloor(t,x,y-1,z))&&Math.hypot(x+.5-player.pos.x,y+.5-player.pos.y,z+.5-player.pos.z)>=5;
+    case 'ghast':return nsDiffOK()&&nsR(20)===0&&(sp||nsValidFloor(t,x,y-1,z));
+    case 'zpiglin':return nsDiffOK()&&!nsBelowIn(I.wart,x,y,z);
+    case 'piglin':case 'hoglin':return !nsBelowIn(I.wart,x,y,z);
+    case 'pillager':return nsLight(x,y,z)[1]<=8&&nsDiffOK()&&(sp||nsValidFloor(t,x,y-1,z));   // PatrollingMonster: 블록빛 ≤ 8, 하늘빛은 상관없어요
+    case 'bat':{if(y>=S)return false;const i=nsRawMax(x,y,z);if(Math.random()<.5)return false;return i<=nsR(4)&&(sp||nsValidFloor(t,x,y-1,z))}
+    case 'squid':case 'dolphin':return sp||(y>=S-13&&y<=S&&getB(x,y-1,z)===WATER&&getB(x,y+1,z)===WATER);   // WaterAnimal.checkSurfaceWaterAnimalSpawnRules
+    case 'glow_squid':return sp||(y<=S-33&&Math.max(...nsLight(x,y,z))===0&&getB(x,y,z)===WATER);
+    case 'axolotl':return sp||nsBelowIn(I.axo,x,y,z);
+    case 'turtle':return y<S+4&&nsBelowIn(I.sand,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'strider':{let yy=y;while(getB(x,yy,z)===LAVA)yy++;return getB(x,yy,z)===AIR}
+    case 'mooshroom':return nsBelowIn(I.moosh,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'rabbit':return nsBelowIn(I.rabbit,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'fox':return nsBelowIn(I.fox,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'wolf':return nsBelowIn(I.wolf,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'goat':return nsBelowIn(I.goat,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'frog':return nsBelowIn(I.frog,x,y,z)&&nsBrightEnough(x,y,z);
+    case 'parrot':{const b=getB(x,y-1,z);return (I.grass.has(b)||b===AIR||isLeaf(b)||isLog(b))&&nsBrightEnough(x,y,z)}
+    case 'polar_bear':{const k=nsBiomeKey(x,y,z);if(k==='frozen_ocean'||k==='deep_frozen_ocean')return nsBrightEnough(x,y,z)&&nsBelowIn(I.polarAlt,x,y,z);return nsBelowIn(I.grass,x,y,z)&&nsBrightEnough(x,y,z)}
+  }
+  if(NS_MOBCAT[t]==='creature')return nsBelowIn(I.grass,x,y,z)&&nsBrightEnough(x,y,z);
+  return nsMon(t,x,y,z,r)}
+// Mob.checkSpawnRules = PathfinderMob 길찾기 값 ≥ 0 (몬스터는 어두운 곳 · 동물은 잔디나 밝은 곳)
+function nsWalkOK(t,x,y,z){if(t==='pillager')return true;
+  if(NS_MONSTER_CLS.has(t))return nsBright(nsRawMax(x,y,z))<=.5;
+  if(t==='hoglin')return true;if(t==='mooshroom'&&nsBelowIn(nsI().moosh,x,y,z))return true;if(t==='turtle'&&nsBelowIn(nsI().sand,x,y,z))return true;if(t==='strider'||t==='axolotl')return true;
+  if(NS_MOBCAT[t]==='creature'){if(nsBelowIn(nsI().grass,x,y,z))return true;return nsBright(nsRawMax(x,y,z))>=.5}
+  return true}
+// 상자 (AABB) 가 블록 · 다른 몹 · 플레이어와 겹치지 않아야 해요 (noCollision · isUnobstructed)
+function nsFits(t,px,py,pz){const D=MOBDEF[t];if(!D)return false;const hw=D.hw,h=D.h;if(boxHits(px,py,pz,hw,h))return false;
+  const ov=(x,y,z,w,hh)=>Math.abs(x-px)<w+hw&&y<py+h&&y+hh>py&&Math.abs(z-pz)<w+hw;
+  if(!player.dead&&ov(player.pos.x,player.pos.y,player.pos.z,.3,1.8))return false;
+  for(const m of mobs)if(!m.dead&&ov(m.pos.x,m.pos.y,m.pos.z,m.hw,m.h))return false;return true}
+// 바이옴 (마크 이름): 땅 밑 깊은 곳은 동굴 바이옴
+const NS_BID=[];for(const k in BNAME2ID)NS_BID[BNAME2ID[k]]=k;
+const NS_CB=new Map();
+function nsColTop(x,z){const ch=chunks.get(ck(x>>4,z>>4));if(!ch)return -1;return nsTop(ch,x&15,z&15)}
+function nsBiomeKey(x,y,z){if(DIM==='nether'){const i=typeof nBio==='function'?nBio(x,z):0;return['nether_wastes','soul_sand_valley','crimson_forest','warped_forest','basalt_deltas'][i]||'nether_wastes'}
+  if(DIM==='end')return typeof endBiomeKey==='function'?endBiomeKey(x,z):'the_end';if(DIM!=='over')return '';
+  if(GEN>=2&&WTYPE!=='flat'){if(deepDarkAt(x,y,z))return'deep_dark';const ck2=x*65536+z;let cb=NS_CB.get(ck2);if(cb===undefined){if(NS_CB.size>20000)NS_CB.clear();cb=caveBio(x,z);NS_CB.set(ck2,cb)}
+    if(cb===1||cb===2){const top=nsColTop(x,z);if(top>0&&y<top-8)return cb===1?'dripstone_caves':'lush_caves'}}
+  const ch=chunks.get(ck(x>>4,z>>4));const bm=ch&&ch.bio?ch.bio[(x&15)|((z&15)<<4)]:BIO.PLAINS;return NS_BID[bm]||'plains'}
+// 구조물 안이면 구조물 표 (swamp_hut · pillager_outpost: 이 게임 상자 · fortress: 네더 벽돌 위)
+function nsStructAt(x,y,z){if(DIM==='nether'){if(getB(x,y-1,z)===NETHER_BRICKS&&typeof nvInFortress==='function'&&nvInFortress(x,y,z))return'fortress';return null}
+  if(DIM!=='over'||GEN<4||WTYPE==='flat'||typeof spreadAt!=='function')return null;
+  for(const [D,bx] of [[WHUT,[0,6,-1,5,0,9]],[OUTPOST,[-8,16,-10,23,-1,9]]]){const rx=Math.floor(x/D.sp),rz=Math.floor(z/D.sp);
+    for(let a=-1;a<=0;a++)for(let c=-1;c<=0;c++){const s=spreadAt(D.kind,rx+a,rz+c,D.sp,D.sep,D.salt,D.test);if(s&&x>=s.x+bx[0]&&x<=s.x+bx[1]&&y>=s.y+bx[2]&&y<=s.y+bx[3]&&z>=s.z+bx[4]&&z<=s.z+bx[5])return D.kind}}
+  return null}
+function nsList(cat,x,y,z){const s=nsStructAt(x,y,z);if(s&&NS_STRUCT[s]&&NS_STRUCT[s][cat])return NS_STRUCT[s][cat];const T=SPAWN_TAB[nsBiomeKey(x,y,z)];return(T&&T[cat])||null}
+function nsPick(L){if(!L||!L.length)return null;let tot=0;for(const e of L)tot+=e.w;let r=nsR(tot);for(const e of L){r-=e.w;if(r<0)return e}return null}
+const nsSame=(L,e)=>!!L&&L.some(o=>o.t===e.t&&o.w===e.w&&o.a===e.a&&o.b===e.b);
+// 열 높이 (WORLD_SURFACE: 공기 아닌 가장 높은 칸)
+function nsTop(ch,lx,lz){const b=ch.b,c=lx|lz<<4;for(let y=Math.min(H-1,(ch.maxY??H-2)+1);y>=0;y--)if(b[c|y<<8])return y;return -1}
+let nsSpawnPt=null,nsSpawnKey='';
+function nsWorldSpawn(){if(DIM!=='over')return null;const k=SEED+':'+WTYPE+':'+GEN;if(nsSpawnKey!==k||dimState.wsp&&nsSpawnPt!==dimState.wsp){nsSpawnKey=k;try{nsSpawnPt=worldSpawnXZ()}catch(e){nsSpawnPt=null}}return nsSpawnPt}
+// isRightDistanceToPlayerAndSpawnPoint: 플레이어에게서 24칸 넘게 · 세계 스폰 24칸 밖 · 불러온 청크
+function nsDistOK(x,y,z,d2){if(d2<=576)return false;const w=nsWorldSpawn();if(w&&(x+.5-w.x)**2+(y-w.y)**2+(z+.5-w.z)**2<576)return false;const ch=chunks.get(ck(x>>4,z>>4));return !!(ch&&ch.sky)}
+function nsSpawn(t,x,y,z,r){let baby=false;if((t==='zombie'||t==='husk'||t==='drowned'||t==='zpiglin')&&Math.random()<.05)baby=true;else if(t==='piglin'&&Math.random()<.2)baby=true;
+  const m=spawnMob(t,x,y,z,baby);if(!m||m.dead)return null;if(baby&&t!=='piglin')m.baby=1e9;m.yaw=Math.random()*Math.PI*2;m.nat=0;if(r==='n'||r==='g')m.natural=1;return m}
+// NaturalSpawner.spawnCategoryForPosition
+function nsCatAt(cat,x,y,z,st){const pp=player.pos,dsp=NS_CAT[cat][1];if(nsConductor(getB(x,y,z)))return;let n=0;
+  for(let k=0;k<3;k++){let l=x,m=z,sd=null,o=Math.ceil(Math.random()*4),p=0;
+    for(let q=0;q<o;q++){l+=nsR(6)-nsR(6);m+=nsR(6)-nsR(6);const d2=(l+.5-pp.x)**2+(y-pp.y)**2+(m+.5-pp.z)**2;
+      if(!nsDistOK(l,y,m,d2))continue;
+      if(!sd){sd=nsPick(nsList(cat,l,y,m));if(!sd)break;o=sd.a+nsR(1+sd.b-sd.a)}
+      const t=sd.t;if(!MOBDEF[t])continue;
+      if(cat!=='creature'&&d2>dsp*dsp)continue;   // canSpawnFarFromPlayer 는 동물만
+      if(!nsSame(nsList(cat,l,y,m),sd))continue;   // 걸어 나간 자리도 같은 표여야 해요 (canSpawnMobAt)
+      if(!nsPlaceOK(t,l,y,m)||!nsRule(t,l,y,m,'n')||!nsFits(t,l+.5,y,m+.5)||!nsWalkOK(t,l,y,m))continue;
+      if(!nsSpawn(t,l+.5,y,m+.5,'n'))continue;n++;p++;st.loc[cat]=(st.loc[cat]||0)+1;
+      if(n>=(NS_CLUSTER[t]||4))return}}}
+// 셈: 이름표 · 길들임 · 구조물 몹처럼 사라지지 않는 몹은 빼요
+function nsPersist(m){const D=m.D;return !!(m.keep||m.tamed||m.cname||m.vill||m.trial||m.heart||m.leash||D.persist||D.boss)}
+const nsCatOf=m=>NS_MOBCAT[m.type]||(m.D.hostile?'monster':'creature');
+function nsCounts(){const c={};for(const m of mobs){if(m.dead||nsPersist(m))continue;const k=nsCatOf(m);if(k==='misc')continue;c[k]=(c[k]||0)+1}return c}
+function nsChunks(){const pp=player.pos,pcx=Math.floor(pp.x)>>4,pcz=Math.floor(pp.z)>>4;let n=0;const L=[];
+  for(const ch of chunks.values()){if(!ch.sky)continue;if(Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))<=8)n++;const ex=ch.cx*16+8-pp.x,ez=ch.cz*16+8-pp.z;if(ex*ex+ez*ez<16384)L.push(ch)}
+  for(let i=L.length-1;i>0;i--){const j=nsR(i+1),t=L[i];L[i]=L[j];L[j]=t}return{n,L}}
+const nsCap=(cat,n)=>Math.floor(NS_CAT[cat][0]*n/289);
+// 한 틱 (ServerChunkCache.tickChunks → NaturalSpawner.spawnForChunk)
+function nsTick(){nsT++;if(!started)return;if(DIM==='time'||!gameRule('spawn_mobs'))return;
+  const enemies=nsDiffOK()&&gameRule('spawn_monsters')!==false,persist=nsT%400===0;
+  const {n,L}=nsChunks(),cnt=nsCounts(),cats=NS_CATS.filter(c=>(c!=='monster'||enemies)&&(c!=='creature'||persist)&&(cnt[c]||0)<nsCap(c,n));if(!cats.length)return;
+  const st={loc:Object.assign({},cnt)};
+  for(const ch of L)for(const c of cats){if((st.loc[c]||0)>=NS_CAT[c][0])continue;   // 플레이어마다 상한 (LocalMobCapCalculator)
+    const lx=nsR(16),lz=nsR(16),top=nsTop(ch,lx,lz)+1,y=nsR(top+1);if(y<1)continue;nsCatAt(c,ch.cx*16+lx,y,ch.cz*16+lz,st)}}
+function nsStep(dt){nsAcc+=dt;let g=0;while(nsAcc>=TICK&&g++<4){nsAcc-=TICK;nsTick();nsGolemTick()}if(nsAcc>=TICK)nsAcc=0}
+// 청크가 처음 만들어질 때 동물 (spawnMobsForChunkGeneration: 확률 0.1 · 무리)
+function nsChunkGen(cx,cz){if(DIM!=='over'||!gameRule('spawn_mobs'))return;const x0=cx*16,z0=cz*16,ch=chunks.get(ck(cx,cz));if(!ch)return;
+  const bk=NS_BID[ch.bio?ch.bio[0]:BIO.PLAINS]||'plains',T=SPAWN_TAB[bk],L=T&&T.creature;if(!L)return;const P=NS_GENP[bk]??.1;
+  for(let guard=0;guard<8&&Math.random()<P;guard++){const sd=nsPick(L);if(!sd||!MOBDEF[sd.t])continue;const t=sd.t,k=sd.a+nsR(1+sd.b-sd.a),f=MOBDEF[t].hw*2;
+    let l=x0+nsR(16),m=z0+nsR(16);const n0=l,o0=m;
+    for(let p=0;p<k;p++){let ok=false;for(let q=0;!ok&&q<4;q++){const y=nsGenTop(l,m);
+        if(y>0&&nsPlaceOK(t,l,y,m)){const e=clamp(l,x0+f,x0+16-f),h=clamp(m,z0+f,z0+16-f);
+          if(nsFits(t,e,y,h)&&nsRule(t,Math.floor(e),y,Math.floor(h),'g')&&nsWalkOK(t,Math.floor(e),y,Math.floor(h))&&nsSpawn(t,e,y,h,'g'))ok=true}
+        l+=nsR(5)-nsR(5);m+=nsR(5)-nsR(5);let g2=0;while((l<x0||l>=x0+16||m<z0||m>=z0+16)&&g2++<50){l=n0+nsR(5)-nsR(5);m=o0+nsR(5)-nsR(5)}}}}}
+function nsGenTop(x,z){for(let y=Math.min(H-2,nsColTop(x,z));y>0;y--){const id=getB(x,y,z);if((SOLID[id]||id===WATER||id===LAVA)&&!isLeaf(id))return y+1}return -1}   // MOTION_BLOCKING_NO_LEAVES
+// 몹 사라짐 (Mob.checkDespawn): 128칸 (물고기 64) 넘으면 바로 · 32칸 넘고 30초 넘게 아무 일 없으면 틱마다 1/800
+function nsDespawn(m,dt){const D=m.D;if(nsPersist(m)){if(Math.hypot(player.pos.x-m.pos.x,player.pos.z-m.pos.z)>112){m.nat=0;return true}m.nat=0;return false}   // (이 게임은 먼 청크 몹을 저장하지 않아요: 예전처럼 112칸)
+  const c=nsCatOf(m);if(c==='creature'||c==='misc'){return Math.hypot(player.pos.x-m.pos.x,player.pos.z-m.pos.z)>112}   // 동물은 안 사라져요 (멀면 예전처럼 정리)
+  const d2=(player.pos.x-m.pos.x)**2+(player.pos.y-m.pos.y)**2+(player.pos.z-m.pos.z)**2,ds=NS_CAT[c]?NS_CAT[c][1]:128;
+  if(d2>ds*ds)return true;const tk=dt*20;m.nat=(m.nat||0)+tk;if(m.hurtT>0)m.nat=0;
+  if(NS_MONSTER_CLS.has(m.type)&&nsBright(nsRawMax(m.pos.x,m.pos.y+.5,m.pos.z))>.5)m.nat+=2*tk;
+  if(d2<1024){m.nat=0;return false}return m.nat>600&&Math.random()<1-Math.pow(1-1/800,tk)}
+/* ── 생성기 (BaseSpawner): 플레이어 16칸 안 · 틱마다 대기 줄이고 → 4번 (±4칸 · 위아래 1칸) · 9×9×9 안 같은 몹 6마리면 멈춤 · 성공하면 200~799틱 쉬어요 */
+const SPAWNER_ST=new Map();let spawnerAcc=0;
+function vSpawnerTick(dt){spawnerAcc+=dt;let g=0;while(spawnerAcc>=TICK&&g++<4){spawnerAcc-=TICK;vSpawnerTick1()}if(spawnerAcc>=TICK)spawnerAcc=0}
+function vSpawnerTick1(){const pp=player.pos;
+  for(const [k,type] of SPAWNERS){const [x,y,z]=k.split(',').map(Number);if(!chunks.has(ck(x>>4,z>>4)))continue;if(getB(x,y,z)!==SPAWNER){if(chunks.has(ck(x>>4,z>>4))){SPAWNERS.delete(k);SPAWNER_ST.delete(k)}continue}
+    if(player.dead||(x+.5-pp.x)**2+(y+.5-pp.y)**2+(z+.5-pp.z)**2>=256)continue;   // isNearPlayer (16칸)
+    let S=SPAWNER_ST.get(k);if(!S)SPAWNER_ST.set(k,S={d:20});if(S.d===-1)S.d=200+nsR(600);if(S.d>0){S.d--;continue}
+    if(!MOBDEF[type])continue;let any=false;
+    for(let i=0;i<4;i++){const sx=x+(Math.random()-Math.random())*4+.5,sy=y+nsR(3)-1,sz=z+(Math.random()-Math.random())*4+.5,bx=Math.floor(sx),bz=Math.floor(sz);
+      const D=MOBDEF[type];if(boxHits(sx,sy,sz,D.hw,D.h))continue;if(!nsRule(type,bx,sy,bz,'s'))continue;
+      let near=0;for(const m of mobs)if(!m.dead&&m.type===type&&m.pos.x+m.hw>x-4&&m.pos.x-m.hw<x+5&&m.pos.y+m.h>y-4&&m.pos.y<y+5&&m.pos.z+m.hw>z-4&&m.pos.z-m.hw<z+5)near++;
+      if(near>=6){S.d=200+nsR(600);break}
+      if(!nsWalkOK(type,bx,sy,bz)||!nsFits(type,sx,sy,sz))continue;
+      const m=spawnMob(type,sx,sy,sz);if(!m||m.dead)continue;m.yaw=Math.random()*Math.PI*2;m.nat=0;any=true;for(let q=0;q<4;q++)smoke(sx,sy+.5,sz)}
+    if(any)S.d=200+nsR(600)}}
+/* ── 철 골렘 (Villager.spawnGolemIfNeeded): 하루 안에 잔 주민이 10칸 안에 (공황 3명 · 수다 5명) · 30초 안에 골렘을 못 본 주민 → ±8칸 · 위아래 6칸에 10번 */
+const NS_GOLEM_BAD=()=>{const I=nsI();if(!I.golemBad){I.golemBad=new Set([COBWEB,CACTUS,ICE,GLOWSTONE,...I.glassy,...(()=>{const s=new Set();for(const n of['glass_pane','conduit','tnt','beacon','sea_lantern','frosted_ice','tinted_glass'])if(idOfMC(n)>=0)s.add(idOfMC(n));for(const k in MC_ITEM)if(/stained_glass(_pane)?$/.test(k)&&MC_ITEM[k]>=0)s.add(MC_ITEM[k]);return s})()])}return I.golemBad};
+const nsVillWants=v=>v.lastSlept!=null&&nsT-v.lastSlept<24000&&!(v.golemSeen>nsT);
+function nsGolemTick(){if(DIM!=='over'||nsT%20!==0)return;const V=mobs.filter(m=>m.type==='villager'&&!m.dead);if(!V.length)return;
+  const golems=mobs.filter(m=>m.type==='iron_golem'&&!m.dead);
+  for(const v of V){if(v.sleep||(!v.vill&&isNight()&&nsBedNear(v)))v.lastSlept=nsT;
+    if(nsT%200===0&&golems.some(g=>Math.abs(g.pos.x-v.pos.x)<=16&&Math.abs(g.pos.y-v.pos.y)<=16&&Math.abs(g.pos.z-v.pos.z)<=16))v.golemSeen=nsT+600;   // GolemSensor
+    const panic=v.panic>0||mobs.some(o=>!o.dead&&(o.type==='zombie'||o.type==='husk'||o.type==='drowned'||o.type==='zpiglin'||o.type==='pillager')&&o.pos.distanceTo(v.pos)<8);
+    if(panic&&nsT%100===0)nsGolemTry(v,3,V);
+    else if(!v.sleep&&nsT-(v.gossipT??-1e9)>=1200){const o=V.find(w=>w!==v&&!w.sleep&&w.pos.distanceTo(v.pos)<2.5);if(o){v.gossipT=o.gossipT=nsT;nsGolemTry(v,5,V)}}}}
+function nsBedNear(v){const x=Math.floor(v.pos.x),y=Math.floor(v.pos.y),z=Math.floor(v.pos.z);for(let dy=-1;dy<=0;dy++)for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)if(getB(x+dx,y+dy,z+dz)===BED)return true;return false}
+function nsGolemTry(v,min,V){if(!nsVillWants(v))return false;const L=V.filter(w=>Math.abs(w.pos.x-v.pos.x)<=10+w.hw&&Math.abs(w.pos.y-v.pos.y)<=10+w.h&&Math.abs(w.pos.z-v.pos.z)<=10+w.hw);
+  if(L.filter(nsVillWants).slice(0,5).length<min)return false;const g=nsGolemSpawn(Math.floor(v.pos.x),Math.floor(v.pos.y),Math.floor(v.pos.z));if(g){for(const w of L)w.golemSeen=nsT+600;return true}return false}
+function nsGolemSpawn(x0,y0,z0){const bad=NS_GOLEM_BAD();
+  for(let i=0;i<10;i++){const x=x0+nsR(17)-8,z=z0+nsR(17)-8;let above=getB(x,y0+6,z),y=y0+6,spot=-1;
+    for(let j=6;j>=-6;j--){y--;const below=getB(x,y,z);if(!bad.has(below)&&(above===AIR||above===WATER||above===LAVA)&&(SOLID[below]||nsI().powder.has(below))){spot=y+1;break}above=below}
+    if(spot<0)continue;if(!nsTopSturdy(getB(x,spot-1,z),x,spot-1,z)&&!SOLID[getB(x,spot-1,z)])continue;
+    let ok=nsEmpty('iron_golem',x,spot,z,true);for(let k=1;k<3&&ok;k++)ok=nsEmpty('iron_golem',x,spot+k,z);if(!ok)continue;
+    const D=MOBDEF.iron_golem,px=x+.5,pz=z+.5;let clear=!(!player.dead&&Math.abs(player.pos.x-px)<.3+D.hw&&Math.abs(player.pos.z-pz)<.3+D.hw&&player.pos.y<spot+D.h&&player.pos.y+1.8>spot);
+    for(const m of mobs)if(clear&&!m.dead&&Math.abs(m.pos.x-px)<m.hw+D.hw&&Math.abs(m.pos.z-pz)<m.hw+D.hw&&m.pos.y<spot+D.h&&m.pos.y+m.h>spot)clear=false;if(!clear)continue;
+    const g=spawnMob('iron_golem',px,spot,pz);if(g&&!g.dead){g.natural=1;return g}}return null}
 /* ═════════════ 게임 틱 · 액체 · 레드스톤 ═════════════
    1초 = 20틱, 레드스톤 1틱 = 2게임틱. 블록이 바뀌면 주변을 다시 계산해요. */
 let gameTick=0,tickAcc=0;const SCH=[];const rsQ=new Map();const cmpOut=new Map();let rsBusy=false;
@@ -6010,10 +6218,7 @@ function SEAGRASS_ITEM_OR(){return typeof SEAGRASS!=='undefined'?SEAGRASS:WHEAT}
 // 몬스터 생성기: 요새 · 던전에서 정해진 몹이 나와요
 const SPAWNERS=new Map();
 let spawnerT=0;
-function spawnerTick(dt){spawnerT-=dt;if(spawnerT>0)return;spawnerT=2.5+Math.random()*2;const pp=player.pos;
-  for(const [k,type] of SPAWNERS){const [x,y,z]=k.split(',').map(Number);if(Math.abs(x-pp.x)>16||Math.abs(y-pp.y)>16||Math.abs(z-pp.z)>16)continue;if(getB(x,y,z)!==SPAWNER){SPAWNERS.delete(k);continue}
-    if(mobs.filter(m=>m.type===type&&m.pos.distanceTo(new V3(x,y,z))<9).length>=5)continue;
-    for(let n=0;n<2;n++){for(let t=0;t<6;t++){const sx=x+Math.floor((Math.random()-.5)*8),sy=y+Math.floor((Math.random()-.5)*2),sz=z+Math.floor((Math.random()-.5)*8);if(!SOLID[getB(sx,sy,sz)]&&!SOLID[getB(sx,sy+1,sz)]&&SOLID[getB(sx,sy-1,sz)]){spawnMob(type,sx+.5,sy,sz+.5);for(let q=0;q<4;q++)smoke(sx+.5,sy+.5,sz+.5);break}}}}}
+function spawnerTick(dt){vSpawnerTick(dt)}   // (P4-MOB) 마크 BaseSpawner (아래 nsStep 옆)
 // 새 몹 자연 생성: 동굴의 박쥐 · 물의 오징어/돌고래 · 해변 거북 · 무성한 동굴 아홀로틀 · 깊은 곳 발광 오징어
 function extraSpawns3(){if(DIM!=='over')return;const pp=player.pos,cnt=t=>mobs.filter(m=>m.type===t).length;
   const a=Math.random()*Math.PI*2,r=16+Math.random()*30,x=Math.floor(pp.x+Math.cos(a)*r),z=Math.floor(pp.z+Math.sin(a)*r),ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)return;const bm=ch.bio[(x&15)|((z&15)<<4)];
