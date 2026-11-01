@@ -1,6 +1,7 @@
 // 룬 아고라 — 모험의 대지: world
 // 지형(높이장 · 메시 · 물 · 식생 · 바위) · 길 · 강 · 다리 · 룬 비석(빠른 이동) · 월드맵(M) · 미니맵 · 낮밤 · 글라이더 · 헤엄 · 바람 승강 룬 · 절벽 처리
 // 계약서: docs/agora-modules.md — 필드 물체는 F.FW 에 절대 y, 전투 레이어 이펙트(X.burst 등)는 지면 기준 y
+import { LORE } from './lore/index.js';
 export async function init(G, X, F){
 const { THREE, V3, BUS, TAU } = X;
 const W = F.WORLD, S = X.S, HALF = W.half, WL = W.water, byId = F.byId;
@@ -101,6 +102,78 @@ function scarpInfo(s, x, z){
 }
 function scarpH(s, x, z){ const q = scarpInfo(s, x, z); if (!q) return 0; const tw = lerp(s.w, 64, q.gap); return s.rise * sst(-tw / 2, tw / 2, q.sd) * (1 - sst(160, 420, q.sd)) * q.end; }
 
+// ───────────────────────── 삼각형 언덕 배치 ─────────────────────────
+// 세 가지 크기. 큰 언덕은 지역마다 몇 개, 중간 언덕은 두 볼거리 사이(가운데쯤)에 세워 한쪽에서 다른 쪽이 바로 안 보이게,
+// 작은 언덕은 들판 곳곳에. 길 · 물 · 랜드마크 · 사냥터 · 정착지 · 이야기 물건(lore) 자리는 비켜요 (이미 검사한 좌표가 비탈이 되지 않게).
+const HILLS = [], clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+{ const RG = W.regions, regOf = (x, z) => { let b = null, bk = 1e9; for (const r of RG){ const q = Math.hypot(x - r.c[0], z - r.c[1]) / r.r; if (q < bk){ bk = q; b = r; } } return b; };
+  const KEEPP = [];   // [x, z, 반경]
+  for (const l of W.landmarks) KEEPP.push([l.c[0], l.c[1], l.r + 12]);
+  for (const c of W.camps) KEEPP.push([c.c[0], c.c[1], c.r * 0.9 + 6]);
+  for (const t of W.settlements || []) KEEPP.push([t.c[0], t.c[1], t.r + 12]);
+  for (const w of W.waypoints) KEEPP.push([w.c[0], w.c[1], 16]);
+  for (const n of W.npcs) KEEPP.push([n.c[0], n.c[1], 9]);
+  for (const f of W.fishing) KEEPP.push([f.c[0], f.c[1], 10]);
+  for (const m of W.mesas) KEEPP.push([m.c[0], m.c[1], m.r * 1.3 + 14]);
+  for (const p of W.peaks) KEEPP.push([p.c[0], p.c[1], p.r + 10]);
+  for (const sp of W.spirals) KEEPP.push([sp.c[0], sp.c[1], sp.r0 + 22]);
+  for (const b of W.bridges) KEEPP.push([b.c[0], b.c[1], b.len + 8]);
+  for (const l of W.lifts) KEEPP.push([l.from[0], l.from[1], 14], [l.to[0], l.to[1], 14]);
+  for (const b of W.bluffs) KEEPP.push([b.c[0], b.c[1], b.r + 16]);
+  for (const L of LORE){ const S0 = L.settlement || {}; for (const r of S0.residents || []){ KEEPP.push([r.c[0], r.c[1], 3]); if (r.home) KEEPP.push([r.home[0], r.home[1], 3]); }
+    for (const o of [...(L.readables || []), ...(L.setpieces || []), ...(L.bosses || []), ...(L.keystone ? [L.keystone] : [])]) KEEPP.push([o.c[0], o.c[1], 4]);
+    for (const q of L.quests || []) for (const o of q.o || []) if (o.t === 'reach' && o.c) KEEPP.push([o.c[0], o.c[1], (o.r || 6) + 2]); }
+  const segD = (x, z, a, b) => { const ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez || 1, t = c01(((x - a[0]) * ex + (z - a[1]) * ez) / l2); return Math.hypot(x - a[0] - ex * t, z - a[1] - ez * t); };
+  const lineD = (x, z, pts) => { let d = 1e9; for (let i = 0; i < pts.length - 1; i++) d = Math.min(d, segD(x, z, pts[i], pts[i + 1])); return d; };
+  function free(x, z, r){
+    if (Math.max(Math.abs(x), Math.abs(z)) > 640 - r) return false;
+    const reg = regOf(x, z); if (!reg || reg.safe) return false;
+    for (const [px, pz, pr] of KEEPP) if ((x - px) ** 2 + (z - pz) ** 2 < (pr + r * 0.85) ** 2) return false;
+    for (const rd of W.roads) if (lineD(x, z, rd.pts) < r * 0.8 + rd.w / 2 + 4) return false;
+    for (const rv of W.rivers) if (lineD(x, z, rv.pts) < r * 0.85 + rv.w + 10) return false;
+    for (const rg of W.ridges) if (lineD(x, z, rg.pts) < rg.w + r) return false;
+    for (const L of W.lakes) if (((x - L.c[0]) / (L.rx + r * 0.9 + 10)) ** 2 + ((z - L.c[1]) / (L.rz + r * 0.9 + 10)) ** 2 < 1) return false;
+    for (const s of W.islands) if (Math.hypot(x - s.c[0], z - s.c[1]) < s.r * 2.4 + r) return false;
+    for (const p of W.plateaus){ const d = Math.hypot(x - p.c[0], z - p.c[1]); if (Math.abs(d - p.r) < r + 16) return false; }
+    for (const r0 of W.ramps) if (segD(x, z, r0.from, r0.to) < r + r0.w) return false;
+    for (const sc of W.scarps) if (segD(x, z, sc.a, sc.b) < r + 18) return false;
+    for (const h of HILLS) if ((x - h.x) ** 2 + (z - h.z) ** 2 < ((r + h.r) * (h.sc === 2 ? 0.75 : 0.55)) ** 2) return false;
+    return true;
+  }
+  // 지역별 모양: 높이 비율 · 뾰족함 · 크기 배수 (늪은 낮은 둔덕, 침식지는 가시처럼 뾰족, 설원은 높게)
+  const STY = { greenhill: [0.36, 1.45, 1], woods: [0.34, 1.35, 1], lake: [0.28, 1.3, 0.9], swamp: [0.16, 1.2, 0.8], canyon: [0.4, 1.7, 1], plateau: [0.34, 1.5, 1], blight: [0.42, 1.9, 0.95], frost: [0.44, 1.6, 1.15] };
+  function add(x, z, r, sc, seed){
+    const reg = regOf(x, z), st = STY[reg.id] || STY.greenhill, a = 1 + hash(seed, 7, 1) * 0.7, ang = hash(seed, 7, 2) * Math.PI, p = st[1] + hash(seed, 7, 3) * 0.25;
+    r *= st[2]; const ax = r * a, az = r / Math.sqrt(a), minR = Math.min(ax, az);
+    // 걸어서 오를 수 있게: 가장 가파른 곳(꼭대기 부근 기울기 ≈ p·h/짧은 반지름)을 0.66 아래로
+    const h = Math.min(r * st[0] * (0.85 + hash(seed, 7, 4) * 0.3), 0.66 * minR / p);
+    HILLS.push({ x, z, r, ax, az, ca: Math.cos(ang), sa: Math.sin(ang), h, p, sc, reg: reg.id });
+  }
+  // ⓪ 룬 탑 언덕 (worlddata.towers): 그 자리에 큰 언덕을 먼저 세워요 (꼭대기는 탑 자리로 평평)
+  (W.towers || []).forEach((t, i) => { add(t.c[0], t.c[1], 46, 2, 9000 + i); const hl = HILLS[HILLS.length - 1]; hl.tower = t; hl.h = Math.max(hl.h, 13); });
+  // ① 큰 언덕 (r 50~78): 지역마다 몇 개 — 멀리서도 보이는 표지
+  const BIGN = { greenhill: 3, woods: 2, lake: 1, swamp: 1, canyon: 2, plateau: 2, blight: 2, frost: 1 };
+  { const cnt = {}; for (let t = 0; t < 4000; t++){ const x = (hash(t, 1, 11) - 0.5) * 1240, z = (hash(t, 1, 12) - 0.5) * 1240, r = 50 + hash(t, 1, 13) * 28, reg = regOf(x, z);
+      if (!reg || (cnt[reg.id] || 0) >= (BIGN[reg.id] || 0) || !free(x, z, r)) continue; cnt[reg.id] = (cnt[reg.id] || 0) + 1; add(x, z, r, 2, t); } }
+  // ② 중간 언덕 (r 20~42): 서로 80~240m 떨어진 두 볼거리 사이 — 다가가야 너머가 보여요
+  { const POI = [...W.landmarks.map(l => l.c), ...(W.settlements || []).map(t => t.c), ...W.camps.map(c => c.c), ...W.waypoints.map(w => w.c)];
+    let n = 0; for (let i = 0; i < POI.length; i++) for (let j = i + 1; j < POI.length; j++){ const A = POI[i], B = POI[j], d = Math.hypot(B[0] - A[0], B[1] - A[1]); if (d < 80 || d > 240) continue;
+      const sd = i * 977 + j, off = (hash(sd, 2, 1) - 0.5) * 0.3 * d, t = 0.4 + hash(sd, 2, 2) * 0.2, nx = -(B[1] - A[1]) / d, nz = (B[0] - A[0]) / d;
+      const x = A[0] + (B[0] - A[0]) * t + nx * off, z = A[1] + (B[1] - A[1]) * t + nz * off, r = clamp(d * 0.16, 20, 42);
+      if (hash(sd, 2, 3) < 0.55 && free(x, z, r)){ add(x, z, r, 1, sd); n++; } }
+    // 빈 들판을 더 (55m 칸)
+    for (let j = -11; j <= 11; j++) for (let i = -11; i <= 11; i++){ if (hash(i, j, 21) > 0.32) continue; const x = i * 55 + (hash(i, j, 22) - 0.5) * 40, z = j * 55 + (hash(i, j, 23) - 0.5) * 40, r = 18 + hash(i, j, 24) * 18; if (free(x, z, r)) add(x, z, r, 1, i * 131 + j); } }
+  // ③ 작은 언덕 (r 6~13): 걷는 리듬
+  for (let j = -24; j <= 24; j++) for (let i = -24; i <= 24; i++){ if (hash(i, j, 31) > 0.3) continue; const x = i * 26 + (hash(i, j, 32) - 0.5) * 22, z = j * 26 + (hash(i, j, 33) - 0.5) * 22, r = 6 + hash(i, j, 34) * 7; if (free(x, z, r)) add(x, z, r, 0, i * 7919 + j); }
+}
+// 룬 탑 자리 (BotW 의 탑처럼 멀리서 보이는 「인력」): 지역마다 가장 높은 큰 언덕 꼭대기. 꼭대기는 조금 평평하게 다져요.
+const TOWERS = [];
+for (const h of HILLS) if (h.tower) TOWERS.push({ id: h.tower.id, name: h.tower.name, reg: h.reg, x: h.x, z: h.z, hill: h });
+// 언덕 높이: 기운 타원 + 뾰족한 꼭대기 (pow) + 능선 무늬 조금
+function hillAt(hl, x, z){ const dx = x - hl.x, dz = z - hl.z, u = (dx * hl.ca + dz * hl.sa) / hl.ax, v = (-dx * hl.sa + dz * hl.ca) / hl.az, q = u * u + v * v; if (q >= 1) return 0;
+  const s = Math.max(Math.sqrt(q), hl.tower ? 0.09 : 0), base = Math.pow(1 - s, hl.p) * (1 - 0.35 * sst(0.75, 1, s)); return hl.h * base * (0.9 + 0.2 * ridged(x * 0.03 + hl.x * 0.01, z * 0.03, 2)); }
+F.hills = HILLS;
+
 // ───────────────────────── 높이장 만들기 ─────────────────────────
 const AMP1 = [1.2, 16, 13, 4.5, 1.8, 7, 6, 9, 16], AMP2 = [0.35, 3.2, 3.2, 1.2, 1.5, 2.2, 2.2, 3.4, 5];
 async function buildHeights(){
@@ -178,6 +251,9 @@ async function buildHeights(){
       const px = x - b.c[0], pz = z - b.c[1], u = px * dx0 + pz * dz0, v = Math.abs(-px * dz0 + pz * dx0), d = Math.hypot(px, pz) * (1 + pn(x * 0.09, z * 0.09) * 0.08);
       const rise = b.drop * sst(-b.r * 1.15, b.r * 0.72, u) * sst(b.r, b.r * 0.4, v), edge = lerp(1, sst(b.r + 1, b.r - 3, d), sst(-0.1 * b.r, 0.25 * b.r, u));
       HG[k] += rise * edge + pn(x * 0.2, z * 0.2) * 0.4 * rise / b.drop; }); }
+  await idle();
+  // 3½) 삼각형 언덕 (젤다 BotW 의 「삼각형 법칙」) — 큰 것 = 멀리서 보이는 표지(인력), 중간 = 너머를 가려 「저 뒤엔 뭐가 있지?」, 작은 것 = 걷는 리듬
+  for (const hl of HILLS){ const R = Math.max(hl.ax, hl.az) + 2; box(hl.x - R, hl.z - R, hl.x + R, hl.z + R, (k, x, z) => { const v = hillAt(hl, x, z); if (v > 0) HG[k] += v; }); }
   await idle();
   // 4) 새싹 마을 평탄화 (≈ y 8) + 룬의 관문 앞
   const VL = byId('regions', 'village'), VY = 8;
@@ -394,13 +470,16 @@ const TIMEU = { value: 0 }, DAYU = { value: 1 };
 // ───────────────────────── 지형 재질 (월드 좌표 삼면 투영 디테일 + 지층 + 가시 결맥) ─────────────────────────
 const TMAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0 });
 TMAT.onBeforeCompile = sh => {
-  sh.uniforms.tDet = { value: DET }; sh.uniforms.uTime = TIMEU;
+  sh.uniforms.tDet = { value: DET }; sh.uniforms.uTime = TIMEU; sh.uniforms.uDay = DAYU;
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aT; varying vec4 vT; varying vec3 vWP; varying vec3 vWN;')
     .replace('#include <color_vertex>', '#include <color_vertex>\n vColor.rgb = pow(vColor.rgb, vec3(2.2)); vT = aT;')
     .replace('#include <project_vertex>', '#include <project_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
   sh.fragmentShader = (LOW ? '#define TLOW\n' : '') + sh.fragmentShader.replace('#include <common>', `#include <common>
-uniform sampler2D tDet; uniform float uTime; varying vec4 vT; varying vec3 vWP; varying vec3 vWN;
-vec4 dX, dZ, dA, dB; vec3 tBw;`)
+uniform sampler2D tDet; uniform float uTime, uDay; varying vec4 vT; varying vec3 vWP; varying vec3 vWN;
+vec4 dX, dZ, dA, dB; vec3 tBw;
+// 구름 그림자용 값 노이즈
+float cHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float cNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(cHash(i), cHash(i + vec2(1, 0)), f.x), mix(cHash(i + vec2(0, 1)), cHash(i + vec2(1, 1)), f.x), f.y); }`)
     .replace('#include <color_fragment>', `#include <color_fragment>
   {
     vec3 wn = normalize(vWN); tBw = pow(abs(wn), vec3(5.0)); tBw /= (tBw.x + tBw.y + tBw.z);
@@ -445,7 +524,16 @@ vec4 dX, dZ, dA, dB; vec3 tBw;`)
     float lum = dot(diffuseColor.rgb, vec3(0.3, 0.6, 0.1));
     float spk = step(0.996, fract(sin(dot(floor(vWP.xz * 7.0), vec2(12.9898, 78.233))) * 43758.5453));
     totalEmissiveRadiance += vec3(0.9, 0.95, 1.0) * spk * smoothstep(0.6, 0.8, lum) * 0.8;
-  }`);
+  }`)
+    .replace('#include <lights_fragment_begin>', `
+  #ifndef TLOW
+  { // 구름 그림자: 큰 그림자 덩어리가 바람 따라 땅 위를 흘러가요 (낮에만) — 넓이감이 확 커져요
+    vec2 cp = vWP.xz * 0.0036 + vec2(uTime * 0.0105, uTime * 0.0042);
+    float c = cNoise(cp) * 0.62 + cNoise(cp * 2.31 + 7.3) * 0.28 + cNoise(cp * 5.1 - 3.1) * 0.1;
+    diffuseColor.rgb *= 1.0 - smoothstep(0.54, 0.7, c) * 0.34 * uDay;
+  }
+  #endif
+#include <lights_fragment_begin>`);
 };
 
 // ───────────────────────── 지형 메시 (200m 조각 × 64, 원근 단계 2개 + 치마) ─────────────────────────
@@ -715,6 +803,30 @@ const TINTS = { 1: [0xffb8d0, 0xfff0f4, 0xffc8e0], 2: [0xe8803a, 0xd04a2a, 0xe8c
 const RAMPS = W.ramps, LIFTS = W.lifts, SPIR = W.spirals;
 const UPDRAFTS = [{ x: -168, z: 452, r: 9, top: 52, name: '바람개비 언덕' }];
 { const e = byId('mesas', 'eagle'); if (e) UPDRAFTS.push({ x: e.c[0] - e.r - 11, z: e.c[1] + 6, r: 10, top: e.h + 36, name: '독수리 둥지 바위' }); }
+// 룬 탑: 높이 46m 돌 첨탑 + 꼭대기 룬 수정 (밤에도 멀리서 빛나요). 밑에서 깨우면 둘레 320m 지도가 열리고, 탑을 감싸는 상승 기류가 켜져요 (글라이더로 꼭대기까지)
+S.field.towers = S.field.towers || {};
+const TW_H = 46;
+{ const stone = G.std({ color: 0xcfc6b4, roughness: 0.82, flatShading: true }), band = G.std({ color: 0x2a3440, roughness: 0.6, flatShading: true });
+  const runeOff = G.std({ color: 0x3a4a56, emissive: 0x2a6a80, emissiveIntensity: 0.25, roughness: 0.4 }), runeOn = G.std({ color: 0x9af8ff, emissive: 0x6af0ff, emissiveIntensity: 1.6, roughness: 0.3 });
+  const SG = [], BG = [], RG2 = [];
+  for (const t of TOWERS){ const y = terrainH(t.x, t.z) - 0.6; t.y = y; t.top = y + TW_H;
+    const m = (g, x, yy, z, ry = 0) => g.applyMatrix4(new THREE.Matrix4().makeRotationY(ry)).translate(t.x + x, y + yy, t.z + z);
+    SG.push(m(new THREE.CylinderGeometry(5.2, 6.2, 2.2, 6), 0, 1.1, 0), m(new THREE.CylinderGeometry(4.2, 5.0, 2, 6), 0, 3.2, 0, 0.26));
+    for (let i = 0; i < 6; i++){ const h0 = 4 + i * 6.4, r0 = 3.6 - i * 0.36, r1 = r0 - 0.3; SG.push(m(new THREE.CylinderGeometry(r1, r0, 5.6, 6), 0, h0 + 2.8, 0, i * 0.18)); BG.push(m(new THREE.CylinderGeometry(r1 + 0.18, r1 + 0.22, 0.8, 6), 0, h0 + 5.9, 0, i * 0.18)); }
+    // 꼭대기 받침 · 네 갈래 발톱 · 바닥 룬 띠
+    SG.push(m(new THREE.CylinderGeometry(2.6, 1.6, 2.4, 6), 0, TW_H - 6.2, 0)); for (let i = 0; i < 4; i++){ const a = i * Math.PI / 2 + 0.4; SG.push(m(new THREE.BoxGeometry(0.6, 4.2, 0.9).applyMatrix4(new THREE.Matrix4().makeRotationZ(-0.35)).translate(1.9, 1.6, 0), 0, TW_H - 6.4, 0, a)); }
+    t.rune = new THREE.Mesh(new THREE.CylinderGeometry(3.95, 4.65, 0.5, 6).translate(t.x, y + 4.4, t.z), runeOff); t.crys = new THREE.Mesh(new THREE.OctahedronGeometry(1.9, 0).scale(1, 1.7, 1).translate(t.x, t.top - 1.4, t.z), runeOff);
+    t.glow = X.glowSprite(0xffd890, 16, 0.5); t.glow.material.fog = false; t.glow.position.set(t.x, t.top - 1.2, t.z); t.glow.renderOrder = 2;
+    for (const o of [t.rune, t.crys, t.glow]) F.FW.add(o);
+    F.circle(t.x, t.z, 5.4);
+    t.on = !!S.field.towers[t.id]; t.mats = [runeOff, runeOn];
+    UPDRAFTS.push({ x: t.x, z: t.z, r: 7.5, top: t.top + 26, name: t.name, off: !t.on, tower: t });
+  }
+  if (SG.length){ const ms = new THREE.Mesh(G.mergeGeos(SG), stone); ms.castShadow = ms.receiveShadow = true; F.FW.add(ms); F.FW.add(new THREE.Mesh(G.mergeGeos(BG), band)); }
+  F.towers = TOWERS;
+}
+function towerLook(t){ t.rune.material = t.crys.material = t.mats[t.on ? 1 : 0]; t.glow.material.color.setHex(t.on ? 0x9af8ff : 0xffd890); t.glow.material.opacity = t.on ? 0.95 : 0.5; t.glow.scale.setScalar(t.on ? 22 : 16); }
+for (const t of TOWERS) towerLook(t);
 for (const u of UPDRAFTS){ u.y = terrainH(u.x, u.z); u.top = Math.max(u.top, u.y + 30); }
 F.updrafts = UPDRAFTS;
 function blocked(x, z, pad){
@@ -947,7 +1059,18 @@ for (const u of UPDRAFTS){
     vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform float uTime; varying vec2 vU; void main(){ float s = fract(vU.x * 5.0 + vU.y * 2.2 - uTime * 0.35); float a = smoothstep(0.0, 0.08, s) * smoothstep(0.22, 0.08, s) * sin(vU.y * 3.14159) * 0.26; gl_FragColor = vec4(vec3(0.88, 0.98, 1.0) * a, a); }' }));
   g.add(sw); u.sw = sw;
+  if (u.off) g.visible = false;
 }
+// 룬 탑 깨우기 (E): 지도 공개 · 상승 기류 · 수정이 하늘색으로
+for (const u of UPDRAFTS){ const t = u.tower; if (!t) continue;
+  const it = F.addInteract({ x: t.x, z: t.z + 6.5, r: 5.5, title: t.on ? `🌬 ${t.name} — 글라이더를 펴고 바람을 타요` : `🗼 ${t.name} 깨우기`, action(){
+    if (t.on){ X.hint('🌬 점프한 뒤 Space 를 길게 눌러 글라이더를 펴고 탑을 감싼 바람에 들어가 보세요', 4); return; }
+    t.on = true; u.off = false; u.g.visible = true; S.field.towers[t.id] = Date.now(); towerLook(t); it.title = `🌬 ${t.name} — 글라이더를 펴고 바람을 타요`;
+    fogReveal(t.x, t.z, 320); fogDirty = true; fogSave(); X.sfx('level'); X.sfx('summon');
+    X.burst(new V3(t.x, 2, t.z), 0x9af8ff, 80, 9, 0.4, 1.4, 2, 5); X.shockwave(t.x, 0.2, t.z, 14, 0x9af8ff, 1.0);
+    const reg = byId('regions', t.reg); X.banner('RUNE TOWER', `${t.name}이 깨어났다`, `${reg ? reg.name : ''} 지도가 열렸어요 · 탑을 감싼 바람을 타면 꼭대기까지`, false, 3.4);
+    X.gainExp(Math.round(X.need(S.lv) * 0.12)); BUS.emit('tower', { id: t.id }); BUS.emit('discover', { id: t.id, name: t.name, kind: 'tower' }); X.save(); } }); }
+
 
 // ───────────────────────── 글라이더 (젤다식 패러글라이더) ─────────────────────────
 function makeGlider(){
@@ -1104,6 +1227,20 @@ function moodTick(dt, px, py, pz){
 }
 let NIGHTK = 0;
 // 별 · 달
+// 먼 산맥 (공기 원근): 지도 밖에 산맥 띠를 세 겹 — 멀수록 하늘(안개) 색에 가깝게 옅어져서 땅이 끝없이 이어져 보여요.
+// 안개를 받지 않는 대신 매 프레임 안개 색에서 색을 만들어요. 북쪽(서리)은 높고 남쪽은 낮게.
+const RANGES = (() => { const L = [], defs = [[1150, 210, 0.74, 3], [1480, 300, 0.84, 7], [1880, 420, 0.92, 11]];
+  for (const [R, H, mixK, sd] of defs){ const n = LOW ? 96 : 160, P = [], I = [];
+    for (let i = 0; i <= n; i++){ const a = i / n * TAU, x = Math.cos(a) * R, z = Math.sin(a) * R, north = sst(0, -R, z) * 0.6 + 0.55;
+      const h = H * north * (0.45 + 0.75 * ridged(Math.cos(a) * 3.1 + sd, Math.sin(a) * 3.1 - sd, 4) + 0.18 * pn(a * 9 + sd, sd));
+      P.push(x, -60, z, x, h, z); if (i < n) I.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I);
+    const m = new THREE.MeshBasicMaterial({ color: 0x8899aa, fog: false, side: THREE.DoubleSide, depthWrite: true }), me = new THREE.Mesh(g, m);
+    me.frustumCulled = false; me.renderOrder = -2; me.userData.k = mixK; F.FW.add(me); L.push(me); }
+  return L; })();
+const _rc = new THREE.Color(), _rd = new THREE.Color();
+function rangesTick(px, pz){ const fc = G.scene.fog ? G.scene.fog.color : _rd.set(0x8899aa); _rd.copy(fc).multiplyScalar(0.62).lerp(_rc.setRGB(0.3, 0.38, 0.5), 0.25);
+  for (const me of RANGES){ me.material.color.copy(_rd).lerp(fc, me.userData.k); me.position.set(px * 0.5, 0, pz * 0.5); } }
 const STARS = (() => { const n = LOW ? 700 : 1600, P = new Float32Array(n * 3), Sd = new Float32Array(n);
   for (let i = 0; i < n; i++){ const u = rng(), v = rng() * 0.92 + 0.08, a = u * TAU, y = v, r = Math.sqrt(1 - y * y); P[i * 3] = Math.cos(a) * r * 1600; P[i * 3 + 1] = y * 1600; P[i * 3 + 2] = Math.sin(a) * r * 1600; Sd[i] = rng(); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(Sd, 1));
@@ -1179,7 +1316,7 @@ F.area.mapZoom = 5.2;
 // 미니맵 위: 룬 비석 · 상승 기류 · 승강 룬
 { const prev = F.area.mapDraw; F.area.mapDraw = (c, k) => { if (prev) prev(c, k); const ms = 1.3 / (F.area.mapZoom || 5);
     for (const w of WPS){ const on = wpOn(w.id); c.save(); c.translate(w.c[0] * k, w.c[1] * k); c.rotate(Math.PI / 4 - G.camYaw); c.scale(ms, ms); c.fillStyle = on ? '#7ff3ff' : '#8a8f9a'; if (on){ c.shadowColor = '#7ff3ff'; c.shadowBlur = 8; } c.fillRect(-4, -4, 8, 8); c.restore(); }
-    c.strokeStyle = 'rgba(240,250,255,.8)'; c.lineWidth = 1.2 * ms; for (const u of UPDRAFTS){ c.beginPath(); c.arc(u.x * k, u.z * k, u.r * k, 0, TAU); c.stroke(); } }; }
+    c.strokeStyle = 'rgba(240,250,255,.8)'; c.lineWidth = 1.2 * ms; for (const u of UPDRAFTS){ if (u.off) continue; c.beginPath(); c.arc(u.x * k, u.z * k, u.r * k, 0, TAU); c.stroke(); } }; }
 // 안개 (탐험한 곳만 밝혀요): 128 × 128 칸 (12.5m)
 const FOGN = 128, FOG = new Uint8Array(FOGN * FOGN), FOGS = 256, FOGC = G.cnv(FOGS), FOGA = new Float32Array(FOGS * FOGS), FOGT = new Float32Array(FOGS * FOGS);
 try { if (S.field.fog){ const b = atob(S.field.fog); for (let i = 0; i < b.length && i * 8 < FOG.length; i++){ const v = b.charCodeAt(i); for (let q = 0; q < 8; q++) FOG[i * 8 + q] = (v >> q) & 1; } } } catch (e){}
@@ -1274,6 +1411,7 @@ function drawWorldMap(){
     if (dsc && s > 0.6){ c.font = `700 ${Math.round(11 * fz)}px 'Gowun Batang'`; c.lineWidth = 3; c.strokeStyle = 'rgba(20,14,8,.8)'; c.strokeText(l.name, x, y + 19 * fz); c.fillStyle = raid ? '#ffb0c8' : '#fff3d6'; c.fillText(l.name, x, y + 19 * fz); }
     MV2.hits.push({ x, y, r: 13 * fz, kind: 'lm', o: l }); }
   // 정착지 (agora-towns.js 가 F.towns.list 를 채워요 · 탐험했거나 가 본 곳만)
+  for (const t of TOWERS){ if (!t.on && !revealed(t.x, t.z)) continue; const [x, y] = toS(t.x, t.z); c.font = `${Math.round(17 * fz)}px sans-serif`; c.textAlign = 'center'; c.globalAlpha = t.on ? 1 : 0.55; c.fillText('🗼', x, y + 6 * fz); c.globalAlpha = 1; }
   for (const t of (F.towns && F.towns.list) || []){ if (!t.seen && !revealed(t.c[0], t.c[1])) continue; const [x, y] = toS(t.c[0], t.c[1]);
     c.beginPath(); c.arc(x, y, 11 * fz, 0, TAU); c.fillStyle = 'rgba(70,46,20,.9)'; c.fill(); c.lineWidth = 1.5; c.strokeStyle = '#ffd08a'; c.stroke(); c.font = `${Math.round(12 * fz)}px sans-serif`; c.fillStyle = '#fff'; c.fillText('🏘', x, y + 1);
     if (s > 0.5){ c.font = `700 ${Math.round(11 * fz)}px 'Gowun Batang'`; c.lineWidth = 3; c.strokeStyle = 'rgba(20,14,8,.8)'; c.strokeText(t.name, x, y + 19 * fz); c.fillStyle = '#ffe2b0'; c.fillText(t.name, x, y + 19 * fz); }
@@ -1383,7 +1521,7 @@ function playerTick(dt){
   GLIDER.visible = glideK > 0.03; if (GLIDER.visible){ const e = glideK; GLIDER.scale.set(GSC0 * e * (1 + 0.12 * Math.sin(e * Math.PI)), GSC0 * e, GSC0 * e); GLIDER.rotation.z = gliding ? Math.sin(G.time * 1.3) * 0.05 : 0; }
   if (gliding){
     let vy = -2.2, lift = 0;
-    for (const u of UPDRAFTS){ const d = Math.hypot(p.x - u.x, p.z - u.z); if (d < u.r * 1.25 && p.y < u.top + 4){ const k = 1 - sst(u.r * 0.85, u.r * 1.25, d); lift = Math.max(lift, k); vy = lerp(vy, 12 * (1 - sst(u.top - 14, u.top + 4, p.y)) + 0.4, k); if (Math.random() < 0.3) X.emit(p.x + (Math.random() - 0.5) * 3, p.y - 1, p.z + (Math.random() - 0.5) * 3, 0, 6, 0, 0xeafcff, 0.22, 0.7, { drag: 0.5 }); } }
+    for (const u of UPDRAFTS){ if (u.off) continue; const d = Math.hypot(p.x - u.x, p.z - u.z); if (d < u.r * 1.25 && p.y < u.top + 4){ const k = 1 - sst(u.r * 0.85, u.r * 1.25, d); lift = Math.max(lift, k); vy = lerp(vy, 12 * (1 - sst(u.top - 14, u.top + 4, p.y)) + 0.4, k); if (Math.random() < 0.3) X.emit(p.x + (Math.random() - 0.5) * 3, p.y - 1, p.z + (Math.random() - 0.5) * 3, 0, 6, 0, 0xeafcff, 0.22, 0.7, { drag: 0.5 }); } }
     glY += vy * dt; p.y = Math.max(glY, gy); glY = p.y; pl.vy = 0;
     const want = lerp(G.keys.ShiftLeft || G.keys.ShiftRight ? 11.5 : 9, 3.2, lift); gspd += (want - gspd) * Math.min(1, dt * 1.6);
     const yaw = X.fig.root.rotation.y; p.x += Math.sin(yaw) * gspd * dt; p.z += Math.cos(yaw) * gspd * dt; G.collide(p, 0.36);
@@ -1417,7 +1555,7 @@ G.hooks.push((dt, rdt) => {
   if (Math.hypot(p.x - vegX, p.z - vegZ) > 10){ vegX = p.x; vegZ = p.z; refreshVeg(p.x, p.z); }
   if (Math.hypot(p.x - gcx, p.z - gcz) > 5) refreshGrass(p.x, p.z);
   GRUNI.uP.value.copy(p);
-  moodT -= rdt; if (moodT <= 0){ moodTick(Math.max(0.1, -moodT + 0.1), p.x, p.y, p.z); moodT = 0.1; }
+  moodT -= rdt; if (moodT <= 0){ moodTick(Math.max(0.1, -moodT + 0.1), p.x, p.y, p.z); moodT = 0.1; rangesTick(p.x, p.z); }
   ambTick(rdt);
   STARS.position.copy(cam); STARS.material.uniforms.uOp.value = NIGHTK * 0.95; STARS.visible = NIGHTK > 0.02;
   MOON.s.visible = MOON.h.visible = NIGHTK > 0.03 && MOONV.y > -0.05; if (MOON.s.visible){ MOON.s.position.copy(cam).addScaledVector(MOONV, 1500); MOON.h.position.copy(MOON.s.position); MOON.s.material.opacity = NIGHTK; MOON.h.material.opacity = NIGHTK * 0.25; }

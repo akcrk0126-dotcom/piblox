@@ -176,6 +176,19 @@ export const WORLD = {
     { id: 't_frost', name: '서리 수도원',      en: 'Frostvigil Abbey',  c: [52, -556],  r: 24, region: 'frost',     style: 'monastery', flat: true },
   ],
 
+  // ── 룬 탑 (젤다 BotW 의 탑처럼 멀리서 보이는 「인력」) ──────────────────────
+  // agora-world.js 가 그 자리에 큰 언덕을 세우고 꼭대기에 46m 탑을 올려요. 깨우면 둘레 지도가 열리고 탑을 감싼 바람을 타고 날아올라요.
+  towers: [
+    { id: 'tw_greenhill', name: '바람의 룬 탑',      c: [72, 352] },
+    { id: 'tw_woods',     name: '잎맥의 룬 탑',      c: [-472, 432] },
+    { id: 'tw_lake',      name: '물비늘 룬 탑',      c: [190, 6] },
+    { id: 'tw_swamp',     name: '안개 등대 룬 탑',   c: [520, 270] },
+    { id: 'tw_canyon',    name: '붉은 먼지 룬 탑',   c: [582, -262] },
+    { id: 'tw_plateau',   name: '별지기 룬 탑',      c: [-470, -228] },
+    { id: 'tw_blight',    name: '가시 경계 룬 탑',   c: [-160, -340] },
+    { id: 'tw_frost',     name: '서리 룬 탑',        c: [-124, -572] },
+  ],
+
   // ── 랜드마크 (이름 붙은 장소) ──────────────────────────────────
   // type = agora-landmarks.js 의 빌더 키. r = 발견 반경. raid = 레이드 입구 id.
   landmarks: [
