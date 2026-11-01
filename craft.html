@@ -3785,12 +3785,12 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,1,.05,1200);
 let GAM=.5;try{const g=localStorage.getItem('bc_opt_gam');GAM=g!=null?clamp(+g/100||0,0,1):localStorage.getItem('bc_opt_fb')==='1'?1:.5}catch(e){}
 const gamTxt=v=>v<=0?'어둡게':v>=100?'밝게':v===50?'기본':'+'+v+'%';
 // (P4-FIX) 엑스레이 막기: 꽉 찬 불투명 블록 (OP) 은 옆 블록 면을 지워요 → 그 그림에 투명 픽셀이 있으면 세상 속이 뚫려 보여요.
-// 마크 solid 층처럼 알파를 무시: OP 블록 그림의 투명 픽셀을 옆 픽셀 색으로 메워요 (투명해야 하는 블록과 같이 쓰는 그림은 빼요)
+// 마크 solid 층처럼 알파를 무시 (알파 TA=250 은 바이옴 색 표시라서 그대로 둬요 — 예전엔 잔디 윗면이 회색이 됐어요): OP 블록 그림의 투명 픽셀을 옆 픽셀 색으로 메워요 (투명해야 하는 블록과 같이 쓰는 그림은 빼요)
 {const opT=new Set(),nopT=new Set();for(let i=1;i<NB;i++){const b=B[i];if(!b||!b.tex)continue;const full=OP[i]&&(!b.shape||b.shape==='slab'||b.shape==='observer')&&!b.cross&&!b.torch;for(const t of [...b.tex,TEX[b.face],TEX[b.mface]])if(t!=null)(full?opT:nopT).add(t)}
-  const g=ATLAS.getContext('2d');for(const t of opT){if(nopT.has(t))continue;const X=(t%32)*16,Y=Math.floor(t/32)*16,img=g.getImageData(X,Y,16,16),d=img.data;let bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255)bad++;if(!bad)continue;
-    for(let pass=0;pass<16&&bad;pass++){for(let y=0;y<16;y++)for(let x=0;x<16;x++){const o=(y*16+x)*4;if(d[o+3]===255)continue;let r=0,gg=0,bb=0,n=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>15||ny>15)continue;const q=(ny*16+nx)*4;if(d[q+3]===255){r+=d[q];gg+=d[q+1];bb+=d[q+2];n++}}
-        if(n){d[o]=r/n;d[o+1]=gg/n;d[o+2]=bb/n;d[o+3]=254}}for(let k=3;k<1024;k+=4)if(d[k]===254)d[k]=255;bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255)bad++}
-    if(bad)for(let k=3;k<1024;k+=4)d[k]=255;g.putImageData(img,X,Y);const tc=tileList[t];if(tc&&tc.getContext)tc.getContext('2d').putImageData(img,0,0)}}
+  const g=ATLAS.getContext('2d');for(const t of opT){if(nopT.has(t))continue;const X=(t%32)*16,Y=Math.floor(t/32)*16,img=g.getImageData(X,Y,16,16),d=img.data;let bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255&&d[k]!==TA)bad++;if(!bad)continue;
+    for(let pass=0;pass<16&&bad;pass++){for(let y=0;y<16;y++)for(let x=0;x<16;x++){const o=(y*16+x)*4;if(d[o+3]===255||d[o+3]===TA)continue;let r=0,gg=0,bb=0,n=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>15||ny>15)continue;const q=(ny*16+nx)*4;if(d[q+3]===255||d[q+3]===TA){r+=d[q];gg+=d[q+1];bb+=d[q+2];n++}}
+        if(n){d[o]=r/n;d[o+1]=gg/n;d[o+2]=bb/n;d[o+3]=254}}for(let k=3;k<1024;k+=4)if(d[k]===254)d[k]=255;bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255&&d[k]!==TA)bad++}
+    if(bad)for(let k=3;k<1024;k+=4)if(d[k]!==TA)d[k]=255;g.putImageData(img,X,Y);const tc=tileList[t];if(tc&&tc.getContext)tc.getContext('2d').putImageData(img,0,0)}}
 const atlasTex=new THREE.CanvasTexture(ATLAS);atlasTex.magFilter=atlasTex.minFilter=THREE.NearestFilter;atlasTex.generateMipmaps=false;
 const VS=`attribute vec3 lt;attribute vec3 tc;varying vec2 vUv;varying vec3 vL;varying vec3 vT;varying float vD;void main(){vUv=uv;vL=lt;vT=tc;vec4 wp=modelMatrix*vec4(position,1.);vec3 dd=wp.xyz-cameraPosition;vD=max(length(dd.xz),abs(dd.y));gl_Position=projectionMatrix*viewMatrix*wp;}`;
 // (P2-GFX) 마크 LightTexture 그대로: 하늘빛 = 밝기×(어두워짐×0.95+0.05)×(f,f,1)→흰색 35% · 블록빛 = 밝기×(1.5+깜빡임) 을 주황빛으로 → 더해서 회색 4% · 밝기 50% 감마 · 회색 4%
