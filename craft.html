@@ -5398,7 +5398,7 @@ function updateMobsCore(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp
     else{m.fuse=Math.max(0,m.fuse-dt);const held=inv[sel];if(D.shy&&dist<6&&!player.sneak&&!player.dead)m.panic=Math.max(m.panic,1.2);if(D.ram&&m.angry<=0&&dist<9&&!player.dead&&!creative()&&Math.random()<dt*.04)m.angry=3;
       if(D.food&&held&&held.id===D.food&&dist<8&&!player.dead){dir=Math.atan2(dx,dz);face=dir;sp=dist>2.5?D.sp:0}
       else if(m.love>0){let mate=null;for(const o of mobs)if(o!==m&&o.type===m.type&&o.love>0&&!o.dead&&o.pos.distanceTo(m.pos)<8){mate=o;break}
-        if(mate){dir=Math.atan2(mate.pos.x-m.pos.x,mate.pos.z-m.pos.z);sp=D.sp;if(mate.pos.distanceTo(m.pos)<1.4){m.love=mate.love=0;m.breedCD=mate.breedCD=300;spawnMob(m.type,m.pos.x,m.pos.y+.2,m.pos.z,true);for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+1,m.pos.z)}}}
+        if(mate){dir=Math.atan2(mate.pos.x-m.pos.x,mate.pos.z-m.pos.z);sp=D.sp;if(mate.pos.distanceTo(m.pos)<1.4){m.love=mate.love=0;m.breedCD=mate.breedCD=300;spawnMob(m.type,m.pos.x,m.pos.y+.2,m.pos.z,true);if(typeof advBred==='function')advBred(m);for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+1,m.pos.z)}}}
       else{if(m.ai.t<=0){m.ai.t=2+Math.random()*5;m.ai.mv=Math.random()<.55;m.ai.dir=Math.random()*Math.PI*2}if(m.ai.mv){sp=D.sp*.6;dir=m.ai.dir}}}
     if(face!=null||sp){let dyaw=(face!=null?face:dir)-m.yaw;while(dyaw>Math.PI)dyaw-=Math.PI*2;while(dyaw<-Math.PI)dyaw+=Math.PI*2;m.yaw+=dyaw*Math.min(1,dt*8)}
     if(m.eff)sp=effMob(m,sp,dt);const k=1-Math.exp(-(m.onGround?10:2)*dt);m.vel.x+=(Math.sin(dir)*sp-m.vel.x)*k;m.vel.z+=(Math.cos(dir)*sp-m.vel.z)*k;
@@ -5514,7 +5514,7 @@ function hbArrowHit(p,h){const sp=p.vel.length()*TICK;let d=Math.ceil(Math.max(0
   const src=h.pos.clone().addScaledVector(p.vel.clone().normalize(),-1),bounce=()=>{p.vel.multiplyScalar(-.1);p.skip=h.e;return false};
   if(h.kind==='mob'){const m=h.e;if(m.D.deflect){p.vel.multiplyScalar(-.5);p.skip=m;return false}   // 브리즈: 거꾸로 튕겨내요
     if(m.D.ender){enderTP(m);p.skip=m;return false}   // 엔더맨: 순간 이동해 피하고 화살은 지나가요
-    if(m.hurtT>0)return bounce();sfx('arrowhit',null,1,p.pos);hurtMob(m,d,src);if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
+    if(m.hurtT>0)return bounce();sfx('arrowhit',null,1,p.pos);hurtMob(m,d,src);if(p.owner!=='mob'&&typeof advEv==='function')advEv('player_hurt_entity',{arrow:1});if(!m.dead){if(p.flame)m.fireT=5;if(p.punch){const l=Math.hypot(p.vel.x,p.vel.z)||1;m.vel.x+=p.vel.x/l*p.punch*12;m.vel.z+=p.vel.z/l*p.punch*12;m.vel.y+=2}}return true}
   if(h.kind==='player'){if(creative()||player.hurtT>0)return bounce();hurtPlayer(d,src,p.owner==='mob'?'skeleton':'arrow');if(p.flame)player.burn=5;return true}
   if(h.kind==='remote'){if(p.owner==='mob'&&MPS&&p5mIsAuth()&&h.e.uid){p5mHit(h.e.uid,d,src,'skeleton');return true}if(p.owner!=='player'||!MPS)return bounce();const r=h.e;r.hurtT=.35;sendHit(r,d,src,p.punch||0,p.flame?1.25:0);sfx('hurt');return true}
   if(h.kind==='boat'){hbBoatHit(h.e,d);return true}
@@ -5580,7 +5580,7 @@ addEventListener('keydown',e=>{if(e.code==='F3'&&!e.repeat){hbF3Was=showDebug;f3
 addEventListener('keydown',e=>{if(e.code!=='KeyB'||e.repeat||!keys.F3||chatOpen||screenOpen||menuOpen||!started)return;showHitbox=!showHitbox;f3Combo=true;
   if(showDebug!==hbF3Was){showDebug=hbF3Was;$('debug').classList.toggle('hide',!showDebug)}chatLine('[디버그]: 히트박스: '+(showHitbox?'보이기':'숨기기'),'#ffff55');e.preventDefault()});
 const _itx={};function iconTexURL(u){if(_itx[u])return _itx[u];const img=new Image();img.src=u;const t=new THREE.Texture(img);img.onload=()=>t.needsUpdate=true;t.magFilter=t.minFilter=THREE.NearestFilter;return _itx[u]=t}
-function feedMob(m){if(m.D.villager){openTrade(m);return true}if(useOnMob(m))return true;const st=inv[sel];if(st&&m.D.tame&&!m.tamed&&st.id===BONE){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;m.angry=0;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('늑대를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}if(!st||st.id!==m.D.food||m.baby>0||m.breedCD>0||m.love>0)return false;m.love=30;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}for(let k=0;k<4;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);sfx('eat');return true}
+function feedMob(m){if(m.D.villager){openTrade(m);return true}if(useOnMob(m))return true;const st=inv[sel];if(st&&m.D.tame&&!m.tamed&&st.id===BONE){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;if(typeof advTame==='function')advTame(m);m.angry=0;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('늑대를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}if(!st||st.id!==m.D.food||m.baby>0||m.breedCD>0||m.love>0)return false;m.love=30;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}for(let k=0;k<4;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);sfx('eat');return true}
 let spawnT=0;const pendingAnimals=[];
 const ANIMALS_BY={42:['sheep','cow'],43:['sheep','wolf'],44:['cow','sheep'],49:['wolf','fox','rabbit'],45:['goat'],25:['panda','chicken','pig'],26:['chicken','pig'],27:['cow','sheep'],28:['rabbit'],29:['rabbit'],30:['frog','chicken'],31:['cow','sheep','rabbit'],32:['wolf','fox','rabbit','sheep'],33:['fox','rabbit','wolf'],34:['goat','fox','rabbit'],35:['goat'],36:['cow','sheep','pig','rabbit'],39:['rabbit'],12:['goat'],8:['rabbit'],1:['polar_bear'],3:['cow','sheep','pig','chicken','horse'],4:['pig','chicken','cow','sheep'],5:['cow','sheep','chicken'],6:['wolf','fox','sheep','pig','rabbit'],7:['polar_bear','rabbit','sheep'],9:['cow','sheep','horse'],10:['chicken','pig','panda','cat'],11:['sheep','cow'],13:['frog','chicken','pig'],14:['pig','chicken'],16:['mooshroom'],17:['pig','cow','sheep','chicken'],18:['sheep'],19:['pig','sheep'],20:['sheep','cow'],23:['cow','sheep','chicken']};
 // 마크 스폰 규칙: 몬스터는 블록빛 0 + 하늘빛 ≤ 0~7 무작위, 무리 단위, 플레이어에게서 24칸 이상
@@ -6545,13 +6545,13 @@ function horseBrain(m,dt){if(player.ride!==m)return null;const fw=(keys.KeyW?1:0
 function rideTick(dt){const p=player,m=p.ride;if(!m)return false;
   if(m.dead||!mobs.includes(m)||p.dead){p.ride=null;return false}
   if(rideShift()){p.ride=null;dismountTo(m.pos.x,m.pos.y,m.pos.z,m.yaw??p.yaw,(m.w||1.4),(m.h||1.6));return false}
-  if(!m.tamed){m.tameT=(m.tameT||0)+dt;if(m.tameT>1.6){m.tameT=0;if(Math.random()<.4){m.tamed=1;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast(m.saddle?'말을 길들였어요! WASD 로 달리고 스페이스로 점프':'말을 길들였어요! 안장을 얹으면 몰 수 있어요')}else{p.ride=null;p.pos.set(m.pos.x+1.5,m.pos.y+.5,m.pos.z);p.vel.set(0,6,0);smoke(m.pos.x,m.pos.y+m.h,m.pos.z);toast('말이 떨어뜨렸어요. 다시 타 보세요');sfx('animal_cow');return false}}}
+  if(!m.tamed){m.tameT=(m.tameT||0)+dt;if(m.tameT>1.6){m.tameT=0;if(Math.random()<.4){m.tamed=1;if(typeof advTame==='function')advTame(m);for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast(m.saddle?'말을 길들였어요! WASD 로 달리고 스페이스로 점프':'말을 길들였어요! 안장을 얹으면 몰 수 있어요')}else{p.ride=null;p.pos.set(m.pos.x+1.5,m.pos.y+.5,m.pos.z);p.vel.set(0,6,0);smoke(m.pos.x,m.pos.y+m.h,m.pos.z);toast('말이 떨어뜨렸어요. 다시 타 보세요');sfx('animal_cow');return false}}}
   p.pos.set(m.pos.x,m.pos.y+m.h*.72,m.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true;return true}
 function useOnMob(m){const st=inv[sel];if(piglinUse(m,st))return true;if(typeof nvMobUse==='function'&&nvMobUse(m,st))return true;
   if(m.type==='horse'){if(st&&st.id===SADDLE&&!m.saddle){m.saddle=1;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(m.P.saddle)m.P.saddle.visible=true;sfx('place','wood');return true}
     if(!player.ride&&!m.baby&&!player.sneak){player.ride=m;m.tameT=0;toast(m.tamed?(m.saddle?'WASD 로 달려요 · Shift 로 내리기':'안장을 얹어야 몰 수 있어요'):'말이 날뛰어요... 길들이는 중');return true}}
   if(m.type==='mooshroom'&&st&&st.id===BOWL){st.n--;if(!st.n)inv[sel]=null;addItem({id:MUSHROOM_STEW||BOWL,n:1});renderHotbar();sfx('eat');return true}
-  if(m.type==='cat'&&st&&(st.id===COD||st.id===SALMON)&&!m.tamed){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('고양이를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}
+  if(m.type==='cat'&&st&&(st.id===COD||st.id===SALMON)&&!m.tamed){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;if(typeof advTame==='function')advTame(m);for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('고양이를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}
   return false}
 Object.assign(MOBDEF,{
   bat:{n:'박쥐',hp:6,hw:.25,h:.5,sp:5,fly:1,cave:1,drops:()=>[],snd:'animal_bat',build(g,P){P.body=part(.25,.3,.2,0x4a3a2a);P.body.position.y=.25;g.add(P.body);P.head=part(.22,.2,.2,0x3a2a1a,faceTex('#3a2a1a','#101010'));P.head.position.set(0,.45,0);g.add(P.head);
@@ -15287,7 +15287,6 @@ const ADVU={};for(const l of ADV_UI.split('\n')){const [id,ic,bg,dko,den]=l.spli
 const ADV_TABS=['story','nether','end','adventure','husbandry'],ADV_BG={story:'stone',nether:'netherrack',end:'end_stone',adventure:'coarse_dirt',husbandry:'hay_side'};
 let advTab=null,advScroll={},advBack=null;
 const advVis=id=>{const A=ADV[id];if(!A)return false;if(advDone(id))return true;const kids=q=>(ADV_KIDS[q]||[]).some(k=>advDone(k)||kids(k));if(kids(id))return true;if(A.hid)return false;const p=A.par,g=p&&ADV[p]&&ADV[p].par;return!!p&&(advDone(p)||!!g&&advDone(g))};   // 뿌리는 따야 보여요 (새 세계는 '아무것도 없어 보이네요')
-function advIcon(name){const id=typeof idOfMC==='function'?idOfMC('minecraft:'+name):-1;return id>=0&&ITEM[id]?iconURL(id):''}
 function advLayout(root){const P={};let row=0;const go=(id,d)=>{const K2=(ADV_KIDS[id]||[]).filter(advVis);if(!K2.length){P[id]={x:d,y:row++};return}const ys=K2.map(k=>{go(k,d+1);return P[k].y});P[id]={x:d,y:(ys[0]+ys[ys.length-1])/2}};go(root,0);return P}
 MENU2.adv={back:()=>{if(advBack)showMenu(advBack);else{hideMenu();lockPointer()}},html:()=>{const W=gW(),H=gH(),x0=Math.floor((W-252)/2),y0=Math.floor((H-140)/2)+8;
   const tabs=ADV_TABS.filter(t=>advVis(t+'/root'));if(!tabs.includes(advTab))advTab=tabs[0]||null;
@@ -15614,6 +15613,571 @@ i18nAdd('서버 주인','Server owner');i18nAdd('관리자','Operator');i18nAdd(
 i18nAdd('연결이 끊어졌어요','Connection Lost');i18nAdd('서버에 접속하지 못했어요','Failed to connect to the server');i18nAdd('서버에서 내보내졌어요','Kicked by an operator');
 i18nAdd('이 서버에서 차단됐어요.\n이유: {0}','You are banned from this server.\nReason: {0}');i18nAdd('이 서버의 화이트리스트에 없어요!','You are not white-listed on this server!');i18nAdd('관리자에게 차단됐어요.','Banned by an operator.');
 i18nAdd('이 서버에서 차단됐어요.','You are banned from this server.');i18nAdd('이유: {0}','Reason: {0}');
+// (P4-MENU 3) 발전 과제 조건 표 (misode/mcmeta 26.3 data/advancement: 발전 과제|조건|트리거|값) · 알림/보상 (발전 과제|알림|대화|경험치)
+const ADV_CRIT=`adventure/adventuring_time|minecraft:badlands|location|b:badlands
+adventure/adventuring_time|minecraft:bamboo_jungle|location|b:bamboo_jungle
+adventure/adventuring_time|minecraft:beach|location|b:beach
+adventure/adventuring_time|minecraft:birch_forest|location|b:birch_forest
+adventure/adventuring_time|minecraft:cherry_grove|location|b:cherry_grove
+adventure/adventuring_time|minecraft:cold_ocean|location|b:cold_ocean
+adventure/adventuring_time|minecraft:dappled_forest|location|b:dappled_forest
+adventure/adventuring_time|minecraft:dark_forest|location|b:dark_forest
+adventure/adventuring_time|minecraft:deep_cold_ocean|location|b:deep_cold_ocean
+adventure/adventuring_time|minecraft:deep_dark|location|b:deep_dark
+adventure/adventuring_time|minecraft:deep_frozen_ocean|location|b:deep_frozen_ocean
+adventure/adventuring_time|minecraft:deep_lukewarm_ocean|location|b:deep_lukewarm_ocean
+adventure/adventuring_time|minecraft:deep_ocean|location|b:deep_ocean
+adventure/adventuring_time|minecraft:desert|location|b:desert
+adventure/adventuring_time|minecraft:dripstone_caves|location|b:dripstone_caves
+adventure/adventuring_time|minecraft:eroded_badlands|location|b:eroded_badlands
+adventure/adventuring_time|minecraft:flower_forest|location|b:flower_forest
+adventure/adventuring_time|minecraft:forest|location|b:forest
+adventure/adventuring_time|minecraft:frozen_ocean|location|b:frozen_ocean
+adventure/adventuring_time|minecraft:frozen_peaks|location|b:frozen_peaks
+adventure/adventuring_time|minecraft:frozen_river|location|b:frozen_river
+adventure/adventuring_time|minecraft:grove|location|b:grove
+adventure/adventuring_time|minecraft:ice_spikes|location|b:ice_spikes
+adventure/adventuring_time|minecraft:jagged_peaks|location|b:jagged_peaks
+adventure/adventuring_time|minecraft:jungle|location|b:jungle
+adventure/adventuring_time|minecraft:lukewarm_ocean|location|b:lukewarm_ocean
+adventure/adventuring_time|minecraft:lush_caves|location|b:lush_caves
+adventure/adventuring_time|minecraft:mangrove_swamp|location|b:mangrove_swamp
+adventure/adventuring_time|minecraft:meadow|location|b:meadow
+adventure/adventuring_time|minecraft:mushroom_fields|location|b:mushroom_fields
+adventure/adventuring_time|minecraft:ocean|location|b:ocean
+adventure/adventuring_time|minecraft:old_growth_birch_forest|location|b:old_growth_birch_forest
+adventure/adventuring_time|minecraft:old_growth_pine_taiga|location|b:old_growth_pine_taiga
+adventure/adventuring_time|minecraft:old_growth_spruce_taiga|location|b:old_growth_spruce_taiga
+adventure/adventuring_time|minecraft:pale_garden|location|b:pale_garden
+adventure/adventuring_time|minecraft:plains|location|b:plains
+adventure/adventuring_time|minecraft:river|location|b:river
+adventure/adventuring_time|minecraft:savanna|location|b:savanna
+adventure/adventuring_time|minecraft:savanna_plateau|location|b:savanna_plateau
+adventure/adventuring_time|minecraft:snowy_beach|location|b:snowy_beach
+adventure/adventuring_time|minecraft:snowy_plains|location|b:snowy_plains
+adventure/adventuring_time|minecraft:snowy_slopes|location|b:snowy_slopes
+adventure/adventuring_time|minecraft:snowy_taiga|location|b:snowy_taiga
+adventure/adventuring_time|minecraft:sparse_jungle|location|b:sparse_jungle
+adventure/adventuring_time|minecraft:stony_peaks|location|b:stony_peaks
+adventure/adventuring_time|minecraft:stony_shore|location|b:stony_shore
+adventure/adventuring_time|minecraft:sulfur_caves|location|b:sulfur_caves
+adventure/adventuring_time|minecraft:sunflower_plains|location|b:sunflower_plains
+adventure/adventuring_time|minecraft:swamp|location|b:swamp
+adventure/adventuring_time|minecraft:taiga|location|b:taiga
+adventure/adventuring_time|minecraft:warm_ocean|location|b:warm_ocean
+adventure/adventuring_time|minecraft:windswept_forest|location|b:windswept_forest
+adventure/adventuring_time|minecraft:windswept_gravelly_hills|location|b:windswept_gravelly_hills
+adventure/adventuring_time|minecraft:windswept_hills|location|b:windswept_hills
+adventure/adventuring_time|minecraft:windswept_savanna|location|b:windswept_savanna
+adventure/adventuring_time|minecraft:wooded_badlands|location|b:wooded_badlands
+adventure/avoid_vibration|avoid_vibration|avoid_vibration|
+adventure/hero_of_the_village|hero_of_the_village|hero_of_the_village|
+adventure/kill_a_mob|minecraft:blaze|player_killed_entity|blaze
+adventure/kill_a_mob|minecraft:bogged|player_killed_entity|bogged
+adventure/kill_a_mob|minecraft:breeze|player_killed_entity|breeze
+adventure/kill_a_mob|minecraft:camel_husk|player_killed_entity|camel_husk
+adventure/kill_a_mob|minecraft:cave_spider|player_killed_entity|cave_spider
+adventure/kill_a_mob|minecraft:creaking|player_killed_entity|creaking
+adventure/kill_a_mob|minecraft:creeper|player_killed_entity|creeper
+adventure/kill_a_mob|minecraft:drowned|player_killed_entity|drowned
+adventure/kill_a_mob|minecraft:elder_guardian|player_killed_entity|elder_guardian
+adventure/kill_a_mob|minecraft:ender_dragon|player_killed_entity|ender_dragon
+adventure/kill_a_mob|minecraft:enderman|player_killed_entity|enderman
+adventure/kill_a_mob|minecraft:endermite|player_killed_entity|endermite
+adventure/kill_a_mob|minecraft:evoker|player_killed_entity|evoker
+adventure/kill_a_mob|minecraft:ghast|player_killed_entity|ghast
+adventure/kill_a_mob|minecraft:guardian|player_killed_entity|guardian
+adventure/kill_a_mob|minecraft:hoglin|player_killed_entity|hoglin
+adventure/kill_a_mob|minecraft:husk|player_killed_entity|husk
+adventure/kill_a_mob|minecraft:magma_cube|player_killed_entity|magma_cube
+adventure/kill_a_mob|minecraft:parched|player_killed_entity|parched
+adventure/kill_a_mob|minecraft:phantom|player_killed_entity|phantom
+adventure/kill_a_mob|minecraft:piglin|player_killed_entity|piglin
+adventure/kill_a_mob|minecraft:piglin_brute|player_killed_entity|piglin_brute
+adventure/kill_a_mob|minecraft:pillager|player_killed_entity|pillager
+adventure/kill_a_mob|minecraft:ravager|player_killed_entity|ravager
+adventure/kill_a_mob|minecraft:shulker|player_killed_entity|shulker
+adventure/kill_a_mob|minecraft:silverfish|player_killed_entity|silverfish
+adventure/kill_a_mob|minecraft:skeleton|player_killed_entity|skeleton
+adventure/kill_a_mob|minecraft:slime|player_killed_entity|slime
+adventure/kill_a_mob|minecraft:spider|player_killed_entity|spider
+adventure/kill_a_mob|minecraft:stray|player_killed_entity|stray
+adventure/kill_a_mob|minecraft:vex|player_killed_entity|vex
+adventure/kill_a_mob|minecraft:vindicator|player_killed_entity|vindicator
+adventure/kill_a_mob|minecraft:witch|player_killed_entity|witch
+adventure/kill_a_mob|minecraft:wither|player_killed_entity|wither
+adventure/kill_a_mob|minecraft:wither_skeleton|player_killed_entity|wither_skeleton
+adventure/kill_a_mob|minecraft:zoglin|player_killed_entity|zoglin
+adventure/kill_a_mob|minecraft:zombie|player_killed_entity|zombie
+adventure/kill_a_mob|minecraft:zombie_horse|player_killed_entity|zombie_horse
+adventure/kill_a_mob|minecraft:zombie_nautilus|player_killed_entity|zombie_nautilus
+adventure/kill_a_mob|minecraft:zombie_villager|player_killed_entity|zombie_villager
+adventure/kill_a_mob|minecraft:zombified_piglin|player_killed_entity|zombified_piglin
+adventure/kill_all_mobs|minecraft:blaze|player_killed_entity|blaze
+adventure/kill_all_mobs|minecraft:bogged|player_killed_entity|bogged
+adventure/kill_all_mobs|minecraft:breeze|player_killed_entity|breeze
+adventure/kill_all_mobs|minecraft:camel_husk|player_killed_entity|camel_husk
+adventure/kill_all_mobs|minecraft:cave_spider|player_killed_entity|cave_spider
+adventure/kill_all_mobs|minecraft:creaking|player_killed_entity|creaking
+adventure/kill_all_mobs|minecraft:creeper|player_killed_entity|creeper
+adventure/kill_all_mobs|minecraft:drowned|player_killed_entity|drowned
+adventure/kill_all_mobs|minecraft:elder_guardian|player_killed_entity|elder_guardian
+adventure/kill_all_mobs|minecraft:ender_dragon|player_killed_entity|ender_dragon
+adventure/kill_all_mobs|minecraft:enderman|player_killed_entity|enderman
+adventure/kill_all_mobs|minecraft:endermite|player_killed_entity|endermite
+adventure/kill_all_mobs|minecraft:evoker|player_killed_entity|evoker
+adventure/kill_all_mobs|minecraft:ghast|player_killed_entity|ghast
+adventure/kill_all_mobs|minecraft:guardian|player_killed_entity|guardian
+adventure/kill_all_mobs|minecraft:hoglin|player_killed_entity|hoglin
+adventure/kill_all_mobs|minecraft:husk|player_killed_entity|husk
+adventure/kill_all_mobs|minecraft:magma_cube|player_killed_entity|magma_cube
+adventure/kill_all_mobs|minecraft:parched|player_killed_entity|parched
+adventure/kill_all_mobs|minecraft:phantom|player_killed_entity|phantom
+adventure/kill_all_mobs|minecraft:piglin|player_killed_entity|piglin
+adventure/kill_all_mobs|minecraft:piglin_brute|player_killed_entity|piglin_brute
+adventure/kill_all_mobs|minecraft:pillager|player_killed_entity|pillager
+adventure/kill_all_mobs|minecraft:ravager|player_killed_entity|ravager
+adventure/kill_all_mobs|minecraft:shulker|player_killed_entity|shulker
+adventure/kill_all_mobs|minecraft:silverfish|player_killed_entity|silverfish
+adventure/kill_all_mobs|minecraft:skeleton|player_killed_entity|skeleton
+adventure/kill_all_mobs|minecraft:slime|player_killed_entity|slime
+adventure/kill_all_mobs|minecraft:spider|player_killed_entity|spider
+adventure/kill_all_mobs|minecraft:stray|player_killed_entity|stray
+adventure/kill_all_mobs|minecraft:vex|player_killed_entity|vex
+adventure/kill_all_mobs|minecraft:vindicator|player_killed_entity|vindicator
+adventure/kill_all_mobs|minecraft:witch|player_killed_entity|witch
+adventure/kill_all_mobs|minecraft:wither|player_killed_entity|wither
+adventure/kill_all_mobs|minecraft:wither_skeleton|player_killed_entity|wither_skeleton
+adventure/kill_all_mobs|minecraft:zoglin|player_killed_entity|zoglin
+adventure/kill_all_mobs|minecraft:zombie|player_killed_entity|zombie
+adventure/kill_all_mobs|minecraft:zombie_horse|player_killed_entity|zombie_horse
+adventure/kill_all_mobs|minecraft:zombie_nautilus|player_killed_entity|zombie_nautilus
+adventure/kill_all_mobs|minecraft:zombie_villager|player_killed_entity|zombie_villager
+adventure/kill_all_mobs|minecraft:zombified_piglin|player_killed_entity|zombified_piglin
+adventure/kill_mob_near_sculk_catalyst|kill_mob_near_sculk_catalyst|kill_mob_near_sculk_catalyst|
+adventure/minecraft_trials_edition|minecraft_trials_edition|location|s:trial_chambers
+adventure/ol_betsy|shot_crossbow|shot_crossbow|crossbow
+adventure/root|killed_by_something|entity_killed_player|
+adventure/root|killed_something|player_killed_entity|
+adventure/salvage_sherd|has_sherd|inventory_changed|#decorated_pot_sherds
+adventure/shoot_arrow|shot_arrow|player_hurt_entity|arrow
+adventure/sleep_in_bed|slept_in_bed|slept_in_bed|
+adventure/summon_iron_golem|summoned_golem|summoned_entity|iron_golem
+adventure/totem_of_undying|used_totem|used_totem|totem_of_undying
+adventure/trade|traded|villager_trade|
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim|recipe_crafted|rib_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim|recipe_crafted|silence_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim|recipe_crafted|snout_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim|recipe_crafted|spire_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim|recipe_crafted|tide_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim|recipe_crafted|vex_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim|recipe_crafted|ward_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_all_exclusive_armor_patterns|armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim|recipe_crafted|wayfinder_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:bolt_armor_trim_smithing_template_smithing_trim|recipe_crafted|bolt_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:coast_armor_trim_smithing_template_smithing_trim|recipe_crafted|coast_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:dune_armor_trim_smithing_template_smithing_trim|recipe_crafted|dune_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:eye_armor_trim_smithing_template_smithing_trim|recipe_crafted|eye_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:flow_armor_trim_smithing_template_smithing_trim|recipe_crafted|flow_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:host_armor_trim_smithing_template_smithing_trim|recipe_crafted|host_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:raiser_armor_trim_smithing_template_smithing_trim|recipe_crafted|raiser_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim|recipe_crafted|rib_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:sentry_armor_trim_smithing_template_smithing_trim|recipe_crafted|sentry_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:shaper_armor_trim_smithing_template_smithing_trim|recipe_crafted|shaper_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim|recipe_crafted|silence_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim|recipe_crafted|snout_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim|recipe_crafted|spire_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim|recipe_crafted|tide_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim|recipe_crafted|vex_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim|recipe_crafted|ward_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim|recipe_crafted|wayfinder_armor_trim_smithing_template_smithing_trim
+adventure/trim_with_any_armor_pattern|armor_trimmed_minecraft:wild_armor_trim_smithing_template_smithing_trim|recipe_crafted|wild_armor_trim_smithing_template_smithing_trim
+adventure/voluntary_exile|voluntary_exile|player_killed_entity|#raiders
+end/dragon_breath|dragon_breath|inventory_changed|dragon_breath
+end/dragon_egg|dragon_egg|inventory_changed|dragon_egg
+end/elytra|elytra|inventory_changed|elytra
+end/enter_end_gateway|entered_end_gateway|enter_block|end_gateway
+end/find_end_city|in_city|location|s:end_city
+end/kill_dragon|killed_dragon|player_killed_entity|ender_dragon
+end/respawn_dragon|summoned_dragon|summoned_entity|ender_dragon
+end/root|entered_end|changed_dimension|>the_end
+husbandry/axolotl_in_a_bucket|axolotl_bucket|filled_bucket|axolotl_bucket
+husbandry/balanced_diet|apple|consume_item|apple
+husbandry/balanced_diet|baked_potato|consume_item|baked_potato
+husbandry/balanced_diet|beef|consume_item|beef
+husbandry/balanced_diet|beetroot|consume_item|beetroot
+husbandry/balanced_diet|beetroot_soup|consume_item|beetroot_soup
+husbandry/balanced_diet|bread|consume_item|bread
+husbandry/balanced_diet|carrot|consume_item|carrot
+husbandry/balanced_diet|chicken|consume_item|chicken
+husbandry/balanced_diet|chorus_fruit|consume_item|chorus_fruit
+husbandry/balanced_diet|cod|consume_item|cod
+husbandry/balanced_diet|cooked_beef|consume_item|cooked_beef
+husbandry/balanced_diet|cooked_chicken|consume_item|cooked_chicken
+husbandry/balanced_diet|cooked_cod|consume_item|cooked_cod
+husbandry/balanced_diet|cooked_mutton|consume_item|cooked_mutton
+husbandry/balanced_diet|cooked_porkchop|consume_item|cooked_porkchop
+husbandry/balanced_diet|cooked_rabbit|consume_item|cooked_rabbit
+husbandry/balanced_diet|cooked_salmon|consume_item|cooked_salmon
+husbandry/balanced_diet|cookie|consume_item|cookie
+husbandry/balanced_diet|dried_kelp|consume_item|dried_kelp
+husbandry/balanced_diet|enchanted_golden_apple|consume_item|enchanted_golden_apple
+husbandry/balanced_diet|glow_berries|consume_item|glow_berries
+husbandry/balanced_diet|golden_apple|consume_item|golden_apple
+husbandry/balanced_diet|golden_carrot|consume_item|golden_carrot
+husbandry/balanced_diet|honey_bottle|consume_item|honey_bottle
+husbandry/balanced_diet|melon_slice|consume_item|melon_slice
+husbandry/balanced_diet|mushroom_stew|consume_item|mushroom_stew
+husbandry/balanced_diet|mutton|consume_item|mutton
+husbandry/balanced_diet|poisonous_potato|consume_item|poisonous_potato
+husbandry/balanced_diet|porkchop|consume_item|porkchop
+husbandry/balanced_diet|potato|consume_item|potato
+husbandry/balanced_diet|pufferfish|consume_item|pufferfish
+husbandry/balanced_diet|pumpkin_pie|consume_item|pumpkin_pie
+husbandry/balanced_diet|rabbit|consume_item|rabbit
+husbandry/balanced_diet|rabbit_stew|consume_item|rabbit_stew
+husbandry/balanced_diet|rotten_flesh|consume_item|rotten_flesh
+husbandry/balanced_diet|salmon|consume_item|salmon
+husbandry/balanced_diet|spider_eye|consume_item|spider_eye
+husbandry/balanced_diet|suspicious_stew|consume_item|suspicious_stew
+husbandry/balanced_diet|sweet_berries|consume_item|sweet_berries
+husbandry/balanced_diet|tropical_fish|consume_item|tropical_fish
+husbandry/bred_all_animals|minecraft:armadillo|bred_animals|armadillo
+husbandry/bred_all_animals|minecraft:axolotl|bred_animals|axolotl
+husbandry/bred_all_animals|minecraft:bee|bred_animals|bee
+husbandry/bred_all_animals|minecraft:camel|bred_animals|camel
+husbandry/bred_all_animals|minecraft:cat|bred_animals|cat
+husbandry/bred_all_animals|minecraft:chicken|bred_animals|chicken
+husbandry/bred_all_animals|minecraft:cow|bred_animals|cow
+husbandry/bred_all_animals|minecraft:donkey|bred_animals|donkey
+husbandry/bred_all_animals|minecraft:fox|bred_animals|fox
+husbandry/bred_all_animals|minecraft:frog|bred_animals|
+husbandry/bred_all_animals|minecraft:goat|bred_animals|goat
+husbandry/bred_all_animals|minecraft:hoglin|bred_animals|hoglin
+husbandry/bred_all_animals|minecraft:horse|bred_animals|horse
+husbandry/bred_all_animals|minecraft:llama|bred_animals|llama
+husbandry/bred_all_animals|minecraft:mooshroom|bred_animals|mooshroom
+husbandry/bred_all_animals|minecraft:mule|bred_animals|mule
+husbandry/bred_all_animals|minecraft:nautilus|bred_animals|nautilus
+husbandry/bred_all_animals|minecraft:ocelot|bred_animals|ocelot
+husbandry/bred_all_animals|minecraft:panda|bred_animals|panda
+husbandry/bred_all_animals|minecraft:pig|bred_animals|pig
+husbandry/bred_all_animals|minecraft:rabbit|bred_animals|rabbit
+husbandry/bred_all_animals|minecraft:sheep|bred_animals|sheep
+husbandry/bred_all_animals|minecraft:sniffer|bred_animals|
+husbandry/bred_all_animals|minecraft:strider|bred_animals|strider
+husbandry/bred_all_animals|minecraft:turtle|bred_animals|
+husbandry/bred_all_animals|minecraft:wolf|bred_animals|wolf
+husbandry/breed_an_animal|bred|bred_animals|
+husbandry/fishy_business|cod|fishing_rod_hooked|cod
+husbandry/fishy_business|pufferfish|fishing_rod_hooked|pufferfish
+husbandry/fishy_business|salmon|fishing_rod_hooked|salmon
+husbandry/fishy_business|tropical_fish|fishing_rod_hooked|tropical_fish
+husbandry/froglights|froglights|inventory_changed|ochre_froglight;pearlescent_froglight;verdant_froglight
+husbandry/obtain_netherite_hoe|netherite_hoe|inventory_changed|netherite_hoe
+husbandry/obtain_sniffer_egg|obtain_sniffer_egg|inventory_changed|sniffer_egg
+husbandry/plant_any_sniffer_seed|pitcher_pod|placed_block|pitcher_crop
+husbandry/plant_any_sniffer_seed|torchflower|placed_block|torchflower_crop
+husbandry/plant_seed|beetroots|placed_block|beetroots
+husbandry/plant_seed|melon_stem|placed_block|melon_stem
+husbandry/plant_seed|nether_wart|placed_block|nether_wart
+husbandry/plant_seed|pitcher_pod|placed_block|pitcher_crop
+husbandry/plant_seed|pumpkin_stem|placed_block|pumpkin_stem
+husbandry/plant_seed|torchflower|placed_block|torchflower_crop
+husbandry/plant_seed|wheat|placed_block|wheat
+husbandry/root|consumed_item|consume_item|
+husbandry/tactical_fishing|cod_bucket|filled_bucket|cod_bucket
+husbandry/tactical_fishing|pufferfish_bucket|filled_bucket|pufferfish_bucket
+husbandry/tactical_fishing|salmon_bucket|filled_bucket|salmon_bucket
+husbandry/tactical_fishing|tropical_fish_bucket|filled_bucket|tropical_fish_bucket
+husbandry/tadpole_in_a_bucket|tadpole_bucket|filled_bucket|tadpole_bucket
+husbandry/tame_an_animal|tamed_animal|tame_animal|
+nether/brew_potion|potion|brewed_potion|
+nether/create_beacon|beacon|construct_beacon|1
+nether/create_full_beacon|beacon|construct_beacon|4
+nether/explore_nether|minecraft:basalt_deltas|location|b:basalt_deltas
+nether/explore_nether|minecraft:crimson_forest|location|b:crimson_forest
+nether/explore_nether|minecraft:nether_wastes|location|b:nether_wastes
+nether/explore_nether|minecraft:soul_sand_valley|location|b:soul_sand_valley
+nether/explore_nether|minecraft:warped_forest|location|b:warped_forest
+nether/find_bastion|bastion|location|s:bastion_remnant
+nether/find_fortress|fortress|location|s:fortress
+nether/get_wither_skull|wither_skull|inventory_changed|wither_skeleton_skull
+nether/netherite_armor|netherite_armor|inventory_changed|netherite_helmet;netherite_chestplate;netherite_leggings;netherite_boots
+nether/obtain_ancient_debris|ancient_debris|inventory_changed|ancient_debris
+nether/obtain_blaze_rod|blaze_rod|inventory_changed|blaze_rod
+nether/obtain_crying_obsidian|crying_obsidian|inventory_changed|crying_obsidian
+nether/root|entered_nether|changed_dimension|>the_nether
+nether/summon_wither|summoned|summoned_entity|wither
+nether/uneasy_alliance|killed_ghast|player_killed_entity|ghast
+story/cure_zombie_villager|cured_zombie|cured_zombie_villager|
+story/deflect_arrow|deflected_projectile|entity_hurt_player|blocked
+story/enchant_item|enchanted_item|enchanted_item|
+story/enter_the_end|entered_end|changed_dimension|>the_end
+story/enter_the_nether|entered_nether|changed_dimension|>the_nether
+story/follow_ender_eye|in_stronghold|location|s:stronghold
+story/form_obsidian|obsidian|inventory_changed|obsidian
+story/iron_tools|iron_pickaxe|inventory_changed|iron_pickaxe
+story/lava_bucket|lava_bucket|inventory_changed|lava_bucket
+story/mine_diamond|diamond|inventory_changed|diamond
+story/mine_stone|get_stone|inventory_changed|#stone_tool_materials
+story/obtain_armor|iron_boots|inventory_changed|iron_boots
+story/obtain_armor|iron_chestplate|inventory_changed|iron_chestplate
+story/obtain_armor|iron_helmet|inventory_changed|iron_helmet
+story/obtain_armor|iron_leggings|inventory_changed|iron_leggings
+story/root|crafting_table|inventory_changed|crafting_table
+story/shiny_gear|diamond_boots|inventory_changed|diamond_boots
+story/shiny_gear|diamond_chestplate|inventory_changed|diamond_chestplate
+story/shiny_gear|diamond_helmet|inventory_changed|diamond_helmet
+story/shiny_gear|diamond_leggings|inventory_changed|diamond_leggings
+story/smelt_iron|iron|inventory_changed|iron_ingot
+story/upgrade_tools|stone_pickaxe|inventory_changed|stone_pickaxe`;
+const ADV_META=`adventure/adventuring_time|1|1|500
+adventure/arbalistic|1|1|85
+adventure/avoid_vibration|1|1|0
+adventure/blowback|1|1|40
+adventure/brush_armadillo|1|1|0
+adventure/bullseye|1|1|50
+adventure/craft_decorated_pot_using_only_sherds|1|1|0
+adventure/crafters_crafting_crafters|1|1|0
+adventure/fall_from_world_height|1|1|0
+adventure/heart_transplanter|1|1|0
+adventure/hero_of_the_village|1|1|100
+adventure/honey_block_slide|1|1|0
+adventure/kill_a_mob|1|1|0
+adventure/kill_all_mobs|1|1|100
+adventure/kill_mob_near_sculk_catalyst|1|1|0
+adventure/lighten_up|1|1|0
+adventure/lightning_rod_with_villager_no_fire|1|1|0
+adventure/minecraft_trials_edition|1|1|0
+adventure/ol_betsy|1|1|0
+adventure/overoverkill|1|1|50
+adventure/play_jukebox_in_meadows|1|1|0
+adventure/read_power_of_chiseled_bookshelf|1|1|0
+adventure/revaulting|1|1|0
+adventure/root|0|0|0
+adventure/salvage_sherd|1|1|0
+adventure/shoot_arrow|1|1|0
+adventure/sleep_in_bed|1|1|0
+adventure/sniper_duel|1|1|50
+adventure/spear_many_mobs|1|1|0
+adventure/spyglass_at_dragon|1|1|0
+adventure/spyglass_at_ghast|1|1|0
+adventure/spyglass_at_parrot|1|1|0
+adventure/summon_iron_golem|1|1|0
+adventure/throw_trident|1|1|0
+adventure/totem_of_undying|1|1|0
+adventure/trade|1|1|0
+adventure/trade_at_world_height|1|1|0
+adventure/trim_with_all_exclusive_armor_patterns|1|1|150
+adventure/trim_with_any_armor_pattern|1|1|0
+adventure/two_birds_one_arrow|1|1|65
+adventure/under_lock_and_key|1|1|0
+adventure/use_lodestone|1|1|0
+adventure/very_very_frightening|1|1|0
+adventure/voluntary_exile|1|1|0
+adventure/walk_on_powder_snow_with_leather_boots|1|1|0
+adventure/who_needs_rockets|1|1|0
+adventure/whos_the_pillager_now|1|1|0
+end/dragon_breath|1|1|0
+end/dragon_egg|1|1|0
+end/elytra|1|1|0
+end/enter_end_gateway|1|1|0
+end/find_end_city|1|1|0
+end/kill_dragon|1|1|0
+end/levitate|1|1|50
+end/respawn_dragon|1|1|0
+end/root|0|0|0
+husbandry/allay_deliver_cake_to_note_block|1|1|0
+husbandry/allay_deliver_item_to_player|1|1|0
+husbandry/axolotl_in_a_bucket|1|1|0
+husbandry/balanced_diet|1|1|100
+husbandry/bred_all_animals|1|1|100
+husbandry/breed_an_animal|1|1|0
+husbandry/complete_catalogue|1|1|50
+husbandry/feed_snifflet|1|1|0
+husbandry/fishy_business|1|1|0
+husbandry/froglights|1|1|0
+husbandry/kill_axolotl_target|1|1|0
+husbandry/leash_all_frog_variants|1|1|0
+husbandry/make_a_sign_glow|1|1|0
+husbandry/obtain_netherite_hoe|1|1|100
+husbandry/obtain_sniffer_egg|1|1|0
+husbandry/place_dried_ghast_in_water|1|1|0
+husbandry/plant_any_sniffer_seed|1|1|0
+husbandry/plant_seed|1|1|0
+husbandry/remove_wolf_armor|1|1|0
+husbandry/repair_wolf_armor|1|1|0
+husbandry/ride_a_boat_with_a_goat|1|1|0
+husbandry/root|0|0|0
+husbandry/safely_harvest_honey|1|1|0
+husbandry/silk_touch_nest|1|1|0
+husbandry/tactical_fishing|1|1|0
+husbandry/tadpole_in_a_bucket|1|1|0
+husbandry/tame_an_animal|1|1|0
+husbandry/uh_oh|1|1|0
+husbandry/wax_off|1|1|0
+husbandry/wax_on|1|1|0
+husbandry/whole_pack|1|1|50
+nether/all_effects|1|1|1000
+nether/all_potions|1|1|100
+nether/brew_potion|1|1|0
+nether/charge_respawn_anchor|1|1|0
+nether/create_beacon|1|1|0
+nether/create_full_beacon|1|1|0
+nether/distract_piglin|1|1|0
+nether/explore_nether|1|1|500
+nether/fast_travel|1|1|100
+nether/find_bastion|1|1|0
+nether/find_fortress|1|1|0
+nether/get_wither_skull|1|1|0
+nether/loot_bastion|1|1|0
+nether/netherite_armor|1|1|100
+nether/obtain_ancient_debris|1|1|0
+nether/obtain_blaze_rod|1|1|0
+nether/obtain_crying_obsidian|1|1|0
+nether/return_to_sender|1|1|50
+nether/ride_strider|1|1|0
+nether/ride_strider_in_overworld_lava|1|1|0
+nether/root|0|0|0
+nether/summon_wither|1|1|0
+nether/uneasy_alliance|1|1|100
+story/cure_zombie_villager|1|1|0
+story/deflect_arrow|1|1|0
+story/enchant_item|1|1|0
+story/enter_the_end|1|1|0
+story/enter_the_nether|1|1|0
+story/follow_ender_eye|1|1|0
+story/form_obsidian|1|1|0
+story/iron_tools|1|1|0
+story/lava_bucket|1|1|0
+story/mine_diamond|1|1|0
+story/mine_stone|1|1|0
+story/obtain_armor|1|1|0
+story/root|0|0|0
+story/shiny_gear|1|1|0
+story/smelt_iron|1|1|0
+story/upgrade_tools|1|1|0`;
+/* ═════════════ (P4-MENU 3) 발전 과제: 아이콘 · 진짜 조건 · 알림 · 보상 ═════════════
+   ADV_CRIT (26.3 데이터에서 뽑은 조건: 발전 과제|조건|트리거|값) → advEv(트리거, 정보) 가 맞는 조건을 줘요.
+   값: inventory_changed 'a,b;c' (; 는 모두 · , 는 하나만 · #태그) · 몹/아이템/블록 이름 (비면 아무거나) · location 'b:생물 군계' / 's:구조물' · changed_dimension '보낸곳>간곳' */
+const ADVC={},ADVM={};
+for(const l of ADV_CRIT.split('\n')){const [id,k0,t,v]=l.split('|');const A=ADV[id];if(!A)continue;const k=A.crit.includes(k0)?k0:A.crit.includes(k0.replace(/^minecraft:/,''))?k0.replace(/^minecraft:/,''):null;if(k)(ADVC[t]||(ADVC[t]=[])).push({id,k,v:v||''})}   // 조건 이름은 ADV 쪽 (minecraft: 없이) 에 맞춰요
+for(const l of ADV_META.split('\n')){const [id,ts,ch,xp]=l.split('|');ADVM[id]={toast:ts==='1',chat:ch==='1',xp:+xp||0}}
+const advHasC=(id,k)=>{const d=ADVD()[id];return!!d&&d.includes(k)};
+const mcS=s=>String(s||'').replace(/^minecraft:/,'');
+const ADV_TAGF={stone_tool_materials:['cobblestone','blackstone','cobbled_deepslate'],decorated_pot_sherds:null};   // 게임 태그 표에 없으면 바닐라 태그 내용
+function advAltOK(a,ev){if(a==='*'||a==='')return true;if(a[0]==='#'){const n=a.slice(1),T=typeof MC_TAGS!=='undefined'&&MC_TAGS.item&&MC_TAGS.item['minecraft:'+n];if(T&&T.length)return T.some(i=>ev.ids.has(i));if(ADV_TAGF[n])return ADV_TAGF[n].some(x=>ev.names.has(x));if(n==='decorated_pot_sherds')return[...ev.names].some(x=>/_pottery_sherd$/.test(x));return false}return ev.names.has(a)}
+function advMatch(t,v,ev){switch(t){
+  case 'inventory_changed':return v.split(';').every(p=>p.split(',').some(a=>advAltOK(a,ev)));
+  case 'player_killed_entity':case 'bred_animals':case 'tame_animal':case 'summoned_entity':{if(!v)return true;if(v[0]==='#'){const T=typeof MC_TAGS!=='undefined'&&MC_TAGS.entity_type&&MC_TAGS.entity_type['minecraft:'+v.slice(1)];return!!T&&T.includes('minecraft:'+ev.type)}return v.split(',').map(mcS).includes(ev.type)}
+  case 'location':return v.startsWith('b:')?ev.biome===v.slice(2):v.startsWith('s:')?!!ev.structs&&ev.structs.has(v.slice(2)):false;
+  case 'consume_item':case 'fishing_rod_hooked':case 'filled_bucket':case 'shot_crossbow':case 'used_totem':return!v||v.split(',').includes(ev.item);
+  case 'placed_block':case 'enter_block':return v.split(',').includes(ev.block);
+  case 'changed_dimension':{const [f,to]=v.split('>');return(!f||f===ev.from)&&(!to||to===ev.to)}
+  case 'construct_beacon':return(ev.level|0)>=+v;
+  case 'entity_hurt_player':return v!=='blocked'||!!ev.blocked;
+  case 'player_hurt_entity':return v!=='arrow'||!!ev.arrow;
+  default:return true}}
+function advEv(t,ev){try{if(!started||!WORLD||player.dead&&t!=='entity_killed_player')return 0;const L=ADVC[t];if(!L)return 0;ev=ev||{};let n=0;for(const c of L){if(advHasC(c.id,c.k)||advDone(c.id))continue;if(advMatch(t,c.v,ev)&&advAward(c.id,c.k))n++}return n}catch(e){return 0}}
+// ── 살피기 (0.5초마다): 보관함 · 차원 · 생물 군계 · 구조물
+const ADV_DIM={over:'overworld',nether:'the_nether',end:'the_end',time:'time_chamber'};let advLastDim=null,advInvSig='',advLocT=0;
+function advPoll(){if(!started||!WORLD||player.dead)return;
+  const all=[...inv,...(typeof armor!=='undefined'?armor:[]),...(typeof offh!=='undefined'?offh:[]),typeof cursor!=='undefined'?cursor:null].filter(Boolean),ids=new Set(all.map(s=>s.id)),sig=[...ids].sort().join(',');
+  if(sig!==advInvSig){advInvSig=sig;advEv('inventory_changed',{ids,names:new Set([...ids].map(i=>mcS(MCID[i])))})}
+  if(advLastDim!==null&&advLastDim!==DIM)advEv('changed_dimension',{from:ADV_DIM[advLastDim],to:ADV_DIM[DIM]});advLastDim=DIM;
+  if(++advLocT%2)return;const x=Math.floor(player.pos.x),z=Math.floor(player.pos.z),y=player.pos.y;let biome='';try{biome=mcS(biomeAtMC(x,z,y<(typeof terrainH==='function'&&DIM==='over'?terrainH(x,z)-8:-1e9)))}catch(e){}
+  const structs=new Set();   // 이미 만들어진 구조물 표만 읽어요 (찾기 함수를 부르면 /locate 의 캐시가 바뀌어요)
+  try{const deep=DIM==='over'&&y<terrainH(x,z)-6;if(deep&&typeof SHOLDS!=='undefined'&&SHOLDS)for(const q of SHOLDS)if(Math.hypot(q.x-x,q.z-z)<40)structs.add('stronghold');
+    if(advLocT%6===0&&typeof STRUCTS!=='undefined')for(const [k,q] of STRUCTS){if(!q||q.x==null)continue;if(deep&&/trial/.test(k)&&Math.hypot(q.x-x,q.z-z)<30)structs.add('trial_chambers');else if(DIM==='end'&&/city/.test(k)&&Math.hypot(q.x-x,q.z-z)<40)structs.add('end_city')}}catch(e){}
+  advEv('location',{biome,structs})}
+setInterval(advPoll,500);
+{const _ef=enterWorld;enterWorld=function(){advLastDim=null;advInvSig='';return _ef.apply(this,arguments)}}
+// ── 게임 사건에 걸기
+{const _ss=scoreStat;scoreStat=function(type,id,h,n){const r=_ss.apply(this,arguments);try{if(h==null||h===myName()){if(type==='minecraft.killed')advEv('player_killed_entity',{type:mcS(id)});else if(type==='minecraft.killed_by')advEv('entity_killed_player',{type:mcS(id)});
+  else if(type==='minecraft.custom'&&id==='minecraft:deaths')advEv('entity_killed_player',{})}}catch(e){}return r}}
+const advDrag=f=>function(){const r=f.apply(this,arguments);try{if(DIM==='end'&&!player.dead)advEv('player_killed_entity',{type:'ender_dragon'})}catch(e){}return r};
+if(typeof dragonDied==='function')dragonDied=advDrag(dragonDied);if(typeof dragonDone==='function')dragonDone=advDrag(dragonDone);
+{const _s=sfx;sfx=function(kind,mat,vol,pos){const r=_s.apply(this,arguments);try{if(started){
+  if(kind==='burp'&&lastEaten)advEv('consume_item',{item:mcS(MCID[lastEaten])});
+  else if(kind==='enchant')advEv('enchanted_item',{});
+  else if(kind==='place'&&pos){const b=getB(Math.floor(pos.x),Math.floor(pos.y),Math.floor(pos.z));if(b)advEv('placed_block',{block:mcS(MCID[b])})}
+  else if(kind==='bucket'&&(mat==='fill'||mat==='fill_lava'))advEv('filled_bucket',{item:mat==='fill'?'water_bucket':'lava_bucket'});
+  else if(kind==='bow'&&!(typeof mat==='number'&&mat<0)){const st=inv[sel];if(st&&mcS(MCID[st.id])==='crossbow')advEv('shot_crossbow',{item:'crossbow'})}}}catch(e){}return r}}
+{const _sl=sleepIn;sleepIn=function(){const ok=DIM==='over'&&typeof daylight!=='undefined'&&daylight<=.45;const r=_sl.apply(this,arguments);try{if(ok)advEv('slept_in_bed',{})}catch(e){}return r}}
+{const _tt=tradeTake;tradeTake=function(){let had=null;try{had=tradeOut()}catch(e){}const r=_tt.apply(this,arguments);try{if(had)advEv('villager_trade',{})}catch(e){}return r}}
+{const _sb=shieldBlocks;shieldBlocks=function(d,src,why,o){const r=_sb.apply(this,arguments);try{if(r&&(/^(arrow|skeleton|trident|fireball|snowball|wind_charge)$/.test(String(why||''))||o&&(o.proj||o.projectile)))advEv('entity_hurt_player',{blocked:true})}catch(e){}return r}}
+function advTame(m){try{advEv('tame_animal',{type:mcS(mobMC(m.type))})}catch(e){}}
+function advBred(m){try{advEv('bred_animals',{type:mcS(mobMC(m.type))});stAdd('custom','animals_bred',1)}catch(e){}}
+
+/* ── 알림 (마크 AdvancementToast: 160×32 · 오른쪽 위에서 미끄러져 들어와요 · 아이콘 (8,8) · 제목 노랑/분홍 (30,7) · 이름 흰색 (30,18) · 5초) */
+for(const [a,b] of [['발전 과제 달성!','Advancement Made!'],['목표 달성!','Goal Reached!'],['도전 과제 완료!','Challenge Complete!'],['{0}님이 발전 과제 {1}을(를) 달성했습니다','{0} has made the advancement {1}'],['{0}님이 목표 {1}을(를) 달성했습니다','{0} has reached the goal {1}'],['{0}님이 도전 과제 {1}을(를) 완료했습니다','{0} has completed the challenge {1}']])i18nAdd(a,b);
+const ADV_TT={t:'발전 과제 달성!',g:'목표 달성!',c:'도전 과제 완료!'},ADV_CT={t:'{0}님이 발전 과제 {1}을(를) 달성했습니다',g:'{0}님이 목표 {1}을(를) 달성했습니다',c:'{0}님이 도전 과제 {1}을(를) 완료했습니다'};
+function advToast(A){let box=$('advToasts');if(!box){box=document.createElement('div');box.id='advToasts';document.body.appendChild(box)}const u=ADVU[A.id]||{};
+  const el=document.createElement('div');el.className='advT'+(A.fr==='c'?' ch':'');el.innerHTML=`<img class="px" src="${advIcon(u.ic)}"><b>${esc(TR(ADV_TT[A.fr]||ADV_TT.t))}</b><span>${esc(advTitle(A))}</span>`;
+  box.appendChild(el);while(box.children.length>5)box.firstChild.remove();requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));try{snd('toast.in','master',1,1)}catch(e){}
+  const ms=5000*(optGet('notifT',100)/100);setTimeout(()=>{el.classList.remove('in');try{snd('toast.out','master',1,1)}catch(e){}setTimeout(()=>el.remove(),700)},ms)}
+advAnnounce=function(A){try{const M=ADVM[A.id]||{toast:true,chat:true,xp:0};(dimState.advNew||(dimState.advNew={}))[A.id]=1;
+  if(M.toast)advToast(A);if(A.fr==='c')try{snd('toast.challenge','master',1,1)}catch(e){}
+  if(M.xp>0&&typeof xpInfo==='function'){player.xp=Math.max(0,xpInfo().t+M.xp);try{sfx('xp')}catch(e){}}
+  if(M.chat&&gameRule('show_advancement_messages')){const u=ADVU[A.id]||{},col=A.fr==='c'?'#aa00aa':'#55ff55',tip=esc(advTitle(A)+'\n'+(u.dko?TR(u.dko):''));
+    chatLine(esc(TR(ADV_CT[A.fr]||ADV_CT.t)).replace('{0}',esc(myName())).replace('{1}',`<span class="advChat" style="color:${col}" title="${tip}">${esc(advDisp(A))}</span>`),'#fff',true)}}catch(e){}};
+// 소리 (우리가 합성): 알림 들어옴 · 나감 (쓱) · 도전 완료 (팡파르)
+try{sdef('toast.in',1,()=>{const o=sbf(.45);for(let i=0;i<14;i++)sgr(o,i*.018,.05,'bp',500+i*160,1.4,.18*(1-i/16));smo(o,.2,880,.06,.12);return snorm(o)});
+  sdef('toast.out',1,()=>{const o=sbf(.45);for(let i=0;i<14;i++)sgr(o,i*.018,.05,'bp',2700-i*160,1.4,.16*(1-i/16));return snorm(o)});
+  sdef('toast.challenge',1,()=>{const o=sbf(3.2),N=[[0,523],[.14,659],[.28,784],[.42,1046],[.62,784],[.76,1046]];for(const [t,f] of N){smo(o,t,f,.22,.5,null,.004);smo(o,t,f*2,.1,.12)}
+    for(const f of [523,659,784,1046])smo(o,.95,f,.7,.32,null,.01);for(const f of [1318,1568])smo(o,1.05,f,.5,.12,null,.01);return snorm(o)})}catch(e){}
+
+/* ── 아이콘: 게임에 없는 아이템은 우리 코드로 그려요 (색 바꾸기 · 픽셀 그림) */
+const ADV_ICONC={};
+function icTint(base,fn){const id=idOfMC('minecraft:'+base);if(id<0)return null;const s=iconC(id),c=cv(s.width,s.height),g=c.getContext('2d');g.drawImage(s,0,0);const D=g.getImageData(0,0,c.width,c.height),d=D.data;
+  for(let i=0;i<d.length;i+=4)if(d[i+3]){const o=fn(d[i],d[i+1],d[i+2]);if(o){d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2]}}g.putImageData(D,0,0);return c}
+const hexRGB=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const tintAll=col=>{const t=hexRGB(col);return(r,g,b)=>{const l=(r*.3+g*.59+b*.11)/180;return t.map(v=>Math.min(255,v*l|0))}};
+const tintBlue=col=>{const t=hexRGB(col);return(r,g,b)=>b>r+25&&b>=g?t.map(v=>Math.min(255,v*((r+g+b)/3/150)|0)):null};
+const ADV_PX={
+  nether_star:[['.......w........','.......w........','......wyw.......','......wyw.......','.....wyyyw......','wwwwwyyyyywwwww.','.wyyyyyyyyyyyw..','..wyyyyyyyyyw...','...wyyyyyyyw....','...wyyyyyyyw....','..wyyyywyyyyw...','..wyyw...wyyw...','.wyw.......wyw..','.ww.........ww..','................','................'],{w:'#ffffff',y:'#f6f0b8'}],
+  end_crystal:[['................','...gggggggggg...','..g..........g..','..g.pppppppp.g..','..g.pmmmmmmp.g..','..g.pmppppmp.g..','..g.pmpwwpmp.g..','..g.pmpwwpmp.g..','..g.pmppppmp.g..','..g.pmmmmmmp.g..','..g.pppppppp.g..','..g..........g..','...gggggggggg...','.....bbbbbb.....','....bbbbbbbb....','................'],{g:'#cfe8f0',p:'#d8379b',m:'#7b1f5a',w:'#ffd2f0',b:'#3a3a3a'}],
+  trident:[['...........c.c.c','............ccc.','...........cccc.','..........cc....','.........cc.....','........cc......','.......cc.......','......cc........','.....cc.........','....cc..........','...cc...........','..cc............','.dd.............','.d..............','................','................'],{c:'#6fc9b8',d:'#3b8a7d'}],
+  iron_spear:[['............www.','...........wwww.','...........wwg..','..........gwg...','.........bb.....','........bb......','.......bb.......','......bb........','.....bb.........','....bb..........','...bb...........','..bb............','.bb.............','................','................','................'],{w:'#e6e6e6',g:'#9a9a9a',b:'#7a5530'}],
+  spyglass:[['................','............oo..','...........oyyo.','..........oyyo..','.........oyyo...','........oyyo....','.......occo.....','......occo......','.....occo.......','....occo........','...occo.........','..occo..........','..oco...........','...o............','................','................'],{o:'#5a3a1a',y:'#e3a046',c:'#c06a2c'}],
+  totem_of_undying:[['................','.....yyyyyy.....','....yggyyggy....','....yyyyyyyy....','....yywwwwyy....','.....yyyyyy.....','..yyyyyyyyyyyy..','.yyyeyyyyyyeyyy.','..yy.yyyyyy.yy..','.....yyyyyy.....','.....yyeeyy.....','.....yyyyyy.....','......yyyy......','......y..y......','................','................'],{y:'#e8c446',g:'#2e8b3e',w:'#5a3a10',e:'#3fae5a'}],
+  lead:[['................','.....bbbb.......','....b....b......','...b......b.....','...b......b.....','....b....b......','.....bbbbb......','.........b......','..........b.....','...........b....','............b...','............bb..','...........bbb..','................','................','................'],{b:'#9c7b55'}],
+  sniffer_egg:[['................','......rrrr......','.....rrgrrr.....','....rrrrrggr....','....rgrrrrrr....','...rrrrrgrrrr...','...rrggrrrrgr...','...rrrrrrrrrr...','...rgrrrrggrr...','...rrrrrrrrrr...','....rrrggrrr....','....rrrrrrrr....','.....rrrrrr.....','................','................','................'],{r:'#a8392f',g:'#3f7a3a'}],
+  dried_ghast:[['................','................','...gggggggggg...','...gddddddddg...','...gdkddddkdg...','...gdkddddkdg...','...gddddddddg...','...gddkkkkddg...','...gddddddddg...','...gggggggggg...','....g.g..g.g....','....g.g..g.g....','................','................','................','................'],{g:'#6b5a4a',d:'#9c8a76',k:'#2a2420'}],
+  pitcher_pod:[['................','........gg......','.......gg.......','.....tttt.......','....tccctt......','...tcctcctt.....','...tctcctct.....','...tccctcct.....','....tcctcct.....','....ttcccct.....','.....ttttt......','................','................','................','................','................'],{g:'#4a7a3a',t:'#2b6e72',c:'#4fb3b8'}],
+  dragon_head:[['................','..k..........k..','..kk........kk..','..kkkkkkkkkkkk..','..kppkkkkkkppk..','..kkkkkkkkkkkk..','..kkkmmkkmmkkk..','..kkkkkkkkkkkk..','..kkkkkkkkkkkk..','...kkkkkkkkkk...','...kgkkkkkkgk...','...kkkkkkkkkk...','................','................','................','................'],{k:'#1a1a1f',p:'#cc4fe0',m:'#3a3a44',g:'#555'}],
+  wither_skeleton_skull:[['................','...kkkkkkkkkk...','..kddddddddddk..','..kddddddddddk..','..kdkkkddkkkdk..','..kdkkkddkkkdk..','..kddddddddddk..','..kdddkkkkdddk..','..kddddddddddk..','..kdkdkdkdkdkk..','..kddddddddddk..','...kkkkkkkkkk...','................','................','................','................'],{k:'#111',d:'#3a3a3a'}],
+  potion:[['................','......kkkk......','......kwwk......','.......kk.......','.......kk.......','......kwwk......','.....kwwwwk.....','....kccccccck...','....kcwcccccck..','....kccccccck...','....kccccccck...','.....kccccck....','......kkkkk.....','................','................','................'],{k:'#2a2a3a',w:'#cfe0f0',c:'#3f6ad8'}],
+  dragon_breath:[['................','......kkkk......','......kwwk......','.......kk.......','.......kk.......','......kwwk......','.....kwwwwk.....','....kccccccck...','....kcwcccccck..','....kccccccck...','....kccccccck...','.....kccccck....','......kkkkk.....','................','................','................'],{k:'#2a2a3a',w:'#cfe0f0',c:'#d27bd8'}],
+  warped_fungus_on_a_stick:[['..............bb','.............bb.','............bb..','...........bb.s.','..........bb..s.','.........bb...s.','........bb....s.','.......bb.....s.','......bb.....tt.','.....bb.....tttt','....bb......tmmt','...bb........tt.','..bb............','.bb.............','................','................'],{b:'#7a5530',s:'#cfcfcf',t:'#2aa38a',m:'#e06a2a'}],
+  silence_armor_trim_smithing_template:[['................','...kkkkkkkkkk...','..kdddddddddk...','..kdcccccccdk...','..kdccbbbccdk...','..kdcbbbbbcdk...','..kdccbbbccdk...','..kdcccccccdk...','..kdccbccbcdk...','..kdcbcccbcdk...','..kdcccccccdk...','..kdddddddddk...','...kkkkkkkkk....','................','................','................'],{k:'#1e1e24',d:'#3a3a46',c:'#2d4a5a',b:'#5fd0e0'}],
+  dune_armor_trim_smithing_template:[['................','...kkkkkkkkkk...','..kdddddddddk...','..kdcccccccdk...','..kdccbbbccdk...','..kdcbcccbcdk...','..kdccbbbccdk...','..kdcccccccdk...','..kdcbbbbbcdk...','..kdcccccccdk...','..kdcbcccbcdk...','..kdddddddddk...','...kkkkkkkkk....','................','................','................'],{k:'#4a3a20',d:'#c9a96a',c:'#d8be82',b:'#7a5a2a'}]};
+const ADV_TINT={armadillo_scute:['turtle_scute',tintAll('#c9887a')],ominous_trial_key:['trial_key',tintAll('#58c7b4')],glow_ink_sac:['ink_sac',tintAll('#4fe0d0')],torchflower_seeds:['wheat_seeds',tintAll('#3a9a6a')],wolf_armor:['leather_horse_armor',tintAll('#c9a27e')],crafter:['dispenser',tintAll('#b9a48c')],
+  axolotl_bucket:['water_bucket',tintBlue('#f19ac3')],tropical_fish_bucket:['water_bucket',tintBlue('#f08a2a')],pufferfish_bucket:['water_bucket',tintBlue('#e8c84a')],tadpole_bucket:['water_bucket',tintBlue('#6b4b2a')],milk_bucket:['water_bucket',tintBlue('#f4f4f4')]};
+function advIcon(name){if(!name)return'';const id=typeof idOfMC==='function'?idOfMC('minecraft:'+name):-1;if(id>=0&&ITEM[id])return iconURL(id);if(ADV_ICONC[name])return ADV_ICONC[name];let c=null;
+  try{if(ADV_TINT[name])c=icTint(ADV_TINT[name][0],ADV_TINT[name][1]);if(!c&&ADV_PX[name])c=pxc(ADV_PX[name][0],ADV_PX[name][1]);if(!c)c=pxc(ADV_PX.nether_star[0],{w:'#888',y:'#bbb'})}catch(e){}return ADV_ICONC[name]=c?c.toDataURL():''}
+// 틀 그림 (26×26): 과제 □ · 목표 둥근 모서리 · 도전 뾰족 — 못 땀 회색 / 땀 금색
+const ADV_FRAME={};
+function advFrame(fr,got){const k=fr+got;if(ADV_FRAME[k])return ADV_FRAME[k];const c=cv(26,26),g=c.getContext('2d'),P=got?['#3a2606','#f9e27a','#d9a12c','#8a5a12']:['#1a1a1a','#e2e2e2','#a6a6a6','#585858'];
+  const inShape=(x,y,m)=>{const a=Math.min(x,25-x),b=Math.min(y,25-y);if(fr==='g')return a>=m&&b>=m&&a+b>=m+4;if(fr==='c'){if(a>=m+2&&b>=m+2)return true;return(a>=m&&b>=m)&&(a<m+4&&b<m+4)||((a>=m&&b>=m+2)&&Math.abs(x-12.5)<3)||((b>=m&&a>=m+2)&&Math.abs(y-12.5)<3)}return a>=m&&b>=m};
+  for(let y=0;y<26;y++)for(let x=0;x<26;x++){if(!inShape(x,y,0))continue;let col=P[0];if(inShape(x,y,1)){col=P[2];if(!inShape(x-1,y-1,1)||!inShape(x,y-1,1)||!inShape(x-1,y,1))col=P[1];else if(!inShape(x+1,y+1,1)||!inShape(x,y+1,1)||!inShape(x+1,y,1))col=P[3]}g.fillStyle=col;g.fillRect(x,y,1,1)}
+  return ADV_FRAME[k]=c.toDataURL()}
+// 화면: 틀 그림 · 새로 딴 것은 반짝 · 새 것이 있는 탭은 점 · 화면을 닫으면 '새 것' 표시가 사라져요
+{const h0=MENU2.adv.html;MENU2.adv.html=()=>{let h=h0();const N=dimState.advNew||{};
+  h=h.replace(/<div class="advnode f([tgc])( got)?" data-adv="([^"]+)" style="([^"]*)">/g,(m,fr,got,id,st)=>`<div class="advnode f${fr}${got||''}${N[id]?' new':''}" data-adv="${id}" style="${st};background-image:url(${advFrame(fr,got?1:0)})">`);
+  h=h.replace(/<div class="mab advtab([^"]*)" data-at="([a-z]+)"/g,(m,c,t)=>`<div class="mab advtab${c}${Object.keys(N).some(k=>k.startsWith(t+'/'))?' hasnew':''}" data-at="${t}"`);return h}}
+let advViewed=false;{const a0=MENU2.adv.after;MENU2.adv.after=M=>{advViewed=true;return a0(M)}}
+{const _sm=showMenu;showMenu=function(t){if(advViewed&&t!=='adv'&&menuOpen==='adv'){advViewed=false;try{dimState.advNew={}}catch(e){}}return _sm.apply(this,arguments)}}
+{const b0=MENU2.adv.back;MENU2.adv.back=()=>{if(advViewed){advViewed=false;try{dimState.advNew={}}catch(e){}}return b0()}}
+document.head.appendChild(Object.assign(document.createElement('style'),{textContent:
+  '#menu .advnode,#menu .advnode.got{background-color:transparent!important;box-shadow:none!important;outline:none!important;border-radius:0!important;clip-path:none!important;background-size:100% 100%;image-rendering:pixelated}'+
+  '#menu .advnode.new{animation:advNew 1s ease-in-out infinite alternate}@keyframes advNew{from{filter:brightness(1) drop-shadow(0 0 0 #fff)}to{filter:brightness(1.35) drop-shadow(0 0 calc(2px * var(--s)) #fff6a0)}}'+
+  '#menu .advtab.hasnew:after{content:"";position:absolute;right:calc(3px * var(--s));top:calc(3px * var(--s));width:calc(3px * var(--s));height:calc(3px * var(--s));background:#ffff55;outline:calc(1px * var(--s)) solid #000}'+
+  '#advToasts{position:fixed;right:0;top:0;z-index:61;display:flex;flex-direction:column;align-items:flex-end;pointer-events:none}'+
+  '.advT{position:relative;width:calc(160px * var(--s));height:calc(32px * var(--s));margin-bottom:0;background:#1c1c1c;box-shadow:inset 0 0 0 calc(1px * var(--s)) #000,inset 0 0 0 calc(2px * var(--s)) #5a5a5a,inset 0 0 0 calc(3px * var(--s)) #2c2c2c;transform:translateX(100%);transition:transform .6s cubic-bezier(.2,.8,.3,1);font-size:calc(8px * var(--s));line-height:calc(9px * var(--s))}'+
+  '.advT.in{transform:none}.advT img{position:absolute;left:calc(8px * var(--s));top:calc(8px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
+  '.advT b{position:absolute;left:calc(30px * var(--s));top:calc(7px * var(--s));font-weight:normal;color:#ffff00;white-space:nowrap}.advT.ch b{color:#ff88ff}.advT span{position:absolute;left:calc(30px * var(--s));top:calc(18px * var(--s));right:calc(4px * var(--s));color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+  '#advToast{display:none!important}#chat.open .advChat{pointer-events:auto;cursor:default}'}));
 </script>
 </body>
 </html>
