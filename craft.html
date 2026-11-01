@@ -7917,6 +7917,10 @@ const cvs=$('gl');
 function lockPointer(){if(isTouch)return;try{const r=cvs.requestPointerLock();if(r&&r.catch)r.catch(()=>{if(!screenOpen&&started&&!chatOpen&&!menuOpen)showMenu('ready')})}catch(e){}}
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&started&&!screenOpen&&!player.dead&&!menuOpen&&!chatOpen){mouseL=mouseR=false;showMenu('pause')}});
 cvs.addEventListener('click',()=>{if(chatOpen){$('chatIn').focus();return}if(started&&!menuOpen&&!screenOpen&&!document.pointerLockElement)lockPointer()});   // (P4-FIX) 채팅 중 화면을 누르면 마우스를 잠그지 말고 입력칸으로 (예전엔 잠겨서 Esc 가 안 먹고 채팅이 안 닫혔어요)
+// (P4-FIX) 마크처럼 Esc 로 메뉴 화면 닫기 (일시정지 → 게임으로 · 설정 → 완료 · 하위 화면 → 취소/뒤로). 예전엔 메뉴에서 Esc 가 아무것도 안 했어요
+addEventListener('keydown',e=>{if(e.key!=='Escape'||e.repeat||chatOpen||screenOpen||!menuOpen||menuOpen==='title'||menuOpen==='ready'||(typeof poemOn!=='undefined'&&poemOn))return;if(Date.now()-(window.__menuAt||0)<300)return;   // 포인터 잠금을 푼 바로 그 Esc 는 넘겨요
+  const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')&&t.value)return;const bs=[...$('menu').querySelectorAll('[data-m]')].filter(b=>!b.disabled&&b.offsetParent!==null);
+  for(const lbl of ['게임으로 돌아가기','Back to Game','완료','Done','취소','Cancel','뒤로','Back','돌아가기']){const b=bs.find(b=>b.textContent.trim()===lbl);if(b){e.preventDefault();b.click();return}}});
 // (P4-FIX) 채팅이 열려 있는데 입력칸에서 포커스가 빠졌을 때: Esc 는 닫기 · Enter 는 보내기 · 다른 키는 입력칸으로 돌려보내요
 addEventListener('keydown',e=>{if(!chatOpen)return;const i=$('chatIn');if(e.target===i)return;if(e.code==='F11'||/^F\d+$/.test(e.code))return;
   if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeChat(false);return}if(e.key==='Enter'){e.preventDefault();e.stopImmediatePropagation();closeChat(true);return}
@@ -8106,7 +8110,7 @@ function slider(id,label,min,max,val,fmt){return `<div class="mslider"><input ty
 function bindSlider(id,label,min,max,fmt,on){const el=$(id);el.oninput=()=>{const v=+el.value;el.nextElementSibling.style.left=`calc(${(v-min)/(max-min)*100}% - ${(v-min)/(max-min)*16}px)`;el.parentNode.querySelector('span').textContent=label+': '+fmt(v);on(v)}}
 const MODE_N={survival:'서바이벌',creative:'크리에이티브'},TYPE_N={default:'기본',flat:'평지'};
 let selWorld=null,selServer=null,newW=null,phase='boot';
-function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;keysRelease();if(document.pointerLockElement)document.exitPointerLock();
+function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;keysRelease();window.__menuAt=Date.now();if(document.pointerLockElement)document.exitPointerLock();
   const help=isTouch?'왼쪽 조이스틱 이동 · 화면 드래그로 시점<br>꾹 누르기: 부수기 · 짧게 탭: 놓기/사용':'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl 달리기 · E 인벤토리 · T 채팅 · F5 시점<br>왼쪽 클릭 부수기/공격 · 오른쪽 클릭 놓기/사용/먹이주기 · Q 버리기 · 1~9 / 휠 핫바';
   let h='';
   if(type==='title')h=menuHTML(type);
@@ -11426,7 +11430,7 @@ function updateBoats(dt){const p=player;
     {const lk=lightK(b.pos.x,b.pos.y+.5,b.pos.z);b.m.traverse(o=>{if(o.isMesh&&o.material.userData.base)o.material.color.copy(o.material.userData.base).multiplyScalar(lk)})}
     if(ride){p.pos.set(b.pos.x,b.pos.y+.3,b.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true}
     if(b.pos.y<-40){scene.remove(b.m);boats.splice(i,1);if(ride)p.boat=null}}}
-function boatRideTick(){const p=player,b=p.boat;if(!b)return false;if(!boats.includes(b)||p.dead){p.boat=null;return false}
+function boatRideTick(){const p=player,b=p.boat;if(!b)return false;if(!boats.includes(b)||p.dead||b.dm!==DIM){p.boat=null;return false}   // (P4-FIX) 보트째 포털을 지나면 다른 차원에서 몸이 굳었어요
   if(rideShift()){p.boat=null;dismountTo(b.pos.x,b.pos.y,b.pos.z,b.yaw,1.375,.5625);return false}return true}
 // (P4-FIX) 타고 있을 땐 updatePlayer 가 p.sneak 을 고치기 전에 돌아가서 Shift 가 안 먹었어요 → 키를 직접 읽어요 (채팅 · 창이 열려 있으면 무시)
 function rideShift(){return !!(keys.ShiftLeft||keys.ShiftRight||tSneak)&&!chatOpen&&!screenOpen}
