@@ -5380,13 +5380,13 @@ function updateMobs(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp.x,p
     if(m.baby>0){m.baby-=dt;if(m.baby<=0){m.g.scale.setScalar(1);m.hw=D.hw;m.h=D.h}}
     let sp=0,dir=m.ai.dir,face=null;
     const ml=lightAt(m.pos.x,m.pos.y+1,m.pos.z),dark=ml[0]*daylight<8&&ml[1]<8;
-    const target=!D.brain&&!m.tamed&&!player.dead&&!creative()&&D.hostile&&dist<20*x6Vis(m)&&Math.abs(dy)<10&&(!D.night||dark||m.angry>0)&&(!D.neutral||m.angry>0);
+    const target=!D.brain&&!m.tamed&&!player.dead&&!creative()&&D.hostile&&(!D.night||dark||m.angry>0)&&(!D.neutral||m.angry>0)&&nsTarget(m,dt,dist,dy);   // (P4-MOB) 마크 NearestAttackableTargetGoal: 시야 · 위아래 4칸 · 안 보이면 3초 뒤 놓침
     const br=D.brain?D.brain(m,dt,dx,dz,dist,dy):D.piglin?piglinBrain(m,dt,dist):null;
     if(br){dir=br.dir;sp=br.sp;face=br.face!=null?br.face:null}
     else if(target){dir=Math.atan2(dx,dz);face=dir;
-      if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&dist<16&&m.atk<=0){m.atk=2+Math.random();const from=new V3(m.pos.x,m.pos.y+hbEye(m)-.1,m.pos.z),d=hbAim(from,D.potion?8:6);(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,32,'mob',2+Math.floor(Math.random()*3))}}
-      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3.2){sp=0;if(m.fuse===0)sfx('fuse','creeper',1,m.pos);m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
-      else{sp=dist>1.1?D.sp:0;if(dist<1.5+m.hw&&Math.abs(dy)<1.6&&m.atk<=0){m.atk=1;hurtPlayer(x6MobAtk(m),m.pos,m.type);if(D.toss&&!creative()&&!player.dead)player.vel.y=Math.max(player.vel.y,9)}}}
+      if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&Math.hypot(dist,dy)<nsRangedR(m)&&m.atk<=0){m.atk=nsRangedCD(m);const from=new V3(m.pos.x,m.pos.y+hbEye(m)-.1,m.pos.z),d=hbAim(from,D.potion?8:nsInacc());(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,32,'mob',2+Math.floor(Math.random()*3))}}
+      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3){sp=0;if(m.fuse===0)sfx('fuse','creeper',1,m.pos);m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
+      else{sp=dist>1.1?D.sp:0;if(m.atk<=0&&nsMeleeReach(m)){m.atk=1;hurtPlayer(x6MobAtk(m),m.pos,m.type);if(D.toss&&!creative()&&!player.dead)player.vel.y=Math.max(player.vel.y,9)}}}
     else if(m.panic>0){m.fuse=0;if(m.ai.t<=0){m.ai.t=.6;m.ai.dir=Math.atan2(-dx,-dz)+(Math.random()-.5)*1.4}dir=m.ai.dir;sp=D.sp*2.2}
     else if(m.tamed&&tamedAI(m,dt,dx,dz,dist)){dir=m.ai.dir;sp=m.ai.sp;face=dir}
     else{m.fuse=Math.max(0,m.fuse-dt);const held=inv[sel];if(D.shy&&dist<6&&!player.sneak&&!player.dead)m.panic=Math.max(m.panic,1.2);if(D.ram&&m.angry<=0&&dist<9&&!player.dead&&!creative()&&Math.random()<dt*.04)m.angry=3;
@@ -5595,7 +5595,6 @@ function spawnTick(dt){if(typeof nvTick==='function')nvTick(dt);endTick(dt);time
   const ch=chunks.get(ck(x>>4,z>>4));if(!ch||!ch.sky)return;
   extraSpawns(ch,x,z,hos,ani)}
 function extraSpawns(ch,x,z,hos,ani){const bm=ch.bio[(x&15)|((z&15)<<4)],night=daylight<.45,pp=player.pos;
-  if(night&&hos<16&&worldTime-(player.lastRest??(player.lastRest=worldTime))>=DAYLEN*3&&Math.random()<.04&&mobs.filter(m=>m.type==='phantom').length<3&&pp.y>SEA-2&&lightAt(pp.x,pp.y+1,pp.z)[0]>12)spawnMob('phantom',pp.x+(Math.random()-.5)*20,pp.y+20,pp.z+(Math.random()-.5)*20);
   if(!night&&ani<20&&[17,23,36,3].includes(bm)&&Math.random()<.06&&mobs.filter(m=>m.type==='bee').length<6){const y=surfaceY(x,z);if(y>0)spawnMob('bee',x+.5,y+2,z+.5)}
 }
 function surfaceY(x,z){const ch=chunks.get(ck(x>>4,z>>4));if(!ch)return -1;for(let yy=Math.min(H-3,ch.maxY+1);yy>1;yy--){const id=getB(x,yy,z);if(SOLID[id]&&!isLeaf(id)){if(!SOLID[getB(x,yy+1,z)]&&!SOLID[getB(x,yy+2,z)]&&getB(x,yy+1,z)!==WATER)return yy+1;return -1}if(id===WATER)return -1}return -1}
@@ -5768,7 +5767,7 @@ function nsTick(){nsT++;if(!started)return;if(DIM==='time'||!gameRule('spawn_mob
   const st={loc:Object.assign({},cnt)};
   for(const ch of L)for(const c of cats){if((st.loc[c]||0)>=NS_CAT[c][0])continue;   // 플레이어마다 상한 (LocalMobCapCalculator)
     const lx=nsR(16),lz=nsR(16),top=nsTop(ch,lx,lz)+1,y=nsR(top+1);if(y<1)continue;nsCatAt(c,ch.cx*16+lx,y,ch.cz*16+lz,st)}}
-function nsStep(dt){nsAcc+=dt;let g=0;while(nsAcc>=TICK&&g++<4){nsAcc-=TICK;nsTick();nsGolemTick()}if(nsAcc>=TICK)nsAcc=0}
+function nsStep(dt){nsAcc+=dt;let g=0;while(nsAcc>=TICK&&g++<4){nsAcc-=TICK;nsTick();nsGolemTick();nsPhantomTick()}if(nsAcc>=TICK)nsAcc=0}
 // 청크가 처음 만들어질 때 동물 (spawnMobsForChunkGeneration: 확률 0.1 · 무리)
 function nsChunkGen(cx,cz){if(DIM!=='over'||!gameRule('spawn_mobs'))return;const x0=cx*16,z0=cz*16,ch=chunks.get(ck(cx,cz));if(!ch)return;
   const bk=NS_BID[ch.bio?ch.bio[0]:BIO.PLAINS]||'plains',T=SPAWN_TAB[bk],L=T&&T.creature;if(!L)return;const P=NS_GENP[bk]??.1;
@@ -5779,6 +5778,27 @@ function nsChunkGen(cx,cz){if(DIM!=='over'||!gameRule('spawn_mobs'))return;const
           if(nsFits(t,e,y,h)&&nsRule(t,Math.floor(e),y,Math.floor(h),'g')&&nsWalkOK(t,Math.floor(e),y,Math.floor(h))&&nsSpawn(t,e,y,h,'g'))ok=true}
         l+=nsR(5)-nsR(5);m+=nsR(5)-nsR(5);let g2=0;while((l<x0||l>=x0+16||m<z0||m>=z0+16)&&g2++<50){l=n0+nsR(5)-nsR(5);m=o0+nsR(5)-nsR(5)}}}}}
 function nsGenTop(x,z){for(let y=Math.min(H-2,nsColTop(x,z));y>0;y--){const id=getB(x,y,z);if((SOLID[id]||id===WATER||id===LAVA)&&!isLeaf(id))return y+1}return -1}   // MOTION_BLOCKING_NO_LEAVES
+// ── 몹 싸움 (P4-MOB 후속): 표적 · 근접 사거리 · 원거리 간격 · 팬텀 — 마크 26.2 코드 그대로
+const NS_FOLLOW={zombie:35,husk:35,drowned:35,zpiglin:35,enderman:64,pillager:32,piglin:16,hoglin:16,zoglin:16,breeze:24,warden:24};   // Attributes.FOLLOW_RANGE (나머지 16)
+function nsTarget(m,dt,dist,dy){const R=(NS_FOLLOW[m.type]||16)*x6Vis(m);if(Math.hypot(dist,dy)>R){m.tgt=0;return false}
+  if(m.angry>0){m.tgt=1;return true}   // 맞으면 (HurtByTargetGoal) 바로
+  m.losK=(m.losK||0)-dt;if(m.losK<=0){m.losK=.25+Math.random()*.1;m.sees=los(new V3(m.pos.x,m.pos.y+hbEye(m),m.pos.z),new V3(player.pos.x,player.pos.y+eyeH(),player.pos.z))}
+  if(m.tgt){if(m.sees)m.unseen=0;else if((m.unseen=(m.unseen||0)+dt)>3){m.tgt=0;return false}return true}   // TargetGoal: 안 보인 지 60틱이면 놓쳐요
+  if(m.sees&&dy<=4+m.h&&dy>=-5.8&&Math.random()<dt*2){m.tgt=1;m.unseen=0;if(m.D.ranged)m.atk=Math.max(m.atk,1);return true}   // 찾기: 몸 상자 ±(R,4,R) · 10틱에 한 번 꼴 · 처음 활은 20틱 당겨요
+  return false}
+function nsMeleeReach(m){const p=player.pos,R=m.hw+.828+.3;if(Math.abs(p.x-m.pos.x)>=R||Math.abs(p.z-m.pos.z)>=R)return false;if(m.pos.y>=p.y+1.8||m.pos.y+m.h<=p.y)return false;
+  return los(new V3(m.pos.x,m.pos.y+hbEye(m),m.pos.z),new V3(p.x,p.y+eyeH(),p.z))}   // Mob.isWithinMeleeAttackRange (DEFAULT_ATTACK_REACH = √2.04 − 0.6) + 시야
+const nsDiffId=()=>({peaceful:0,easy:1,normal:2,hard:3})[cmdDiff()]??2;
+const nsInacc=()=>14-nsDiffId()*4;   // 활 · 쇠뇌 부정확도: 쉬움 10 · 보통 6 · 어려움 2
+function nsRangedR(m){return m.type==='witch'?10:m.type==='pillager'?8:m.type==='breeze'?16:15}
+function nsRangedCD(m){const h=cmdDiff()==='hard';switch(m.type){case'skeleton':case'stray':return h?2:3;case'bogged':return h?2.5:3.5;case'witch':return 3;case'pillager':return 2.25+Math.random()}return 2+Math.random()}   // 당기기 20틱 + 간격 (해골 40 · 어려움 20 · 보그드 50/30 · 마녀 60 · 쇠뇌 25+20~39)
+function nsLocalDiff(){const id=nsDiffId(),g=clamp((worldTime*20-72000)/1440000,0,1)*.25;let h=clamp([1,.75,.5,.25,0,.25,.5,.75][Math.floor(worldTime/DAYLEN)%8]*.25,0,g);if(id===1)h*=.5;return id*(.75+g+h)}   // DifficultyInstance (머문 시간은 0)
+let nsPhT=0;
+function nsPhantomTick(){if(DIM!=='over'||!nsDiffOK()||!gameRule('spawn_mobs')||gameRule('spawn_phantoms')===false||gameRule('spawn_monsters')===false)return;if(--nsPhT>0)return;nsPhT+=(60+nsR(60))*20;
+  if(nsSkyDarken()<5||player.dead)return;const x=Math.floor(player.pos.x),y=Math.floor(player.pos.y),z=Math.floor(player.pos.z);if(y<SEA||nsLight(x,y,z)[0]<15)return;
+  if(!(nsLocalDiff()>Math.random()*3))return;const tsr=Math.max(1,Math.floor((worldTime-(player.lastRest??(player.lastRest=worldTime)))*20));if(nsR(tsr)<72000)return;
+  const sx=x-10+nsR(21),sy=y+20+nsR(15),sz=z-10+nsR(21);if(sy>=H-1||!nsEmpty('phantom',sx,sy,sz))return;const n=1+nsR(nsDiffId()+1);
+  for(let i=0;i<n;i++){const m=spawnMob('phantom',sx+.5,sy,sz+.5);if(m&&!m.dead){m.natural=1;m.nat=0}}}   // PhantomSpawner: 60~119초마다 · 하늘 아래 · 3일 못 잤으면 (1 − 72000/잠 안 잔 틱)
 // 몹 사라짐 (Mob.checkDespawn): 128칸 (물고기 64) 넘으면 바로 · 32칸 넘고 30초 넘게 아무 일 없으면 틱마다 1/800
 function nsDespawn(m,dt){const D=m.D;if(nsPersist(m)){if(Math.hypot(player.pos.x-m.pos.x,player.pos.z-m.pos.z)>112){m.nat=0;return true}m.nat=0;return false}   // (이 게임은 먼 청크 몹을 저장하지 않아요: 예전처럼 112칸)
   const c=nsCatOf(m);if(c==='creature'||c==='misc'){return Math.hypot(player.pos.x-m.pos.x,player.pos.z-m.pos.z)>112}   // 동물은 안 사라져요 (멀면 예전처럼 정리)
@@ -11184,7 +11204,7 @@ const MINE={kind:'mineshaft',sp:12*16,sep:4*16,salt:7101,rad:96,test(x,z,r){if(r
 function mineParts(s){if(s.parts)return s.parts;const r=mulberry(s.seed),P=[];
   const R0=4+Math.floor(r()*4),room={t:'room',x0:s.x-R0,x1:s.x+R0,y0:s.y,y1:s.y+3+Math.floor(r()*3),z0:s.z-R0,z1:s.z+R0};P.push(room);
   const cor=(x,y,z,dx,dz,depth)=>{if(depth>8||P.length>70||y<6)return;const L=(2+Math.floor(r()*4))*5,ex=x+dx*L,ez=z+dz*L;if(Math.hypot(ex-s.x,ez-s.z)>80)return;
-    P.push({t:'cor',x,y,z,dx,dz,L,rails:r()<.7,webs:r()<.4,chest:r()<.28?2+Math.floor(r()*(L-4)):-1,spawner:r()<.07?Math.floor(L/2)+1:-1});
+    P.push({t:'cor',x,y,z,dx,dz,L,rails:r()<.7,webs:r()<.4,chest:r()<.28?2+Math.floor(r()*(L-4)):-1,spawner:r()<(GEN>=6?2/69:.07)?Math.floor(L/2)+1:-1});
     const k=r();if(k<.55){const cx=ex+dx,cz=ez+dz,two=r()<.2;P.push({t:'cross',x:cx,y,z:cz,two});for(const [ndx,ndz] of [[dx,dz],[dz,dx],[-dz,-dx]])if(r()<.7)cor(cx+ndx*2,y+(two&&r()<.5?4:0),cz+ndz*2,ndx,ndz,depth+1)}
     else if(k<.8){const down=r()<.65;P.push({t:'stairs',x:ex,y,z:ez,dx,dz,down});cor(ex+dx*5,y+(down?-5:5),ez+dz*5,dx,dz,depth+1)}
     else cor(ex,y,ez,dx,dz,depth+1)};
@@ -11272,7 +11292,7 @@ function stampOutpost(B_,s){const X=s.x,Z=s.z,Y=s.y,r=mulberry(s.seed),DL=DARK_O
   const gx=X-8,gz=Z+2;for(let dx=0;dx<4;dx++)for(let dz=0;dz<4;dz++){const e=dx===0||dx===3||dz===0||dz===3,gy=terrainH(gx+dx,gz+dz)+1;B_.set(gx+dx,gy-1,gz+dz,DP);for(let y=gy;y<gy+3;y++)B_.set(gx+dx,y,gz+dz,e?FENCE_OAK:AIR);B_.set(gx+dx,gy+3,gz+dz,DP)}
   mobAt('opg'+X+','+Z,'iron_golem',gx+2,terrainH(gx+2,gz+2)+1,gz+2,1);
   const tx=X+12,tz=Z+1;for(let dx=0;dx<5;dx++)for(let dz=0;dz<4;dz++){const ty=terrainH(tx+dx,tz+dz)+1;const hgt=dz===0||dz===3?1:2;for(let y=0;y<hgt;y++)B_.set(tx+dx,ty+y,tz+dz,(dx===0||dx===4)?WOOL_WHITE:AIR);B_.set(tx+dx,ty+hgt,tz+dz,WOOL_WHITE)}
-  mobAt('opp'+X+','+Z,'pillager',X+4,Y+1,Z+4,3);mobAt('opt'+X+','+Z,'pillager',X+4,Y+16,Z+4,2)}
+  /* (P4-MOB) 마크 전초기지는 약탈자를 미리 두지 않아요: 구조물 표 (블록빛 ≤ 8) 로 계속 생겨요 · 예전엔 사라지지 않고 상한에도 안 세는 5마리를 따로 뒀어요 */}
 
 // ── 난파선: 바다 밑 · 해변. 배 길이 22 · 폭 7 · 돛대 · 뒤 선실 (지도 상자) · 가운데 (보물) · 앞 (보급)
 const SHIP={kind:'shipwreck',sp:24*16,sep:4*16,salt:7601,rad:16,test(x,z,r){const h=terrainH(x,z),bm=biomeOf(x,z,h);const beach=bm===BIO.BEACH||bm===BIO.SNOWY_BEACH;if(!isOcean(bm)&&!beach)return null;if(!beach&&h>SEA-4)return null;
