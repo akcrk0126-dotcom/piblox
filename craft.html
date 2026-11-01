@@ -3634,10 +3634,13 @@ function shapeBoxes(id,m,x,y,z){{const q=B[id]&&NBSH[B[id].shape]?nbShapeBoxes(i
   if(id===PISTON||id===STICKY_PISTON)return m&8?[rotBox([0,0,0,1,1,.75],m&7)]:[[0,0,0,1,1,1]];
   if(id===LILY_PAD)return[[0,0,0,1,.06,1]];
   return[[0,0,0,1,BH[id],1]]}
-function overl(px,py,pz,hw,h,cb){const x0=Math.floor(px-hw),x1=Math.floor(px+hw),y0=Math.floor(py),y1=Math.floor(py+h),z0=Math.floor(pz-hw),z1=Math.floor(pz+hw);
-  for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++){const id=getB(x,y,z);if(!SOLID[id])continue;
+// (P4-FIX) 마크처럼 울타리 · 울타리 문 (닫힘) · 담장은 부딪힘 높이 1.5칸 (24/16) → 점프 (1.25칸) 로 못 넘어요 · 열린 울타리 문은 안 막아요. 테두리 (겨냥 상자) 는 그대로 1칸
+let TALLC=null;function tallC(){if(TALLC)return TALLC;TALLC=new Uint8Array(NB);for(let i=0;i<NB;i++){const b=B[i];if(!b)continue;if(b.gateB||b.use==='gate')TALLC[i]=2;else if(b.shape==='fence'||b.shape==='wall'||b.wallB)TALLC[i]=1}return TALLC}
+function colBoxes(id,m,x,y,z){const t=tallC()[id];if(t===2){if(m&8)return [];return HDIRS[m&3]<2?[[.375,0,0,.625,1.5,1]]:[[0,0,.375,1,1.5,.625]]}const bs=shapeBoxes(id,m,x,y,z);if(t===1)return bs.map(b=>[b[0],b[1],b[2],b[3],1.5,b[5]]);return bs}
+function overl(px,py,pz,hw,h,cb){const x0=Math.floor(px-hw),x1=Math.floor(px+hw),y0=Math.floor(py),y1=Math.floor(py+h),z0=Math.floor(pz-hw),z1=Math.floor(pz+hw),TC=tallC();
+  for(let y=y0-1;y<=y1;y++)for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++){const id=getB(x,y,z);if(!SOLID[id])continue;if(y<y0&&!TC[id])continue;   // 한 칸 아래는 1.5칸짜리만
     if(!SHAPED[id]&&BH[id]===1){cb(x,y,z,x+1,y+1,z+1);continue}
-    for(const b of shapeBoxes(id,getM(x,y,z),x,y,z)){const ax=x+b[0],ay=y+b[1],az=z+b[2],bx=x+b[3],by=y+b[4],bz=z+b[5];if(px+hw>ax+1e-6&&px-hw<bx-1e-6&&py+h>ay+1e-6&&py<by-1e-4&&pz+hw>az+1e-6&&pz-hw<bz-1e-6)cb(ax,ay,az,bx,by,bz)}}}
+    for(const b of colBoxes(id,getM(x,y,z),x,y,z)){const ax=x+b[0],ay=y+b[1],az=z+b[2],bx=x+b[3],by=y+b[4],bz=z+b[5];if(px+hw>ax+1e-6&&px-hw<bx-1e-6&&py+h>ay+1e-6&&py<by-1e-4&&pz+hw>az+1e-6&&pz-hw<bz-1e-6)cb(ax,ay,az,bx,by,bz)}}}
 function boxHits(px,py,pz,hw,h){let top=0,hit=false;overl(px,py,pz,hw,h,(a,b,c,d,e)=>{hit=true;if(e>top)top=e});return hit?Math.max(top,1e-3):0}
 function moveEnt(e,dx,dy,dz,hw,h,sneakGuard){const n=Math.ceil(Math.max(Math.abs(dx),Math.abs(dy),Math.abs(dz))/.4)||1;dx/=n;dy/=n;dz/=n;const wasG=e.onGround;e.onGround=false;e.hitX=e.hitZ=false;
   const horiz=(ax,d)=>{const P=e.pos;let r=null,top=0;overl(P.x,P.y,P.z,hw,h,(a,b,c,dd,ee,f)=>{const lo=ax==='x'?a:c,hi=ax==='x'?dd:f;r=d>0?(r==null?lo:Math.min(r,lo)):(r==null?hi:Math.max(r,hi));if(ee>top)top=ee});
@@ -4744,7 +4747,7 @@ function pBoxes(x0,y0,z0,x1,y1,z1,feetY,desc){const L=_pb;L.length=0;const X0=Ma
   for(let y=Y0;y<=Y1;y++)for(let z=Z0;z<=Z1;z++)for(let x=X0;x<=X1;x++){const id=getB(x,y,z);if(!SOLID[id])continue;
     if(id===SCAFFOLD){if(y>Y0&&feetY>y+1-1e-5&&!desc)L.push(x,y+.875,z,x+1,y+1,z+1);continue}
     if(!SHAPED[id]&&BH[id]===1){if(y>Y0)L.push(x,y,z,x+1,y+1,z+1);continue}
-    for(const b of shapeBoxes(id,getM(x,y,z)))if(y>Y0||b[4]>1)L.push(x+b[0],y+b[1],z+b[2],x+b[3],y+b[4],z+b[5])}
+    for(const b of colBoxes(id,getM(x,y,z),x,y,z))if(y>Y0||b[4]>1)L.push(x+b[0],y+b[1],z+b[2],x+b[3],y+b[4],z+b[5])}
   return L}
 // 한 축으로 d 만큼 움직일 때 막히는 곳까지 (VoxelShape.collide)
 function pClip(L,s,a,d){if(Math.abs(d)<1e-7)return 0;const b=a===0?1:0,c=a===2?1:2;
@@ -8462,7 +8465,8 @@ cvs.addEventListener('click',()=>{if(chatOpen){$('chatIn').focus();return}if(sta
 // (P4-FIX) 마크처럼 Esc 로 메뉴 화면 닫기 (일시정지 → 게임으로 · 설정 → 완료 · 하위 화면 → 취소/뒤로). 예전엔 메뉴에서 Esc 가 아무것도 안 했어요
 addEventListener('keydown',e=>{if(e.key!=='Escape'||e.repeat||chatOpen||screenOpen||!menuOpen||menuOpen==='title'||menuOpen==='ready'||(typeof poemOn!=='undefined'&&poemOn))return;if(Date.now()-(window.__menuAt||0)<300)return;   // 포인터 잠금을 푼 바로 그 Esc 는 넘겨요
   const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')&&t.value)return;const bs=[...$('menu').querySelectorAll('[data-m]')].filter(b=>!b.disabled&&b.offsetParent!==null);
-  for(const lbl of ['게임으로 돌아가기','Back to Game','완료','Done','취소','Cancel','뒤로','Back','돌아가기']){const b=bs.find(b=>b.textContent.trim()===lbl);if(b){e.preventDefault();b.click();return}}});
+  {const r=bs.find(b=>b.dataset.m==='resume');if(r){e.preventDefault();r.click();return}}
+  for(const lbl of ['게임으로 돌아가기','게임으로','Back to Game','완료','Done','취소','Cancel','뒤로','Back','돌아가기']){const b=bs.find(b=>b.textContent.trim()===lbl);if(b){e.preventDefault();b.click();return}}});
 // (P4-FIX) 채팅이 열려 있는데 입력칸에서 포커스가 빠졌을 때: Esc 는 닫기 · Enter 는 보내기 · 다른 키는 입력칸으로 돌려보내요
 addEventListener('keydown',e=>{if(!chatOpen)return;const i=$('chatIn');if(e.target===i)return;if(e.code==='F11'||/^F\d+$/.test(e.code))return;
   if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeChat(false);return}if(e.key==='Enter'){e.preventDefault();e.stopImmediatePropagation();closeChat(true);return}
