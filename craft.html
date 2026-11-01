@@ -3476,7 +3476,7 @@ function buildChunk(ch){
       if(sh==='campfire'){boxQ([0,0,0,1,.25,1],f=>f===2?TEX.campfire_top:TEX.log_side,null,f=>f===3);const T=tileUV(b.fireT||TEX.campfire_fire),a=.15,c=.85;
         const q1=[[x+a,y,z+a],[x+c,y,z+c],[x+c,y+1,z+c],[x+a,y+1,z+a]],q2=[[x+a,y,z+c],[x+c,y,z+a],[x+c,y+1,z+a],[x+a,y+1,z+c]];quad(M,q1,T,FBS);quad(M,[q1[1],q1[0],q1[3],q1[2]],T,FBS);quad(M,q2,T,FBS);quad(M,[q2[1],q2[0],q2[3],q2[2]],T,FBS);continue}
     }
-    if(b.shape){const hh=b.bh,ins=b.shape==='cactus'?1/16:0,l0=[SL[i]/15,BLL[i]/15];
+    if(b.shape){const hh=OP[id]?1:b.bh,ins=b.shape==='cactus'?1/16:0,l0=[SL[i]/15,BLL[i]/15];
       for(let f=0;f<6;f++){const F=FACES[f],nid=R[i+F.off];if((f===2&&hh===1||f===3||f<2||f>3)&&OP[nid]&&!(ins&&f!==2&&f!==3))continue;if(b.shape==='cactus'&&(f===2||f===3)&&nid===CACTUS)continue;if(f===3&&y===0)continue;
         const lt=f===2&&hh<1?l0:[SL[i+F.off]/15,BLL[i+F.off]/15];const lv=[lt[0],lt[1],F.s];const t=tileUV(b.tex[f]);const uv=(f===2||f===3)?t:[t[0],t[1],t[2],t[1]+(t[3]-t[1])*hh];
         quad(M,F.c.map(c=>{let px=c[0],pz=c[2];if(ins){if(F.k===0)px=c[0]?1-ins:ins;if(F.k===2)pz=c[2]?1-ins:ins}return[x+px,y+c[1]*hh,z+pz]}),uv,[lv,lv,lv,lv])}continue}
@@ -3506,6 +3506,13 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,1,.05,1200);
 // (P3-LOOK) 마크 밝기 설정 (options.gamma, 기본 0.5). 예전 '밝기: 최대' 를 켰던 사람은 '밝게' 로 옮겨요
 let GAM=.5;try{const g=localStorage.getItem('bc_opt_gam');GAM=g!=null?clamp(+g/100||0,0,1):localStorage.getItem('bc_opt_fb')==='1'?1:.5}catch(e){}
 const gamTxt=v=>v<=0?'어둡게':v>=100?'밝게':v===50?'기본':'+'+v+'%';
+// (P4-FIX) 엑스레이 막기: 꽉 찬 불투명 블록 (OP) 은 옆 블록 면을 지워요 → 그 그림에 투명 픽셀이 있으면 세상 속이 뚫려 보여요.
+// 마크 solid 층처럼 알파를 무시: OP 블록 그림의 투명 픽셀을 옆 픽셀 색으로 메워요 (투명해야 하는 블록과 같이 쓰는 그림은 빼요)
+{const opT=new Set(),nopT=new Set();for(let i=1;i<NB;i++){const b=B[i];if(!b||!b.tex)continue;const full=OP[i]&&(!b.shape||b.shape==='slab'||b.shape==='observer')&&!b.cross&&!b.torch;for(const t of [...b.tex,TEX[b.face],TEX[b.mface]])if(t!=null)(full?opT:nopT).add(t)}
+  const g=ATLAS.getContext('2d');for(const t of opT){if(nopT.has(t))continue;const X=(t%32)*16,Y=Math.floor(t/32)*16,img=g.getImageData(X,Y,16,16),d=img.data;let bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255)bad++;if(!bad)continue;
+    for(let pass=0;pass<16&&bad;pass++){for(let y=0;y<16;y++)for(let x=0;x<16;x++){const o=(y*16+x)*4;if(d[o+3]===255)continue;let r=0,gg=0,bb=0,n=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>15||ny>15)continue;const q=(ny*16+nx)*4;if(d[q+3]===255){r+=d[q];gg+=d[q+1];bb+=d[q+2];n++}}
+        if(n){d[o]=r/n;d[o+1]=gg/n;d[o+2]=bb/n;d[o+3]=254}}for(let k=3;k<1024;k+=4)if(d[k]===254)d[k]=255;bad=0;for(let k=3;k<1024;k+=4)if(d[k]<255)bad++}
+    if(bad)for(let k=3;k<1024;k+=4)d[k]=255;g.putImageData(img,X,Y);const tc=tileList[t];if(tc&&tc.getContext)tc.getContext('2d').putImageData(img,0,0)}}
 const atlasTex=new THREE.CanvasTexture(ATLAS);atlasTex.magFilter=atlasTex.minFilter=THREE.NearestFilter;atlasTex.generateMipmaps=false;
 const VS=`attribute vec3 lt;attribute vec3 tc;varying vec2 vUv;varying vec3 vL;varying vec3 vT;varying float vD;void main(){vUv=uv;vL=lt;vT=tc;vec4 wp=modelMatrix*vec4(position,1.);vec3 dd=wp.xyz-cameraPosition;vD=max(length(dd.xz),abs(dd.y));gl_Position=projectionMatrix*viewMatrix*wp;}`;
 // (P2-GFX) 마크 LightTexture 그대로: 하늘빛 = 밝기×(어두워짐×0.95+0.05)×(f,f,1)→흰색 35% · 블록빛 = 밝기×(1.5+깜빡임) 을 주황빛으로 → 더해서 회색 4% · 밝기 50% 감마 · 회색 4%
@@ -3718,8 +3725,10 @@ function colTemp(x,z){const ch=chunks.get(ck(x>>4,z>>4)),b=ch&&ch.bio?ch.bio[(x&
 const coldAt=(tp,y)=>tp-Math.max(0,y-YO-80)*.05/40<.15;
 // 비가 닿는 맨 위 높이 (열마다 잠깐 기억)
 const precipC=new Map();
-function precipTop(x,z){const k=x*73856093^z*19349663;let v=precipC.get(k);if(v!==undefined)return v;const cy=Math.floor(camera.position.y);let y=Math.min(H-1,cy+24);
-  for(;y>Math.max(1,cy-24);y--){const id=getB(x,y,z);if(id&&B[id]&&(B[id].solid||B[id].liquid||isLeaf(id)))break}v=y+1;precipC.set(k,v);return v}
+// (P4-FIX) 마크 MOTION_BLOCKING 높이맵처럼: 열의 맨 위에서부터 내려와 처음 막는 블록 바로 위 (동굴 · 지붕 아래엔 비가 안 와요)
+function precipTop(x,z){const k=Math.imul(x,73856093)^Math.imul(z,19349663);let v=precipC.get(k);if(v!==undefined)return v;const ch=chunks.get(ck(x>>4,z>>4));
+  if(!ch){v=terrainH(x,z)+1}else{const b=ch.b,c=(x&15)|((z&15)<<4);let y=H-1;for(;y>=0;y--){const id=b[c|(y<<8)];if(id&&B[id]&&(B[id].solid||B[id].liquid||isLeaf(id)))break}v=y+1}
+  precipC.set(k,v);return v}
 // 빗줄기 · 눈송이 그림 (rain.png · snow.png 처럼 한 칸 너비 = 64픽셀 · 세로 4칸 = 256픽셀 · 왼쪽 비 · 오른쪽 눈)
 const PRECIP_TEX=(()=>{const c=cv(128,256),g=c.getContext('2d'),r=mulberry(4321);
   for(let band=0;band<4;band++)for(let i=0;i<6;i++){const x=band*16+Math.floor(r()*16),y=Math.floor(r()*256),l=14+Math.floor(r()*16),cr=190+r()*30|0,cg=208+r()*25|0;for(let k=0;k<l;k++){g.fillStyle=`rgba(${cr},${cg},255,${.12+.5*(k/l)})`;g.fillRect(x,(y+k)%256,1,1)}}
@@ -3776,14 +3785,17 @@ function thunderSound(d){const a=ac();if(!a||muted||a.state!=='running')return;c
 // 빗소리 (지붕 아래면 먹먹하게)
 let rainNode=null;
 function rainSound(){const a=AC;if(!a||a.state!=='running')return;if(!rainNode){const s=a.createBufferSource();s.buffer=NOISE;s.loop=true;const fl=a.createBiquadFilter();fl.type='lowpass';fl.frequency.value=3000;const hp=a.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;const g=a.createGain();g.gain.value=0;s.connect(hp);hp.connect(fl);fl.connect(g);g.connect(sbus('weather'));s.start();rainNode={g,fl}}
-  const p=player,l=lightAt(p.pos.x,p.pos.y+p.eye,p.pos.z),out=l[0]>=14,[bm,tp]=colTemp(Math.floor(p.pos.x),Math.floor(p.pos.z)),rl=muted||DIM!=='over'||!started||NO_PRECIP.has(bm)||coldAt(tp,p.pos.y)?0:rainLvl;
+  // (P4-FIX) 마크 tickRainParticles 처럼: 둘레 10칸 열 중 비 닿는 높이가 내 높이 ±10 안인 곳에서만 소리 · 내 머리 위가 막혔으면 먹먹하게 (weather.rain.above)
+  const p=player,py=Math.floor(p.pos.y+p.eye);let hit=0;const NS=24;
+  if(!muted&&DIM==='over'&&started&&rainLvl>0)for(let i=0;i<NS;i++){const x=Math.floor(p.pos.x+(Math.random()*2-1)*10),z=Math.floor(p.pos.z+(Math.random()*2-1)*10),[bm,tp]=colTemp(x,z);if(NO_PRECIP.has(bm))continue;const y=precipTop(x,z);if(y>py+10||y<py-10||coldAt(tp,y))continue;hit++}
+  const out=precipTop(Math.floor(p.pos.x),Math.floor(p.pos.z))<=py,rl=hit?rainLvl*Math.min(1,hit*3/NS):0;
   const t=a.currentTime;rainNode.g.gain.setTargetAtTime(rl*(out?.16:.07),t,.4);rainNode.fl.frequency.setTargetAtTime(out?3000:700,t,.4)}
 // 매 틱: 비 세기는 0.01씩 바뀌어요 · 뇌우면 번개 · 땅에 튀는 빗방울 (tickRain)
 function weatherTick(){wTicks++;rainO=rainLvl;thunO=thunLvl;const [tr,tt]=weatherTarget();rainLvl=clamp(rainLvl+(tr>rainLvl?.01:tr<rainLvl?-.01:0),0,1);thunLvl=clamp(thunLvl+(tt>thunLvl?.01:tt<thunLvl?-.01:0),0,1);
   if(skyFlash>0)skyFlash--;boltTick();
   if(wTicks%20===0)precipC.clear();
   if(DIM==='over'&&started&&thunLvl>.9&&rainLvl>.2&&Math.random()<1/300){const a=Math.random()*Math.PI*2,r=8+Math.random()*80,x=Math.floor(player.pos.x+Math.cos(a)*r),z=Math.floor(player.pos.z+Math.sin(a)*r);if(!NO_PRECIP.has(colTemp(x,z)[0]))lightning(x,z)}
-  if(rainLvl>0&&DIM==='over'&&started){const n=Math.floor(rainLvl*rainLvl*40);for(let i=0;i<n;i++){const x=Math.floor(player.pos.x+(Math.random()*2-1)*10),z=Math.floor(player.pos.z+(Math.random()*2-1)*10),[bm,tp]=colTemp(x,z);if(NO_PRECIP.has(bm))continue;const y=precipTop(x,z);if(Math.abs(y-player.pos.y)>12||coldAt(tp,y))continue;
+  if(rainLvl>0&&DIM==='over'&&started){const n=Math.floor(rainLvl*rainLvl*40);for(let i=0;i<n;i++){const x=Math.floor(player.pos.x+(Math.random()*2-1)*10),z=Math.floor(player.pos.z+(Math.random()*2-1)*10),[bm,tp]=colTemp(x,z);if(NO_PRECIP.has(bm))continue;const y=precipTop(x,z);if(Math.abs(y-Math.floor(player.pos.y))>10||coldAt(tp,y))continue;
       if(getB(x,y-1,z)===LAVA){if(Math.random()<.3)spriteP({x:x+Math.random(),y:y+.1,z:z+Math.random(),xd:0,yd:.02,zd:0,grav:-.1,fric:.96,col:.4,s:.12,life:20,frames:8,row:0,phys:false});continue}
       spriteP({x:x+Math.random(),y:y+.02,z:z+Math.random(),xd:(Math.random()*2-1)*.012,yd:Math.random()*.2+.1,zd:(Math.random()*2-1)*.012,grav:1.5,fric:.98,col:1,rgb:SPLASH_C,s:.1*(Math.random()*.5+.5)*2,life:Math.floor(8/(Math.random()*.8+.2)),row:3,fr:1+Math.floor(Math.random()*4),drop:true,phys:true})}}
   if(wTicks%10===0)rainSound()}
@@ -3835,7 +3847,7 @@ function chunkTick(budget){const t0=performance.now(),pcx=Math.floor(player.pos.
 function hardenPowder(x,y,z){const id=getB(x,y,z);if(!B[id]||!B[id].powder)return;for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,0,1],[0,0,-1]])if(getB(x+dx,y+dy,z+dz)===WATER){setBlock(x,y,z,B[id].powder);return}}
 {const sb0=setBlock;setBlock=function(x,y,z,id,a,b,m){const r=sb0(x,y,z,id,a,b,m);if(r&&!b){if(B[id]&&B[id].powder)hardenPowder(x,y,z);else if(id===WATER)for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,-1,0],[0,0,1],[0,0,-1]])hardenPowder(x+dx,y+dy,z+dz)}return r}}
 function setBlock(x,y,z,id,lazy,fromNet,meta){if(y<0||y>=H)return false;meta=meta|0;const cx=x>>4,cz=z>>4,ch=chunks.get(ck(cx,cz));if(!ch)return false;const lx=x&15,lz=z&15,i=bi(lx,y,lz);const old=ch.b[i],om=ch.m[i];if(old===id&&om===meta)return true;
-  ch.b[i]=id;ch.m[i]=meta;const pv=encB(id,meta);(edits[ek(cx,cz)]||(edits[ek(cx,cz)]={}))[i]=pv;if(!fromNet)mpEdit(cx,cz,i,pv);if(id&&y+1>ch.maxY)ch.maxY=Math.min(H-1,y+1);
+  ch.b[i]=id;ch.m[i]=meta;precipC.delete(Math.imul(x,73856093)^Math.imul(z,19349663));const pv=encB(id,meta);(edits[ek(cx,cz)]||(edits[ek(cx,cz)]={}))[i]=pv;if(!fromNet)mpEdit(cx,cz,i,pv);if(id&&y+1>ch.maxY)ch.maxY=Math.min(H-1,y+1);
   const lightCh=OP[old]!==OP[id]||EM[old]!==EM[id]||ATT[old]!==ATT[id];
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){if(!lightCh&&!((dx===0||(dx<0&&lx===0)||(dx>0&&lx===15))&&(dz===0||(dz<0&&lz===0)||(dz>0&&lz===15))))continue;const n=chunks.get(ck(cx+dx,cz+dz));if(n)n.dirty=true}
   blockChanged(x,y,z,old,id,om);
@@ -5970,7 +5982,7 @@ function horseBrain(m,dt){if(player.ride!==m)return null;const fw=(keys.KeyW?1:0
   if(l<.1)return{dir:m.yaw,sp:0,face:m.yaw};const dir=Math.atan2(wx,wz);return{dir,sp:(keys.ControlLeft?13:9.5)*Math.min(1,l),face:dir}}
 function rideTick(dt){const p=player,m=p.ride;if(!m)return false;
   if(m.dead||!mobs.includes(m)||p.dead){p.ride=null;return false}
-  if(p.sneak){p.ride=null;p.pos.set(m.pos.x+Math.cos(p.yaw)*1.2,m.pos.y+.1,m.pos.z-Math.sin(p.yaw)*1.2);p.fallStart=null;return false}
+  if(rideShift()){p.ride=null;dismountTo(m.pos.x,m.pos.y,m.pos.z,m.yaw??p.yaw,(m.w||1.4),(m.h||1.6));return false}
   if(!m.tamed){m.tameT=(m.tameT||0)+dt;if(m.tameT>1.6){m.tameT=0;if(Math.random()<.4){m.tamed=1;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast(m.saddle?'말을 길들였어요! WASD 로 달리고 스페이스로 점프':'말을 길들였어요! 안장을 얹으면 몰 수 있어요')}else{p.ride=null;p.pos.set(m.pos.x+1.5,m.pos.y+.5,m.pos.z);p.vel.set(0,6,0);smoke(m.pos.x,m.pos.y+m.h,m.pos.z);toast('말이 떨어뜨렸어요. 다시 타 보세요');sfx('animal_cow');return false}}}
   p.pos.set(m.pos.x,m.pos.y+m.h*.72,m.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true;return true}
 function useOnMob(m){const st=inv[sel];if(piglinUse(m,st))return true;if(typeof nvMobUse==='function'&&nvMobUse(m,st))return true;
@@ -7890,7 +7902,12 @@ let started=false,menuOpen=null,sens=1,tSneak=false,showDebug=false;
 const cvs=$('gl');
 function lockPointer(){if(isTouch)return;try{const r=cvs.requestPointerLock();if(r&&r.catch)r.catch(()=>{if(!screenOpen&&started&&!chatOpen&&!menuOpen)showMenu('ready')})}catch(e){}}
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&started&&!screenOpen&&!player.dead&&!menuOpen&&!chatOpen){mouseL=mouseR=false;showMenu('pause')}});
-cvs.addEventListener('click',()=>{if(started&&!menuOpen&&!screenOpen&&!document.pointerLockElement)lockPointer()});
+cvs.addEventListener('click',()=>{if(chatOpen){$('chatIn').focus();return}if(started&&!menuOpen&&!screenOpen&&!document.pointerLockElement)lockPointer()});   // (P4-FIX) 채팅 중 화면을 누르면 마우스를 잠그지 말고 입력칸으로 (예전엔 잠겨서 Esc 가 안 먹고 채팅이 안 닫혔어요)
+// (P4-FIX) 채팅이 열려 있는데 입력칸에서 포커스가 빠졌을 때: Esc 는 닫기 · Enter 는 보내기 · 다른 키는 입력칸으로 돌려보내요
+addEventListener('keydown',e=>{if(!chatOpen)return;const i=$('chatIn');if(e.target===i)return;if(e.code==='F11'||/^F\d+$/.test(e.code))return;
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeChat(false);return}if(e.key==='Enter'){e.preventDefault();e.stopImmediatePropagation();closeChat(true);return}
+  if(e.target&&e.target.tagName==='INPUT'||e.target&&e.target.tagName==='TEXTAREA')return;i.focus()},true);
+document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement&&chatOpen){try{document.exitPointerLock()}catch(x){}setTimeout(()=>{if(chatOpen)$('chatIn').focus()},0)}});
 addEventListener('mousemove',e=>{if(document.pointerLockElement!==cvs)return;const k=mouseK();player.yaw-=e.movementX*k;player.pitch=clamp(player.pitch-e.movementY*k,-Math.PI/2,Math.PI/2)});   // 감도 곡선: mouseK (P2-CAM)
 addEventListener('mousedown',e=>{if(document.pointerLockElement!==cvs)return;ac();
   if(e.button===0){mouseL=true;if(player.missTime>0)return;if(targetMob)attack(targetMob);else if(targetRemote)attackRemote(targetRemote);else if(targetBoat)hitBoat(targetBoat);else if(!target){if(!creative())player.missTime=10;player.atkTicker=0;if(started)deflectFire()}doSwing()}
@@ -11396,7 +11413,18 @@ function updateBoats(dt){const p=player;
     if(ride){p.pos.set(b.pos.x,b.pos.y+.3,b.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true}
     if(b.pos.y<-40){scene.remove(b.m);boats.splice(i,1);if(ride)p.boat=null}}}
 function boatRideTick(){const p=player,b=p.boat;if(!b)return false;if(!boats.includes(b)||p.dead){p.boat=null;return false}
-  if(p.sneak){p.boat=null;p.pos.set(b.pos.x-Math.sin(b.yaw+Math.PI/2)*1.1,b.pos.y+.6,b.pos.z-Math.cos(b.yaw+Math.PI/2)*1.1);p.fallStart=null;return false}return true}
+  if(rideShift()){p.boat=null;dismountTo(b.pos.x,b.pos.y,b.pos.z,b.yaw,1.375,.5625);return false}return true}
+// (P4-FIX) 타고 있을 땐 updatePlayer 가 p.sneak 을 고치기 전에 돌아가서 Shift 가 안 먹었어요 → 키를 직접 읽어요 (채팅 · 창이 열려 있으면 무시)
+function rideShift(){return !!(keys.ShiftLeft||keys.ShiftRight||tSneak)&&!chatOpen&&!screenOpen}
+// 마크 DismountHelper 처럼: 탈것 옆 (오른쪽 → 왼쪽 → 뒤 → 앞 → 대각선) 에서 발 디딜 바닥이 있고 몸 (0.6×1.8) 이 들어가는 자리 · 없으면 탈것 위
+const DISMOUNT_BAD=new Set([MAGMA,CAMPFIRE,CACTUS,SWEET_BERRY,WITHER_ROSE].filter(v=>typeof v==='number'));
+function dismountTo(vx,vy,vz,yaw,vw,vh){const p=player,d=(vw*Math.SQRT2+.6)/2+.05,fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=-fz,rz=fx,C=[[rx,rz],[-rx,-rz],[-fx,-fz],[fx,fz],[rx-fx,rz-fz],[-rx-fx,-rz-fz],[rx+fx,rz+fz],[-rx+fx,-rz+fz]];let spot=null;
+  for(const [ax,az] of C){const l=Math.hypot(ax,az),x=vx+ax/l*d,z=vz+az/l*d,X=Math.floor(x),Z=Math.floor(z),by=Math.floor(vy);
+    for(let ty=by+1;ty>=by-2&&!spot;ty--){const fl=getB(X,ty-1,Z);if(!SOLID[fl]||DISMOUNT_BAD.has(fl)||(B[fl]&&B[fl].fireDmg))continue;const top=boxHits(x,ty-1,z,.3,.999);if(!top||top>vy+1.2)continue;
+      const inL=getB(X,Math.floor(top),Z),inL2=getB(X,Math.floor(top+1),Z);if(inL===LAVA||inL2===LAVA||(B[inL]&&B[inL].fireDmg))continue;if(!boxHits(x,top,z,.3,1.8))spot=[x,top,z]}
+    if(spot)break}
+  if(!spot)spot=boxHits(vx,vy+vh,vz,.3,1.8)?[vx,vy,vz]:[vx,vy+vh,vz];
+  p.pos.set(spot[0],spot[1]+1e-3,spot[2]);p.prev.copy(p.pos);p.vel.set(0,0,0);p.fallStart=null;p.fallDist=0}
 function hitBoat(b){doSwing();b.hurtT=.25;b.hp-=creative()?4:1;sfx('dig','wood',.7);if(b.hp>0)return;const i=boats.indexOf(b);if(i>=0)boats.splice(i,1);scene.remove(b.m);if(player.boat===b)player.boat=null;if(!creative())spawnItem({id:BOAT,n:1},b.pos.x,b.pos.y+.5,b.pos.z)}
 // 친구 때리기: 내 칸 h/ 에 "누구를 얼마나" 적으면, 맞은 사람이 그걸 보고 스스로 다쳐요
 let hitKeys=[];
