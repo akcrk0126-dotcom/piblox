@@ -386,6 +386,8 @@ body.creative #stats,body.creative #air{visibility:hidden}
 'use strict';
 /* ═════════════ 기본 도구 ═════════════ */
 const $=id=>document.getElementById(id);
+// (P4-MENU) 키 지정 · 토글 · Esc=뒤로: 모든 키 처리보다 먼저 (아래 '설정 · 화면 바깥 UI' 칸)
+addEventListener('keydown',e=>{kbKey(e);kbRemap(e)},true);addEventListener('keyup',e=>kbRemap(e),true);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function hash2(x,z,s){let h=Math.imul(x|0,374761393)+Math.imul(z|0,668265263)+Math.imul(s|0,1442695041)|0;h=Math.imul(h^h>>>13,1274126177);h^=h>>>16;return(h>>>0)/4294967296}
@@ -7155,7 +7157,7 @@ function updateMe(dt){me.g.visible=viewMode>0&&started&&!player.dead;if(!me.g.vi
 let pvR=null,pvScene,pvCam,pvSteve,pvMouse=[0,0];
 function pvRender(){const host=document.querySelector('#panel .pv');if(!host)return;
   if(!pvR){const c=document.createElement('canvas');c.width=104;c.height=140;try{pvR=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:false})}catch(e){pvR=false;return}
-    pvScene=new THREE.Scene();pvScene.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,.45);dl.position.set(.3,.6,1);pvScene.add(dl);pvCam=new THREE.PerspectiveCamera(30,104/140,.1,20);pvCam.position.set(0,1.05,5.2);pvSteve=makeSteve(SKIN);pvScene.add(pvSteve.g)}
+    pvScene=new THREE.Scene();pvScene.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,.45);dl.position.set(.3,.6,1);pvScene.add(dl);pvCam=new THREE.PerspectiveCamera(30,104/140,.1,20);pvCam.position.set(0,1.05,5.2);pvSteve=makeSteve(SKIN);if(skinSlim())setArmModel(pvSteve,true,SKIN);skinParts(pvSteve);pvScene.add(pvSteve.g)}
   if(pvR===false)return;if(pvR.domElement.parentNode!==host){host.innerHTML='';host.appendChild(pvR.domElement);pvR.domElement.style.cssText='width:100%;height:100%;image-rendering:pixelated'}
   const r=host.getBoundingClientRect(),mx=(pvMouse[0]-(r.left+r.width/2))/200,my=(pvMouse[1]-(r.top+r.height*.25))/200;
   pvSteve.g.rotation.y=clamp(mx,-1,1)*.45;pvSteve.P.head.rotation.y=clamp(mx,-1,1)*.4;pvSteve.P.head.rotation.x=clamp(my,-1,1)*.5;pvR.render(pvScene,pvCam)}
@@ -7709,7 +7711,7 @@ const mT=(y,t)=>`<div class="mtl" style="top:${y*GS}px">${t}</div>`;
 const mS=(x,y,w,id,label,min,max,val,fmt)=>`<div class="mab msl" style="${gSt(x,y,w,20)}">${slider(id,label,min,max,val,fmt)}</div>`;
 let menuBlur=5;try{const v=localStorage.getItem('bc_opt_blur');if(v!=null)menuBlur=+v}catch(e){}
 const applyBlur=()=>document.documentElement.style.setProperty('--blur',(menuBlur*.8)+'px');applyBlur();
-const ATK_N=['조준점','핫바','끔'];
+const ATK_N=['십자선','단축 바','꺼짐'];
 const optPct=k=>{try{const v=localStorage.getItem('bc_opt_'+k);return v===null||v===''?100:clamp(+v||0,0,100)}catch(e){return 100}},pctTxt=v=>v?v+'%':'끔';
 // P2-CAM 변수 (fovFx · tiltFx · scrFx: 0~1) 가 있으면 바로 바꿔요
 function setPctOpt(k,v){setOpt(k,v);try{if(k==='fovfx'&&typeof fovFx!=='undefined')fovFx=v/100;if(k==='tilt'&&typeof tiltFx!=='undefined')tiltFx=v/100;if(k==='scrfx'&&typeof scrFx!=='undefined')scrFx=v/100}catch(e){}}
@@ -7721,30 +7723,25 @@ function optScreen(title,rows,done){const W=gW(),H=gH(),cx=Math.floor(W/2);
 const oBtn=(label,m,dis)=>(x,y,w)=>mB(x,y,w,label,m,dis),oSl=(id,label,min,max,val,fmt)=>(x,y,w)=>mS(x,y,w,id,label,min,max,val,fmt);
 function menuHTML(type){const W=gW(),H=gH(),cx=Math.floor(W/2);
   if(type==='title'){const l=Math.floor(H/4)+48,sp=SPLASH[Math.floor(Math.random()*SPLASH.length)],k=100/(gTextW(sp)+32);
-    return `<img id="mcLogo" class="mab" alt="블록크래프트" style="top:${30*GS}px"><div class="edition mab" style="${gSt(cx-64,67,128,14)}">웹 에디션</div><div class="sub" style="left:${(cx+123)*GS}px;top:${69*GS}px;--k:${k.toFixed(3)}">${esc(sp)}</div>
-    ${mB(cx-100,l,200,'싱글플레이','single')}${mB(cx-100,l+24,200,'멀티플레이','multi')}${mB(cx-100,l+48,200,'새 소식 · 업데이트 영상'+(newsUnseen()?' <span style="color:#ff5555">●</span>':''),'news')}
-    ${mB(cx-100,l+84,98,'설정...','opts')}<a class="mbtn mab" href="hub.html" style="${gSt(cx+2,l+84,98)}">허브로 나가기</a>
+    return `<img id="mcLogo" class="mab" alt="블록크래프트" style="top:${30*GS}px"><div class="edition mab" style="${gSt(cx-64,67,128,14)}">웹 에디션</div>${optGet('hideSplash',false)?'':`<div class="sub" style="left:${(cx+123)*GS}px;top:${69*GS}px;--k:${k.toFixed(3)}">${esc(sp)}</div>`}
+    ${mB(cx-100,l,200,'싱글플레이','single')}${mB(cx-100,l+24,200,'멀티플레이','multi')}${mB(cx-100,l+48,98,'Realms','realms')}${mB(cx+2,l+48,98,'새 소식'+(newsUnseen()?' <span style="color:#ff5555">●</span>':''),'news')}
+    ${tIcon(cx-124,l+84,'tLang','lang','언어')}${mB(cx-100,l+84,98,'설정...','opts')}${tIcon(cx+104,l+84,'tAcc','acc','접근성')}<a class="mbtn mab" href="hub.html" style="${gSt(cx+2,l+84,98)}">허브로 나가기</a>
     <div class="verL">블록크래프트 1.21 (웹)</div><div class="verR">Mojang 과 관계없는 팬 게임</div>`}
   if(type==='pause'){const y=Math.floor((H-166)/4)+50,x=cx-102;
     return mT(40,'게임 메뉴')+mB(x,y,204,'게임으로 돌아가기','resume')+mB(x,y+24,98,'새 소식','news')+mB(cx+4,y+24,98,'조작 방법','ctrl')
       +mB(x,y+48,98,'시점: '+['1인칭','3인칭 뒤','3인칭 앞'][viewMode],'view')+`<a class="mbtn mab" href="hub.html" data-m="hub" style="${gSt(cx+4,y+48,98)}">허브로 나가기</a>`
       +mB(x,y+72,98,'설정...','opts2')+mB(cx+4,y+72,98,MPS?'서버 코드: '+esc(MPS.sid):'LAN에 열기','lan',!MPS)+mB(x,y+96,204,'저장하고 타이틀 화면으로 나가기','quit')}
   if(type==='opts'){const y=61+Math.max(0,Math.floor((H-33-61-120)/2)),x1=cx-154,x2=cx+4,inW=started&&!(WORLD&&WORLD.mp);
-    const G=[['스킨 사용자 지정...','skin',1],['음악 및 소리...','sound'],['비디오 설정...','video'],['조작...','controls'],['언어...','lang',1],['채팅 설정...','chatOpt',1],['리소스 팩...','rp',1],['접근성 설정...','acc'],['원격 측정 데이터...','tele',1],['크레딧 및 저작자 표시','credits',started]];
-    return mT(12,'설정')+mS(x1,29,150,'mFov','시야',30,110,FOV,fovTxt)+(inW?mB(x2,29,150,'난이도: '+DIFF_KO[cmdDiff()],'diff'):mB(x2,29,150,'온라인...','online',1))
+    const G=[['스킨 사용자 지정...','skin'],['음악 및 소리...','sound'],['비디오 설정...','video'],['조작...','controls'],['언어...','lang'],['대화 설정...','chatOpt'],['리소스 팩...','rp',1],['접근성 설정...','acc'],['원격 측정 데이터...','tele',1],['제작진 및 이용 저작물...','credits']];
+    return mT(12,'설정')+oK('fov')(x1,29,150)+(inW?mB(x2,29,150,'난이도: '+DIFF_KO[cmdDiff()],'diff'):mB(x2,29,150,'온라인...','online',1))
       +G.map(([t,m,d],i)=>mB(i%2?x2:x1,y+Math.floor(i/2)*24,150,t,m,d)).join('')+mB(cx-100,H-27,200,'완료','optsDone')}
-  if(type==='video')return optScreen('비디오 설정',[[oSl('mGui','GUI 크기',0,autoGui(),guiOpt,v=>v?v:'자동'),oSl('mRD','렌더 거리',2,10,RD,v=>v+'청크')],[oSl('mGam','밝기',0,100,Math.round(GAM*100),gamTxt),oBtn('구름: '+(cloudsOn?cloudFast?'빠르게':'멋지게':'끔'),'clouds')],
-    [oBtn('화면 흔들림: '+(bobView?'켬':'끔'),'bob'),oBtn('공격 표시기: '+ATK_N[atkInd],'atk')],[oBtn('전체 화면: '+(document.fullscreenElement?'켬':'끔'),'fs'),oSl('mBlur','메뉴 배경 흐림',0,10,menuBlur,v=>v?v:'끔')],
-    [oSl('mScrfx','왜곡 효과',0,100,optPct('scrfx'),pctTxt),oSl('mFovfx','시야 효과',0,100,optPct('fovfx'),pctTxt)]]);
-  if(type==='acc')return optScreen('접근성 설정',[[oSl('mScrfx','왜곡 효과',0,100,optPct('scrfx'),pctTxt),oSl('mFovfx','시야 효과',0,100,optPct('fovfx'),pctTxt)],[oSl('mTilt','피격 시 화면 기울기',0,100,optPct('tilt'),pctTxt),oSl('mBlur','메뉴 배경 흐림',0,10,menuBlur,v=>v?v:'끔')]]);
   if(type==='sound'){const C=SCAT.filter(c=>c!=='master'),R=[[oSl('mVol_master',SCAT_N.master,0,100,Math.round(SVOL.master*100),volTxt)]];for(let i=0;i<C.length;i+=2)R.push(C.slice(i,i+2).map(c=>oSl('mVol_'+c,SCAT_N[c],0,100,Math.round(SVOL[c]*100),volTxt)));return optScreen('음악 및 소리',R)}   // 음량 10가지 (P2-SND)
-  if(type==='controls')return optScreen('조작',[[oSl('mSens','마우스 감도',typeof sensTxt==='function'?0:10,200,Math.round(sens*100),v=>typeof sensTxt==='function'?sensTxt(v):v+'%'),oBtn('키 설정...','ctrl')]]);
   return ''}
 // 사망 화면 (마크 DeathScreen: 제목 2배 y=30×2 · 원인 y=85 · 점수 y=100 · 버튼 높이/4+72 · +96)
 function placeDead(){const D=$('dead');if(D.classList.contains('hide'))return;const W=gW(),H=gH(),cx=Math.floor(W/2);D.querySelector('h2').style.top=60*GS+'px';$('deadMsg').style.top=85*GS+'px';$('deadScore').style.top=100*GS+'px';
   $('respawn').style.cssText=gSt(cx-100,Math.floor(H/4)+72,200);$('deadTitle').style.cssText=gSt(cx-100,Math.floor(H/4)+96,200)}
 {const _die=die;die=function(){const r=_die.apply(this,arguments);placeDead();return r}}
-addEventListener('resize',()=>{if(['title','pause','opts','video','sound','controls','acc','ctrl','single'].includes(menuOpen))showMenu(menuOpen);placeDead();if(screenOpen)renderInvFx()});
+addEventListener('resize',()=>{if(['title','pause','opts','sound','ctrl','create'].includes(menuOpen)||MENU2[menuOpen])showMenu(menuOpen);placeDead();if(screenOpen)renderInvFx()});
 // 불러오기 화면 (마크 LevelLoadingScreen: 가운데 청크 지도 · 위에 % · 바탕은 흐린 화면)
 {const LM=document.createElement('canvas');LM.id='loadMap';LM.width=LM.height=18;$('loading').appendChild(LM);const lg=LM.getContext('2d');
   setInterval(()=>{const L=$('loading');if(L.classList.contains('hide'))return;const map=phase!=='boot';L.classList.toggle('lmap',map);if(!map)return;
@@ -7892,7 +7889,7 @@ const cvs=$('gl');
 function lockPointer(){if(isTouch)return;try{const r=cvs.requestPointerLock();if(r&&r.catch)r.catch(()=>{if(!screenOpen&&started&&!chatOpen&&!menuOpen)showMenu('ready')})}catch(e){}}
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&started&&!screenOpen&&!player.dead&&!menuOpen&&!chatOpen){mouseL=mouseR=false;showMenu('pause')}});
 cvs.addEventListener('click',()=>{if(started&&!menuOpen&&!screenOpen&&!document.pointerLockElement)lockPointer()});
-addEventListener('mousemove',e=>{if(document.pointerLockElement!==cvs)return;const k=mouseK();player.yaw-=e.movementX*k;player.pitch=clamp(player.pitch-e.movementY*k,-Math.PI/2,Math.PI/2)});   // 감도 곡선: mouseK (P2-CAM)
+addEventListener('mousemove',e=>{if(document.pointerLockElement!==cvs)return;const k=mouseK();player.yaw-=e.movementX*k;player.pitch=clamp(player.pitch-e.movementY*k*mInvert(),-Math.PI/2,Math.PI/2)});   // 감도 곡선: mouseK (P2-CAM)
 addEventListener('mousedown',e=>{if(document.pointerLockElement!==cvs)return;ac();
   if(e.button===0){mouseL=true;if(player.missTime>0)return;if(targetMob)attack(targetMob);else if(targetRemote)attackRemote(targetRemote);else if(targetBoat)hitBoat(targetBoat);else if(!target){if(!creative())player.missTime=10;player.atkTicker=0;if(started)deflectFire()}doSwing()}
   else if(e.button===2){mouseR=true;useItem(true);useCD=.2}   // 오른쪽 클릭 반복 4틱 (rightClickDelay)
@@ -7947,7 +7944,7 @@ function camTick(){const p=player;p.eye+=((POSE_EYE[p.pose]||1.62)-p.eye)*.5;p.f
 {const _up=updatePlayer;updatePlayer=function(dt){const r=_up.apply(this,arguments);camTick();return r}}
 // 휠: 한 칸 (≈100px) 에 한 칸씩 · 트랙패드의 작은 값은 모아서 (마크 accumulatedScroll)
 let wheelAcc=0,wheelT=0;
-function wheelSlot(e){const px=e.deltaMode===1?e.deltaY*33:e.deltaMode===2?e.deltaY*400:e.deltaY,now=performance.now();if(now-wheelT>300)wheelAcc=0;wheelT=now;wheelAcc+=px;
+function wheelSlot(e){const px=e.deltaMode===1?e.deltaY*33:e.deltaMode===2?e.deltaY*400:e.deltaY,now=performance.now();if(now-wheelT>300)wheelAcc=0;wheelT=now;wheelAcc+=px*mScroll();
   let n=0;while(wheelAcc>=50){n++;wheelAcc-=100}while(wheelAcc<=-50){n--;wheelAcc+=100}if(n)selectSlot(((sel+n)%9+9)%9)}
 // F2 스크린샷 (화면 + HUD) → yyyy-MM-dd_HH.mm.ss.png 로 내려받고 채팅에 알려 줘요
 let shotReq=false;
@@ -8072,18 +8069,16 @@ if(isTouch){document.body.classList.add('touch');
 /* ═════════════ 메뉴 ═════════════ */
 const SPLASH=['16×16 픽셀!','곡괭이를 챙기세요!','다이아몬드는 아래에!','크리퍼 조심!','100% 손으로 만듦!','나무를 때려요!','밤에는 집으로!','친구랑 같이!','바이옴 13종!','양털로 침대를!'];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function slider(id,label,min,max,val,fmt){return `<div class="mslider"><input type="range" id="${id}" min="${min}" max="${max}" value="${val}" step="1"><i style="left:calc(${(val-min)/(max-min)*100}% - ${(val-min)/(max-min)*16}px)"></i><span>${label}: ${fmt(val)}</span></div>`}
-function bindSlider(id,label,min,max,fmt,on){const el=$(id);el.oninput=()=>{const v=+el.value;el.nextElementSibling.style.left=`calc(${(v-min)/(max-min)*100}% - ${(v-min)/(max-min)*16}px)`;el.parentNode.querySelector('span').textContent=label+': '+fmt(v);on(v)}}
+function slider(id,label,min,max,val,fmt){return `<div class="mslider"><input type="range" id="${id}" min="${min}" max="${max}" value="${val}" step="1"><i style="left:calc(${(val-min)/(max-min)*100}% - ${(val-min)/(max-min)*8}px * var(--s))"></i><span>${label}: ${fmt(val)}</span></div>`}
+function bindSlider(id,label,min,max,fmt,on){const el=$(id);el.oninput=()=>{const v=+el.value;el.nextElementSibling.style.left=`calc(${(v-min)/(max-min)*100}% - ${(v-min)/(max-min)*8}px * var(--s))`;el.parentNode.querySelector('span').textContent=label+': '+fmt(v);on(v)}}
 const MODE_N={survival:'서바이벌',creative:'크리에이티브'},TYPE_N={default:'기본',flat:'평지'};
 let selWorld=null,selServer=null,newW=null,phase='boot';
+const MENU2={},MACT={},MBACK={};   // (P4-MENU) 새 화면 · 버튼 동작 · Esc 로 돌아갈 곳 — 맨 아래 '설정 · 화면 바깥 UI' 칸에서 채워요
 function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;if(document.pointerLockElement)document.exitPointerLock();
   const help=isTouch?'왼쪽 조이스틱 이동 · 화면 드래그로 시점<br>꾹 누르기: 부수기 · 짧게 탭: 놓기/사용':'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl 달리기 · E 인벤토리 · T 채팅 · F5 시점<br>왼쪽 클릭 부수기/공격 · 오른쪽 클릭 놓기/사용/먹이주기 · Q 버리기 · 1~9 / 휠 핫바';
   let h='';
-  if(type==='title')h=menuHTML(type);
-  else if(type==='single'){const L=worldsList().sort((a,b)=>b.last-a.last);if(!selWorld&&L[0])selWorld=L[0].id;
-    const W=gW(),H=gH(),cx=Math.floor(W/2);   // 마크 SelectWorldScreen: 제목 y=8 · 검색 22 · 목록 48~높이-64 (줄 36 · 폭 270) · 버튼 높이-52 / -28
-    h=mT(8,'월드 선택')+`<input class="minput mab" id="wSearch" maxlength="32" placeholder="검색..." autocomplete="off" style="${gSt(cx-100,22,200,20)}"><div class="mlistbg wlist" style="${gSt(0,48,W,H-112)}">${L.length?L.map(w=>`<div class="witem${w.id===selWorld?' on':''}" data-w="${w.id}" style="width:${270*GS}px"><img class="px" src="${iconURL(GRASS)}"><b>${esc(w.name)}</b><small>${new Date(w.last).toLocaleString('ko-KR')}</small><small>${MODE_N[w.mode]} 모드 · ${TYPE_N[w.type||'default']}</small></div>`).join(''):'<div class="mempty">아직 만든 월드가 없어요</div>'}</div>`
-      +mB(cx-154,H-52,150,'선택한 월드 플레이','play',!L.length)+mB(cx+4,H-52,150,'새로운 세계 만들기','create')+mB(cx-154,H-28,72,'편집','wedit',1)+mB(cx-76,H-28,72,'삭제','del',!L.length)+mB(cx+4,H-28,72,'다시 만들기','wre',1)+mB(cx+82,H-28,72,'취소','title')}
+  if(MENU2[type])h=MENU2[type].html(arg);
+  else if(type==='title')h=menuHTML(type);
   else if(type==='create'){newW=newW||{name:'새로운 세계',mode:'survival',type:'default',seed:''};newW.tab=newW.tab||0;newW.dif=newW.dif||'normal';
     // (P3-LOOK) 마크 1.21 CreateWorldScreen: 위 탭 (게임 · 세계 · 추가 기능, 폭 (min(400,W)-28)/3 · 높이 24) · 머리/바닥 구분선 · 내용은 남은 칸의 1/6 높이 · 아래 150+150 버튼 (높이-28)
     const W=gW(),H=gH(),cx=Math.floor(W/2),tw=Math.round((Math.min(400,W)-28)/6)*2,tx=cx-Math.floor(tw*3/2),top=26,av=H-33-top;
@@ -8094,10 +8089,6 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
     else{const y=top+Math.floor((av-61)/6);
       h+=mB(cx-154,y,150,'월드 유형: '+TYPE_N[newW.type],'nwType')+mB(cx+4,y,150,'사용자 지정...','nwCustom',1)+`<div class="mab mlab" style="${gSt(cx-154,y+28,308)}">세계 생성 시드</div><input class="minput mab" id="nwSeed" maxlength="20" placeholder="비워 두면 무작위 시드" value="${esc(newW.seed)}" style="${gSt(cx-154,y+41,308,20)}">`}
     h+=mB(cx-154,H-28,150,'새로운 세계 만들기','doCreate')+mB(cx+4,H-28,150,'취소','single')}
-  else if(type==='multi'){h=`<h2>멀티플레이</h2><div class="mlist" id="srvList"><div class="mempty">${mpReady()?'서버 목록을 불러오는 중...':'서버에 연결하는 중... (PlayHub 서버)'}</div></div>
-    <div class="mrow"><button class="mbtn" data-m="join" disabled id="mJoin">서버 접속</button><button class="mbtn" data-m="mkSrv">서버 만들기</button></div>
-    <div class="mrow"><input class="minput" id="srvCode" placeholder="서버 코드로 접속" maxlength="8" style="flex:1"><button class="mbtn" data-m="joinCode" style="flex:0 0 120px">코드 접속</button></div>
-    <div class="mrow"><button class="mbtn" data-m="multi">새로고침</button><button class="mbtn" data-m="title">취소</button></div>`;setTimeout(loadServers,50)}
   else if(type==='mkSrv'){newW=newW||{name:'',mode:'survival',type:'default',seed:''};if(!newW.name)newW.name=(myName()+'의 서버').slice(0,24);
     h=`<h2>서버 만들기</h2><label class="mlabel">서버 이름</label><input class="minput" id="nwName" maxlength="32" value="${esc(newW.name)}">
     <button class="mbtn" data-m="nwMode2">게임 모드: ${MODE_N[newW.mode]}</button><button class="mbtn" data-m="nwType2">월드 유형: ${TYPE_N[newW.type]}</button>
@@ -8105,7 +8096,7 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
     <div class="mnote">만든 서버는 누구나 목록에서 보고 들어올 수 있어요. 지은 건물은 서버에 저장돼요</div>
     <div class="mrow"><button class="mbtn" data-m="doSrv">서버 열기</button><button class="mbtn" data-m="multi">취소</button></div>`}
   else if(type==='pause')h=menuHTML(type);
-  else if(type==='opts'||type==='video'||type==='sound'||type==='controls'||type==='acc')h=menuHTML(type);
+  else if(type==='opts'||type==='sound')h=menuHTML(type);
   else if(type==='ctrl'){h=mT(12,'조작 방법')+`<div class="mlistbg" style="${gSt(0,33,gW(),gH()-66)}"><div class="help">${help.replace(/ · /g,'<br>')}<br>F1 화면 숨기기 · F3 디버그 화면</div></div>`+mB(Math.floor(gW()/2)-100,gH()-27,200,'완료','ctrlDone')}
   else if(type==='ready')h=`<div class="ready"><i></i><b>주위 둘러보기</b>화면을 클릭하면 시작해요</div>`;
   else if(type==='msg')h=`<h2>${esc(arg)}</h2><button class="mbtn" data-m="title">확인</button>`;
@@ -8121,6 +8112,7 @@ function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('
   for(const [id,k,l] of [['mScrfx','scrfx','왜곡 효과'],['mFovfx','fovfx','시야 효과'],['mTilt','tilt','피격 시 화면 기울기']])if($(id))bindSlider(id,l,0,100,pctTxt,v=>setPctOpt(k,v));
   if($('mGam'))bindSlider('mGam','밝기',0,100,gamTxt,v=>{GAM=v/100;setOpt('gam',v)});   // 마크 밝기 (감마): 0 어둡게 · 50 기본 · 100 밝게
   if($('mBlur'))bindSlider('mBlur','메뉴 배경 흐림',0,10,v=>v?v:'끔',v=>{menuBlur=v;setOpt('blur',v);applyBlur()});
+  oBind(M);if(MENU2[type]&&MENU2[type].after)MENU2[type].after(M,arg);
   const lg=$('mcLogo');if(lg){mcLogo(c=>{lg.src=c.toDataURL();const k=Math.min(256/c.width,44/c.height);lg.style.width=c.width*k*GS+'px';lg.style.left=(Math.floor(gW()/2)-c.width*k/2)*GS+'px';lg.style.top=(30+(44-c.height*k)/2)*GS+'px'})}}
 const volTxt=v=>v?v+'%':'끔',fovTxt=v=>v===70?'보통':v===110?'퀘이크 프로':v;let optsBack='title',ctrlBack='title',musicOn=true;try{musicOn=localStorage.getItem('bc_opt_music')!=='0'}catch(e){}
 let _logoC=null;
@@ -8138,7 +8130,8 @@ function mcLogo(cb){if(_logoC){cb(_logoC);return}const make=()=>{const t=cv(160,
     _logoC=c;cb(c)};
   if(document.fonts&&document.fonts.load)document.fonts.load('12px BlockLogo').then(make,make);else make()}
 function setOpt(k,v){try{localStorage.setItem('bc_opt_'+k,v)}catch(e){}}
-function menuAct(a){if(a==='news'){openNews();return}
+function menuAct(a){if(MACT[a]){MACT[a]();return}if(a.startsWith('o:')){oClick(a.slice(2));showMenu(menuOpen);return}if(a.startsWith('kb:')){kbSel=a.slice(3);showMenu('keys');return}if(a.startsWith('kbr:')){delete KB[a.slice(4)];kbSave();showMenu('keys');return}
+  if(a==='news'){openNews();return}
   if(a==='optsSub'){showMenu('opts');return}if(a==='video'||a==='sound'||a==='controls'||a==='acc'){showMenu(a);return}if(a==='atk'){atkInd=(atkInd+1)%3;setOpt('atk',atkInd);showMenu(menuOpen);return}
   if(a==='fs'){const d=document;if(typeof toggleFS==='function')toggleFS();else try{const r=d.fullscreenElement?d.exitFullscreen():d.documentElement.requestFullscreen();if(r&&r.catch)r.catch(()=>{})}catch(e){}return}
   if(a==='diff'){dimState.dif=DIFFS[(DIFFS.indexOf(cmdDiff())+1)%4];showMenu(menuOpen);return}if(a==='credits'){if(!started&&typeof endPoemShow==='function')endPoemShow(false,()=>showMenu('opts'));return}if(a==='fb'){FULLBRIGHT=!FULLBRIGHT;setOpt('fb',FULLBRIGHT?1:0);dimVisual();showMenu(menuOpen);return}const keep=()=>{if($('nwName'))newW.name=$('nwName').value;if($('nwSeed'))newW.seed=$('nwSeed').value};
@@ -8217,23 +8210,19 @@ const RP='playhub_mp/rooms/';const dbr=p=>firebase.database().ref(RP+p);
 function waitMP(cb,tries){if(mpReady())return cb(true);if((tries||0)>40)return cb(false);setTimeout(()=>waitMP(cb,(tries||0)+1),250)}
 function errMsg(e){const c=e&&(e.code||e.message)||'';return /permission/i.test(c)?'권한이 없어요. PlayHub에 로그인했는지 확인해 주세요':'연결 오류 ('+c+')'}
 function mergeList(v){const by={};for(const u in v||{}){const o=v[u]||{};for(const sid in o){const x=o[sid];if(!x||!x.name)continue;const cur=by[sid];if(!cur||(x.upd||0)>(cur.upd||0))by[sid]=Object.assign({sid},x,{players:Math.max(x.players||1,cur?cur.players||1:0)})}}return Object.values(by)}
-function loadServers(){waitMP(ok=>{const box=$('srvList');if(!box)return;if(!ok){box.innerHTML='<div class="mempty">서버에 연결하지 못했어요. 인터넷을 확인해 주세요</div>';return}
-  dbr('bc_list/players').once('value').then(s=>{const t=now();const L=mergeList(s.val()).filter(x=>t-(x.upd||0)<7*864e5).sort((a,b)=>(b.upd||0)-(a.upd||0));
-    if(!$('srvList'))return;$('srvList').innerHTML=L.length?L.map(x=>{const on=t-(x.upd||0)<90000;return`<div class="mitem${x.sid===selServer?' on':''}" data-s="${esc(x.sid)}"><b>${esc(x.name)}</b><small>${on?'<span style="color:#55ff55">● 접속 '+(x.players||1)+'명</span>':'<span style="color:#aaa">○ 비어 있음 (들어가면 다시 열려요)</span>'} · ${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'}</small><small>코드 ${esc(x.sid)} · 만든 사람 ${esc(x.hostName||'?')}</small></div>`}).join(''):'<div class="mempty">열린 서버가 없어요. 서버 만들기로 첫 서버를 열어 보세요</div>';
-    $('srvList').querySelectorAll('[data-s]').forEach(el=>{el.onclick=()=>{selServer=el.dataset.s;$('srvList').querySelectorAll('.mitem').forEach(x=>x.classList.toggle('on',x===el));$('mJoin').disabled=false};el.ondblclick=()=>joinServer(el.dataset.s)})}).catch(e=>{if($('srvList'))$('srvList').innerHTML='<div class="mempty">서버 목록을 읽지 못했어요: '+esc(errMsg(e))+'</div>'})})}
-function createServer(o){waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}const uid=window.__mpUid,sid=Math.random().toString(36).slice(2,8);
+function createServer(o){waitMP(ok=>{if(!ok){showMenu('disc',{r:'서버에 연결하지 못했어요. 인터넷을 확인해 주세요'});return}const uid=window.__mpUid,sid=Math.random().toString(36).slice(2,8);
   const meta={name:o.name||'서버',seed:o.seed,type:o.type,gen:o.gen>=5?5:o.gen>=4?4:o.gen===3?3:o.gen===2?2:1,mode:o.mode,host:uid,hostName:myName(),created:now(),upd:now(),players:1};
-  Promise.all([dbr('bc_list/players/'+uid+'/'+sid).set(meta),dbr('bc_'+sid+'/players/'+uid+'/m').set(meta)]).then(()=>joinServer(sid)).catch(e=>showMenu('msg','서버를 만들지 못했어요. '+errMsg(e)))})}
-function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');waitMP(ok=>{if(!ok){showMenu('msg','서버에 연결하지 못했어요');return}
-  showMenu('msg','서버 정보를 받는 중...');
-  dbr('bc_'+sid+'/players').once('value').then(s=>{const all=s.val()||{};let meta=null;for(const u in all){const m=all[u]&&all[u].m;if(m&&(!meta||m.host===u))meta=m}
-    if(!meta){showMenu('msg','그런 서버를 찾을 수 없어요');return}
+  Promise.all([dbr('bc_list/players/'+uid+'/'+sid).set(meta),dbr('bc_'+sid+'/players/'+uid+'/m').set(meta)]).then(()=>joinServer(sid)).catch(e=>showMenu('disc',{t:'서버를 만들지 못했어요',r:errMsg(e)}))})}
+function joinServer(sid){sid=String(sid).toLowerCase().replace(/[^a-z0-9]/g,'');waitMP(ok=>{if(!ok){showMenu('disc',{r:'서버에 연결하지 못했어요. 인터넷을 확인해 주세요'});return}
+  showMenu('connect');
+  dbr('bc_'+sid+'/players').once('value').then(s=>{if(connAbort)return;const all=s.val()||{};let meta=null;for(const u in all){const m=all[u]&&all[u].m;if(m&&(!meta||m.host===u))meta=m}
+    if(!meta){showMenu('disc',{r:'그런 서버를 찾을 수 없어요 (코드 '+sid+')'});return}
     const lw={},ed={},tl={},tt={};
     for(const u in all){const e=all[u]&&all[u].e||{};for(const c in e){const o=e[c]||{};for(const i in o){const r=o[i];if(!r||r.v==null)continue;const k=c+'/'+i;if((r.t||0)>=(lw[k]||0)){lw[k]=r.t||0;(ed[c]||(ed[c]={}))[i]=r.v}}}
       const t=all[u]&&all[u].t||{};for(const k in t){const r=t[k];if(!r)continue;if((r.t||0)>=(tt[k]||0)){tt[k]=r.t||0;tl[k]=r.j}}}
     const tiles2=[];for(const k in tl){if(!tl[k])continue;try{tiles2.push([k.replace(/_/g,','),JSON.parse(tl[k])])}catch(_){}}
     let d=null;try{d=JSON.parse(localStorage.getItem('bc_mp_'+sid))}catch(_){}
-    enterWorld({id:'mp_'+sid,name:meta.name,mode:meta.mode,type:meta.type,gen:meta.gen,seed:meta.seed,mp:sid},d,{edits:ed,tiles:tiles2,time:meta.time});mpStart(sid,meta,lw,tt)}).catch(e=>showMenu('msg','접속하지 못했어요. '+errMsg(e)))})}
+    enterWorld({id:'mp_'+sid,name:meta.name,mode:meta.mode,type:meta.type,gen:meta.gen,seed:meta.seed,mp:sid},d,{edits:ed,tiles:tiles2,time:meta.time});mpStart(sid,meta,lw,tt)}).catch(e=>{if(!connAbort)showMenu('disc',{r:errMsg(e)})})})}
 function mpStart(sid,meta,lw,tt){const uid=window.__mpUid,base='bc_'+sid+'/players/';
   MPS={sid,uid,meta,host:meta.host===uid,base,q:{},qt:0,st:0,count:1,refs:[],tq:{},lw:lw||{},tt:tt||{},watched:new Set(),mine:[],dq:{},kq:{},claimed:new Set(),myClaims:[]};
   const me=dbr(base+uid);MPS.me=me;me.child('p').onDisconnect().remove();me.child('d').remove().catch(()=>{});me.child('k').remove().catch(()=>{});
@@ -11495,7 +11484,8 @@ function openNews(){const u=UPDATES[0],esc2=t=>String(t).replace(/[&<>]/g,c=>({'
 function closeNews(){const v=$('news').querySelector('video');if(v)v.pause();$('news').classList.add('hide')}
 $('newsX').onclick=closeNews;$('news').addEventListener('click',e=>{if(e.target.id==='news')closeNews()});
 bootPanorama();
-function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)===0)updateWaypoint();const rdt=Math.min(.25,(now-last)/1000);let dt=Math.min(.05,rdt);last=now;fpsN++;fpsT+=rdt;if(fpsT>=1){fps=fpsN;fpsN=0;fpsT=0}   // rdt: 플레이어 틱은 20 TPS 를 따라잡아요 (한 프레임 최대 5틱 · 마크 Timer 처럼)
+function frame(now){requestAnimationFrame(frame);if(fpsSkip(now))return;   // 최대 프레임률 (P4-MENU)
+  stepBiomeSearch();if((fpsN&7)===0)updateWaypoint();const rdt=Math.min(.25,(now-last)/1000);let dt=Math.min(.05,rdt);last=now;fpsN++;fpsT+=rdt;if(fpsT>=1){fps=fpsN;fpsN=0;fpsT=0}   // rdt: 플레이어 틱은 20 TPS 를 따라잡아요 (한 프레임 최대 5틱 · 마크 Timer 처럼)
   if(!loadDone){chunkTick(40);const pcx=Math.floor(player.pos.x/16),pcz=Math.floor(player.pos.z/16);let tot=0,ok=0,gen=0;
     for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){tot++;const c=chunks.get(ck(pcx+dx,pcz+dz));if(c){gen++;if(!c.dirty)ok++}}
     $('loadBar').style.width=((gen+ok)/tot/2*100)+'%';if(phase==='loading')$('loadSub').textContent=gen<tot?'지형 생성 중... '+Math.round(gen/tot*100)+'%':'지형 불러오는 중... '+Math.round(ok/tot*100)+'%';
@@ -11531,7 +11521,7 @@ function frame(now){requestAnimationFrame(frame);stepBiomeSearch();if((fpsN&7)==
       $('debug').innerHTML=L.map(t=>t?`<div>${esc(t)}</div>`:'<div class="gap"></div>').join('')+debugRight()}}
   drawHUD();$('cross').style.visibility=hideGui||viewMode||!started||player.dead||$('hud').classList.contains('hide')?'hidden':'';$('chat').style.visibility=hideGui&&!chatOpen?'hidden':'';
   {const lk=started?lightK(p.pos.x,p.pos.y+p.eye,p.pos.z):1;vigB+=((1-lk)-vigB)*Math.min(1,dt*.2);$('vig').style.opacity=clamp(vigB,0,1)}
-  saveT+=dt;if(saveT>30){saveT=0;save()}}
+  saveT+=dt;if(saveT>30){saveT=0;save();saveInd()}}
 let vigB=0;
 requestAnimationFrame(frame);
 /* ═════════════ (P3-ART) 마크 자바 26 그림 맞추기 — HUD 스프라이트 · 아이템 아이콘 ═════════════
@@ -11640,6 +11630,333 @@ for(const n in ART_FOOD){const [seed,pal,deco]=ART_FOOD[n],id=typeof idOfMC==='f
 {for(const k in ITEM){if(typeof ICON!=='undefined')delete ICON[k];if(typeof ICONC!=='undefined')delete ICONC[k];if(typeof texCache!=='undefined'&&texCache[k]){try{texCache[k].dispose()}catch(e){}delete texCache[k]}}}
 // ── 소리: 모든 sfx(종류, 재질, 볼륨, 자리) 를 새 소리 엔진으로 (P2-SND · 다른 sfx 덮개들보다 바깥이라 맨 아래에 둬요) ──
 {const _in=sfx;sfx=function(kind,mat,vol,pos){return sndDispatch(_in,kind,mat,vol,pos)}}
+/* ═════════════ (P4-MENU) 화면 바깥 UI · 설정 — 마크 자바 1.21 그대로 ═════════════
+   옵션은 OPT 표 한 곳 (마크 OptionInstance): 키 → {t:'b' 켜짐/꺼짐 | 'c' 고르기 | 's' 막대, n: 이름, d: 기본값, get/set (있으면 게임 변수와 바로 이어져요)}
+   새 화면은 MENU2[이름] = {html(arg), after(M,arg), back: Esc 로 돌아갈 동작} · 버튼 동작은 MACT[이름]. 글자는 바닐라 ko_kr 문구 (P4-LANG 이 감싸요) */
+const OPTV={};
+function optGet(k,d){if(k in OPTV)return OPTV[k];let v=d;try{const s=localStorage.getItem('bc_opt_'+k);if(s!==null&&s!=='')v=typeof d==='number'?+s:typeof d==='boolean'?s==='1':s}catch(e){}return OPTV[k]=v}
+const ONOFF=v=>v?'켜짐':'꺼짐',PCT=v=>v?v+'%':'꺼짐',CHUNKS=v=>`청크 ${v}개`;
+const OPT={
+  // 비디오 설정 (VideoSettingsScreen)
+  graphics:{t:'c',n:'그래픽',d:1,vals:['빠르게','화려하게','기막히게!']},
+  rd:{t:'s',n:'렌더 거리',min:2,max:10,get:()=>RD,set:v=>{RD=v;setOpt('rd',v)},fmt:CHUNKS},
+  chunkUpd:{t:'c',n:'청크 구성기',d:0,vals:['스레드 활용','부분 차단형','완전 차단형']},
+  sim:{t:'s',n:'시뮬레이션 거리',d:12,min:5,max:32,fmt:CHUNKS},
+  ao:{t:'b',n:'부드러운 조명 효과',d:true},
+  fpsmax:{t:'s',n:'최대 프레임률',d:120,min:10,max:260,step:10,fmt:v=>v>=260?'무제한':v+' FPS'},
+  vsync:{t:'b',n:'수직 동기화',d:true},
+  gui:{t:'s',n:'GUI 배율',min:0,max:()=>autoGui(),get:()=>guiOpt,set:v=>{guiOpt=v;setOpt('gui',v)},fmt:v=>v?v:'자동',end:()=>{applyGui();showMenu(menuOpen)}},
+  atk:{t:'c',n:'공격 지표',vals:['십자선','단축 바','꺼짐'],get:()=>atkInd,set:v=>{atkInd=v;setOpt('atk',v)}},
+  gam:{t:'s',n:'밝기',min:0,max:100,get:()=>Math.round(GAM*100),set:v=>{GAM=v/100;setOpt('gam',v)},fmt:v=>gamTxt(v)},
+  clouds:{t:'c',n:'구름',vals:['꺼짐','빠르게','화려하게'],get:()=>cloudsOn?cloudFast?1:2:0,set:v=>{cloudsOn=v>0;cloudFast=v===1;setOpt('clouds',cloudsOn?cloudFast?'fast':1:0)}},
+  fs:{t:'b',n:'전체 화면',get:()=>!!document.fullscreenElement,set:()=>{try{if(typeof toggleFS==='function')toggleFS();else{const d=document,r=d.fullscreenElement?d.exitFullscreen():d.documentElement.requestFullscreen();if(r&&r.catch)r.catch(()=>{})}}catch(e){}}},
+  parts:{t:'c',n:'입자',d:0,vals:['모두','적게','최소']},
+  mip:{t:'s',n:'밉맵 레벨',d:4,min:0,max:4,fmt:v=>v?v:'꺼짐'},
+  eshadow:{t:'b',n:'개체 그림자',d:true},
+  scrfx:{t:'s',n:'왜곡 효과',min:0,max:100,get:()=>optPct('scrfx'),set:v=>setPctOpt('scrfx',v),fmt:PCT},
+  edist:{t:'s',n:'개체 거리',d:100,min:50,max:500,step:25,fmt:v=>v+'%'},
+  fovfx:{t:'s',n:'시야 효과',min:0,max:100,get:()=>optPct('fovfx'),set:v=>setPctOpt('fovfx',v),fmt:PCT},
+  autosave:{t:'b',n:'자동 저장 표시',d:true},
+  glintSpd:{t:'s',n:'반짝임 속도',d:50,min:0,max:100,fmt:PCT},
+  glintStr:{t:'s',n:'반짝임 세기',d:75,min:0,max:100,fmt:PCT},
+  blur:{t:'s',n:'메뉴 배경 흐림',min:0,max:10,get:()=>menuBlur,set:v=>{menuBlur=v;setOpt('blur',v);applyBlur()},fmt:v=>v?v:'꺼짐'},
+  bob:{t:'b',n:'화면 흔들림',get:()=>bobView,set:v=>{bobView=v;setOpt('bob',v?1:0)}},
+  fov:{t:'s',n:'시야 범위',min:30,max:110,get:()=>FOV,set:v=>{FOV=v;setOpt('fov',v)},fmt:v=>fovTxt(v)},
+  // 조작 · 마우스 (ControlsScreen · MouseSettingsScreen)
+  sneakT:{t:'c',n:'웅크리기',d:0,vals:['홀드','토글']},
+  sprintT:{t:'c',n:'달리기',d:0,vals:['홀드','토글']},
+  autojump:{t:'b',n:'자동 점프',d:false},
+  opTab:{t:'b',n:'관리자 아이템 탭',d:false},
+  sens:{t:'s',n:'마우스 감도',min:0,max:200,get:()=>Math.round(sens*100),set:v=>{sens=v/100;setOpt('sens',v)},fmt:v=>sensTxt(v)},
+  touch:{t:'b',n:'터치스크린 모드',d:false},
+  scroll:{t:'s',n:'스크롤 감도',d:0,min:-200,max:100,fmt:v=>Math.pow(10,v/100).toFixed(2)},   // 마크: 10^(i/100) · 0.01 ~ 10
+  discrete:{t:'b',n:'별도 스크롤',d:false},
+  invert:{t:'b',n:'마우스 반전',d:false},
+  rawin:{t:'b',n:'무보정 입력',d:true},
+  // 대화 설정 (ChatOptionsScreen)
+  chatVis:{t:'c',n:'대화',d:0,vals:['표시','명령어만','숨김']},
+  chatCol:{t:'b',n:'색',d:true},links:{t:'b',n:'웹 링크',d:true},linkPrompt:{t:'b',n:'링크 확인',d:true},
+  chatOp:{t:'s',n:'대화 문자 불투명도',d:100,min:10,max:100,fmt:v=>v+'%'},
+  chatBg:{t:'s',n:'문자 배경 불투명도',d:50,min:0,max:100,fmt:v=>v+'%'},
+  chatScale:{t:'s',n:'대화 문자 크기',d:100,min:0,max:100,fmt:PCT},
+  chatSpace:{t:'s',n:'줄 간격',d:0,min:0,max:100,fmt:v=>v+'%'},
+  chatDelay:{t:'s',n:'대화 지연',d:0,min:0,max:60,full:v=>v?`대화 지연: ${(v/10).toFixed(1)}초`:'대화 지연: 없음'},
+  chatW:{t:'s',n:'폭',d:320,min:40,max:320,fmt:v=>v+'px'},
+  chatHF:{t:'s',n:'입력 중 높이',d:180,min:20,max:180,fmt:v=>v+'px'},
+  chatHU:{t:'s',n:'입력 중이 아닐 때 높이',d:90,min:20,max:180,fmt:v=>v+'px'},
+  narrator:{t:'c',n:'내레이터',d:0,vals:['꺼짐','모두','대화','시스템']},
+  cmdSug:{t:'b',n:'명령어 제안',d:true},hideNames:{t:'b',n:'이름 일치 기준 숨기기',d:true},reducedDbg:{t:'b',n:'디버그 정보 축소',d:false},secureOnly:{t:'b',n:'보안 대화만 표시',d:false},
+  // 접근성 설정 (AccessibilityOptionsScreen)
+  subs:{t:'b',n:'자막 표시',d:false},hiContrast:{t:'b',n:'고대비',d:false},
+  bgChatOnly:{t:'c',n:'문자 배경',d:0,vals:['대화','모두']},
+  notifT:{t:'s',n:'알림 시간',d:100,min:50,max:1000,step:10,fmt:v=>(v/100).toFixed(1)+'x'},
+  tilt:{t:'s',n:'피해 흔들림',min:0,max:100,get:()=>optPct('tilt'),set:v=>setPctOpt('tilt',v),fmt:PCT},
+  darkEff:{t:'s',n:'어둠 고동 세기',d:100,min:0,max:100,fmt:PCT},
+  hideFlash:{t:'b',n:'하늘 번쩍임 숨기기',d:false},darkMojang:{t:'b',n:'흑백 로고',d:false},
+  panoSpd:{t:'s',n:'파노라마 회전 속도',d:100,min:0,max:100,fmt:PCT},
+  hideSplash:{t:'b',n:'스플래시 문구 숨기기',d:false},narrKey:{t:'b',n:'내레이터 단축키',d:true},
+  // 스킨 사용자 지정 (SkinCustomizationScreen)
+  cape:{t:'b',n:'망토',d:true},jacket:{t:'b',n:'재킷',d:true},lsleeve:{t:'b',n:'왼쪽 소매',d:true},rsleeve:{t:'b',n:'오른쪽 소매',d:true},
+  lpants:{t:'b',n:'왼쪽 바지 다리',d:true},rpants:{t:'b',n:'오른쪽 바지 다리',d:true},hat:{t:'b',n:'모자',d:true},
+  mainHand:{t:'c',n:'주로 사용하는 손',d:1,vals:['왼손','오른손']},
+};
+const oGet=k=>{const o=OPT[k];return o.get?o.get():optGet(k,o.d)};
+const oMax=o=>typeof o.max==='function'?o.max():o.max;
+const oVal=(k,v)=>{const o=OPT[k];if(o.t==='b')return ONOFF(v);if(o.t==='c')return o.vals[v];return o.fmt?o.fmt(v):v};
+const oText=(k,v)=>{const o=OPT[k];if(v===undefined)v=oGet(k);return o.full?o.full(v):o.n+': '+oVal(k,v)};
+function oSet(k,v){const o=OPT[k];if(o.set)o.set(v);else{OPTV[k]=v;setOpt(k,typeof v==='boolean'?(v?1:0):v)}optApply(k)}
+function oClick(k){const o=OPT[k],v=oGet(k);if(o.t==='b')oSet(k,!v);else if(o.t==='c')oSet(k,(v+1)%o.vals.length)}
+// 한 칸 그리기 (optRows 가 x, y, 폭을 줘요)
+const oK=(k,dis)=>(x,y,w)=>{const o=OPT[k];if(o.t==='s'){const v=oGet(k),mn=o.min,mx=oMax(o),p=mx>mn?(v-mn)/(mx-mn):0;
+    return `<div class="mab msl" style="${gSt(x,y,w,20)}"><div class="mslider${dis?' dis':''}"><input type="range" id="o_${k}" min="${mn}" max="${mx}" step="${o.step||1}" value="${v}"${dis?' disabled':''}><i style="left:calc(${(p*100).toFixed(3)}% - ${(p*8).toFixed(3)}px * var(--s))"></i><span>${esc(oText(k,v))}</span></div></div>`}
+  return mB(x,y,w,esc(oText(k)),'o:'+k,dis)};
+function oBind(M){M.querySelectorAll('input[type=range][id^="o_"]').forEach(el=>{const k=el.id.slice(2),o=OPT[k];if(!o)return;const knob=()=>{const mn=+el.min,mx=+el.max,p=mx>mn?(+el.value-mn)/(mx-mn):0;el.nextElementSibling.style.left=`calc(${(p*100).toFixed(3)}% - ${(p*8).toFixed(3)}px * var(--s))`};
+  el.oninput=()=>{const v=+el.value;knob();el.parentNode.querySelector('span').textContent=oText(k,v);oSet(k,v)};if(o.end)el.onchange=()=>o.end()})}
+// 옵션이 바뀌면 바로 반영
+function optApply(k){if(/^chat|^bgChatOnly$|^cmdSug$/.test(k))chatCss();if(['hat','jacket','lsleeve','rsleeve','lpants','rpants'].includes(k))skinParts()}
+// 하위 화면 (OptionsSubScreen: 제목 y=12 · 목록 33 ~ 높이-33 · 줄 25 · 아래 완료 200)
+function optScreen2(title,rows,foot){const W=gW(),H=gH(),cx=Math.floor(W/2);
+  return mT(12,title)+`<div class="mlistbg" style="${gSt(0,33,W,H-66)}"><div class="mrows" style="height:${(rows.length*25+8)*GS}px">${optRows(rows.map(r=>r.map(c=>typeof c==='string'?oK(c):c)))}</div></div>`+(foot||mB(cx-100,H-27,200,'완료','optsSub'))}
+const pairs=a=>{const r=[];for(let i=0;i<a.length;i+=2)r.push(a.slice(i,i+2));return r};
+Object.assign(MENU2,{
+  video:{html:()=>optScreen2('비디오 설정',[[oBtn('전체 화면 해상도: 현재','fsres',1)]].concat(pairs(['graphics','rd','chunkUpd','sim','ao','fpsmax','vsync','gui','atk','gam','clouds','fs','parts','mip','eshadow','scrfx','edist','fovfx','autosave','glintSpd','glintStr','blur','bob']))),back:'optsSub'},
+  controls:{html:()=>optScreen2('조작',[[oBtn('마우스 설정...','mouse'),oBtn('키 지정...','keys')]].concat(pairs(['sneakT','sprintT','autojump','opTab']))),back:'optsSub'},
+  mouse:{html:()=>optScreen2('마우스 설정',pairs(['sens','touch','scroll','discrete','invert','rawin']),mB(Math.floor(gW()/2)-100,gH()-27,200,'완료','controls')),back:'controls'},
+  chatOpt:{html:()=>optScreen2('대화 설정',pairs(['chatVis','chatCol','links','linkPrompt','chatOp','chatBg','chatScale','chatSpace','chatDelay','chatW','chatHF','chatHU','narrator','cmdSug','hideNames','reducedDbg','secureOnly'])),back:'optsSub'},
+  acc:{html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);return optScreen2('접근성 설정',pairs(['narrator','subs','hiContrast','autojump','blur','chatBg','bgChatOnly','chatOp','chatSpace','chatDelay','notifT','bob','sneakT','sprintT','scrfx','fovfx','darkEff','tilt','glintSpd','glintStr','hideFlash','darkMojang','panoSpd','hideSplash','narrKey']),
+    mB(cx-155,H-27,150,'접근성 안내','accGuide',1)+mB(cx+5,H-27,150,'완료','optsSub'))},back:'optsSub'},
+  skin:{html:()=>optScreen2('스킨 사용자 지정',pairs(['cape','jacket','lsleeve','rsleeve','lpants','rpants','hat','mainHand']).concat([[oBtn('스킨 바꾸기...','skinpick')]])),back:'optsSub'},
+  // 언어 화면 몸통은 P4-LANG 몫 (MENU2.lang 을 바꿔 끼워요)
+  lang:{html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);return mT(12,'언어')+`<div class="mlistbg wlist" style="${gSt(0,33,W,H-86)}"><div class="witem on lang1" style="width:${220*GS}px">한국어 (대한민국)</div></div>`+`<div class="mab mlab mgray" style="${gSt(0,H-50,W)}">번역은 100% 정확하지 않을 수 있습니다.</div>`+mB(cx-100,H-27,200,'완료','optsSub')},back:'optsSub'},
+});
+Object.assign(MACT,{mouse:()=>showMenu('mouse'),keys:()=>{kbSel=null;showMenu('keys')},skin:()=>showMenu('skin'),skinpick:()=>{skinDraft=null;showMenu('skinpick')},chatOpt:()=>showMenu('chatOpt'),lang:()=>showMenu('lang'),
+  controls:()=>showMenu('controls'),credits:()=>showMenu('credits'),realms:()=>showMenu('realms')});
+// 전체 화면이 바뀌면 비디오 설정 글자도
+document.addEventListener('fullscreenchange',()=>{if(menuOpen==='video')showMenu('video')});
+
+/* ── 키 지정 (KeyBindsScreen): 줄 높이 20 · 폭 340 · 이름 왼쪽 · 키 버튼 75 · 초기화 50 · 아래 '키 설정 초기화' · '완료' (150) */
+const KB_CATS=[['조작',[['forward','앞으로 걷기','KeyW'],['left','왼쪽으로 걷기','KeyA'],['back','뒤로 걷기','KeyS'],['right','오른쪽으로 걷기','KeyD'],['jump','점프','Space'],['sneak','웅크리기','ShiftLeft'],['sprint','달리기','ControlLeft']]],
+  ['게임플레이',[['attack','공격/파괴','M0'],['use','아이템 사용/블록 놓기','M2'],['pick','블록 선택','M1']]],
+  ['보관함',[['drop','선택한 아이템 떨어뜨리기','KeyQ']].concat([1,2,3,4,5,6,7,8,9].map(i=>['hotbar'+i,'단축 바 슬롯 '+i,'Digit'+i]),[['inventory','보관함 열기/닫기','KeyE'],['swap','다른 손과 아이템 맞바꾸기','KeyF'],['adv','발전 과제','KeyL']])],
+  ['크리에이티브 모드',[['saveBar','단축 바 저장','KeyC'],['loadBar','단축 바 불러오기','KeyX']]],
+  ['멀티플레이',[['chat','대화 열기','KeyT'],['command','명령어 열기','Slash'],['plist','플레이어 목록 보기','Tab'],['social','사회적 상호 작용 화면','KeyP']]],
+  ['기타',[['shot','스크린샷 찍기','F2'],['persp','시점 전환','F5'],['full','전체 화면 전환','F11'],['smooth','시네마틱 카메라 전환',''],['outl','플레이어 강조','']]]];
+const KB_DEF={};for(const [,L] of KB_CATS)for(const [a,,c] of L)if(!/^M\d$/.test(c))KB_DEF[a]=c;
+let KB={};try{KB=JSON.parse(localStorage.getItem('bc_keys'))||{}}catch(e){KB={}}
+let kbSel=null;
+const kbEff=a=>a in KB?KB[a]:KB_DEF[a];
+const KEYN={Space:'Space',ShiftLeft:'왼쪽 Shift',ShiftRight:'오른쪽 Shift',ControlLeft:'왼쪽 Control',ControlRight:'오른쪽 Control',AltLeft:'왼쪽 Alt',AltRight:'오른쪽 Alt',Tab:'Tab',Enter:'Enter',Backspace:'Backspace',CapsLock:'Caps Lock',Slash:'/',Backslash:'\\',Comma:',',Period:'.',Semicolon:';',Quote:"'",BracketLeft:'[',BracketRight:']',Minus:'-',Equal:'=',Backquote:'`',
+  ArrowUp:'위쪽 방향키',ArrowDown:'아래쪽 방향키',ArrowLeft:'왼쪽 방향키',ArrowRight:'오른쪽 방향키',PageUp:'Page Up',PageDown:'Page Down',Home:'Home',End:'End',Insert:'Insert',Delete:'Delete',MetaLeft:'왼쪽 Win',MetaRight:'오른쪽 Win',ContextMenu:'Menu',M0:'왼쪽 버튼',M1:'가운데 버튼',M2:'오른쪽 버튼','':'지정되지 않음'};
+const keyName=c=>c in KEYN?KEYN[c]:/^Key[A-Z]$/.test(c)?c[3]:/^Digit\d$/.test(c)?c[5]:/^Numpad/.test(c)?'키패드 '+c.slice(6):c;
+// 바꾼 키를 게임이 아는 기본 키로 옮겨 적어요 (모든 키 처리보다 먼저 · 입력칸 · 대화 중엔 그대로)
+function kbRemap(e){const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')||chatOpen)return;let c=e.code,m=c;
+  if(Object.keys(KB).length){m=null;for(const a in KB_DEF)if(kbEff(a)===c){m=KB_DEF[a];break}if(m===null)m=Object.values(KB_DEF).includes(c)?'Unbound'+c:c;if(m!==c)try{Object.defineProperty(e,'code',{value:m})}catch(er){}}
+  // 웅크리기 · 달리기 토글 (마크 ToggleKeyMapping)
+  if(started&&!menuOpen&&!screenOpen&&(m==='ShiftLeft'&&optGet('sneakT',0)||m==='ControlLeft'&&optGet('sprintT',0))){e.stopImmediatePropagation();if(e.type==='keydown'&&!e.repeat)keys[m]=!keys[m]}}
+function kbKey(e){if(e.type!=='keydown')return;
+  if(menuOpen==='keys'&&kbSel){e.preventDefault();e.stopImmediatePropagation();if(e.code==='Escape')KB[kbSel]='';else KB[kbSel]=e.code;if(KB[kbSel]===KB_DEF[kbSel])delete KB[kbSel];kbSave();kbSel=null;showMenu('keys');return}
+  // Esc = 뒤로 (마크 Screen.onClose) — 게임 메뉴 · 타이틀은 그대로
+  if(e.code==='Escape'&&menuOpen&&!e.repeat){const b=MENU2[menuOpen]&&MENU2[menuOpen].back||MBACK[menuOpen];if(b){e.preventDefault();e.stopImmediatePropagation();if(typeof b==='function')b();else menuAct(b)}}}
+function kbSave(){try{localStorage.setItem('bc_keys',JSON.stringify(KB))}catch(e){}}
+MENU2.keys={back:'controls',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),x0=cx-170;let y=4,h='';const used={};for(const a in KB_DEF){const c=kbEff(a);if(c)used[c]=(used[c]||0)+1}
+  for(const [cat,L] of KB_CATS){h+=`<div class="mab mlab kbcat" style="${gSt(x0,y+6,340)}">${cat}</div>`;y+=20;
+    for(const [a,n,def] of L){const mouse=/^M\d$/.test(def),c=mouse?def:kbEff(a),dup=!mouse&&c&&used[c]>1,sel=kbSel===a;let t=esc(keyName(c));if(sel)t=`<span style="color:#ffff55">&gt; <u>${t}</u> &lt;</span>`;else if(dup)t=`<span style="color:#ff5555">[ </span>${t}<span style="color:#ff5555"> ]</span>`;
+      h+=`<div class="mab mlab" style="${gSt(x0,y+6,165)}${dup?';color:#ff5555':''}">${n}</div>`+mB(cx+40,y,75,t,'kb:'+a,mouse)+mB(cx+120,y,50,'초기화','kbr:'+a,mouse||!(a in KB));y+=20}}
+  return mT(12,'키 지정')+`<div class="mlistbg" style="${gSt(0,33,W,H-66)}"><div class="mrows" style="height:${(y+8)*GS}px">${h}</div></div>`+mB(cx-155,H-27,150,'키 설정 초기화','kbAll',!Object.keys(KB).length)+mB(cx+5,H-27,150,'완료','controls')},
+  after:M=>{const L=M.querySelector('.mlistbg');if(L)L.scrollTop=kbScroll;L&&L.addEventListener('scroll',()=>kbScroll=L.scrollTop)}};
+let kbScroll=0;
+MACT.kbAll=()=>{KB={};kbSave();showMenu('keys')};
+
+/* ── 세계 선택 (SelectWorldScreen 1.21): 줄 36 · 폭 270 · 아이콘 32 (첫 입장 때 찍은 화면) · 이름 / 폴더 (날짜) / 모드, 치트, 버전 */
+const wIcon=id=>{try{return localStorage.getItem('bc_wi_'+id)}catch(e){return null}};
+const wDate=t=>{try{return new Date(t).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'})}catch(e){return new Date(t).toLocaleString()}};
+const MODE_W={survival:'서바이벌 모드',creative:'크리에이티브 모드',adventure:'모험 모드',spectator:'관전 모드',hardcore:'하드코어 모드'};
+MENU2.single={back:'title',html:()=>{const L=worldsList().sort((a,b)=>b.last-a.last);if(!L.find(w=>w.id===selWorld))selWorld=L[0]?L[0].id:null;
+  const W=gW(),H=gH(),cx=Math.floor(W/2),none=!selWorld;
+  return mT(8,'세계 선택')+`<input class="minput mab" id="wSearch" maxlength="32" placeholder="세계 검색" autocomplete="off" style="${gSt(cx-100,22,200,20)}"><div class="mlistbg wlist" style="${gSt(0,48,W,H-112)}">${L.length?L.map(w=>`<div class="witem${w.id===selWorld?' on':''}" data-w="${w.id}" style="width:${270*GS}px"><img class="px" src="${wIcon(w.id)||iconURL(GRASS)}"><i class="wplay"></i><b>${esc(w.name)}</b><small>${esc(w.id)} (${esc(wDate(w.last))})</small><small>${MODE_W[w.mode]||MODE_W.survival}${w.cheats===false?'':', 치트'}, 버전: 1.21${w.type==='flat'?' · 평지':''}</small></div>`).join(''):''}</div>`
+    +mB(cx-154,H-52,150,'선택한 세계 플레이','play',none)+mB(cx+4,H-52,150,'새로운 세계 만들기','create')+mB(cx-154,H-28,72,'편집','wedit',none)+mB(cx-76,H-28,72,'삭제','del',none)+mB(cx+4,H-28,72,'다시 만들기','wre',none)+mB(cx+82,H-28,72,'뒤로','title')},
+  after:M=>{M.querySelectorAll('.wplay').forEach(el=>el.onclick=e=>{e.stopPropagation();selWorld=el.parentNode.dataset.w;menuAct('play')})}};
+const selW=()=>worldsList().find(x=>x.id===selWorld);
+Object.assign(MACT,{
+  del:()=>{const w=selW();if(!w)return;showMenu('confirm',{t:'이 세계를 지우시겠습니까?',m:`'${w.name}'이(가) 영원히 사라지게 됩니다!`,yes:'삭제',
+    onYes:()=>{saveWorldsList(worldsList().filter(x=>x.id!==w.id));try{localStorage.removeItem('bc_w_'+w.id);localStorage.removeItem('bc_wi_'+w.id)}catch(e){}selWorld=null;showMenu('single')},onNo:()=>showMenu('single')})},
+  wedit:()=>{const w=selW();if(w){wEdit={id:w.id,name:w.name};showMenu('wedit')}},
+  // 다시 만들기: 세계 만들기 화면을 그 세계 설정으로 채워요 (이름 · 모드 · 유형 · 시드 그대로)
+  wre:()=>{const w=selW();if(!w)return;newW={name:w.name,mode:w.mode==='creative'?'creative':'survival',type:w.type||'default',seed:String(w.seed),tab:0,dif:'normal'};showMenu('create')}});
+// 세계 편집 (EditWorldScreen 1.21: 세로 줄 간격 5 · 폭 200 · 아래 저장/취소 98)
+let wEdit=null;
+MENU2.wedit={back:'single',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),w=selW()||{};if(!wEdit)wEdit={id:w.id,name:w.name};const y0=Math.max(4,Math.floor((H-(9+5+9+2+20+5*25+25+20))/2));let y=y0;
+  let h=mT(y,'세계 편집');y+=14;h+=`<div class="mab mlab" style="${gSt(cx-100,y,200)}">세계 이름</div>`;y+=11;h+=`<input class="minput mab" id="weName" maxlength="32" value="${esc(wEdit.name)}" style="${gSt(cx-100,y,200,20)}">`;y+=25;
+  for(const [t,m,d] of [['아이콘 초기화','weIcon',!wIcon(w.id)],['세계 폴더 열기','weFolder',1],['백업 만들기','weBackup'],['백업 폴더 열기','weBFolder',1],['세계 최적화','weOpt',1]]){h+=mB(cx-100,y,200,t,m,d);y+=25}
+  return h+mB(cx-100,y+5,98,'저장','weSave')+mB(cx+2,y+5,98,'취소','single')},
+  after:()=>{const i=$('weName');if(i){i.oninput=()=>{wEdit.name=i.value;const b=document.querySelector('[data-m="weSave"]');if(b)b.disabled=!i.value.trim()};setTimeout(()=>i.focus(),20)}}};
+Object.assign(MACT,{
+  weIcon:()=>{try{localStorage.removeItem('bc_wi_'+wEdit.id)}catch(e){}showMenu('wedit')},
+  weSave:()=>{const n=(wEdit.name||'').trim().slice(0,32);if(!n)return;const L=worldsList(),w=L.find(x=>x.id===wEdit.id);if(w){w.name=n;saveWorldsList(L)}wEdit=null;showMenu('single')},
+  weBackup:()=>{const L=worldsList(),w=L.find(x=>x.id===wEdit.id);if(!w)return;let d=null;try{d=localStorage.getItem('bc_w_'+w.id)}catch(e){}
+    const name=w.id+'_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json',blob=new Blob([JSON.stringify({blockcraft:1,world:w,data:d?JSON.parse(d):null,icon:wIcon(w.id)})],{type:'application/json'}),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);sysToast('백업됨: '+w.name)}});
+// 확인 화면 (ConfirmScreen: 제목 y=70 · 내용 90 · 버튼 높이/6+96 · 150 둘)
+MENU2.confirm={back:()=>{const a=confArg;if(a&&a.onNo)a.onNo()},html:a=>{confArg=a;const W=gW(),H=gH(),cx=Math.floor(W/2),y=Math.floor(H/6)+96;return mT(70,esc(a.t))+`<div class="mtl" style="top:${90*GS}px;color:#fff">${esc(a.m||'')}</div>`+mB(cx-155,y,150,esc(a.yes||'예'),'cfYes')+mB(cx+5,y,150,esc(a.no||'취소'),'cfNo')}};
+let confArg=null;MACT.cfYes=()=>{const a=confArg;if(a&&a.onYes)a.onYes()};MACT.cfNo=()=>{const a=confArg;if(a&&a.onNo)a.onNo()};
+// 오른쪽 위 알림 (마크 SystemToast: 160×32 판 · 노랑 제목 · 흰 글)
+function sysToast(t,s){let el=$('sysToast');if(!el){el=document.createElement('div');el.id='sysToast';document.body.appendChild(el)}el.innerHTML=`<b>${esc(t)}</b>${s?'<br>'+esc(s):''}`;el.classList.remove('out');void el.offsetWidth;el.classList.add('show');clearTimeout(sysToast.t);sysToast.t=setTimeout(()=>el.classList.remove('show'),5000)}
+// 세계 아이콘: 처음 들어가고 조금 뒤 화면 가운데를 64×64 로 찍어요 (마크 icon.png)
+let wIconReq=0;
+{const _fe=finishEnter;finishEnter=function(){const r=_fe.apply(this,arguments);if(WORLD&&!WORLD.mp&&!wIcon(WORLD.id)){const id=WORLD.id;setTimeout(()=>{if(WORLD&&WORLD.id===id)wIconReq=id},4000)}return r}}
+{const _dh=drawHUD;drawHUD=function(){const r=_dh.apply(this,arguments);if(wIconReq&&started&&!menuOpen&&!screenOpen&&WORLD&&WORLD.id===wIconReq){const id=wIconReq;wIconReq=0;try{const c=cv(64,64),g=c.getContext('2d'),s=Math.min(cvs.width,cvs.height);g.imageSmoothingEnabled=true;g.drawImage(cvs,(cvs.width-s)/2,(cvs.height-s)/2,s,s,0,0,64,64);localStorage.setItem('bc_wi_'+id,c.toDataURL('image/jpeg',.85))}catch(e){}}return r}}
+
+/* ── 멀티플레이 (JoinMultiplayerScreen 1.21): 저장한 서버 + 아래 공개 서버 (마크 LAN 자리) · 버튼 100×3 / 74×4 */
+const srvList=()=>{try{return JSON.parse(localStorage.getItem('bc_servers'))||[]}catch(e){return[]}},srvSave=L=>{try{localStorage.setItem('bc_servers',JSON.stringify(L))}catch(e){}};
+let hubSrv=null,hubErr=null,srvEdit=null;   // selServer: 's<번호>' (저장한 서버) 또는 공개 서버 코드
+const srvCode=s=>String(s||'').trim().toLowerCase().replace(/^.*[/#:]/,'').replace(/[^a-z0-9]/g,'');
+function srvRow(id,name,l1,l2,right,icon){return `<div class="witem srow${selServer===id?' on':''}" data-sv="${esc(id)}" style="width:${305*GS}px"><img class="px" src="${icon||iconURL(GRASS)}"><i class="wplay"></i><b>${esc(name)}</b><span class="sping">${right||''}</span><small>${l1||''}</small><small>${l2||''}</small></div>`}
+const pingBars=on=>`<i class="bars${on?'':' off'}"><i></i><i></i><i></i><i></i><i></i></i>`;
+MENU2.multi={back:'title',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),S=srvList(),t=Date.now();
+  const find=c=>hubSrv&&hubSrv.find(x=>x.sid===c),st=c=>{const x=find(c);if(!hubSrv&&!hubErr)return['<span style="color:#808080">응답 대기 중...</span>','',''];if(!x||t-(x.upd||0)>90000)return['<span style="color:#aa0000">서버에 연결할 수 없습니다</span>','',pingBars(0)];return[esc(x.name),`${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'}`,`<span style="color:#808080">${x.players||1}</span> `+pingBars(1)]};
+  let h=S.map((s,i)=>{const [a,b,r]=st(srvCode(s.ip));return srvRow('s'+i,s.name,a,b,r)}).join('');
+  h+=`<div class="lanhead">PlayHub 공개 서버${hubSrv?'':' <span class="dots">o O o</span>'}</div>`;
+  if(hubErr)h+=`<div class="mempty">${esc(hubErr)}</div>`;
+  else if(hubSrv)h+=hubSrv.map(x=>{const on=t-(x.upd||0)<90000;return srvRow(x.sid,x.name,`<span style="color:#808080">${on?'접속 '+(x.players||1)+'명':'비어 있음 (들어가면 다시 열려요)'} · 코드 ${esc(x.sid)}</span>`,`<span style="color:#808080">${MODE_N[x.mode]||'서바이벌'} · ${TYPE_N[x.type]||'기본'} · 만든 사람 ${esc(x.hostName||'?')}</span>`,pingBars(on))}).join('');
+  h+=`<div class="witem srow mknew" data-m="mkSrv" style="width:${305*GS}px"><b>+ 새 서버 열기...</b><small style="color:#808080">내 세계를 공개 서버로 열어요</small></div>`;
+  const has=!!selServer,saved=/^s\d+$/.test(selServer||'');
+  return mT(12,'멀티플레이')+`<div class="mlistbg wlist" style="${gSt(0,33,W,H-97)}">${h}</div>`
+    +mB(cx-154,H-52,100,'서버 참여','join',!has)+mB(cx-50,H-52,100,'직접 연결','direct')+mB(cx+54,H-52,100,'서버 추가','addsrv')
+    +mB(cx-154,H-28,74,'편집','editsrv',!saved)+mB(cx-76,H-28,74,'삭제','delsrv',!saved)+mB(cx+4,H-28,74,'새로 고침','multiR')+mB(cx+82,H-28,74,'뒤로','title')},
+  after:M=>{M.querySelectorAll('[data-sv]').forEach(el=>{el.onclick=()=>{selServer=el.dataset.sv;showMenu('multi')};el.ondblclick=()=>{selServer=el.dataset.sv;menuAct('join')}});
+    M.querySelectorAll('.srow .wplay').forEach(el=>el.onclick=e=>{e.stopPropagation();selServer=el.parentNode.dataset.sv;menuAct('join')});
+    if(!hubSrv&&!hubErr&&!loadServers.busy)loadServers()}};
+function loadServers(){loadServers.busy=1;waitMP(ok=>{if(!ok){loadServers.busy=0;hubErr='서버에 연결하지 못했어요. 인터넷을 확인해 주세요';if(menuOpen==='multi')showMenu('multi');return}
+  dbr('bc_list/players').once('value').then(s=>{loadServers.busy=0;const t=now();hubSrv=mergeList(s.val()).filter(x=>t-(x.upd||0)<7*864e5).sort((a,b)=>(b.upd||0)-(a.upd||0));if(menuOpen==='multi')showMenu('multi')})
+    .catch(e=>{loadServers.busy=0;hubErr='서버 목록을 읽지 못했어요: '+errMsg(e);if(menuOpen==='multi')showMenu('multi')})})}
+Object.assign(MACT,{
+  multi:()=>{newW=null;showMenu('multi')},multiR:()=>{hubSrv=null;hubErr=null;showMenu('multi')},
+  join:()=>{if(!selServer)return;const m=/^s(\d+)$/.exec(selServer),code=m?srvCode((srvList()[+m[1]]||{}).ip):selServer;if(code)joinServer(code)},
+  direct:()=>{showMenu('direct')},addsrv:()=>{srvEdit={i:-1,name:'블록크래프트 서버',ip:'',rp:0};showMenu('addsrv')},
+  editsrv:()=>{const m=/^s(\d+)$/.exec(selServer||'');if(!m)return;const s=srvList()[+m[1]];if(!s)return;srvEdit={i:+m[1],name:s.name,ip:s.ip,rp:s.rp|0};showMenu('addsrv')},
+  delsrv:()=>{const m=/^s(\d+)$/.exec(selServer||'');if(!m)return;const L=srvList(),s=L[+m[1]];if(!s)return;showMenu('confirm',{t:'이 서버를 지우시겠습니까?',m:`'${s.name}'이(가) 영원히 사라지게 됩니다!`,yes:'삭제',onYes:()=>{L.splice(+m[1],1);srvSave(L);selServer=null;showMenu('multi')},onNo:()=>showMenu('multi')})},
+  asRp:()=>{srvKeep();srvEdit.rp=(srvEdit.rp+1)%3;showMenu('addsrv')},
+  asDone:()=>{srvKeep();if(!srvEdit.ip.trim())return;const L=srvList(),s={name:srvEdit.name.trim()||'블록크래프트 서버',ip:srvEdit.ip.trim(),rp:srvEdit.rp};if(srvEdit.i>=0)L[srvEdit.i]=s;else L.push(s);srvSave(L);selServer='s'+(srvEdit.i>=0?srvEdit.i:L.length-1);srvEdit=null;showMenu('multi')},
+  djJoin:()=>{const c=srvCode($('djIp')&&$('djIp').value);try{localStorage.setItem('bc_lastip',$('djIp').value)}catch(e){}if(c)joinServer(c)}});
+const srvKeep=()=>{if($('asName'))srvEdit.name=$('asName').value;if($('asIp'))srvEdit.ip=$('asIp').value};
+// 서버 정보 편집 (EditServerScreen: 이름 y=66 · 주소 106 · 리소스 팩 높이/4+72 · 완료/취소 높이/4+96+18 · 폭 200)
+MENU2.addsrv={back:'multi',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),e=srvEdit||{name:'',ip:'',rp:0};
+  return mT(17,'서버 정보 편집')+`<div class="mab mlab mgray" style="${gSt(cx-100,53,200)};text-align:left">서버 이름</div><input class="minput mab" id="asName" maxlength="32" value="${esc(e.name)}" style="${gSt(cx-100,66,200,20)}">`
+    +`<div class="mab mlab mgray" style="${gSt(cx-100,94,200)};text-align:left">서버 주소 (서버 코드)</div><input class="minput mab" id="asIp" maxlength="64" value="${esc(e.ip)}" style="${gSt(cx-100,106,200,20)}">`
+    +mB(cx-100,Math.floor(H/4)+72,200,'서버 리소스 팩: '+['물어보기','사용','사용하지 않음'][e.rp|0],'asRp')+mB(cx-100,Math.floor(H/4)+96+18,200,'완료','asDone',!e.ip.trim())+mB(cx-100,Math.floor(H/4)+120+18,200,'취소','multi')},
+  after:()=>{const i=$('asIp'),d=document.querySelector('[data-m="asDone"]');if(i&&d)i.oninput=()=>d.disabled=!i.value.trim();const n=$('asName');if(n)setTimeout(()=>n.focus(),20)}};
+// 직접 연결 (DirectJoinServerScreen: 주소 y=116 · 접속 높이/4+96+12 · 취소 +120+12)
+MENU2.direct={back:'multi',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);let last='';try{last=localStorage.getItem('bc_lastip')||''}catch(e){}
+  return mT(20,'직접 연결')+`<div class="mab mlab mgray" style="${gSt(cx-100,100,200)};text-align:left">서버 주소 (서버 코드)</div><input class="minput mab" id="djIp" maxlength="64" value="${esc(last)}" style="${gSt(cx-100,116,200,20)}">`
+    +mB(cx-100,Math.floor(H/4)+96+12,200,'서버 참여','djJoin',!last.trim())+mB(cx-100,Math.floor(H/4)+120+12,200,'취소','multi')},
+  after:()=>{const i=$('djIp'),d=document.querySelector('[data-m="djJoin"]');if(i){i.oninput=()=>d.disabled=!i.value.trim();i.onkeydown=e=>{if(e.key==='Enter'&&i.value.trim())menuAct('djJoin')};setTimeout(()=>i.focus(),20)}}};
+// 접속 중 (ConnectScreen: 글 높이/2-50 · 취소 높이/4+120+12) · 연결 끊김 (DisconnectedScreen: 제목 회색 · 이유 · '서버 목록으로 돌아가기')
+let connAbort=false;
+MENU2.connect={back:'connCancel',html:a=>{const W=gW(),H=gH(),cx=Math.floor(W/2);connAbort=false;return `<div class="mtl" style="top:${(Math.floor(H/2)-50)*GS}px">${esc(a||'서버에 접속하는 중...')}</div>`+mB(cx-100,Math.floor(H/4)+120+12,200,'취소','connCancel')}};
+MACT.connCancel=()=>{connAbort=true;showMenu('multi')};
+MENU2.disc={back:'multi',html:a=>{a=a||{};const W=gW(),H=gH(),cx=Math.floor(W/2),lines=String(a.r||'').split('\n'),hh=9+12+lines.length*9+12+20,y=Math.floor((H-hh)/2);
+  return `<div class="mtl" style="top:${y*GS}px;color:#aaa">${esc(a.t||'서버 접속에 실패했습니다')}</div>`+lines.map((l,i)=>`<div class="mtl" style="top:${(y+21+i*9)*GS}px">${esc(l)}</div>`).join('')+mB(cx-100,y+21+lines.length*9+12,200,a.b||'서버 목록으로 돌아가기',a.m||'multi')}};
+// 렐름 (웹 에디션엔 없어요: RealmsGenericErrorScreen 모양)
+MENU2.realms={back:'title',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);return mT(Math.floor(H/2)-40,'Realms')+`<div class="mtl" style="top:${(Math.floor(H/2)-20)*GS}px;color:#ff5555">웹 에디션에서는 Realms 를 쓸 수 없어요.</div><div class="mtl" style="top:${(Math.floor(H/2)-8)*GS}px;color:#aaa">친구와 놀려면 멀티플레이의 PlayHub 서버를 써 보세요.</div>`
+  +mB(cx-100,Math.floor(H/2)+20,200,'멀티플레이','multi')+mB(cx-100,Math.floor(H/2)+44,200,'뒤로','title')}};
+// 제작진 및 이용 저작물 (CreditsAndAttributionScreen: 버튼 210 · 줄 간격 8 · 완료 200)
+MENU2.credits={back:'optsSub',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),y=Math.floor(H/2)-40;return mT(y-20,'제작진 및 이용 저작물')+mB(cx-105,y,210,'제작진','crRoll')+mB(cx-105,y+28,210,'이용 저작물','attrib')+mB(cx-105,y+56,210,'허가서 목록','crLic')+mB(cx-100,H-27,200,'완료','optsSub')}};
+MENU2.attrib={back:'credits',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);const L=['블록크래프트 — PlayHub 팬 게임 (Mojang · Microsoft 와 관계없어요)','','글꼴: 갈무리 (Galmuri) — 이민서 · SIL Open Font License 1.1','3D: three.js r128 — MIT License','멀티플레이: Firebase Realtime Database','','그림 · 소리 · 모델은 모두 이 게임 코드가 직접 그려요.','마인크래프트의 그림 파일은 쓰지 않아요.'];
+  return mT(12,'이용 저작물')+`<div class="mlistbg" style="${gSt(0,33,W,H-66)}"><div class="help attrib">${L.map(l=>l?esc(l):'&nbsp;').join('<br>')}</div></div>`+mB(cx-100,H-27,200,'완료','credits')}};
+MACT.crRoll=()=>{if(typeof endPoemShow!=='function')return;if(started){sysToast('제작진','타이틀 화면에서 볼 수 있어요');return}endPoemShow(false,()=>showMenu('credits'))};
+MACT.crLic=()=>{try{open('fonts/Galmuri-LICENSE.txt','_blank')}catch(e){}};
+MACT.accGuide=()=>{};
+
+/* ── 스킨 고르기 (자바 런처 '스킨' 쪽 모양): 왼쪽 도는 미리보기 · 오른쪽 모델 (클래식/슬림) · PNG 올리기 · 기본 스킨 · 저장/취소 */
+const SKIN_PRE=[['스티브',null],['초록 탐험가',['#3f7d4a','#9a8462','#2b2320','#e2b590']],['파랑 광부',['#2d6fb0','#3b3f8c','#3a2516','#c58c66']],['빨강 모험가',['#b0302d','#3a3a3a','#e0c060','#f0c8a0']],
+  ['보라 마법사',['#6a3fa0','#2a2a3a','#d8d8d8','#d6a07a']],['주황 농부',['#d87a2a','#4a6a8a','#5a3a1a','#8a5a3a']],['검정 닌자',['#222428','#18181c','#101010','#c89a78']],['하양 요리사',['#e8e8e8','#5a5a6a','#7a4a2a','#ffd8b8']]];
+const skinSlim=()=>{try{return localStorage.getItem('bc_skin_slim')==='1'}catch(e){return false}};
+let skinDraft=null,skinPv=null;   // skinDraft: {src: dataURL 또는 기본 번호, slim}
+function skinCanvasOf(src,cb){if(typeof src==='number'){const p=SKIN_PRE[src][1],t=p?makeSkin(...p):makeSkin();cb(t.canvas);return}const im=new Image();im.onload=()=>{const c=cv(64,64),g=c.getContext('2d');g.drawImage(im,0,0);
+    if(im.height===32){g.drawImage(im,0,16,16,16,16,48,16,16);g.drawImage(im,40,16,16,16,32,48,16,16)}cb(c)};im.onerror=()=>cb(null);im.src=src}
+// 슬림 팔 (마크 PlayerModel slim: 팔 폭 3 · 축 y 0.5px 아래) — 이미 만든 모델의 팔 상자만 바꿔요 (든 물건은 그대로)
+function setArmModel(S,slim,tex){if(!S||!S.P||!S.P.arms)return;S.slim=slim;const U=[[40,16,40,32],[32,48,48,48]],w=slim?3:4;
+  S.P.arms.forEach((a,i)=>{a.position.y=1.375-(slim?.5/16:0);for(let j=0;j<2;j++){const m=a.children[j];if(!m||!m.isMesh)continue;const n=skinBox(w,12,4,U[i][j*2],U[i][j*2+1],tex||m.material.map,0,j?.25:0);m.geometry.dispose();m.geometry=n.geometry;m.position.x=(i?1:-1)*(slim?.5:1)/16}})}
+function skinParts(S){const L=S?[S]:[typeof me!=='undefined'&&me,typeof pvSteve!=='undefined'&&pvSteve,skinPv&&skinPv.S];for(const s of L){if(!s||!s.P)continue;const P=s.P,vis=(g,k)=>{if(g&&g.children[1])g.children[1].visible=optGet(k,true)};
+  vis(P.head,'hat');vis(P.body,'jacket');vis(P.arms[0],'rsleeve');vis(P.arms[1],'lsleeve');vis(P.legs[0],'rpants');vis(P.legs[1],'lpants')}}
+function skinApply(c,slim){if(c){const g=SKIN.canvas.getContext('2d');g.clearRect(0,0,64,64);g.drawImage(c,0,0);SKIN.needsUpdate=true}
+  for(const s of [typeof me!=='undefined'&&me,typeof pvSteve!=='undefined'&&pvSteve])if(s&&s.slim!==slim&&(slim||s.slim))setArmModel(s,slim,SKIN);skinParts()}
+function skinLoad(){let src=null;try{src=localStorage.getItem('bc_skin')}catch(e){}const slim=skinSlim();if(src==null){skinApply(null,slim);return}skinCanvasOf(/^\d+$/.test(src)?+src:src,c=>skinApply(c,slim))}
+MENU2.skinpick={back:'skin',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);if(!skinDraft){let s=null;try{s=localStorage.getItem('bc_skin')}catch(e){}skinDraft={src:s==null?0:/^\d+$/.test(s)?+s:s,slim:skinSlim()}}
+  const d=skinDraft,ph=Math.min(H-70,170),px=cx-154,top=33;
+  let h=mT(12,'스킨')+`<div class="mab skinpv" style="${gSt(px,top,140,ph)}"><canvas id="skinCv"></canvas><div class="skinhint">끌어서 돌려 보세요</div></div>`;
+  const rx=cx+4;h+=`<div class="mab mlab" style="${gSt(rx,top,150)}">모델</div>`+mB(rx,top+11,73,(d.slim?'':'&gt; ')+'클래식'+(d.slim?'':' &lt;'),'skC')+mB(rx+77,top+11,73,(d.slim?'&gt; ':'')+'슬림'+(d.slim?' &lt;':''),'skS')
+    +`<div class="mab mlab" style="${gSt(rx,top+38,150)}">새 스킨</div>`+mB(rx,top+49,150,'파일 찾아보기...','skFile')+`<div class="mab mlab mgray" style="${gSt(rx,top+71,150)};text-align:left">64×64 또는 64×32 PNG</div>`
+    +`<div class="mab mlab" style="${gSt(rx,top+86,150)}">기본 스킨</div>`+SKIN_PRE.map((p,i)=>`<button class="mbtn mab skpre${d.src===i?' on':''}" data-m="skP${i}" title="${esc(p[0])}" style="${gSt(rx+(i%4)*38,top+97+Math.floor(i/4)*38,34,34)}"><img class="px" data-pre="${i}"></button>`).join('')
+    +`<input type="file" id="skInp" accept="image/png" style="display:none">`;
+  return h+mB(cx-154,H-28,150,'저장','skSave')+mB(cx+4,H-28,150,'취소','skin')},
+  after:M=>{M.querySelectorAll('img[data-pre]').forEach(im=>{const i=+im.dataset.pre;skinCanvasOf(i,c=>{const f=cv(8,8),g=f.getContext('2d');g.drawImage(c,8,8,8,8,0,0,8,8);g.drawImage(c,40,8,8,8,0,0,8,8);im.src=f.toDataURL()})});
+    const inp=$('skInp');inp.onchange=()=>{const f=inp.files&&inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{if(im.width!==64||(im.height!==64&&im.height!==32)){sysToast('스킨을 읽지 못했어요','64×64 또는 64×32 PNG 만 돼요');return}skinDraft.src=r.result;showMenu('skinpick')};im.onerror=()=>sysToast('스킨을 읽지 못했어요');im.src=r.result};r.readAsDataURL(f)};
+    skinPreview()}};
+for(let i=0;i<SKIN_PRE.length;i++)MACT['skP'+i]=()=>{skinDraft.src=i;showMenu('skinpick')};
+Object.assign(MACT,{skC:()=>{skinDraft.slim=false;showMenu('skinpick')},skS:()=>{skinDraft.slim=true;showMenu('skinpick')},skFile:()=>{const i=$('skInp');if(i)i.click()},
+  skSave:()=>{const d=skinDraft;try{localStorage.setItem('bc_skin',String(d.src));localStorage.setItem('bc_skin_slim',d.slim?'1':'0')}catch(e){sysToast('저장 공간이 부족해요')}skinCanvasOf(d.src,c=>skinApply(c,d.slim));skinDraft=null;showMenu('skin')}});
+// 미리보기: 작은 WebGL 하나를 계속 써요 (화면을 떠나면 멈춤)
+function skinPreview(){const host=$('skinCv');if(!host)return;const d=skinDraft,w=host.parentNode.clientWidth,h=host.parentNode.clientHeight;
+  if(!skinPv){const r=new THREE.WebGLRenderer({alpha:true,antialias:false});const sc=new THREE.Scene();sc.add(new THREE.AmbientLight(0xffffff,.62));const dl=new THREE.DirectionalLight(0xffffff,.55);dl.position.set(.3,1,.9);sc.add(dl);
+    const cam=new THREE.PerspectiveCamera(32,1,.1,30);const tex=new THREE.CanvasTexture(cv(64,64));tex.magFilter=tex.minFilter=THREE.NearestFilter;skinPv={r,sc,cam,tex,S:null,yaw:-.5,drag:null,key:''};}
+  const P=skinPv;host.replaceWith(P.r.domElement);P.r.domElement.id='skinCv';P.r.setPixelRatio(devicePixelRatio||1);P.r.setSize(w,h);P.cam.aspect=w/h;P.cam.updateProjectionMatrix();P.cam.position.set(0,1.0,4.6*Math.max(1,.75*h/w));P.cam.lookAt(0,.95,0);
+  if(!P.S||P.S.slim!==d.slim){if(P.S)P.sc.remove(P.S.g);P.S=makeSteve(P.tex,false);if(d.slim)setArmModel(P.S,true,P.tex);P.S.slim=d.slim;P.sc.add(P.S.g);skinParts(P.S)}
+  const k=String(d.src).slice(0,80)+d.src.length;if(P.key!==k){P.key=k;skinCanvasOf(d.src,c=>{if(!c)return;const g=P.tex.image.getContext('2d');g.clearRect(0,0,64,64);g.drawImage(c,0,0);P.tex.needsUpdate=true})}
+  const el=P.r.domElement;el.onpointerdown=e=>{P.drag=e.clientX;el.setPointerCapture(e.pointerId)};el.onpointermove=e=>{if(P.drag!=null){P.yaw+=(e.clientX-P.drag)*.012;P.drag=e.clientX}};el.onpointerup=()=>P.drag=null;
+  if(!P.loop){P.loop=1;let t0=performance.now();const tick=now=>{if(menuOpen!=='skinpick'||!document.contains(P.r.domElement)){P.loop=0;return}requestAnimationFrame(tick);const dt=(now-t0)/1000;t0=now;if(P.drag==null)P.yaw+=dt*.6;
+      const S=P.S,w2=Math.sin(now/400)*.35;S.g.rotation.y=P.yaw;if(S.P.legs){S.P.legs[0].rotation.x=w2;S.P.legs[1].rotation.x=-w2;S.P.arms[0].rotation.x=-w2*.8;S.P.arms[1].rotation.x=w2*.8}P.r.render(P.sc,P.cam)};requestAnimationFrame(tick)}}
+
+/* ── 저장 중 · 자동 저장 표시 · 타이틀 */
+MENU2.saving={html:a=>`<div class="mtl" style="top:${(Math.floor(gH()/2)-50)*GS}px">${esc(a||'세계 저장 중')}</div>`};
+{const _q=quitToTitle;let busy=0;quitToTitle=function(){if(busy||!started)return _q.apply(this,arguments);busy=1;showMenu('saving');requestAnimationFrame(()=>setTimeout(()=>{try{_q()}finally{busy=0}},40))}}
+function saveInd(){if(!optGet('autosave',true)||!started)return;let el=$('saveInd');if(!el){el=document.createElement('div');el.id='saveInd';el.textContent='세계 저장 중';document.body.appendChild(el)}el.classList.add('show');clearTimeout(saveInd.t);saveInd.t=setTimeout(()=>el.classList.remove('show'),1500)}
+// 타이틀 아이콘 버튼 (언어 · 접근성, 20×20): 우리 그림
+const TICON={lang:pxc(['....GGGGG....','..GGwGGGwGG..','.GwwGGGGGwwG.','.GGGGGGGGGGG.','GGGwGGGGGwGGG','GwwwwwwwwwwwG','GGGwGGGGGwGGG','GGGwGGGGGwGGG','GwwwwwwwwwwwG','GGGwGGGGGwGGG','.GGGGGGGGGGG.','.GwwGGGGGwwG.','..GGwGGGwGG..','....GGGGG....'].map(r=>r.slice(0,13)),{G:'#5b8fd8',w:'#dfe9f7'}),
+  acc:pxc(['....wwwww....','..ww.....ww..','.w....k....w.','.w...kkk...w.','w.kkkkkkkkk.w','w.....k.....w','w.....k.....w','w....k.k....w','w...k...k...w','.w..k...k..w.','.w.........w.','..ww.....ww..','....wwwww....'],{w:'#ffffff',k:'#ffffff'})};
+const tIcon=(x,y,m,ic,t)=>`<button class="mbtn mab ticon" data-m="${m}" title="${t}" style="${gSt(x,y,20,20)}"><img class="px" src="${TICON[ic].toDataURL()}"></button>`;
+let subBack=null;MACT.optsSub=()=>{const b=subBack;subBack=null;showMenu(b||'opts')};MACT.tLang=()=>{subBack='title';showMenu('lang')};MACT.tAcc=()=>{subBack='title';showMenu('acc')};
+Object.assign(MBACK,{opts:'optsDone',sound:'optsSub',create:'single',mkSrv:'multi',ctrl:'ctrlDone',msg:'title'});
+
+/* ── 대화 설정 반영 (ChatComponent: 글 불투명도 0.9×값+0.1 · 배경 · 크기 · 줄 간격 · 폭 · 높이) */
+function chatCss(){let st=$('chatOptCss');if(!st){st=document.createElement('style');st.id='chatOptCss';document.head.appendChild(st)}
+  const op=optGet('chatOp',100)/100*.9+.1,bg=optGet('chatBg',50)/100,k=Math.max(.01,optGet('chatScale',100)/100),sp=optGet('chatSpace',0)/100,vis=optGet('chatVis',0),w=optGet('chatW',320),hf=optGet('chatHF',180),hu=optGet('chatHU',90);
+  // 줄 전체 불투명도 = 글 불투명도 → 배경은 bg/op 로 나눠서 마크처럼 배경 세기를 따로 맞춰요
+  st.textContent=`#chatLog>div{background:rgba(0,0,0,${Math.min(1,bg/op).toFixed(3)});font-size:calc(${8*k}px * var(--s));line-height:calc(${(9*(1+sp)*k).toFixed(2)}px * var(--s))}#chatLog>div:not(.old){opacity:${op}}#chat.open #chatLog>div.old{opacity:${op}}
+#chat{width:min(calc(${w+8}px * var(--s)),100vw)}#chatLog{max-height:calc(${hu}px * var(--s))}#chat.open #chatLog{max-height:calc(${hf}px * var(--s))}`
+    +(vis===2?'#chatLog{display:none}':vis===1?'#chatLog>div.pc{display:none}':'')+(optGet('cmdSug',true)?'':'#cmdHint{visibility:hidden}')+(optGet('bgChatOnly',0)===1?'#toast,.verL,.verR{background:rgba(0,0,0,'+bg+')}':'')}
+let _pcLine=0;
+{const _cl=chatLine;chatLine=function(){const r=_cl.apply(this,arguments);if(_pcLine){const b=$('chatLog');if(b&&b.lastChild)b.lastChild.classList.add('pc')}return r}}
+{const _m=mpChatShow;mpChatShow=function(){_pcLine=1;try{return _m.apply(this,arguments)}finally{_pcLine=0}}}
+
+/* ── 게임에 이어진 옵션: 입자 · 개체 그림자 · 최대 프레임률 · 마우스 반전 · 스크롤 감도 */
+let _pForce=0;
+const pForce=f=>function(){_pForce=1;try{return f.apply(this,arguments)}finally{_pForce=0}};
+blockBreakFx=pForce(blockBreakFx);blockHitFx=pForce(blockHitFx);digFx=pForce(digFx);
+{const _tp=terrainP;terrainP=function(){if(!_pForce){const p=optGet('parts',0);if(p===2||p===1&&Math.random()<1/3)return}return _tp.apply(this,arguments)}}   // 마크 calculateParticleLevel: 적게 = 3개 중 1개 빼기 · 최소 = 안 그림 (부수기 조각은 늘)
+{const _us=updateShadows;updateShadows=function(){if(!optGet('eshadow',true)){for(const m of shadows)if(m)m.visible=false;return}return _us.apply(this,arguments)}}
+let _lastF=0;function fpsSkip(now){const c=optGet('fpsmax',120);if(c>=260||document.hidden)return false;if(now-_lastF<1000/c-1)return true;_lastF=now;return false}
+const mInvert=()=>optGet('invert',false)?-1:1,mScroll=()=>Math.pow(10,optGet('scroll',0)/100);
+
+/* ── 꾸미기 · 시작 */
+document.head.appendChild(Object.assign(document.createElement('style'),{textContent:
+  '.minput{line-height:calc(11px * var(--s))}'+   // 한글 (9px) 위가 입력칸 안에서 잘리지 않게
+  '#menu .kbcat{text-align:center;color:#fff}#menu .mslider.dis{opacity:.6}'+
+  '#menu .witem .wplay{position:absolute;left:calc(1px * var(--s));top:calc(1px * var(--s));width:calc(32px * var(--s));height:calc(32px * var(--s));display:none;background:rgba(160,160,160,.55)}#menu .witem:hover .wplay{display:block}'+
+  '#menu .witem .wplay:after{content:"";position:absolute;left:calc(12px * var(--s));top:calc(8px * var(--s));border-left:calc(10px * var(--s)) solid #fff;border-top:calc(8px * var(--s)) solid transparent;border-bottom:calc(8px * var(--s)) solid transparent}'+
+  '#menu .srow .sping{position:absolute;right:calc(2px * var(--s));top:calc(1px * var(--s));display:flex;align-items:center;gap:calc(2px * var(--s));color:#808080}'+
+  '#menu .bars{display:inline-flex;align-items:flex-end;gap:calc(1px * var(--s));height:calc(8px * var(--s))}#menu .bars i{width:calc(1px * var(--s));background:#00ff21}#menu .bars i:nth-child(1){height:20%}#menu .bars i:nth-child(2){height:40%}#menu .bars i:nth-child(3){height:60%}#menu .bars i:nth-child(4){height:80%}#menu .bars i:nth-child(5){height:100%}#menu .bars.off i{background:#3f3f3f}'+
+  '#menu .lanhead{flex:none;width:calc(305px * var(--s));height:calc(20px * var(--s));line-height:calc(20px * var(--s));text-align:center;font-size:calc(8px * var(--s));color:#fff;text-shadow:var(--tsh)}#menu .lanhead .dots{color:#808080}'+
+  '#menu .mknew{padding-left:calc(4px * var(--s))}#menu .mknew b{color:#ffff55}'+
+  '#menu .lang1{padding:calc(4px * var(--s));text-align:center;height:calc(18px * var(--s))}'+
+  '#menu .help.attrib{width:auto;max-width:94vw;text-align:center;line-height:calc(12px * var(--s))}'+
+  '#menu .skinpv{background:rgba(0,0,0,.35);outline:calc(1px * var(--s)) solid #000;box-shadow:inset 0 0 0 calc(1px * var(--s)) #555;overflow:hidden}#menu .skinpv canvas{display:block;width:100%!important;height:100%!important;cursor:grab}'+
+  '#menu .skinhint{position:absolute;left:0;right:0;bottom:calc(3px * var(--s));text-align:center;font-size:calc(8px * var(--s));color:#a0a0a0;pointer-events:none}'+
+  '#menu .skpre{padding:0}#menu .skpre img{width:calc(24px * var(--s));height:calc(24px * var(--s))}#menu .skpre.on{outline:calc(1px * var(--s)) solid #fff;outline-offset:calc(1px * var(--s))}'+
+  '#menu .ticon{padding:0;display:flex;align-items:center;justify-content:center}#menu .ticon img{width:calc(13px * var(--s));height:calc(13px * var(--s))}'+
+  '#sysToast{position:fixed;right:0;top:0;width:calc(160px * var(--s));min-height:calc(32px * var(--s));z-index:60;background:#212121;outline:calc(1px * var(--s)) solid #555;padding:calc(7px * var(--s)) calc(8px * var(--s));font-size:calc(8px * var(--s));line-height:calc(11px * var(--s));color:#fff;transform:translateX(105%);transition:transform .25s;pointer-events:none}#sysToast.show{transform:none}#sysToast b{font-weight:normal;color:#ffff00}'+
+  '#saveInd{position:fixed;right:calc(5px * var(--s));bottom:calc(5px * var(--s));z-index:8;font-size:calc(8px * var(--s));color:#fff;text-shadow:var(--tsh);opacity:0;transition:opacity .5s;pointer-events:none}#saveInd.show{opacity:1}'}));
+chatCss();try{skinLoad()}catch(e){}
 window.__mpOn=false;try{if(!window.__mpFail&&typeof firebase!=='undefined'&&window.MP&&MP.isConfigured&&MP.isConfigured()){MP.initAuthOnly(u=>{if(u){window.__mpOn=true;window.__mpUid=u.uid;if(started)try{MP.setPresence('craft',null)}catch(e){}}})}}catch(e){}
 window.__BC={get camera(){return camera},getB:(x,y,z)=>getB(x,y,z),B,set xpDelay(v){xpDelay=v},setWx(r,t){rainLvl=rainO=r;thunLvl=thunO=t},get wx(){return [rainLvl,thunLvl,skyFlash,weatherOv]},lightning:(x,z)=>lightning(x,z),get xpOrbs(){return xpOrbs},dropXP:(x,y,z,n)=>dropXP(x,y,z,n),selectSlot:i=>selectSlot(i),attack:m=>attack(m),get worldTime(){return worldTime},set worldTime(v){worldTime=v},DAYLEN,setMouseR(v){mouseR=v;if(v){useItem(true);useCD=.25}},TEX,tileList,sfx:(...a)=>sfx(...a),composePiece,musPlay,musStop,get musPlaying(){return musPlaying},setMouseL(v){mouseL=v},keys,boats,placeBoat,openChat,attackRemote,pvpHit,shootArrow,hurtPlayer,get GM(){return GAMEMODE},remotes,doBreak,createServer,joinServer,get MPS(){return MPS},set MPS(v){MPS=v},addRemote,toast,tpTo,BIO,get sel(){return sel},get viewMode(){return viewMode},set viewMode(v){viewMode=v},set sel(v){sel=v},openNews,closeNews,spawnItem,BED,BED_HEAD,get drag(){return drag},set drag(v){drag=v},get cursor2(){return cursor},set cursor2(v){cursor=v},dragPlan,get dims(){return {H,SEA,YO,GEN,DS_Y,LAVA_Y}},runCmd,useOnMob,nearestBuried,templeIn,SPAWNERS,VCHEST,get WAYPT(){return WAYPT},OAK_TRAPDOOR,OAK_GATE,rideTick,chatLog:()=>[...document.querySelectorAll('#chatLog>div')].map(d=>d.textContent),resetShriek:()=>{shriekCD=0},ITEM,B,MOBDEF,villageIn,cityIn,VSTATE:()=>VSTATE,openTrade,get tradeV(){return tradeV},biomeOf,terrainH,BIO_N,hurtMob,nearestStronghold,getM,travelNether,travelEnd,get DIM(){return DIM},get dragon(){return dragon},crystals,dimState:()=>dimState,armor,openScreen,tryLightPortal,player,inv,chunks,getB,setBlock,openScreen,closeScreen,spawnMob,mobs,ents,addItem,matchCraft,tiles,craft2,craft3,get cursor(){return cursor},clickSlot,drawScreen,renderHotbar,startGame,hideMenu,enterWorld,menuAct,showMenu};
 </script>
