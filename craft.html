@@ -4978,7 +4978,7 @@ function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void'||poe
   // 갑옷 (불에 타기 · 낙하 · 익사 · 굶주림 · 공허 · 음파 · 벽 끼임은 무시) → 내구도 −max(1, 피해/4) · 보호 마법부여 EPF (보호 1/레벨 · 가벼운 착지 3/레벨 낙하만, 20까지 = 80%)
   if(!(o&&o.noArmor)&&why!=='fall'&&why!=='void'&&why!=='starve'&&why!=='drown'&&why!=='sonic'&&why!=='wall'){const pts=attrVal(p,'armor'),tg=attrVal(p,'armor_toughness');if(pts>0){d=d*(1-Math.min(20,Math.max(pts/5,pts-d/(2+tg/4)))/25);armor.forEach((a,i)=>{if(a&&ITEM[a.id].armor&&!ITEM[a.id].elytra){a.d=(a.d||0)+Math.max(1,Math.floor(raw0/4));if(a.d>=ITEM[a.id].armor.dur){armor[i]=null;sfx('tbreak')}}})}}
   if(why!=='void'&&why!=='sonic'&&why!=='starve'&&why!=='drown'){let epf=0;armor.forEach(a=>{if(a&&a.e&&a.e.prot)epf+=a.e.prot});if(why==='fall'&&armor[3]&&armor[3].e&&armor[3].e.fall)epf+=3*armor[3].e.fall;if(epf>0)d*=1-Math.min(20,epf)/25}
-  d=effResist(p,d,why);d=Math.round(d*2)/2;if(d<=0)return;d=effAbsorb(p,d);p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt',why);hudHurt();
+  d=effResist(p,d,why);if(d<=0)return;d=effAbsorb(p,d);p.hp-=d;p.exh+=why==='fall'||why==='void'||why==='starve'||why==='drown'||why==='wall'||o&&o.noArmor?0:.1;if(!full){if(p.hp<=0){p.hp=0;die(why)}updateStats();return}p.hurtT=.5;sfx('hurt',why);hudHurt();
   // 마크: 맞은 쪽 반대로 화면이 기울어요 (bobHurt) · 넉백 0.4
   p.hurtTime=10;p.hurtDir=src?Math.atan2(src.z-p.pos.z,src.x-p.pos.x)/DEG-(180-p.yaw/DEG):(Math.random()*2|0)*180;
   if(src){const k=8*(1-attrVal(p,'knockback_resistance')),dx=src.x-p.pos.x,dz=src.z-p.pos.z,l=Math.hypot(dx,dz)||1;if(k>0){p.vel.x=p.vel.x/2-dx/l*k;p.vel.z=p.vel.z/2-dz/l*k;if(p.onGround)p.vel.y=Math.min(8,p.vel.y/2+k)}}   // 네더라이트 갑옷 한 벌마다 넉백 저항 0.1
@@ -5364,12 +5364,18 @@ function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(
   else if(p.owner==='player'&&!p.noPick&&p.life>.5&&p.pos.distanceTo(new V3(player.pos.x,player.pos.y+.8,player.pos.z))<1.5&&addItem({id:ARROW,n:1})===0){sfx('pop');renderHotbar();scene.remove(p.m);projs.splice(i,1);continue}
   else if(!boxHits(p.pos.x,p.pos.y-.06,p.pos.z,.06,.12)){p.stuck=false;p.life=0;p.vel.set(0,0,0);p.prev.copy(p.pos);p.acc=0}   // 꽂힌 블록이 없어지면 떨어져요 (마크 shouldFall)
   if(p.life>(p.stuck?60:10)){scene.remove(p.m);projs.splice(i,1)}}}
-function explode(x,y,z,r){sfx('boom',null,1,{x,y,z});const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
+function explode(x,y,z,r,o){sfx('boom',null,1,{x,y,z});explodeHurt(x,y,z,r,o);const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
     if(!id||id===BEDROCK||id===OBSIDIAN||B[id].liquid||CMD_NOGRIEF)continue;if(Math.random()<.3)dropFor(bx,by,bz,id,true);const te=tiles.get(tkey(bx,by,bz));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,bx+.5,by+.5,bz+.5)});tiles.delete(tkey(bx,by,bz))}setBlock(bx,by,bz,AIR,true)}
   explosionFx(x,y,z,r);
-  const c=new V3(x,y,z);const pd=c.distanceTo(new V3(player.pos.x,player.pos.y+.9,player.pos.z));if(pd<r*2&&!creative()){const f=1-pd/(r*2);hurtPlayer(Math.round(f*f*22+f*4),c,'creeper');player.vel.y+=f*8}
-  for(const m of mobs){const d=c.distanceTo(m.pos);if(d<r*2&&!m.dead){m.hurtT=0;hurtMob(m,Math.round((1-d/(r*2))*20),c)}}
   camKick=.6}
+// (P4-MOB 후속 2) 마크 ServerExplosion.hurtEntities: 거리/지름 · 노출 (몸 상자 격자에서 중심이 보이는 비율) → 피해 ⌊(e²+e)/2×7×지름+1⌋ · 밀기 e (블록을 부수기 전에 계산)
+function explSeen(c,x0,y0,z0,x1,y1,z1){const sx=1/((x1-x0)*2+1),sy=1/((y1-y0)*2+1),sz=1/((z1-z0)*2+1),gx=(1-Math.floor(1/sx)*sx)/2,gz=(1-Math.floor(1/sz)*sz)/2;let n=0,k=0;
+  for(let a=0;a<=1;a+=sx)for(let b=0;b<=1;b+=sy)for(let e=0;e<=1;e+=sz){if(los(new V3(x0+(x1-x0)*a+gx,y0+(y1-y0)*b,z0+(z1-z0)*e+gz),c))n++;k++}return k?n/k:0}
+function explodeHurt(x,y,z,r,o){const c=new V3(x,y,z),D2=r*2,mob=!!(o&&o.mob),p=player;
+  if(!creative()&&!p.dead){const dist=Math.hypot(p.pos.x-x,p.pos.y-y,p.pos.z-z)/D2;if(dist<=1){const e=(1-dist)*explSeen(c,p.pos.x-.3,p.pos.y,p.pos.z-.3,p.pos.x+.3,p.pos.y+1.8,p.pos.z+.3);
+    if(e>0){hurtPlayer(Math.floor((e*e+e)/2*7*D2+1),null,'creeper',mob?null:{noScale:1});const dx=p.pos.x-x,dy=p.pos.y+eyeH()-y,dz=p.pos.z-z,l=Math.hypot(dx,dy,dz);if(l>1e-6&&!p.dead){const k=e/TICK;p.vel.x+=dx/l*k;p.vel.y+=dy/l*k;p.vel.z+=dz/l*k}}}}
+  for(const m of mobs){if(m.dead)continue;const dist=m.pos.distanceTo(c)/D2;if(dist>1)continue;const e=(1-dist)*explSeen(c,m.pos.x-m.hw,m.pos.y,m.pos.z-m.hw,m.pos.x+m.hw,m.pos.y+m.h,m.pos.z+m.hw);if(e<=0)continue;
+    hurtMob(m,Math.floor((e*e+e)/2*7*D2+1),null);const dx=m.pos.x-x,dy=m.pos.y+m.h*.85-y,dz=m.pos.z-z,l=Math.hypot(dx,dy,dz);if(l>1e-6){const k=e*(1-((m.D&&m.D.kbres)??0))/TICK;m.vel.x+=dx/l*k;m.vel.y+=dy/l*k;m.vel.z+=dz/l*k}}}
 const smokeMat=new THREE.MeshBasicMaterial({color:0xdddddd,transparent:true,opacity:.8,depthWrite:false});
 function smoke(x,y,z){spriteP({x,y,z,xd:(Math.random()-.5)*.1,yd:.05+Math.random()*.1,zd:(Math.random()-.5)*.1,grav:-.1,fric:.9,col:.75+Math.random()*.2,s:.1*(Math.random()*Math.random()*6+1),life:Math.floor(16/(Math.random()*.8+.2))+2,frames:8,row:0,phys:false})}   // (P2-GFX) 마크 poof 연기 (그림 파티클로 · 메시를 만들지 않아요)
 function updateMobs(dt){return p5mCore(dt)}   // (P5-MP) 멀티: 권한자만 몹을 돌려요
@@ -5391,7 +5397,7 @@ function updateMobsCore(dt){if(tStopT>0)return;const pp=player.pos,eye=new V3(pp
     if(br){dir=br.dir;sp=br.sp;face=br.face!=null?br.face:null}
     else if(target){dir=Math.atan2(dx,dz);face=dir;
       if(D.ranged){const see=los(new V3(m.pos.x,m.pos.y+1.6,m.pos.z),eye);sp=dist>11||!see?D.sp:dist<6?-D.sp*.8:0;if(see&&Math.hypot(dist,dy)<nsRangedR(m)&&m.atk<=0){m.atk=nsRangedCD(m);const from=new V3(m.pos.x,m.pos.y+hbEye(m)-.1,m.pos.z),d=hbAim(from,D.potion?8:nsInacc());(D.potion?shootPotion:D.wind?shootWind:shootArrow)(from.addScaledVector(d,.6),d,32,'mob',2+Math.floor(Math.random()*3))}}
-      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3){sp=0;if(m.fuse===0)sfx('fuse','creeper',1,m.pos);m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y+.8,m.pos.z,3);m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
+      else if(D.explode){const d3=Math.hypot(dx,dy,dz);if(d3<3){sp=0;if(m.fuse===0)sfx('fuse','creeper',1,m.pos);m.fuse+=dt;if(m.fuse>=1.5){explode(m.pos.x,m.pos.y,m.pos.z,3,{mob:1});m.dead=true;m.deadT=1;scene.remove(m.g);mobs.splice(i,1);continue}}else{m.fuse=Math.max(0,m.fuse-dt);sp=D.sp}}
       else{sp=dist>1.1?D.sp:0;if(m.atk<=0&&nsMeleeReach(m)){m.atk=1;hurtPlayer(x6MobAtk(m),m.pos,m.type);if(D.toss&&!creative()&&!player.dead)player.vel.y=Math.max(player.vel.y,9)}}}
     else if(m.panic>0){m.fuse=0;if(m.ai.t<=0){m.ai.t=.6;m.ai.dir=Math.atan2(-dx,-dz)+(Math.random()-.5)*1.4}dir=m.ai.dir;sp=D.sp*2.2}
     else if(m.tamed&&tamedAI(m,dt,dx,dz,dist)){dir=m.ai.dir;sp=m.ai.sp;face=dir}
@@ -6393,7 +6399,7 @@ updateProjs=function(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(
       if(h.kind==='player'){if(!creative()){hurtPlayer(p.dmg,c.clone().addScaledVector(p.vel,-.05),p.fire===3?'witch':'fire');if(p.fire===1)player.burn=5}}
       else if(h.kind==='mob'){const m=h.e;if(m.D.ender&&p.fire!==2){enderTP(m);p.skip=m;gone=false;continue}hurtMob(m,p.fire===2&&p.owner==='player'&&m.type==='ghast'?1000:p.dmg,c);if(p.fire===1&&!m.D.fireproof)m.fireT=5}   // 되받아친 화염구는 가스트를 한 번에
       else if(h.kind==='crystal')breakCrystal(crystals.indexOf(h.e));else if(h.kind==='boat')hbBoatHit(h.e,p.dmg);
-      if(p.fire===2)explode(c.x,c.y,c.z,1);else for(let k=0;k<4;k++)smoke(c.x,c.y,c.z)}
+      if(p.fire===2)explode(c.x,c.y,c.z,1,{mob:1});else for(let k=0;k<4;k++)smoke(c.x,c.y,c.z)}
     p.m.position.lerpVectors(p.prev,p.pos,gone?1:p.acc/TICK);p.m.rotation.x+=dt*5;p.m.rotation.y+=dt*4;if(Math.random()<.5)smoke(p.m.position.x,p.m.position.y,p.m.position.z);
     if(gone){scene.remove(p.m);projs.splice(i,1)}}
   const keep=projs.filter(p=>p.fire);for(const k of keep)projs.splice(projs.indexOf(k),1);_updateProjs(dt);projs.push(...keep)};
@@ -6947,7 +6953,7 @@ let PLACE_EV=0,OPEN_AT=null;
 {const _cs=closeScreen;closeScreen=function(){const t=OPEN_AT;OPEN_AT=null;_cs();if(t)gameEv('container_close',t.x+.5,t.y+.5,t.z+.5,player,null)}}
 {const _ru=rsUse;rsUse=function(use,t){const r=_ru(use,t);if(r&&t){const id=getB(t.x,t.y,t.z),ly=use==='door'&&!(id===DOOR_LO||id===IRON_DOOR_LO)?t.y-1:t.y,m=getM(t.x,ly,t.z);
   const ev=use==='lever'?(m&1?'block_activate':'block_deactivate'):use==='button'?'block_activate':use==='door'||use==='trap'||use==='gate'?(m&8?'block_open':'block_close'):'block_change';gameEv(ev,t.x+.5,t.y+.5,t.z+.5,player,null)}return r}}
-{const _ex=explode;explode=function(x,y,z,r){_ex(x,y,z,r);gameEv('explode',x,y,z,null,null)}}
+{const _ex=explode;explode=function(x,y,z,r,o){_ex(x,y,z,r,o);gameEv('explode',x,y,z,null,null)}}   // o ({mob}) 도 넘겨요 (P4-MOB: 빠뜨리면 크리퍼 폭발에 난이도가 안 붙어요)
 {const _sa=shootArrow;shootArrow=function(from,dir,speed,owner,dmg){_sa(from,dir,speed,owner,dmg);gameEv('projectile_shoot',from.x,from.y,from.z,owner==='player'?player:null,null)}}
 {const _up=updateProjs;updateProjs=function(dt){const st=projs.map(p=>p.stuck);_up(dt);for(let i=0;i<projs.length;i++){const p=projs[i];if(p.stuck&&st[i]===false)gameEv('projectile_land',p.pos.x,p.pos.y,p.pos.z,p.owner==='player'?player:null,null,{proj:p.owner==='player'?player:null})}}}
 {const _sx=sfx;sfx=function(kind,mat,vol){if(DD_SFX[kind]){DD_SFX[kind](vol==null?1:vol);return}if(kind==='burp'){gameEv(ITEM[lastEaten]&&ITEM[lastEaten].bottleBack?'drink':'eat',player.pos.x,player.pos.y+1.5,player.pos.z,player,null);ddAte(lastEaten)}return _sx(kind,mat,vol)}}
@@ -7981,7 +7987,7 @@ const fFull=pxIcon(FOOD,{x:'#2a1505',B:'#b5651d',b:'#e8a35c',W:'#efe6d6'}),fEmpt
 const bubble=pxIcon(['..xxxx...','.xWwwwx..','xWwwwwwx.','xwwwwwwx.','xwwwwwwx.','xwwwwwWx.','.xwwwWx..','..xxxx...','.........'],{x:'#1d3c8c',W:'#ffffff',w:'#7fb4ff'});
 const armIcon=pxIcon(['..xx.xx..','.xWWxWWx.','.xWWWWWx.','.xWWWWWx.','..xWWWx..','..xWWWx..','..xxxxx..','.........','.........'],{x:'#2a2a2a',W:'#d8d8d8'}),armHalf=pxIcon(['..xx.xx..','.xWWxDDx.','.xWWWDDx.','.xWWWDDx.','..xWWDx..','..xWWDx..','..xxxxx..','.........','.........'],{x:'#2a2a2a',W:'#d8d8d8',D:'#555'}),armEmpty=pxIcon(['..xx.xx..','.xDDxDDx.','.xDDDDDx.','.xDDDDDx.','..xDDDx..','..xDDDx..','..xxxxx..','.........','.........'],{x:'#2a2a2a',D:'#555'});
 const xpNeed=l=>l<16?2*l+7:l<31?5*l-38:9*l-158;function xpLevel(x){let l=0;while(x>=xpNeed(l)){x-=xpNeed(l);l++}return[l,x/xpNeed(l)]}
-function updateStats(){const p=player;let h='',f='',a='';{const pts=armorPts();let ah='';if(pts>0)for(let i=0;i<10;i++){const v=pts-i*2;ah+=`<img class="px" src="${v>=2?armIcon:v===1?armHalf:armEmpty}">`}const ar=$('armorRow');if(ar&&ar.dataset.v!==ah){ar.innerHTML=ah;ar.dataset.v=ah}const [lv,fr]=xpLevel(p.xp||0);$('xpFill').style.width=(fr*100)+'%';$('xpLv').textContent=lv>0?lv:'';$('xpBar').style.visibility=creative()?'hidden':''}for(let i=0;i<10;i++){const v=p.hp-i*2;h+=`<img class="px" src="${v>=2?hFull:v>=1?hHalf:hEmpty}">`;const u=p.food-i*2;f+=`<img class="px" src="${u>=2?fFull:u===1?fHalf:fEmpty}">`}
+function updateStats(){const p=player;let h='',f='',a='';{const pts=armorPts();let ah='';if(pts>0)for(let i=0;i<10;i++){const v=pts-i*2;ah+=`<img class="px" src="${v>=2?armIcon:v===1?armHalf:armEmpty}">`}const ar=$('armorRow');if(ar&&ar.dataset.v!==ah){ar.innerHTML=ah;ar.dataset.v=ah}const [lv,fr]=xpLevel(p.xp||0);$('xpFill').style.width=(fr*100)+'%';$('xpLv').textContent=lv>0?lv:'';$('xpBar').style.visibility=creative()?'hidden':''}for(let i=0;i<10;i++){const v=Math.ceil(p.hp-1e-9)-i*2;h+=`<img class="px" src="${v>=2?hFull:v>=1?hHalf:hEmpty}">`;const u=p.food-i*2;f+=`<img class="px" src="${u>=2?fFull:u===1?fHalf:fEmpty}">`}
   $('hearts').innerHTML=h;$('food').innerHTML=f;
   if(underWater||p.air<15){const n=Math.ceil(p.air/1.5);for(let i=0;i<n;i++)a+=`<img class="px" src="${bubble}">`}$('air').innerHTML=a;
   $('hearts').style.animation=p.hp<=4?'none':'';}
@@ -9893,7 +9899,7 @@ let CMD_NAT=false,CMD_NOGRIEF=false,CMD_MOBKILL=false;
 const _hurtPlayer0=hurtPlayer;
 hurtPlayer=function(d,src,why,o){if(GAMEMODE==='spectator'&&why!=='void'&&why!=='kill')return;if(why==='fall'&&!gameRule('fall_damage')||(why==='fire'||why==='lava')&&!gameRule('fire_damage')||why==='drown'&&!gameRule('drowning_damage')||why==='freeze'&&!gameRule('freeze_damage')||why==='pvp'&&!gameRule('pvp'))return;
   if(why==='starve'&&cmdDiff()==='easy'&&player.hp<=10)return;
-  if(MOBDEF[why]||why==='creeper'||why==='witch'||why==='sonic'){const df=cmdDiff();if(df==='peaceful')return;if(df==='easy')d=Math.min(d/2+1,d);else if(df==='hard')d*=1.5}
+  if((MOBDEF[why]||why==='creeper'||why==='witch'||why==='sonic')&&!(o&&o.noScale)){const df=cmdDiff();if(df==='peaceful')return;if(df==='easy')d=Math.min(d/2+1,d);else if(df==='hard')d*=1.5}
   return _hurtPlayer0(d,src,why,o)};   // o ({noArmor}) 도 넘겨요 (P2-BUG: 감싸기 셋이 빠뜨려서 불에 탈 때 갑옷이 피해를 줄였어요)
 // 쓰러질 때: keep_inventory (가방 · 갑옷 · 경험치 그대로) · immediate_respawn (바로 다시 살아나요)
 const _die0=die;
