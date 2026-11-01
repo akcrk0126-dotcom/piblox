@@ -11,6 +11,7 @@ const W = F.WORLD, S = X.S, FW = F.FW, WL = W.water, byId = F.byId;
 const LOW = G.gfxMode === 'low' || G.IS_TOUCH;
 const T0 = performance.now();
 S.lm = Object.assign({ disc: {} }, S.lm || {});
+F.lmState = F.lmState || {};   // 이야기에 따라 바뀌는 랜드마크 상태 (windmill: 풍차 회전 0~1)
 const STATS = { landmarks: 0, props: 0, colliders: 0, glows: 0, platforms: 0 };
 // 이 모듈이 넣은 충돌체 기록 (점검용) — init 이 끝나면 원래대로 돌려놔요
 const MYCOL = [], _addCol = F.addCollider; F.addCollider = c => { MYCOL.push(c); return _addCol(c); };
@@ -926,7 +927,8 @@ function bWindmill(l){
   for (const key in SB.g){ rot.add(meshOf(G.mergeGeos(SB.g[key]), MAT[key], true)); } K = pk; B = pb;
   B.far.push(['fabricW', new THREE.BoxGeometry(1.8, 21, 0.1).applyMatrix4(new THREE.Matrix4().makeRotationZ(0.6)).applyMatrix4(new THREE.Matrix4().makeRotationY(face)).translate(hub.position.x, hub.position.y, hub.position.z)]);
   B.far.push(['fabricW', new THREE.BoxGeometry(1.8, 21, 0.1).applyMatrix4(new THREE.Matrix4().makeRotationZ(0.6 + Math.PI / 2)).applyMatrix4(new THREE.Matrix4().makeRotationY(face)).translate(hub.position.x, hub.position.y, hub.position.z)]);
-  anim(dt => { rot.rotation.z -= dt * 0.55; });
+  // 풍차는 이야기(1장)가 끝나야 다시 돌아요 — agora-saga 가 F.lmState.windmill 을 0 → 1 로 바꿔요
+  anim(dt => { rot.rotation.z -= dt * 0.55 * (F.lmState.windmill ?? 1); });
   // 바람개비 · 연
   const pw = []; for (let i = 0; i < 22; i++){ const a = R() * TAU, d = rr(8, 26), x = Math.cos(a) * d, z = Math.sin(a) * d; if (kept(cx + x, cz + z, 1.5) || roadD(cx + x, cz + z) < 1) continue; pw.push([x, z, rr(1.4, 2.2), rr(0, TAU)]); }
   pinwheels(pw);
