@@ -8850,7 +8850,7 @@ let chatOpen=false;
 function chatLine(html,col,isHtml){const box=$('chatLog');const d=document.createElement('div');d.style.color=col||'#fff';if(isHtml)d.innerHTML=html;else d.textContent=html;d.dataset.t=Date.now();box.appendChild(d);while(box.children.length>60)box.firstChild.remove();box.scrollTop=1e9}
 function openChat(pre){if(!started||chatOpen)return;if(menuOpen==='ready')hideMenu();chatOpen=true;for(const k in keys)keys[k]=false;$('chat').classList.add('open');const i=$('chatIn');i.value=pre||'';hintSel=0;updateCmdHint();setTimeout(()=>i.focus(),10);if(document.pointerLockElement)document.exitPointerLock()}
 function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;keysRestore();$('cmdHint').classList.add('hide');$('chat').classList.remove('open');i.blur();
-  if(send&&t){if(t.startsWith('/'))runCmd(t);else if(MPS)mpChat(t);else chatLine(`<${myName()}> ${t}`)}
+  if(send&&t){if(t.startsWith('/')){if(typeof cmdAllowed==='function'&&!cmdAllowed(t))cmdShowErr(new CmdError(cmdMsg('unknown_cmd'),1,t));else runCmd(t)}else if(MPS)mpChat(t);else chatLine(`<${myName()}> ${t}`)}
   if(started&&!menuOpen&&!screenOpen&&!isTouch)lockPointer()}
 // ── 명령어 (Agent 05): 마크 자바 에디션 26.3 과 똑같은 명령어 ─────────────────────────────────────
 //   Brigadier 처럼 한 글자씩 읽어요: 틀린 곳을 정확히 짚어서 빨간 글씨 + "…<--[여기]" 로 알려 줘요.
@@ -14609,6 +14609,500 @@ function langHTML(){const W=gW(),H=gH(),cx=Math.floor(W/2),sel=langSel||LANG;
 // P4-MENU 의 MENU2 표가 있으면 언어 화면 몸통을 거기에도 끼워요 (합친 뒤에도 같은 화면)
 try{if(typeof MENU2!=='undefined'&&MENU2)MENU2.lang=Object.assign(MENU2.lang||{},{html:()=>langHTML(),back:'optsSub'})}catch(e){}
 if(LANG==='en')i18nSwapNames(true);
+// (P4-MENU 2) 화면 글 표: 게임 규칙 (아이디|한국어|영어|갈래|설명) · 일반 통계 · 발전 과제 (아이콘|배경|설명) — misode/mcmeta 26.3 언어 파일 · 발전 과제 데이터
+const GR_UI=`advance_time|시간 흐름|Advance time of day|updates||
+advance_weather|날씨 갱신|Update weather|updates||
+allow_entering_nether_using_portals|네더 허용|Allow Nether|misc|플레이어의 네더 진입 가능 여부를 제어합니다.|Controls whether players are allowed to enter the Nether.
+block_drops|블록 떨굼|Drop blocks|drops|경험 구슬을 포함하여 블록으로부터의 자원 떨굼을 제어합니다.|Controls resource drops from blocks, including experience orbs.
+block_explosion_drop_decay|블록 사용에 의한 폭발에서, 몇몇 블록이 노획물을 떨어뜨리지 않음|In block interaction explosions, some blocks won't drop their loot|drops|블록 사용에 의한 폭발에서, 파괴된 블록이 떨궈야 할 아이템 중 일부가 그대로 사라집니다.|Some of the drops from blocks destroyed by explosions caused by block interactions are lost in the explosion.
+command_block_output|명령 블록 출력 알림|Broadcast command block output|chat||
+command_blocks_work|명령 블록 켜기|Enable Command Blocks|misc||
+drowning_damage|익사 피해|Deal drowning damage|player||
+elytra_movement_check|겉날개 움직임 확인하기|Do elytra movement check|player||
+ender_pearls_vanish_on_death|죽을 때 던져져 있는 엔더 진주 소멸|Thrown Ender Pearls vanish on death|player|플레이어가 죽을 때, 던져져 있는 엔더 진주가 사라지는지 여부입니다.|Whether Ender Pearls thrown by a player vanish when that player dies.
+entity_drops|개체 장비 떨굼|Drop entity equipment|drops|광산 수레 (보관함 포함), 아이템 액자, 보트 등에서의 떨굼을 제어합니다.|Controls drops from Minecarts (including inventories), Item Frames, Boats, etc.
+fall_damage|낙하 피해|Deal fall damage|player||
+fire_damage|불 피해|Deal fire damage|player||
+fire_spread_radius_around_player|불 확산 반지름|Fire spread radius|updates|플레이어를 중심으로 불이 확산될 수 있는 블록 단위의 반경.|The radius in blocks around a player in which fire can spread.
+forgive_dead_players|죽은 플레이어 용서|Forgive dead players|mobs|중립 몹이 화나 있다가도 목표 플레이어가 근처에서 죽으면 화를 풉니다.|Angered neutral mobs stop being angry when the targeted player dies nearby.
+freeze_damage|동상 피해|Deal freeze damage|player||
+global_sound_events|전역 소리 이벤트|Global sound events|misc|보스 생성 등 특정 게임 이벤트가 발생했을 때, 그 소리가 어디서나 들립니다.|When certain game events happen, like a boss spawning, the sound is heard everywhere.
+immediate_respawn|즉시 리스폰|Respawn immediately|player||
+keep_inventory|죽음 후 보관함 보존|Keep inventory after death|player||
+lava_source_conversion|용암이 원천으로 바뀜|Lava converts to source|updates|흐르는 용암의 두 면이 용암 원천으로 둘러싸일 때, 그 블록이 원천으로 바뀝니다.|When flowing lava is surrounded on two sides by lava sources, it converts into a source.
+limited_crafting|제작에 제작법 필요|Require recipe for crafting|player|이 설정을 켜면 플레이어들은 잠금 해제된 제작법으로만 제작할 수 있습니다.|If enabled, players will be able to craft only unlocked recipes.
+locator_bar|플레이어 위치 표시 바 켜기|Enable player Locator Bar|player|켜져 있으면 플레이어가 있는 방향을 알려 주는 바를 화면에 표시합니다.|When enabled, a bar is shown on the screen to indicate the direction of players.
+log_admin_commands|관리자 명령 알림|Broadcast admin commands|chat||
+max_block_modifications|명령어의 블록 변경량 제한|Command modification block limit|misc|fill이나 clone 등의 명령어 하나가 한 번에 바꿀 수 있는 블록 수.|The number of blocks that can be changed at once by one command, such as fill or clone.
+max_command_forks|명령어 맥락 제한|Command context limit|misc|'execute as' 등의 명령어에서 쓰일 수 있는 맥락의 최대 개수.|Maximum number of contexts that can be used by commands like 'execute as'.
+max_command_sequence_length|명령 연쇄 크기 제한|Command chain size limit|misc|명령 블록 연쇄와 함수에 해당.|Applies to command block chains and functions.
+max_entity_cramming|개체 중첩 한계|Entity cramming threshold|mobs||
+max_minecart_speed|광산 수레 최고 속도|Minecart max speed|misc|땅에서 광산 수레가 움직일 때 최고 기본 속도|Maximum default speed of a moving Minecart on land.
+max_snow_accumulation_height|적설 높이|Snow accumulation height|updates|눈이 올 때, 최대 이 숫자만큼 눈의 층이 쌓입니다.|When it snows, layers of snow form on the ground up to at most this number of layers.
+mob_drops|몹 노획물 떨굼|Drop mob loot|drops|경험 구슬을 포함하여 몹으로부터의 자원 떨굼을 제어합니다.|Controls resource drops from mobs, including experience orbs.
+mob_explosion_drop_decay|몹 폭발에서, 몇몇 블록이 노획물을 떨어뜨리지 않음|In mob explosions, some blocks won't drop their loot|drops|몹에 의한 폭발에서, 파괴된 블록이 떨궈야 할 아이템 중 일부가 그대로 사라집니다.|Some of the drops from blocks destroyed by explosions caused by mobs are lost in the explosion.
+mob_griefing|파괴적 몹 행위 허용|Allow destructive mob actions|mobs||
+natural_health_regeneration|생명력 재생|Regenerate health|player||
+player_movement_check|플레이어 움직임 확인하기|Do player movement check|player||
+players_nether_portal_creative_delay|크리에이티브 모드인 플레이어의 네더 차원문 지연 시간|Player's Nether Portal delay in creative mode|player|크리에이티브 모드인 플레이어가 다른 차원으로 가기 위해 네더 차원문에서 기다려야 하는 시간 (틱 단위).|Time (in ticks) that a creative mode player needs to stand in a Nether Portal before changing dimensions.
+players_nether_portal_default_delay|크리에이티브 모드가 아닌 플레이어의 네더 차원문 지연 시간|Player's Nether Portal delay in non-creative mode|player|크리에이티브 모드가 아닌 플레이어가 다른 차원으로 가기 위해 네더 차원문에서 기다려야 하는 시간 (틱 단위).|Time (in ticks) that a non-creative mode player needs to stand in a Nether Portal before changing dimensions.
+players_sleeping_percentage|취침 비율|Sleep percentage|player|밤을 건너뛰려면 잠들어야 하는 플레이어들의 비율.|The percentage of players who must be sleeping to skip the night.
+projectiles_can_break_blocks|투사체가 블록 파괴 가능|Projectiles can break blocks|drops|투사체 충돌이 투사체로 파괴 가능한 블록을 파괴할지 여부를 제어합니다.|Controls whether impact projectiles will destroy blocks that are destructible by them.
+pvp|pvp 켜기|Enable pvp|player|플레이어가 다른 플레이어에게 피해를 입힐 수 있는지 여부를 제어합니다.|Controls whether players are allowed to damage other players.
+raids|습격 켜기|Do raids|mobs||
+random_tick_speed|랜덤 틱 속도 비율|Random tick speed rate|updates||
+reduced_debug_info|디버그 정보 축소|Reduce debug info|misc|디버그 화면의 내용을 제한합니다.|Limits contents of debug screen.
+respawn_radius|리스폰 위치 반지름|Respawn location radius|player|스폰 지점 주위, 플레이어들이 스폰할 수 있는 영역의 크기를 제어합니다.|Controls the size of the area around the spawn point that players can spawn in.
+send_command_feedback|명령 피드백 전송|Send command feedback|chat||
+show_advancement_messages|발전 과제 알림|Announce advancements|chat||
+show_death_messages|죽음 문구 표시|Show death messages|chat||
+spawn_mobs|몹 생성|Spawn mobs|spawning|일부 개체는 별도의 규칙이 있을 수 있습니다.|Some entities might have separate rules.
+spawn_monsters|몬스터 생성|Spawn Monsters|spawning|몬스터의 자연적 생성 여부를 제어합니다.|Controls whether monsters naturally spawn.
+spawn_patrols|약탈자 정찰대 생성|Spawn pillager patrols|spawning||
+spawn_phantoms|팬텀 생성|Spawn phantoms|spawning||
+spawn_wandering_traders|떠돌이 상인 생성|Spawn Wandering Traders|spawning||
+spawn_wardens|워든 생성|Spawn Wardens|spawning||
+spawner_blocks_work|생성기 블록 켜기|Enable Spawner Blocks|misc||
+spectators_generate_chunks|관전자의 지형 생성 허용|Allow spectators to generate terrain|player||
+spread_vines|덩굴 퍼짐|Vines spread|updates|덩굴이 인접한 블록으로 무작위하게 퍼지는지 여부를 제어합니다. 늘어진 덩굴이나 휘어진 덩굴 등 다른 종류의 덩굴 블록에는 영향을 주지 않습니다.|Controls whether the Vines block spreads randomly to adjacent blocks. Does not affect other types of vine blocks such as Weeping Vines, Twisting Vines, etc.
+tnt_explodes|TNT의 점화 및 폭발 허용|Allow TNT to be activated and to explode|misc||
+tnt_explosion_drop_decay|TNT 폭발에서, 몇몇 블록이 노획물을 떨어뜨리지 않음|In TNT explosions, some blocks won't drop their loot|drops|TNT에 의한 폭발에서, 파괴된 블록이 떨궈야 할 아이템 중 일부가 그대로 사라집니다.|Some of the drops from blocks destroyed by explosions caused by TNT are lost in the explosion.
+universal_anger|무차별적 분노|Universal anger|mobs|중립 몹이 화나면 화나게 한 플레이어뿐만 아니라 근처에 있는 모든 플레이어를 공격합니다. '죽은 플레이어 용서'가 꺼져 있을 때 가장 잘 작동합니다.|Angered neutral mobs attack any nearby player, not just the player that angered them. Works best if forgiveDeadPlayers is disabled.
+water_source_conversion|물이 원천으로 바뀜|Water converts to source|updates|흐르는 물의 두 면이 물 원천으로 둘러싸일 때, 그 블록이 원천으로 바뀝니다.|When flowing water is surrounded on two sides by water sources, it converts into a source.`;
+const ST_UI=`animals_bred|동물을 교배한 횟수|Animals Bred
+aviate_one_cm|겉날개로 날아간 거리|Distance by Elytra
+bell_ring|종을 울린 횟수|Bells Rung
+boat_one_cm|보트를 타고 이동한 거리|Distance by Boat
+clean_armor|갑옷을 탈색한 횟수|Armor Pieces Cleaned
+clean_banner|현수막을 탈색한 횟수|Banners Cleaned
+clean_shulker_box|셜커 상자를 탈색한 횟수|Shulker Boxes Cleaned
+climb_one_cm|올라간 거리|Distance Climbed
+crouch_one_cm|웅크리고 걸은 거리|Distance Crouched
+damage_absorbed|흡수된 피해|Damage Absorbed
+damage_blocked_by_shield|방패로 막은 피해|Damage Blocked by Shield
+damage_dealt|입힌 피해|Damage Dealt
+damage_dealt_absorbed|입힌 피해 (흡수됨)|Damage Dealt (Absorbed)
+damage_dealt_resisted|입힌 피해 (저항함)|Damage Dealt (Resisted)
+damage_resisted|저항한 피해|Damage Resisted
+damage_taken|받은 피해|Damage Taken
+deaths|죽은 횟수|Number of Deaths
+drop|아이템을 떨어뜨린 횟수|Items Dropped
+eat_cake_slice|먹은 케이크 조각 개수|Cake Slices Eaten
+enchant_item|아이템에 마법을 부여한 횟수|Items Enchanted
+fall_one_cm|떨어진 거리|Distance Fallen
+fill_cauldron|가마솥을 채운 횟수|Cauldrons Filled
+fish_caught|물고기를 잡은 횟수|Fish Caught
+fly_one_cm|날아간 거리|Distance Flown
+happy_ghast_one_cm|행복한 가스트를 타고 이동한 거리|Distance by Happy Ghast
+horse_one_cm|말을 타고 이동한 거리|Distance by Horse
+inspect_dispenser|발사기를 들여다본 횟수|Dispensers Searched
+inspect_dropper|공급기를 들여다본 횟수|Droppers Searched
+inspect_hopper|호퍼를 들여다본 횟수|Hoppers Searched
+interact_with_anvil|모루 사용 횟수|Interactions with Anvil
+interact_with_beacon|신호기 사용 횟수|Interactions with Beacon
+interact_with_blast_furnace|용광로 사용 횟수|Interactions with Blast Furnace
+interact_with_brewingstand|양조기 사용 횟수|Interactions with Brewing Stand
+interact_with_campfire|모닥불 사용 횟수|Interactions with Campfire
+interact_with_cartography_table|지도 제작대 사용 횟수|Interactions with Cartography Table
+interact_with_crafting_table|제작대 사용 횟수|Interactions with Crafting Table
+interact_with_furnace|화로 사용 횟수|Interactions with Furnace
+interact_with_grindstone|숫돌 사용 횟수|Interactions with Grindstone
+interact_with_lectern|독서대 사용 횟수|Interactions with Lectern
+interact_with_loom|베틀 사용 횟수|Interactions with Loom
+interact_with_smithing_table|대장장이 작업대 사용 횟수|Interactions with Smithing Table
+interact_with_smoker|훈연기 사용 횟수|Interactions with Smoker
+interact_with_stonecutter|석재 절단기 사용 횟수|Interactions with Stonecutter
+jump|점프 횟수|Jumps
+leave_game|종료 횟수|Games Quit
+minecart_one_cm|광산 수레를 타고 이동한 거리|Distance by Minecart
+mob_kills|몹 사냥 횟수|Mob Kills
+nautilus_one_cm|앵무조개를 타고 이동한 거리|Distance by Nautilus
+open_barrel|통을 연 횟수|Barrels Opened
+open_chest|상자를 열어본 횟수|Chests Opened
+open_enderchest|엔더 상자를 열어본 횟수|Ender Chests Opened
+open_shulker_box|셜커 상자를 연 횟수|Shulker Boxes Opened
+pig_one_cm|돼지를 타고 이동한 거리|Distance by Pig
+play_noteblock|소리 블록 연주 횟수|Note Blocks Played
+play_record|음반을 재생한 횟수|Music Discs Played
+play_time|플레이 시간|Time Played
+player_kills|플레이어를 죽인 횟수|Player Kills
+pot_flower|식물을 화분에 심은 횟수|Plants Potted
+raid_trigger|습격을 유발한 횟수|Raids Triggered
+raid_win|습격에서 승리한 횟수|Raids Won
+sleep_in_bed|침대에서 잔 횟수|Times Slept in a Bed
+sleep_in_straw_bed|밀짚 침대에서 잔 횟수|Times Slept in a Straw Bed
+sneak_time|웅크린 시간|Sneak Time
+sprint_one_cm|달려간 거리|Distance Sprinted
+strider_one_cm|스트라이더를 타고 이동한 거리|Distance by Strider
+swim_one_cm|수영한 거리|Distance Swum
+talked_to_villager|주민과 대화한 횟수|Talked to Villagers
+target_hit|과녁 명중 횟수|Targets Hit
+time_since_death|마지막 죽음 이후 지난 시간|Time Since Last Death
+time_since_rest|마지막 휴식 이후 지난 시간|Time Since Last Rest
+total_world_time|세계가 열려 있던 시간|Time with World Open
+traded_with_villager|주민과 거래한 횟수|Traded with Villagers
+trigger_trapped_chest|작동시킨 덫 상자 개수|Trapped Chests Triggered
+tune_noteblock|소리 블록을 조율한 횟수|Note Blocks Tuned
+use_cauldron|가마솥에서 물을 뜬 횟수|Water Taken from Cauldron
+walk_on_water_one_cm|물 위를 걸어간 거리|Distance Walked on Water
+walk_one_cm|걸어간 거리|Distance Walked
+walk_under_water_one_cm|물속을 걸어간 거리|Distance Walked under Water`;
+const ADV_UI=`adventure/adventuring_time|diamond_boots||모든 생물 군계를 발견하세요|Discover every biome
+adventure/arbalistic|crossbow||쇠뇌 한 발로 종류가 다른 몹 다섯 마리를 죽이세요|Kill five unique mobs with one crossbow shot
+adventure/avoid_vibration|sculk_sensor||스컬크 감지체나 워든 근처에서 웅크린 채 움직여 당신을 감지하지 못하게 하세요|Sneak near a Sculk Sensor or Warden to prevent it from detecting you
+adventure/blowback|wind_charge||브리즈가 쏜 돌풍구를 튕겨내 브리즈를 죽이세요|Kill a Breeze with a deflected Breeze-shot Wind Charge
+adventure/brush_armadillo|armadillo_scute||솔을 사용해 아르마딜로에게서 아르마딜로 인갑을 얻으세요|Get Armadillo Scutes from an Armadillo using a Brush
+adventure/bullseye|target||30미터 이상 떨어진 곳에서 과녁 블록의 정중앙을 맞추세요|Hit the bullseye of a Target block from at least 30 meters away
+adventure/craft_decorated_pot_using_only_sherds|decorated_pot||도자기 조각 4개로 장식된 도자기를 만드세요|Make a Decorated Pot out of 4 Pottery Sherds
+adventure/crafters_crafting_crafters|crafter||제작기가 제작기를 제작할 때 근처에 있으세요|Be near a Crafter when it crafts a Crafter
+adventure/fall_from_world_height|water_bucket||세계의 위쪽 끝(건축 제한)에서 아래쪽 끝까지 자유 낙하하고 살아남으세요|Free fall from the top of the world (build limit) to the bottom of the world and survive
+adventure/heart_transplanter|creaking_heart||창백한 참나무 원목 두 개 사이에 크리킹 심장을 올바른 방향으로 설치하세요|Place a Creaking Heart with the correct alignment between two Pale Oak Log blocks
+adventure/hero_of_the_village|white_banner||습격으로부터 마을을 지켜내세요|Successfully defend a village from a raid
+adventure/honey_block_slide|honey_block||꿀 블록을 향해 점프해 낙하를 멈추세요|Jump into a Honey Block to break your fall
+adventure/kill_a_mob|iron_sword||적대적 몬스터를 죽이세요|Kill any hostile monster
+adventure/kill_all_mobs|diamond_sword||모든 적대적 몬스터를 하나 이상씩 죽이세요|Kill one of every hostile monster
+adventure/kill_mob_near_sculk_catalyst|sculk_catalyst||스컬크 촉매 근처에서 몹을 죽이세요|Kill a mob near a Sculk Catalyst
+adventure/lighten_up|copper_bulb||구리 전구를 도끼로 긁어내 더 밝아지게 하세요|Scrape a Copper Bulb with an Axe to make it brighter
+adventure/lightning_rod_with_villager_no_fire|lightning_rod||주민의 감전 사고를 화재 없이 막으세요|Protect a Villager from an undesired shock without starting a fire
+adventure/minecraft_trials_edition|chiseled_tuff||시련의 회당에 발을 들여놓으세요|Step foot in a Trial Chamber
+adventure/ol_betsy|crossbow||쇠뇌를 쏘세요|Shoot a Crossbow
+adventure/overoverkill|mace||철퇴를 휘둘러 한 번에 하트 50개만큼 피해를 입히세요|Deal 50 hearts of damage in a single hit using the Mace
+adventure/play_jukebox_in_meadows|jukebox||주크박스로 음악을 틀어 목초지에 활기를 불어넣으세요|Make the Meadows come alive with the sound of music from a Jukebox
+adventure/read_power_of_chiseled_bookshelf|chiseled_bookshelf||비교기를 사용하여 조각된 책장의 레드스톤 신호를 측정하세요|Read the power signal of a Chiseled Bookshelf using a Comparator
+adventure/revaulting|ominous_trial_key||불길한 시련 열쇠로 불길한 금고의 잠금을 푸세요|Unlock an Ominous Vault with an Ominous Trial Key
+adventure/root|map|adventure|모험, 탐사와 전투|Adventure, exploration and combat
+adventure/salvage_sherd|brush||수상한 블록을 솔질해 도자기 조각을 얻으세요|Brush a Suspicious block to obtain a Pottery Sherd
+adventure/shoot_arrow|bow||화살로 무언가를 맞히세요|Shoot something with an Arrow
+adventure/sleep_in_bed|red_bed||침대에서 자서 리스폰 지점을 바꾸세요|Sleep in a Bed to change your respawn point
+adventure/sniper_duel|arrow||50미터 이상 떨어져 있는 스켈레톤을 죽이세요|Kill a Skeleton from at least 50 meters away
+adventure/spear_many_mobs|iron_spear||창으로 한 번 돌격해 몹 다섯 마리를 맞히세요|Hit five mobs in the same Charge attack using the Spear
+adventure/spyglass_at_dragon|spyglass||망원경으로 엔더 드래곤을 바라보세요|Look at the Ender Dragon through a Spyglass
+adventure/spyglass_at_ghast|spyglass||망원경으로 가스트를 바라보세요|Look at a Ghast through a Spyglass
+adventure/spyglass_at_parrot|spyglass||망원경으로 앵무새를 바라보세요|Look at a Parrot through a Spyglass
+adventure/summon_iron_golem|carved_pumpkin||마을 방어를 돕기 위해 철 골렘을 소환하세요|Summon an Iron Golem to help defend a village
+adventure/throw_trident|trident||무언가를 향해 삼지창을 던지세요. 참고: 가지고 있는 유일한 무기를 내던지는 것은 좋은 생각이 아닙니다.|Throw a Trident at something. Note: Throwing away your only weapon is not a good idea.
+adventure/totem_of_undying|totem_of_undying||불사의 토템으로 죽음을 면하세요|Use a Totem of Undying to cheat death
+adventure/trade|emerald||주민과 거래하세요|Successfully trade with a Villager
+adventure/trade_at_world_height|emerald||건축 높이 제한에서 주민과 거래하세요|Trade with a Villager at the build height limit
+adventure/trim_with_all_exclusive_armor_patterns|silence_armor_trim_smithing_template||다음 대장장이 형판을 모두 사용해 보세요: 첨탑, 돼지 코, 갈비뼈, 파수, 고요, 벡스, 물결, 길잡이|Apply these smithing templates at least once: Spire, Snout, Rib, Ward, Silence, Vex, Tide, Wayfinder
+adventure/trim_with_any_armor_pattern|dune_armor_trim_smithing_template||대장장이 작업대에서 장식된 갑옷을 제작하세요|Craft trimmed armor at a Smithing Table
+adventure/two_birds_one_arrow|crossbow||관통 화살 한 발로 팬텀 두 마리를 죽이세요|Kill two Phantoms with a piercing Arrow
+adventure/under_lock_and_key|trial_key||시련 열쇠로 금고의 잠금을 푸세요|Unlock a Vault with a Trial Key
+adventure/use_lodestone|lodestone||자석석에 나침반을 사용하세요|Use a Compass on a Lodestone
+adventure/very_very_frightening|trident||주민에게 벼락을 떨어뜨리세요|Strike a Villager with lightning
+adventure/voluntary_exile|white_banner||습격 대장을 죽이세요. 당분간 마을에서 떨어져 있는 게 좋을지도 몰라요...|Kill a raid captain. Maybe consider staying away from villages for the time being...
+adventure/walk_on_powder_snow_with_leather_boots|leather_boots||가루눈 위를 걸으세요... 빠지지 않고요|Walk on Powder Snow... without sinking in it
+adventure/who_needs_rockets|wind_charge||돌풍구를 사용해 자신을 8블록만큼 쏘아 올리세요|Use a Wind Charge to launch yourself upward 8 blocks
+adventure/whos_the_pillager_now|crossbow||약탈자에게 똑같은 무기로 앙갚음해 주세요|Give a Pillager a taste of their own medicine
+end/dragon_breath|dragon_breath||드래곤의 숨결을 유리병에 담으세요|Collect Dragon's Breath in a Glass Bottle
+end/dragon_egg|dragon_egg||드래곤 알을 손에 넣으세요|Hold the Dragon Egg
+end/elytra|elytra||겉날개를 찾으세요|Find Elytra
+end/enter_end_gateway|ender_pearl||섬에서 탈출하세요|Escape the island
+end/find_end_city|purpur_block||들어가 보세요, 무슨 일 있겠어요?|Go on in, what could happen?
+end/kill_dragon|dragon_head||행운을 빌어요|Good luck
+end/levitate|shulker_shell||셜커의 공격을 맞고 50블록만큼 공중 부양하세요|Levitate up 50 blocks from the attacks of a Shulker
+end/respawn_dragon|end_crystal||엔더 드래곤을 다시 소환하세요|Respawn the Ender Dragon
+end/root|end_stone|end|끝일까요, 아니면 시작일까요?|Or the beginning?
+husbandry/allay_deliver_cake_to_note_block|note_block||알레이가 소리 블록에 케이크를 떨구게 하세요|Have an Allay drop a Cake at a Note Block
+husbandry/allay_deliver_item_to_player|cookie||알레이에게 아이템을 건네받으세요|Have an Allay deliver items to you
+husbandry/axolotl_in_a_bucket|axolotl_bucket||양동이로 아홀로틀을 잡으세요|Catch an Axolotl in a Bucket
+husbandry/balanced_diet|apple||먹을 수 있다면 모두 먹으세요. 그것이 건강에 좋지 않더라도 말이죠|Eat everything that is edible, even if it's not good for you
+husbandry/bred_all_animals|golden_carrot||모든 동물을 교배시키세요!|Breed all the animals!
+husbandry/breed_an_animal|wheat||동물 두 마리를 교배시키세요|Breed two animals together
+husbandry/complete_catalogue|cod||모든 종류의 고양이를 길들이세요!|Tame all Cat variants!
+husbandry/feed_snifflet|torchflower_seeds||새끼 스니퍼에게 먹이를 주세요|Feed a Snifflet
+husbandry/fishy_business|fishing_rod||물고기를 잡으세요|Catch a fish
+husbandry/froglights|verdant_froglight||보관함에 모든 개구리불을 가지세요|Have all Froglights in your inventory
+husbandry/kill_axolotl_target|tropical_fish_bucket||아홀로틀과 협력해 싸워 이기세요|Team up with an Axolotl and win a fight
+husbandry/leash_all_frog_variants|lead||모든 종류의 개구리를 끈으로 묶으세요|Get each Frog variant on a Lead
+husbandry/make_a_sign_glow|glow_ink_sac||어떤 종류든 표지판의 글자를 빛나게 만드세요|Make the text of any kind of sign glow
+husbandry/obtain_netherite_hoe|netherite_hoe||네더라이트 주괴로 괭이를 강화한 후, 삶의 선택들을 돌이켜 보세요|Use a Netherite Ingot to upgrade a Hoe, and then reevaluate your life choices
+husbandry/obtain_sniffer_egg|sniffer_egg||스니퍼 알을 얻으세요|Obtain a Sniffer Egg
+husbandry/place_dried_ghast_in_water|dried_ghast||마른 가스트 블록을 물속에 설치하세요|Place a Dried Ghast block into water
+husbandry/plant_any_sniffer_seed|pitcher_pod||아무 스니퍼 씨앗이나 심으세요|Plant any Sniffer seed
+husbandry/plant_seed|wheat||씨앗을 심고 자라나는 것을 지켜보세요|Plant a seed and watch it grow
+husbandry/remove_wolf_armor|shears||가위를 사용해 늑대에게서 늑대 갑옷을 벗기세요|Remove Wolf Armor from a Wolf using Shears
+husbandry/repair_wolf_armor|wolf_armor||아르마딜로 인갑을 사용해 손상된 늑대 갑옷을 완전히 수리하세요|Fully repair damaged Wolf Armor using Armadillo Scutes
+husbandry/ride_a_boat_with_a_goat|oak_boat||염소와 함께 보트에 타세요|Get in a Boat and float with a Goat
+husbandry/root|hay_block|husbandry|세상은 친구들과 음식으로 가득 차 있어요|The world is full of friends and food
+husbandry/safely_harvest_honey|honey_bottle||꿀벌을 자극하지 않도록 모닥불을 사용해 벌통에 든 꿀을 유리병에 담으세요|Use a Campfire to collect Honey from a Beehive using a Glass Bottle without aggravating the Bees
+husbandry/silk_touch_nest|bee_nest||벌 세 마리가 들어 있는 벌집이나 벌통을 섬세한 손길을 사용해 옮기세요|Move a Bee Nest or Beehive, with 3 Bees inside, using Silk Touch
+husbandry/tactical_fishing|pufferfish_bucket||물고기를 잡으세요... 낚싯대 없이요!|Catch a Fish... without a Fishing Rod!
+husbandry/tadpole_in_a_bucket|tadpole_bucket||양동이로 올챙이를 잡으세요|Catch a Tadpole in a Bucket
+husbandry/tame_an_animal|lead||동물을 길들이세요|Tame an animal
+husbandry/uh_oh|tnt||유황 큐브가 TNT 블록을 흡수하게 하세요|Have a Sulfur Cube absorb a TNT block
+husbandry/wax_off|stone_axe||구리 블록의 밀랍칠을 벗기세요!|Scrape Wax off of a Copper block!
+husbandry/wax_on|honeycomb||구리 블록에 벌집 조각을 사용하세요!|Apply Honeycomb to a Copper block!
+husbandry/whole_pack|bone||모든 종류의 늑대를 한 마리씩 길들이세요|Tame one of each Wolf variant
+nether/all_effects|bucket||모든 효과를 동시에 가지세요|Have every effect applied at the same time
+nether/all_potions|milk_bucket||모든 물약 효과를 동시에 가지세요|Have every potion effect applied at the same time
+nether/brew_potion|potion||물약을 만드세요|Brew a Potion
+nether/charge_respawn_anchor|respawn_anchor||리스폰 정박기를 최대로 충전하세요|Charge a Respawn Anchor to the maximum
+nether/create_beacon|beacon||신호기를 제작하고 설치하세요|Construct and place a Beacon
+nether/create_full_beacon|beacon||신호기의 출력을 최대로 만드세요|Bring a Beacon to full power
+nether/distract_piglin|gold_ingot||금으로 피글린의 주의를 돌리세요|Distract Piglins with gold
+nether/explore_nether|netherite_boots||모든 네더 생물 군계를 탐험하세요|Explore all Nether biomes
+nether/fast_travel|map||네더를 이용해 오버월드의 7 km를 이동하세요|Use the Nether to travel 7 km in the Overworld
+nether/find_bastion|polished_blackstone_bricks||보루 잔해에 진입하세요|Enter a Bastion Remnant
+nether/find_fortress|nether_bricks||네더 요새 안으로 들어가세요|Break your way into a Nether Fortress
+nether/get_wither_skull|wither_skeleton_skull||위더 스켈레톤의 해골을 얻으세요|Obtain a Wither Skeleton's skull
+nether/loot_bastion|chest||보루 잔해에 있는 상자에서 노획물을 얻으세요|Loot a Chest in a Bastion Remnant
+nether/netherite_armor|netherite_chestplate||네더라이트 갑옷을 모두 얻으세요|Get a full suit of Netherite armor
+nether/obtain_ancient_debris|ancient_debris||고대 잔해를 얻으세요|Obtain Ancient Debris
+nether/obtain_blaze_rod|blaze_rod||블레이즈의 막대기를 얻으세요|Relieve a Blaze of its rod
+nether/obtain_crying_obsidian|crying_obsidian||우는 흑요석을 얻으세요|Obtain Crying Obsidian
+nether/return_to_sender|fire_charge||화염구로 가스트를 죽이세요|Destroy a Ghast with a fireball
+nether/ride_strider|warped_fungus_on_a_stick||뒤틀린 균 낚싯대를 들고 스트라이더 위에 타세요|Ride a Strider with a Warped Fungus on a Stick
+nether/ride_strider_in_overworld_lava|warped_fungus_on_a_stick||오버월드의 용암 호수에서 스트라이더를 타고 머어어얼리 이동하세요|Take a Strider for a loooong ride on a lava lake in the Overworld
+nether/root|red_nether_bricks|nether|여름옷을 가져오세요|Bring summer clothes
+nether/summon_wither|nether_star||위더를 소환하세요|Summon the Wither
+nether/uneasy_alliance|ghast_tear||네더에서 가스트를 구출해 오버월드로 안전하게 데려온 다음... 죽이세요|Rescue a Ghast from the Nether, bring it safely home to the Overworld... and then kill it
+story/cure_zombie_villager|golden_apple||좀비 주민을 약화시킨 후 치료하세요|Weaken and then cure a Zombie Villager
+story/deflect_arrow|shield||방패로 발사체를 튕겨내세요|Deflect a projectile with a Shield
+story/enchant_item|enchanted_book||마법 부여대로 아이템에 마법을 부여하세요|Enchant an item at an Enchanting Table
+story/enter_the_end|end_stone||엔드 차원문에 진입하세요|Enter the End Portal
+story/enter_the_nether|flint_and_steel||네더 차원문을 짓고, 불을 붙여 들어가세요|Build, light, and enter a Nether Portal
+story/follow_ender_eye|ender_eye||엔더의 눈을 따라가세요|Follow an Eye of Ender
+story/form_obsidian|obsidian||흑요석을 얻으세요|Obtain a block of Obsidian
+story/iron_tools|iron_pickaxe||곡괭이를 개선하세요|Upgrade your Pickaxe
+story/lava_bucket|lava_bucket||양동이에 용암을 채우세요|Fill a Bucket with lava
+story/mine_diamond|diamond||다이아몬드를 얻으세요|Acquire diamonds
+story/mine_stone|wooden_pickaxe||새 곡괭이로 돌을 채굴하세요|Mine Stone with your new Pickaxe
+story/obtain_armor|iron_chestplate||철 갑옷으로 스스로를 보호하세요|Protect yourself with a piece of iron armor
+story/root|grass_block|stone|게임의 핵심과 이야기|The heart and story of the game
+story/shiny_gear|diamond_chestplate||다이아몬드 갑옷은 생명을 구합니다|Diamond armor saves lives
+story/smelt_iron|iron_ingot||철 주괴를 제련하세요|Smelt an Iron Ingot
+story/upgrade_tools|stone_pickaxe||더 좋은 곡괭이를 만드세요|Construct a better Pickaxe`;
+/* ═════════════ (P4-MENU 2) 자바 26.3 화면 맞추기: 게임 메뉴 · 발전 과제 · 통계 · 세계 설정 · 게임 규칙 · 세계 만들기 (게임/세계/기타) · 비디오 (머리말 4개) · 첫 실행 접근성 안내 · 피드백 · LAN 설정 ═════════════
+   새 글자는 K(한국어, 영어) 로 적어요 → i18nAdd 로 영어 모드에서도 바뀌어요 */
+const K=(ko,en)=>{try{i18nAdd(ko,en)}catch(e){}return ko};
+for(const [a,b] of [['게임 메뉴','Game Menu'],['게임으로','Back to Game'],['발전 과제','Advancements'],['통계','Statistics'],['피드백 보내기','Give Feedback'],['버그 제보하기','Report Bugs'],['설정...','Options...'],['LAN 서버 열기','Open to LAN'],['플레이어 신고','Player Reporting'],['저장하고 나가기','Save and Quit to Title'],['연결 끊기','Disconnect'],
+  ['피드백','Feedback'],['이 링크를 열거나 클립보드에 복사하시겠습니까?','Do you want to open this link or copy it to your clipboard?'],['브라우저에서 열기','Open in Browser'],['클립보드에 복사','Copy to Clipboard'],['LAN 설정','LAN Options'],['다른 플레이어 설정','Settings for Other Players'],['LAN 세계 시작','Start LAN World'],
+  ['웹 에디션에서는 지금 세계를 LAN 에 열 수 없어요.','The web edition can\'t open this world to LAN.'],['멀티플레이 → 새 서버 열기로 새 세계를 함께 할 수 있어요.','Use Multiplayer → Open a New Server to play together.'],['이 서버의 코드: {0}','This server\'s code: {0}'],
+  ['아무것도 없어 보이네요...','There doesn\'t seem to be anything here...'],['ㅠㅠ',':('],['일반','General'],['아이템','Items'],['몹','Mobs'],['통계를 찾을 수 없습니다.','No statistics found.'],
+  ['채굴 횟수','Times Mined'],['망가뜨린 횟수','Times Broken'],['제작 횟수','Times Crafted'],['사용 횟수','Times Used'],['주운 횟수','Picked Up'],['떨어뜨린 횟수','Dropped'],
+  ['{1}을(를) {0}번 죽였습니다','You killed {0} {1}'],['{0}에게 {1}번 죽었습니다','{0} killed you {1} time(s)'],['{0}을(를) 죽인 적이 없습니다','You have never killed {0}'],['{0}에게 죽은 적이 없습니다','You have never been killed by {0}'],
+  ['세계 설정...','World Options...'],['세계 설정','World Options'],['난이도','Difficulty'],['기본 게임 모드','Default Game Mode'],['명령어 허용','Allow Commands'],['게임 규칙 수정...','Edit Game Rules...'],['게임 규칙 수정','Edit Game Rules'],['기본값: {0}','Default: {0}'],['검색...','Search...'],
+  ['온라인 설정','Online Options'],['Realms 소식 및 초대','Realms News & Invites'],['원격 측정 데이터...','Telemetry Data...'],['온라인...','Online...'],
+  ['게임','Game'],['세계','World'],['기타','More'],['게임 모드','Game Mode'],['서바이벌','Survival'],['하드코어','Hardcore'],['크리에이티브','Creative'],['세계 유형','World Type'],['일반','Normal'],['평지','Superflat'],['사용자 지정','Customize'],['세계 생성기 시드','Seed for the world generator'],
+  ['무작위 시드를 적용하려면 비워 두십시오','Leave blank for a random seed'],['구조물 생성','Generate Structures'],['보너스 상자','Bonus Chest'],['게임 규칙','Game Rules'],['실험','Experiments'],['데이터 팩','Data Packs'],['세계 이름','World Name'],['저장될 위치:','Will be saved in:'],
+  ['자원을 찾고, 제작할 수 있으며 레벨, 생명력, 배고픔이 있습니다','Search for resources, craft, gain levels, health and hunger'],['서바이벌 모드와 비슷하지만 가장 어려운 난이도로 고정되며, 한 번 죽으면 부활할 수 없습니다','Same as Survival Mode, locked at hardest difficulty, and one life only'],
+  ['자원이 무제한이고 자유롭게 날 수 있으며, 블록을 즉시 파괴할 수 있습니다','Unlimited resources, free flying and destroy blocks instantly'],['/gamemode, /experience 같은 명령어들','Commands like /gamemode, /experience'],['마을, 난파선 등','Villages, Shipwrecks, etc.'],
+  ['게임 오버!','Game Over!'],['세계 관전','Spectate World'],['Minecraft에 오신 것을 환영합니다!','Welcome to Minecraft!'],['블록크래프트에 오신 것을 환영합니다!','Welcome to Blockcraft!'],['내레이터를 켜거나 접근성 설정을 확인하시겠습니까?','Would you like to enable the Narrator or visit the Accessibility Settings?'],['계속하기','Continue'],
+  ['화면','Display'],['설정\u200b','Preferences'],['세계 유형: 일반','World Type: Normal'],['세계 유형: 평지','World Type: Superflat'],['품질 및 성능','Quality & Performance'],['인터페이스','Interface'],['설정','Preferences'],['사전 설정','Preset'],['독점 전체 화면','Exclusive Fullscreen'],['그래픽 API','Graphics API'],['기본','Default'],['OpenGL 우선','Prefer OpenGL'],['Vulkan 우선 (실험적 기능)','Prefer Vulkan (Experimental)'],
+  ['fps를 제한할 조건','Reduce fps when'],['최소화','Minimized'],['자리 비움','AFK'],['생물 군계 혼합','Biome Blend'],['나뭇잎 너머 보임','See-Through Leaves'],['개선된 투명도','Improved Transparency'],['텍스처 필터링','Texture Filtering'],['없음','None'],['이방성','Anisotropic'],['이방성 필터링','Anisotropic Filtering'],
+  ['구름 거리','Cloud Distance'],['날씨 효과 반지름','Weather Effect Radius'],['청크가 나타나는 시간','Chunk Fade Time'],['비네트 표시','Show Vignette'],['{0} 블록','{0} Blocks'],['마우스 X 반전','Invert Mouse X'],['마우스 Y 반전','Invert Mouse Y'],['달리기 시간 간격','Sprint Window'],
+  ['보내지 않은 대화 저장','Save Unsent Chats'],['고대비 블록 테두리','High Contrast Block Outlines'],['광산 수레와 함께 회전','Rotate with Minecarts'],['음악 빈도','Music Frequency'],['항상','Constant'],['자주','Frequent'],['음악 알림','Music Toast'],['표시하지 않음','Never'],['일시 정지 메뉴','Pause Menu'],['일시 정지 메뉴 및 알림','Pause Menu and Toast'],
+  ['모두 읽기','Narrates All'],['대화만 읽기','Narrates Chat'],['시스템 메시지만 읽기','Narrates System'],['틱','ticks'],['꺼짐 (가장 빠름)','OFF (Fastest)'],['3x3 (빠름)','3x3 (Fast)'],['5x5 (보통)','5x5 (Normal)'],['7x7 (높음)','7x7 (High)']])i18nAdd(a,b);
+
+/* ── 새 옵션 (26.3) */
+Object.assign(OPT,{
+  graphics:{t:'c',n:K('사전 설정','Preset'),d:1,vals:['빠르게','화려하게','기막히게!','사용자 지정']},
+  exclFs:{t:'b',n:'독점 전체 화면',d:false},gfxApi:{t:'c',n:'그래픽 API',d:0,vals:['기본','OpenGL 우선','Vulkan 우선 (실험적 기능)']},
+  inact:{t:'c',n:'fps를 제한할 조건',d:1,vals:['최소화','자리 비움']},biome:{t:'c',n:'생물 군계 혼합',d:2,vals:['꺼짐 (가장 빠름)','3x3 (빠름)','5x5 (보통)','7x7 (높음)']},
+  cutout:{t:'b',n:'나뭇잎 너머 보임',d:true},improvedT:{t:'b',n:'개선된 투명도',d:false},texFilt:{t:'c',n:'텍스처 필터링',d:0,vals:['없음','RGSS','이방성']},aniso:{t:'s',n:'이방성 필터링',d:2,min:1,max:3,fmt:v=>(1<<v)+'x'},
+  cloudDist:{t:'s',n:'구름 거리',d:16,min:2,max:64,fmt:CHUNKS},weatherR:{t:'s',n:'날씨 효과 반지름',d:10,min:3,max:10,fmt:v=>`${v} 블록`},chunkFade:{t:'s',n:'청크가 나타나는 시간',d:5,min:0,max:40,full:v=>v?`청크가 나타나는 시간: ${(v/10).toFixed(1)}초`:'청크가 나타나는 시간: 없음'},
+  vignette:{t:'b',n:'비네트 표시',d:true},
+  invert:{t:'b',n:'마우스 Y 반전',d:false},invertX:{t:'b',n:'마우스 X 반전',d:false},sprintWin:{t:'s',n:'달리기 시간 간격',d:7,min:1,max:10,fmt:v=>v+' 틱'},
+  drafts:{t:'b',n:'보내지 않은 대화 저장',d:true},hcOutline:{t:'b',n:'고대비 블록 테두리',d:false},rotateCart:{t:'b',n:'광산 수레와 함께 회전',d:true},
+  narrator:{t:'c',n:'내레이터',d:0,vals:['꺼짐','모두 읽기','대화만 읽기','시스템 메시지만 읽기']},
+  musicFreq:{t:'c',n:'음악 빈도',d:1,vals:['항상','기본','자주']},musicToast:{t:'c',n:'음악 알림',d:0,vals:['표시하지 않음','일시 정지 메뉴','일시 정지 메뉴 및 알림']},
+  realmsNotif:{t:'b',n:'Realms 소식 및 초대',d:true}});
+i18nAdd('청크가 나타나는 시간: 없음','Chunk Fade: None');i18nAdd('청크가 나타나는 시간: {0}초','Chunk Fade: {0} second(s)');
+const oHead=t=>(x,y,w)=>`<div class="mab mlab ohead" style="${gSt(x,y+6,w)}">${t}</div>`;
+// 비디오 설정 (26.3: 화면 · 품질 및 성능 · 인터페이스 · 설정 머리말)
+MENU2.video={back:'optsSub',html:()=>optScreen2('비디오 설정',[[oHead('화면')],[oBtn('전체 화면 해상도: 현재','fsres',1)],['fs','exclFs'],['fpsmax','vsync'],['inact','gfxApi'],
+  [oHead('품질 및 성능')],['graphics','rd'],['sim','ao'],['biome','chunkUpd'],['cutout','improvedT'],['texFilt','aniso'],['mip','eshadow'],['edist','parts'],['clouds','cloudDist'],['weatherR','chunkFade'],
+  [oHead('인터페이스')],['gui','atk'],['autosave','blur'],['vignette'],[oHead('설정\u200b')],['gam','bob'],['scrfx','fovfx'],['glintSpd','glintStr']])};
+MENU2.mouse.html=()=>optScreen2('마우스 설정',pairs(['sens','touch','scroll','discrete','invertX','invert','rawin']),mB(Math.floor(gW()/2)-100,gH()-27,200,'완료','controls'));
+MENU2.controls.html=()=>optScreen2('조작',[[oBtn('마우스 설정...','mouse'),oBtn('키 지정...','keys')]].concat(pairs(['sneakT','sprintT','autojump','opTab','sprintWin'])));
+MENU2.chatOpt.html=()=>optScreen2('대화 설정',pairs(['chatVis','chatCol','links','linkPrompt','chatOp','chatBg','chatScale','chatSpace','chatDelay','chatW','chatHF','chatHU','narrator','cmdSug','hideNames','reducedDbg','secureOnly','drafts']));
+{const f=MENU2.acc.html;MENU2.acc.html=()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);return optScreen2('접근성 설정',pairs(['narrator','subs','hiContrast','hcOutline','autojump','blur','chatBg','bgChatOnly','chatOp','chatSpace','chatDelay','notifT','bob','sneakT','sprintT','scrfx','fovfx','darkEff','tilt','glintSpd','glintStr','hideFlash','darkMojang','panoSpd','hideSplash','narrKey','rotateCart']),
+  mB(cx-155,H-27,150,'접근성 안내','accGuide',1)+mB(cx+5,H-27,150,'완료','optsSub'))}}
+MENU2.online={back:'optsSub',html:()=>optScreen2('온라인 설정',[['realmsNotif',oBtn('원격 측정 데이터...','tele',1)]])};MACT.online=()=>showMenu('online');
+// 마우스 X 반전
+const mInvertX=()=>optGet('invertX',false)?-1:1;
+
+/* ── 게임 메뉴 (PauseScreen: 제목 y=40 · 2칸 격자 (98 · 사이 4 · 위 4) · 화면 높이 1/4 자리) */
+MENU2.pause={html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),y0=Math.floor((H-166)/4)+50,x1=cx-102,x2=cx+4,mp=!!MPS;
+  return mT(40,'게임 메뉴')+mB(x1,y0,204,'게임으로','resume')+mB(x1,y0+24,98,'발전 과제','advOpen')+mB(x2,y0+24,98,'통계','statsOpen')
+    +mB(x1,y0+48,98,'피드백 보내기','fbSend')+mB(x2,y0+48,98,'버그 제보하기','fbBug')+mB(x1,y0+72,98,'설정...','opts2')
+    +(mp?mB(x2,y0+72,98,'플레이어 신고','preport',1):mB(x2,y0+72,98,'LAN 서버 열기','lanOpts'))+mB(x1,y0+96,204,mp?'연결 끊기':'저장하고 나가기','quit')}};
+// 링크 확인 (ConfirmLinkScreen: 제목 · 주소 · 열기 / 복사 / 취소)
+let linkArg=null;
+MENU2.link={back:()=>showMenu(linkArg&&linkArg.back||'pause'),html:a=>{linkArg=a;const W=gW(),H=gH(),cx=Math.floor(W/2),y=Math.floor(H/6)+96;
+  return mT(70,'이 링크를 열거나 클립보드에 복사하시겠습니까?')+`<div class="mtl" style="top:${90*GS}px;color:#fff" translate="no">${esc(a.url)}</div>`+mB(cx-155,y,100,'브라우저에서 열기','lkOpen')+mB(cx-50,y,100,'클립보드에 복사','lkCopy')+mB(cx+55,y,100,'취소','lkBack')}};
+const linkAbs=u=>{try{return new URL(u,location.href).href}catch(e){return u}};
+Object.assign(MACT,{fbSend:()=>showMenu('link',{url:linkAbs('hub.html'),back:'pause'}),fbBug:()=>showMenu('link',{url:linkAbs('hub.html'),back:'pause'}),
+  lkOpen:()=>{try{open(linkArg.url,'_blank')}catch(e){}showMenu(linkArg.back||'pause')},lkCopy:()=>{try{navigator.clipboard.writeText(linkArg.url)}catch(e){}showMenu(linkArg.back||'pause')},lkBack:()=>showMenu(linkArg&&linkArg.back||'pause'),
+  lanOpts:()=>showMenu('lan'),preport:()=>{}});
+// LAN 설정 (26.3 menu.multiplayerOptions): 다른 플레이어 설정 · 시작 — 웹 에디션은 지금 세계를 열 수 없어서 안내만
+MENU2.lan={back:'pause',html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2);return mT(20,'LAN 설정')+`<div class="mab mlab" style="${gSt(cx-155,50,310)};text-align:center">다른 플레이어 설정</div>`
+  +mB(cx-155,64,150,'게임 모드: '+(MODE_N[GAMEMODE]||'서바이벌'),'lanX',1)+mB(cx+5,64,150,'명령어 허용: '+ONOFF(WORLD&&WORLD.cheats!==false),'lanX',1)
+  +`<div class="mtl" style="top:${100*GS}px;color:#a0a0a0">웹 에디션에서는 지금 세계를 LAN 에 열 수 없어요.</div><div class="mtl" style="top:${112*GS}px;color:#a0a0a0">멀티플레이 → 새 서버 열기로 새 세계를 함께 할 수 있어요.</div>`
+  +mB(cx-155,H-28,150,'LAN 세계 시작','lanX',1)+mB(cx+5,H-28,150,'취소','pause')}};
+// 세계 설정 (26.3 options.worldOptions): 일반 — 난이도 · 기본 게임 모드 · 명령어 허용 · 게임 규칙 수정...
+MENU2.wopts={back:'opts',html:()=>{const hc=WORLD&&WORLD.hardcore;return optScreen2('세계 설정',[[oHead('일반')],[oBtn('난이도: '+(hc?'하드코어':DIFF_KO[cmdDiff()]),'diff',hc),oBtn('기본 게임 모드: '+(MODE_N[WORLD&&WORLD.mode]||'서바이벌'),'woMode',hc)],
+  [oBtn('명령어 허용: '+ONOFF(!WORLD||WORLD.cheats!==false),'woCheats',hc),oBtn('게임 규칙 수정...','woGR',hc)]],mB(Math.floor(gW()/2)-100,gH()-27,200,'완료','opts'))}};
+const worldSave=()=>{if(!WORLD||WORLD.mp)return;const L=worldsList(),w=L.find(x=>x.id===WORLD.id);if(w){Object.assign(w,{mode:WORLD.mode,cheats:WORLD.cheats});saveWorldsList(L)}};
+Object.assign(MACT,{wopts:()=>showMenu('wopts'),diff:()=>{dimState.dif=DIFFS[(DIFFS.indexOf(cmdDiff())+1)%4];showMenu(menuOpen)},
+  woMode:()=>{if(!WORLD)return;WORLD.mode=WORLD.mode==='creative'?'survival':'creative';worldSave();showMenu('wopts')},woCheats:()=>{if(!WORLD)return;WORLD.cheats=WORLD.cheats===false;worldSave();showMenu('wopts')},
+  woGR:()=>{grEdit={tgt:'world',v:Object.assign({},dimState.gr||{}),q:'',back:'wopts'};showMenu('gamerules')}});
+
+/* ── 게임 규칙 수정 (EditGameRulesScreen: 검색 · 갈래 머리말 (노랑 굵게) · 이름 왼쪽 · 켜짐/꺼짐 44 · 숫자칸 42 · 줄 24 · 완료/취소 150) */
+const GRU={};for(const l of GR_UI.split('\n')){const [id,ko,en,cat,dko,den]=l.split('|');GRU[id]={ko,en,cat,dko,den};i18nAdd(ko,en);if(dko&&den)i18nAdd(dko,den)}
+const GR_CATS=[['player','플레이어','Player'],['mobs','몹','Mobs'],['spawning','생성','Spawning'],['drops','떨굼 설정','Drops'],['updates','세계 갱신','World Updates'],['chat','대화','Chat'],['misc','기타','Miscellaneous']];for(const [,k,e] of GR_CATS)i18nAdd(k,e);
+let grEdit=null;
+MENU2.gamerules={back:'grCancel',html:()=>{if(!grEdit)grEdit={tgt:'world',v:{},q:'',back:'opts'};const W=gW(),H=gH(),cx=Math.floor(W/2),E=grEdit||{v:{},q:''},q=(E.q||'').toLowerCase(),x0=cx-150;let y=4,h='';
+  for(const [c,cn] of GR_CATS){const L=Object.keys(GR_DEF).filter(id=>(GRU[id]||{cat:'misc'}).cat===c&&(!q||id.includes(q)||TR((GRU[id]||{}).ko||id).toLowerCase().includes(q))).sort((a,b)=>TR(GRU[a].ko).localeCompare(TR(GRU[b].ko)));if(!L.length)continue;
+    h+=`<div class="mab mlab grcat" style="${gSt(x0,y+8,300)}">${cn}</div>`;y+=24;
+    for(const id of L){const d=GR_DEF[id],v=id in E.v?E.v[id]:d.def,u=GRU[id]||{ko:id,dko:''},tip=esc((u.dko?TR(u.dko)+'\n':'')+'minecraft:'+id+'\n'+TR('기본값: {0}').replace('{0}',d.t==='b'?TR(ONOFF(d.def)):d.def));
+      h+=`<div class="mab mlab grname" title="${tip}" style="${gSt(x0,y+6,250)}">${esc(u.ko)}</div>`+(d.t==='b'?mB(cx+150-44,y,44,ONOFF(v),'grT:'+id):`<input class="minput mab grnum" data-gr="${id}" value="${v}" style="${gSt(cx+150-42,y,42,20)}">`);y+=24}}
+  if(!h)h=`<div class="mab mlab mgray" style="${gSt(x0,8,300)}">통계를 찾을 수 없습니다.</div>`.replace('통계를 찾을 수 없습니다.','—');
+  return mT(8,'게임 규칙 수정')+`<input class="minput mab" id="grQ" maxlength="40" placeholder="검색..." autocomplete="off" value="${esc(E.q||'')}" style="${gSt(cx-100,20,200,20)}">`
+    +`<div class="mlistbg" style="${gSt(0,46,W,H-46-33)}"><div class="mrows" style="height:${(y+8)*GS}px">${h}</div></div>`+mB(cx-155,H-28,150,'완료','grDone')+mB(cx+5,H-28,150,'취소','grCancel')},
+  after:M=>{const q=$('grQ');if(q){q.oninput=()=>{grEdit.q=q.value;const p=q.selectionStart;showMenu('gamerules');const n=$('grQ');n.focus();n.setSelectionRange(p,p)}}
+    M.querySelectorAll('.grnum').forEach(el=>el.oninput=()=>{const id=el.dataset.gr,d=GR_DEF[id],v=parseInt(el.value,10),ok=/^-?\d+$/.test(el.value.trim())&&(d.min==null||v>=d.min)&&(d.max==null||v<=d.max);el.classList.toggle('bad',!ok);if(ok)grEdit.v[id]=v;const b=M.querySelector('[data-m="grDone"]');if(b)b.disabled=!!M.querySelector('.grnum.bad')});
+    const L=M.querySelector('.mlistbg');if(L){L.scrollTop=grEdit.sc||0;L.onscroll=()=>grEdit.sc=L.scrollTop}}};
+Object.assign(MACT,{grDone:()=>{const E=grEdit;if(!E)return;if(E.tgt==='world'){dimState.gr=Object.assign(dimState.gr||{},E.v)}else if(newW)newW.gr=E.v;grEdit=null;showMenu(E.back)},grCancel:()=>{const b=grEdit&&grEdit.back||'opts';grEdit=null;showMenu(b)}});
+{const _ma=menuAct;menuAct=function(a){if(typeof a==='string'&&a.startsWith('grT:')){const id=a.slice(4),d=GR_DEF[id];grEdit.v[id]=!(id in grEdit.v?grEdit.v[id]:d.def);showMenu('gamerules');return}return _ma.apply(this,arguments)}}
+
+/* ── 세계 만들기 (CreateWorldScreen 26.3: 게임 · 세계 · 기타 탭) */
+const NW_MODES=['survival','hardcore','creative'],NW_MN={survival:'서바이벌',hardcore:'하드코어',creative:'크리에이티브'},NW_INFO={survival:'자원을 찾고, 제작할 수 있으며 레벨, 생명력, 배고픔이 있습니다',hardcore:'서바이벌 모드와 비슷하지만 가장 어려운 난이도로 고정되며, 한 번 죽으면 부활할 수 없습니다',creative:'자원이 무제한이고 자유롭게 날 수 있으며, 블록을 즉시 파괴할 수 있습니다'};
+const nwInit=()=>{newW=newW||{name:'새로운 세계',mode:'survival',type:'default',seed:''};const d={tab:0,dif:'normal',cheats:null,struct:true,bonus:false,gr:{}};for(const k in d)if(newW[k]===undefined)newW[k]=d[k];if(newW.hc)newW.mode='hardcore';return newW};
+const mBt=(x,y,w,l,m,dis,tip)=>mB(x,y,w,l,m,dis).replace('<button ',`<button title="${esc(TR(tip))}" `);
+const nwKeep=()=>{if(!newW)return;if($('nwName'))newW.name=$('nwName').value;if($('nwSeed'))newW.seed=$('nwSeed').value};
+MENU2.create={back:'single',html:()=>{const n=nwInit(),W=gW(),H=gH(),cx=Math.floor(W/2),tw=Math.round((Math.min(400,W)-28)/6)*2,tx=cx-Math.floor(tw*3/2),top=26,av=H-33-top,hc=n.mode==='hardcore',ch=n.cheats==null?n.mode==='creative':n.cheats;
+  let h=['게임','세계','기타'].map((t,i)=>`<button class="mbtn mab mtab${i===n.tab?' on':''}" data-m="nwTab${i}" style="${gSt(tx+i*tw,0,tw,24)}">${t}</button>`).join('')+`<div class="mab msep" style="${gSt(0,24,W)}"></div><div class="mab msep" style="${gSt(0,H-33,W)}"></div>`;
+  if(n.tab===0){const y=top+Math.floor((av-117)/6);
+    h+=`<div class="mab mlab" style="${gSt(cx-104,y,208)}">세계 이름</div><input class="minput mab" id="nwName" maxlength="32" value="${esc(n.name)}" style="${gSt(cx-104,y+13,208,20)}">`
+      +mBt(cx-105,y+41,210,'게임 모드: '+NW_MN[n.mode],'nwMode',0,NW_INFO[n.mode])+mB(cx-105,y+69,210,'난이도: '+(hc?'하드코어':DIFF_KO[n.dif]),'nwDif',hc)+mBt(cx-105,y+97,210,'명령어 허용: '+ONOFF(!hc&&ch),'nwCheats',hc,'/gamemode, /experience 같은 명령어들')}
+  else if(n.tab===1){const y=top+Math.floor((av-89)/6);
+    h+=mB(cx-155,y,150,'세계 유형: '+(n.type==='flat'?'평지':'일반'),'nwType')+mB(cx+5,y,150,'사용자 지정','nwCustom',n.type!=='flat')
+      +`<div class="mab mlab" style="${gSt(cx-155,y+28,310)}">세계 생성기 시드</div><input class="minput mab" id="nwSeed" maxlength="32" placeholder="무작위 시드를 적용하려면 비워 두십시오" value="${esc(n.seed)}" style="${gSt(cx-155,y+41,310,20)}">`
+      +mBt(cx-155,y+69,150,'구조물 생성: '+ONOFF(n.struct),'nwStruct',0,'마을, 난파선 등')+mB(cx+5,y+69,150,'보너스 상자: '+ONOFF(n.bonus),'nwBonus')}
+  else{const y=top+Math.floor((av-80)/6);h+=mB(cx-105,y,210,'게임 규칙','nwGR')+mB(cx-105,y+24,210,'실험','nwExp',1)+mB(cx-105,y+48,210,'데이터 팩','nwDP',1)}
+  return h+mB(cx-154,H-28,150,'새로운 세계 만들기','doCreate')+mB(cx+4,H-28,150,'취소','single')}};
+Object.assign(MACT,{create:()=>{newW=null;showMenu('create')},nwTab0:()=>{nwKeep();newW.tab=0;showMenu('create')},nwTab1:()=>{nwKeep();newW.tab=1;showMenu('create')},nwTab2:()=>{nwKeep();newW.tab=2;showMenu('create')},
+  nwMode:()=>{nwKeep();newW.mode=NW_MODES[(NW_MODES.indexOf(newW.mode)+1)%3];showMenu('create')},nwDif:()=>{nwKeep();newW.dif=DIFFS[(DIFFS.indexOf(newW.dif||'normal')+1)%4];showMenu('create')},
+  nwCheats:()=>{nwKeep();const ch=newW.cheats==null?newW.mode==='creative':newW.cheats;newW.cheats=!ch;showMenu('create')},nwType:()=>{nwKeep();newW.type=newW.type==='flat'?'default':'flat';showMenu('create')},
+  nwStruct:()=>{nwKeep();newW.struct=!newW.struct;showMenu('create')},nwBonus:()=>{nwKeep();newW.bonus=!newW.bonus;showMenu('create')},nwGR:()=>{nwKeep();grEdit={tgt:'new',v:Object.assign({},newW.gr||{}),q:'',back:'create'};showMenu('gamerules')},
+  doCreate:()=>{nwKeep();const n=nwInit(),hc=n.mode==='hardcore',w={id:'w'+Date.now().toString(36),name:(n.name||TR('새로운 세계')).trim().slice(0,32)||TR('새로운 세계'),mode:hc?'survival':n.mode,type:n.type,gen:6,seed:seedOf(n.seed),last:Date.now(),
+      cheats:!hc&&(n.cheats==null?n.mode==='creative':n.cheats),struct:n.struct,bonus:n.bonus};if(hc)w.hardcore=true;const L=worldsList();L.push(w);saveWorldsList(L);selWorld=w.id;const dif=hc?'hard':n.dif,gr=n.gr;newW=null;enterWorld(w,null);if(dif)dimState.dif=dif;if(gr&&Object.keys(gr).length)dimState.gr=Object.assign(dimState.gr||{},gr)}});
+// 다시 만들기: 새 칸까지 채워요
+MACT.wre=()=>{const w=selW();if(!w)return;newW={name:w.name,mode:w.hardcore?'hardcore':w.mode==='creative'?'creative':'survival',type:w.type||'default',seed:String(w.seed),tab:0,dif:'normal',cheats:w.cheats!==false,struct:w.struct!==false,bonus:!!w.bonus,gr:{}};showMenu('create')};
+// 보너스 상자: 처음 들어갈 때 스폰 옆에 (마크 BonusChestFeature: 상자 + 둘레 횃불 4개)
+{const _fe=finishEnter;finishEnter=function(){const fresh=spawnFix,w=WORLD;const r=_fe.apply(this,arguments);try{if(fresh&&w&&w.bonus&&!w.mp){const x=Math.floor(player.pos.x)+2,z=Math.floor(player.pos.z),y=Math.floor(player.pos.y);
+    if(!SOLID[getB(x,y,z)]&&typeof CHEST!=='undefined'){setBlock(x,y,z,CHEST);const items=(typeof lootTableRoll==='function'&&lootTableRoll('minecraft:chests/spawn_bonus_chest'))||[];const te={t:'chest',f:4,items:new Array(27).fill(null)};items.slice(0,27).forEach((s,i)=>te.items[(i*7)%27]=s);tiles.set(tkey(x,y,z),te);
+      for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!SOLID[getB(x+dx,y,z+dz)]&&SOLID[getB(x+dx,y-1,z+dz)]&&typeof TORCH!=='undefined')setBlock(x+dx,y,z+dz,TORCH)}}}catch(e){}return r}}
+// 명령어 허용 꺼짐: 권한 0 명령어만 (help · list · me · msg/tell/w · teammsg/tm · trigger · random) — 나머지는 마크처럼 '알 수 없는 명령어'
+const CMD_P0=['help','list','me','msg','tell','w','teammsg','tm','trigger','random'];
+function cmdAllowed(t){if(!WORLD||WORLD.cheats!==false||WORLD.mp)return true;const c=String(t).replace(/^\//,'').split(/\s+/)[0].replace(/^minecraft:/,'');return CMD_P0.includes(c)}
+// 하드코어: 죽으면 '게임 오버!' · '세계 관전' (관전 모드로 다시 살아요)
+{const _d=die;die=function(){const r=_d.apply(this,arguments);try{if(WORLD&&WORLD.hardcore){const h=$('dead').querySelector('h2');if(h)h.textContent='게임 오버!';$('respawn').textContent='세계 관전'}}catch(e){}return r}}
+{const _r=respawn;respawn=function(){const r=_r.apply(this,arguments);try{if(WORLD&&WORLD.hardcore&&GAMEMODE!=='spectator')runCmd('/gamemode spectator')}catch(e){}return r}}
+
+/* ── 첫 실행 접근성 안내 (AccessibilityOnboardingScreen: 로고 · 글 · 내레이터 / 접근성 설정... / 계속하기) — 자동 시험 브라우저에선 건너뛰어요 */
+const needOnboard=()=>{try{return!navigator.webdriver&&!localStorage.getItem('bc_onboarded')}catch(e){return false}};
+MENU2.onboard={html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),y=Math.max(90,Math.floor(H/2)-20);
+  return `<img id="mcLogo" class="mab" alt="블록크래프트" style="top:${30*GS}px"><div class="mtl" style="top:${(y-30)*GS}px">블록크래프트에 오신 것을 환영합니다!</div><div class="mtl" style="top:${(y-12)*GS}px">내레이터를 켜거나 접근성 설정을 확인하시겠습니까?</div>`
+    +mB(cx-75,y+8,150,oText('narrator'),'o:narrator')+mB(cx-75,y+32,150,'접근성 설정...','obAcc')+mB(cx-75,y+56,150,'계속하기','obDone')}};
+const obDone=()=>{try{localStorage.setItem('bc_onboarded','1')}catch(e){}};
+Object.assign(MACT,{obAcc:()=>{obDone();subBack='title';showMenu('acc')},obDone:()=>{obDone();showMenu('title')}});
+{const _sm=showMenu;showMenu=function(t,a){if(t==='title'&&needOnboard())t='onboard';const r=_sm.call(this,t,a);if(t==='onboard'){const M=$('menu');M.className='title'}return r}}
+
+/* ── 발전 과제 (AdvancementsScreen: 창 252×140 · 안쪽 234×113 (9,18) · 탭 28×32 위로 · 칸 28×27 · 틀 26×26 · 선: 흰 1px + 검은 3px) */
+const ADVU={};for(const l of ADV_UI.split('\n')){const [id,ic,bg,dko,den]=l.split('|');ADVU[id]={ic,bg,dko,den};if(dko&&den)i18nAdd(dko,den)}
+const ADV_TABS=['story','nether','end','adventure','husbandry'],ADV_BG={story:'stone',nether:'netherrack',end:'end_stone',adventure:'coarse_dirt',husbandry:'hay_side'};
+let advTab=null,advScroll={},advBack=null;
+const advVis=id=>{const A=ADV[id];if(!A)return false;if(advDone(id))return true;const kids=q=>(ADV_KIDS[q]||[]).some(k=>advDone(k)||kids(k));if(kids(id))return true;if(A.hid)return false;const p=A.par,g=p&&ADV[p]&&ADV[p].par;return!!p&&(advDone(p)||!!g&&advDone(g))};   // 뿌리는 따야 보여요 (새 세계는 '아무것도 없어 보이네요')
+function advIcon(name){const id=typeof idOfMC==='function'?idOfMC('minecraft:'+name):-1;return id>=0&&ITEM[id]?iconURL(id):''}
+function advLayout(root){const P={};let row=0;const go=(id,d)=>{const K2=(ADV_KIDS[id]||[]).filter(advVis);if(!K2.length){P[id]={x:d,y:row++};return}const ys=K2.map(k=>{go(k,d+1);return P[k].y});P[id]={x:d,y:(ys[0]+ys[ys.length-1])/2}};go(root,0);return P}
+MENU2.adv={back:()=>{if(advBack)showMenu(advBack);else{hideMenu();lockPointer()}},html:()=>{const W=gW(),H=gH(),x0=Math.floor((W-252)/2),y0=Math.floor((H-140)/2)+8;
+  const tabs=ADV_TABS.filter(t=>advVis(t+'/root'));if(!tabs.includes(advTab))advTab=tabs[0]||null;
+  let h=`<div class="mab advwin" style="${gSt(x0,y0,252,140)}"></div>`;
+  tabs.forEach((t,i)=>{const r=ADVU[t+'/root']||{};h+=`<div class="mab advtab${t===advTab?' on':''}" data-at="${t}" style="${gSt(x0+i*32,y0-28,28,32)}"><img class="px" src="${advIcon(r.ic)}"></div>`});
+  if(!advTab){h+=`<div class="mab advin" style="${gSt(x0+9,y0+18,234,113)};background:#000"></div><div class="mtl" style="top:${(y0+18+56-9)*GS}px">아무것도 없어 보이네요...</div><div class="mtl" style="top:${(y0+18+56+3)*GS}px">ㅠㅠ</div>`
+    +`<div class="mab advtitle" style="${gSt(x0+8,y0+6,200)}">발전 과제</div>`;return h}
+  const root=advTab+'/root',P=advLayout(root),ids=Object.keys(P);let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;for(const id of ids){const x=Math.floor(P[id].x*28),y=Math.floor(P[id].y*27);P[id].px=x;P[id].py=y;mnx=Math.min(mnx,x);mxx=Math.max(mxx,x+28);mny=Math.min(mny,y);mxy=Math.max(mxy,y+27)}
+  let s=advScroll[advTab];if(!s){s=advScroll[advTab]={x:117-(mxx+mnx)/2,y:56-(mxy+mny)/2}}s.lim=[mnx,mxx,mny,mxy];advClamp(s);
+  let lines='',nodes='';const ln=(x,y,w,hh,c)=>`<i style="${gSt(x,y,w,hh)};background:${c}"></i>`;
+  for(const pass of [0,1])for(const id of ids){const par=ADV[id].par;if(!par||!P[par])continue;const a=P[par],b=P[id],i1=a.px+13,j=a.px+30,k=a.py+13,l=b.px+13,m=b.py+13;
+    if(!pass)lines+=ln(i1,k-1,j-i1+1,3,'#000')+ln(j,m-1,l-j+1,3,'#000')+ln(j-1,Math.min(k,m)-1,3,Math.abs(k-m)+3,'#000');else lines+=ln(i1,k,j-i1,1,'#fff')+ln(j,m,l-j,1,'#fff')+ln(j,Math.min(k,m),1,Math.abs(k-m)+1,'#fff')}
+  for(const id of ids){const A=ADV[id],u=ADVU[id]||{},d=advDone(id);nodes+=`<div class="advnode f${A.fr}${d?' got':''}" data-adv="${id}" style="${gSt(P[id].px+3,P[id].py,26,26)}"><img class="px" src="${advIcon(u.ic)}"></div>`}
+  const tex=(tileList[TEX[ADV_BG[advTab]]]||tileList[TEX.stone]).toDataURL();
+  h+=`<div class="mab advin" style="${gSt(x0+9,y0+18,234,113)};background:url(${tex}) 0 0/${16*GS}px ${16*GS}px"><div class="advtree" style="transform:translate(${s.x*GS}px,${s.y*GS}px)">${lines}${nodes}</div></div>`
+    +`<div class="mab advtitle" style="${gSt(x0+8,y0+6,200)}">${esc(advTitle(ADV[root]))}</div><div class="advtip hide"></div>`;
+  return h},
+  after:M=>{M.querySelectorAll('[data-at]').forEach(el=>el.onclick=()=>{advTab=el.dataset.at;showMenu('adv')});const box=M.querySelector('.advin'),tree=M.querySelector('.advtree');if(!box||!tree)return;const s=advScroll[advTab];
+    box.onpointerdown=e=>{s.drag=[e.clientX,e.clientY];box.setPointerCapture(e.pointerId)};box.onpointerup=()=>s.drag=null;
+    box.onpointermove=e=>{if(s.drag){s.x+=(e.clientX-s.drag[0])/GS;s.y+=(e.clientY-s.drag[1])/GS;s.drag=[e.clientX,e.clientY];advClamp(s);tree.style.transform=`translate(${s.x*GS}px,${s.y*GS}px)`}};
+    const tip=M.querySelector('.advtip');M.querySelectorAll('.advnode').forEach(n=>{n.onmouseenter=()=>{const A=ADV[n.dataset.adv],u=ADVU[A.id]||{},d=advDone(A.id),r=n.getBoundingClientRect(),cr=A.crit.length>1&&!A.any?` ${(ADVD()[A.id]||[]).length}/${A.crit.length}`:'';
+      tip.innerHTML=`<b class="${d?'got':''}">${esc(advTitle(A))}${d?'':`<span>${cr}</span>`}</b><div style="color:${A.fr==='c'?'#aa00aa':'#55ff55'}">${esc(u.dko||'')}</div>`;tip.style.left=r.left+'px';tip.style.top=r.top+'px';tip.classList.remove('hide')};n.onmouseleave=()=>tip.classList.add('hide')})}};
+function advClamp(s){const [a,b,c,d]=s.lim;if(b-a<=234)s.x=117-(a+b)/2;else s.x=Math.max(234-b,Math.min(-a,s.x));if(d-c<=113)s.y=56-(c+d)/2;else s.y=Math.max(113-d,Math.min(-c,s.y))}
+MACT.advOpen=()=>{advBack='pause';showMenu('adv')};
+
+/* ── 통계 (StatsScreen: 일반 · 아이템 · 몹 — 이 세계에서 센 값) */
+const STD=()=>dimState.stats||(dimState.stats={});
+{const _ss=scoreStat;scoreStat=function(type,id,h,n){try{if(h==null||h===myName()){const k=String(type).replace('minecraft.','')+'|'+String(id);const S=STD();S[k]=(S[k]||0)+(n==null?1:n)}}catch(e){}return _ss.apply(this,arguments)}}
+const stAdd=(type,id,n)=>{if(!id)return;scoreStat('minecraft.'+type,String(id).includes(':')?id:'minecraft:'+id,null,n)};
+const stItem=(type,iid,n)=>{const m=typeof MCID!=='undefined'&&MCID[iid];if(m)stAdd(type,m,n)};
+// 게임 쪽 걸이: 캐기 · 떨어뜨리기 · 받은 피해 · 움직임 (거리 cm · 시간 틱 · 점프)
+{const _b=doBreak;doBreak=function(x,y,z,id){try{if(started&&!player.dead)stItem('mined',id,1)}catch(e){}return _b.apply(this,arguments)}}
+{const _t=throwItem;throwItem=function(st){try{if(st&&started)stItem('dropped',st.id,st.n||1)}catch(e){}return _t.apply(this,arguments)}}
+{const _h=hurtPlayer;hurtPlayer=function(d){const p=player,h0=p.hp+(p.abs||0);const r=_h.apply(this,arguments);try{const t=h0-(p.hp+(p.abs||0));if(t>0)stAdd('custom','damage_taken',Math.round(t*10))}catch(e){}return r}}
+{const _u=updatePlayer;updatePlayer=function(dt){const p=player,x0=p.pos.x,y0=p.pos.y,z0=p.pos.z,g0=p.onGround;const r=_u.apply(this,arguments);
+  try{if(started&&!p.dead&&!menuOpen){stAdd('custom','play_time',1);stAdd('custom','total_world_time',1);stAdd('custom','time_since_death',1);if(p.sneak)stAdd('custom','sneak_time',1);
+    const dh=Math.round(Math.hypot(p.pos.x-x0,p.pos.z-z0)*100),dy=Math.round((p.pos.y-y0)*100);
+    if(dh>0&&dh<2000){const k=p.boat?'boat_one_cm':p.fly?'fly_one_cm':p.swimming?'swim_one_cm':p.sneak?'crouch_one_cm':p.sprint?'sprint_one_cm':p.onGround?'walk_one_cm':null;if(k)stAdd('custom',k,dh)}
+    if(dy<0&&!p.onGround&&!p.fly&&dy>-2000)stAdd('custom','fall_one_cm',-dy);if(g0&&!p.onGround&&p.vel&&p.vel.y>0.3)stAdd('custom','jump',1)}}catch(e){}return r}}
+{const _rs=respawn;respawn=function(){const r=_rs.apply(this,arguments);try{const S=STD();delete S['custom|minecraft:time_since_death']}catch(e){}return r}}
+const STU={};for(const l of ST_UI.split('\n')){const [id,ko,en]=l.split('|');STU[id]={ko,en};i18nAdd(ko,en)}
+const ST_TIME=['play_time','total_world_time','time_since_death','time_since_rest','sneak_time'];
+function stFmt(id,v){const df=x=>x.toFixed(2);if(/_one_cm$/.test(id)){const m=v/100,km=m/1000;return km>.5?df(km)+' km':m>.5?df(m)+' m':v+' cm'}
+  if(ST_TIME.includes(id)){const s=v/20,mi=s/60,h=mi/60,d=h/24,y=d/365;return y>.5?df(y)+' y':d>.5?df(d)+' d':h>.5?df(h)+' h':mi>.5?df(mi)+' m':df(s)+' s'}
+  if(/^damage_/.test(id))return(v/10).toFixed(1).replace(/\.0$/,'');return v.toLocaleString('en-US')}
+let stTab=0,stBack=null;
+MENU2.stats={back:()=>showMenu(stBack||'pause'),html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),S=STD();let body='',hh=0;
+  if(stTab===0){const L=Object.keys(STU).sort((a,b)=>TR(STU[a].ko).localeCompare(TR(STU[b].ko)));L.forEach((id,i)=>{const v=S['custom|minecraft:'+id]||0;body+=`<div class="strow" style="${gSt(cx-140,4+i*10,280,10)};color:${i%2?'#909090':'#fff'}"><span>${esc(STU[id].ko)}</span><span translate="no">${stFmt(id,v)}</span></div>`});hh=L.length*10+8}
+  else if(stTab===1){const T=['mined','broken','crafted','used','picked_up','dropped'],I={};for(const k in S){const [t,id]=k.split('|');const c=T.indexOf(t);if(c<0)continue;const g=idOfMC(id);if(g<0)continue;(I[g]||(I[g]=[0,0,0,0,0,0]))[c]+=S[k]}
+    const ic=['iron_pickaxe','iron_sword','crafting_table','flint_and_steel','chest','dispenser'].map(n=>idOfMC('minecraft:'+n)),tn=['채굴 횟수','망가뜨린 횟수','제작 횟수','사용 횟수','주운 횟수','떨어뜨린 횟수'];
+    body+=T.map((t,c)=>`<div class="sthead" title="${tn[c]}" style="${gSt(cx-140+115+c*28,2,20,20)}">${ic[c]>=0?`<img class="px" src="${iconURL(ic[c])}">`:['⛏','✖','▦','✋','▲','▼'][c]}</div>`).join('');
+    const ids=Object.keys(I).map(Number).sort((a,b)=>String(ITEM[a]&&ITEM[a].n).localeCompare(String(ITEM[b]&&ITEM[b].n)));
+    ids.forEach((g,i)=>{body+=`<div class="stirow" style="${gSt(cx-140,24+i*20,280,20)}"><img class="px" src="${iconURL(g)}" title="${esc(ITEM[g]?ITEM[g].n:'')}">${I[g].map((v,c)=>`<span style="left:${(115+c*28+20)*GS}px">${v?v.toLocaleString('en-US'):'-'}</span>`).join('')}</div>`});hh=24+ids.length*20+8;if(!ids.length)body+=`<div class="mtl" style="top:${40*GS}px">통계를 찾을 수 없습니다.</div>`}
+  else{const M2={};for(const k in S){const [t,id]=k.split('|');if(t!=='killed'&&t!=='killed_by')continue;const m=typeof mcMob==='function'?mcMob(id):null;if(!m)continue;(M2[m]||(M2[m]={k:0,b:0}))[t==='killed'?'k':'b']+=S[k]}
+    const L=Object.keys(M2).sort();L.forEach((m,i)=>{const nm=(MOBDEF[m]&&MOBDEF[m].n)||m,y=4+i*31,a=M2[m];body+=`<div class="mab mlab" style="${gSt(cx-140,y,280)};color:#fff">${esc(nm)}</div>`
+      +`<div class="mab mlab" style="${gSt(cx-138,y+10,278)};color:#909090">${a.k?TR('{1}을(를) {0}번 죽였습니다').replace('{0}',a.k).replace('{1}',nm):TR('{0}을(를) 죽인 적이 없습니다').replace('{0}',nm)}</div>`
+      +`<div class="mab mlab" style="${gSt(cx-138,y+19,278)};color:#909090">${a.b?TR('{0}에게 {1}번 죽었습니다').replace('{0}',nm).replace('{1}',a.b):TR('{0}에게 죽은 적이 없습니다').replace('{0}',nm)}</div>`});hh=L.length*31+8;if(!L.length)body+=`<div class="mtl" style="top:${40*GS}px">통계를 찾을 수 없습니다.</div>`}
+  return mT(12,'통계')+`<div class="mlistbg" style="${gSt(0,33,W,H-33-64)}"><div class="mrows" style="height:${hh*GS}px">${body}</div></div>`
+    +['일반','아이템','몹'].map((t,i)=>mB(cx-182+i*122,H-52,120,t,'stT'+i,i===stTab)).join('')+mB(cx-100,H-28,200,'완료','stDone')}};
+Object.assign(MACT,{statsOpen:()=>{stBack='pause';stTab=0;showMenu('stats')},stT0:()=>{stTab=0;showMenu('stats')},stT1:()=>{stTab=1;showMenu('stats')},stT2:()=>{stTab=2;showMenu('stats')},stDone:()=>showMenu(stBack||'pause')});
+// 발전 과제 키 (L): 게임 중에 바로 열기
+addEventListener('keydown',e=>{if(e.code!=='KeyL'||e.repeat||!started||menuOpen||screenOpen||chatOpen||player.dead)return;const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))return;advBack=null;showMenu('adv')});
+
+/* ── 언어 화면 검색칸 (26.3 gui.language.search) · 세계 선택 검색 글자 */
+{const _lh=langHTML;let langQ='';langHTML=function(){const h=_lh.apply(this,arguments),W=gW(),cx=Math.floor(W/2);return h.replace(/<div class="mlistbg" style="[^"]*">/,`<input class="minput mab" id="langQ" maxlength="32" placeholder="검색..." autocomplete="off" value="${esc(langQ)}" style="${gSt(cx-100,22,200,20)}"><div class="mlistbg" style="${gSt(0,48,W,gH()-48-33)}">`)};
+  MENU2.lang.after=M=>{const q=$('langQ');if(!q)return;const f=()=>{langQ=q.value;const t=q.value.trim().toLowerCase();M.querySelectorAll('.langIt').forEach(el=>el.style.display=!t||el.textContent.toLowerCase().includes(t)?'':'none')};q.oninput=f;f()}}
+MENU2.lang.back='langBack';MACT.langBack=()=>{langSel=null;MACT.optsSub()};
+{const sh=MENU2.single.html;MENU2.single.html=()=>sh().replace('placeholder="세계 검색"','placeholder="검색..."')}
+// 설정: 세계 안이면 '세계 설정...' (26.3), 밖이면 '온라인...'
+{const _mh=menuHTML;menuHTML=function(t){let h=_mh.apply(this,arguments);if(t==='opts'&&typeof h==='string'){h=h.replace(/<button class="mbtn mab" data-m="diff"([^>]*)>[^<]*<\/button>/,'<button class="mbtn mab" data-m="wopts"$1>세계 설정...</button>').replace(/<button class="mbtn mab" data-m="online"([^>]*) disabled>/,'<button class="mbtn mab" data-m="online"$1>')}
+  if(t==='sound'&&typeof h==='string'&&!h.includes('o_musicFreq')){const W=gW(),cx=Math.floor(W/2),m=/class="mrows" style="height:(\d+(?:\.\d+)?)px">/.exec(h);if(m){const rows=Math.round((+m[1]/GS-8)/25),y=4+rows*25;h=h.replace(m[0],`class="mrows" style="height:${(+m[1])+25*GS}px">`+oK('musicFreq')(cx-155,y,150)+oK('musicToast')(cx+5,y,150))}}return h}}
+// 파노라마 회전 속도 (접근성) — 타이틀 배경 세계가 도는 빠르기
+{const _f=frame;frame=function(now){const y=player.yaw;const r=_f.apply(this,arguments);try{if(phase==='boot'){const k=optGet('panoSpd',100)/100;player.yaw=y+(player.yaw-y)*k}}catch(e){}return r}}
+
+document.head.appendChild(Object.assign(document.createElement('style'),{textContent:
+  '#menu .ohead{text-align:center;color:#fff}#menu .grcat{text-align:center;color:#ffff55;font-weight:bold}#menu .grname{color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:auto;line-height:calc(11px * var(--s));margin-top:calc(-1px * var(--s))}#menu .grnum.bad{color:#ff5555;border-color:#ff5555}'+
+  '#menu .nwinfo{line-height:calc(10px * var(--s));white-space:normal}'+
+  '#menu .advwin{background:#c6c6c6;outline:calc(1px * var(--s)) solid #000;box-shadow:inset calc(2px * var(--s)) calc(2px * var(--s)) 0 #fff,inset calc(-2px * var(--s)) calc(-2px * var(--s)) 0 #555;border-radius:calc(2px * var(--s))}'+
+  '#menu .advin{overflow:hidden;image-rendering:pixelated;box-shadow:inset 0 0 0 calc(1px * var(--s)) rgba(0,0,0,.35);cursor:grab}#menu .advtree{position:absolute;left:0;top:0}#menu .advtree>i{position:absolute}'+
+  '#menu .advtitle{font-size:calc(8px * var(--s));line-height:calc(9px * var(--s));color:#404040;text-shadow:none;pointer-events:none}'+
+  '#menu .advtab{background:#a8a8a8;outline:calc(1px * var(--s)) solid #000;box-shadow:inset calc(2px * var(--s)) calc(2px * var(--s)) 0 #dcdcdc;cursor:pointer;display:flex;justify-content:center;padding-top:calc(9px * var(--s));height:calc(28px * var(--s))!important}#menu .advtab.on{background:#c6c6c6;height:calc(32px * var(--s))!important;z-index:2}#menu .advtab img{width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
+  '#menu .advnode{position:absolute;display:flex;align-items:center;justify-content:center;background:#8b8b8b;outline:calc(1px * var(--s)) solid #000;box-shadow:inset calc(2px * var(--s)) calc(2px * var(--s)) 0 #dbdbdb,inset calc(-2px * var(--s)) calc(-2px * var(--s)) 0 #555}#menu .advnode.got{background:#d9a12c;box-shadow:inset calc(2px * var(--s)) calc(2px * var(--s)) 0 #f9e081,inset calc(-2px * var(--s)) calc(-2px * var(--s)) 0 #8a5a12}'+
+  '#menu .advnode.fg{border-radius:calc(7px * var(--s))}#menu .advnode.fc{clip-path:polygon(15% 0,85% 0,85% 8%,100% 8%,100% 92%,85% 92%,85% 100%,15% 100%,15% 92%,0 92%,0 8%,15% 8%)}#menu .advnode img{width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
+  '.advtip{position:fixed;z-index:70;pointer-events:none;font-size:calc(8px * var(--s));line-height:calc(10px * var(--s));max-width:calc(200px * var(--s));transform:translate(calc(-2px * var(--s)),calc(-1px * var(--s)))}.advtip b{display:block;font-weight:normal;color:#fff;background:#0072a8;padding:calc(4px * var(--s)) calc(6px * var(--s)) calc(4px * var(--s)) calc(32px * var(--s));text-shadow:var(--tsh)}.advtip b.got{background:#c48a10}.advtip b span{margin-left:calc(8px * var(--s));color:#fff}.advtip div{background:rgba(16,0,16,.94);padding:calc(3px * var(--s)) calc(6px * var(--s));text-shadow:var(--tsh)}'+
+  '#menu .strow{position:absolute;display:flex;justify-content:space-between;font-size:calc(8px * var(--s));line-height:calc(10px * var(--s));text-shadow:var(--tsh)}#menu .sthead{position:absolute;display:flex;align-items:center;justify-content:center}#menu .sthead img{width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
+  '#menu .stirow{position:absolute;font-size:calc(8px * var(--s));text-shadow:var(--tsh);color:#fff}#menu .stirow img{position:absolute;left:calc(1px * var(--s));top:calc(1px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s))}#menu .stirow span{position:absolute;top:calc(6px * var(--s));transform:translateX(-100%)}#menu .stirow:nth-child(even){background:rgba(255,255,255,.06)}'}));
 </script>
 </body>
 </html>
