@@ -1063,13 +1063,15 @@ for (const u of UPDRAFTS){
 }
 // 룬 탑 깨우기 (E): 지도 공개 · 상승 기류 · 수정이 하늘색으로
 for (const u of UPDRAFTS){ const t = u.tower; if (!t) continue;
-  const it = F.addInteract({ x: t.x, z: t.z + 6.5, r: 5.5, title: t.on ? `🌬 ${t.name} — 글라이더를 펴고 바람을 타요` : `🗼 ${t.name} 깨우기`, action(){
+  const it = F.addInteract({ x: t.x, z: t.z + 6.5, r: 5.5, title: t.on ? `🌬 ${t.name} — 글라이더를 펴고 바람을 타요` : `🗼 ${t.name} 깨우기`, action(){ t.wake(); } });
+  t.wake = () => {
     if (t.on){ X.hint('🌬 점프한 뒤 Space 를 길게 눌러 글라이더를 펴고 탑을 감싼 바람에 들어가 보세요', 4); return; }
     t.on = true; u.off = false; u.g.visible = true; S.field.towers[t.id] = Date.now(); towerLook(t); it.title = `🌬 ${t.name} — 글라이더를 펴고 바람을 타요`;
     fogReveal(t.x, t.z, 320); fogDirty = true; fogSave(); X.sfx('level'); X.sfx('summon');
     X.burst(new V3(t.x, 2, t.z), 0x9af8ff, 80, 9, 0.4, 1.4, 2, 5); X.shockwave(t.x, 0.2, t.z, 14, 0x9af8ff, 1.0);
     const reg = byId('regions', t.reg); X.banner('RUNE TOWER', `${t.name}이 깨어났다`, `${reg ? reg.name : ''} 지도가 열렸어요 · 탑을 감싼 바람을 타면 꼭대기까지`, false, 3.4);
-    X.gainExp(Math.round(X.need(S.lv) * 0.12)); BUS.emit('tower', { id: t.id }); BUS.emit('discover', { id: t.id, name: t.name, kind: 'tower' }); X.save(); } }); }
+    X.gainExp(Math.round(X.need(S.lv) * 0.12)); BUS.emit('tower', { id: t.id }); BUS.emit('discover', { id: t.id, name: t.name, kind: 'tower' }); X.save(); }; }
+F.wakeTower = id => { const t = TOWERS.find(o => o.id === id); if (t && t.wake) t.wake(); };
 
 
 // ───────────────────────── 글라이더 (젤다식 패러글라이더) ─────────────────────────
@@ -1202,6 +1204,11 @@ MV.fnight = mvec(Object.assign({}, X.MOOD.night, { mul: [0.17, 0.21, 0.4], add: 
 MV.fdusk = mvec(Object.assign({}, X.MOOD.dusk, { fogD: FFOG.dusk })); MV.fset = mvec(Object.assign({}, X.MOOD.sunset, { fogD: FFOG.sunset })); MV.fdawn = mvec(Object.assign({}, X.MOOD.pink, { fogD: FFOG.pink })); MV.fgold = mvec(Object.assign({}, X.MOOD.golden, { fogD: FFOG.golden }));
 const REGM = REG.map(r => mvec(Object.assign({}, X.MOOD[r.mood] || X.MOOD.noon, { fogD: FFOG[r.mood] || 0.003 })));
 const curM = new Float32Array(21), regM = new Float32Array(21), tmpM = new Float32Array(21);
+// 이야기로 바뀌는 날씨: 4장(늪)이 끝나면 안개가 옅어져요 (saga 의 change 키 mist_thin)
+const REGF0 = REGM.map(m => m[18]);
+function storyWeather(){ let thin = false; try { thin = !!(F.saga && F.saga.changed && F.saga.changed('mist_thin')); } catch (e){}
+  REG.forEach((r, i) => { if (r.id === 'swamp') REGM[i][18] = REGF0[i] * (thin ? 0.45 : 1); }); }
+BUS.on('chapter', () => X.later(1, storyWeather)); BUS.on('enterField', () => X.later(0.5, storyWeather));
 let moodInit = false;
 const SUNV = new V3(), MOONV = new V3();
 function moodTick(dt, px, py, pz){

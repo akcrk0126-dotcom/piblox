@@ -95,7 +95,7 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 
 ### 모듈이 F 에 올리는 API (다른 모듈이 기대해요)
 
-- **world**: `F.H` 교체, `F.groundFn`, `F.bound`, `F.enemyBound`, `F.roadDist`, `F.discoverWaypoint(id)`, `F.openWorldMap()`, `F.unlockGlider()`, `F.timeOfDay` (0~1, 0.5 정오), `F.isNight()`, `F.gliding`, `F.swimming`
+- **world**: `F.H` 교체, `F.groundFn`, `F.bound`, `F.enemyBound`, `F.roadDist`, `F.discoverWaypoint(id)`, `F.openWorldMap()`, `F.unlockGlider()`, `F.timeOfDay` (0~1, 0.5 정오), `F.isNight()`, `F.gliding`, `F.swimming`, `F.hills` (삼각형 언덕 목록: x, z, r, h, sc 0 작음 · 1 중간 · 2 큼), `F.towers` · `F.wakeTower(id)` (룬 탑: 깨우면 둘레 320m 지도 공개 + 상승 기류, BUS 'tower' { id })
 - **landmarks**: `F.landmarkAt(x,z)`, `F.discovered(id)` (BUS 'discover' 도 쏴요)
 - **rpg**: `F.addItem(id, n)`, `F.hasItem(id, n)`, `F.takeItem(id, n)`, `F.giveLoot(tableId | level, pos)`, `F.questEvent(type, data)`, `F.openInventory()`, `F.openQuests()`, `F.gold(n)` (+/-), `F.title`, `F.ITEMS`
 - **life**: `F.npcs[id] = { fig, pos, label }` (label 은 F.label 핸들 — rpg 가 `label.set(name, title, '!')` 로 퀘스트 표시), `F.bots[]`, `F.chat(...)` 교체, `F.say(text)` (말풍선), `F.emote(name)`, `F.spawnCamp(id)`, `F.worldBoss`
@@ -103,7 +103,7 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 - **minigames**: `F.startFishing(spotId)`, `F.openMinigames()`
 - **towns**: `F.towns = { obj(id), pos(id) → [x, y, z], show(id, on), setChange(key, on, instant), settlementAt(x, z) }` — id 는 정착지 · 읽을거리(r_…) · 수호석(ks_…). 수호석 obj 에는 `setLit(0~1)` 이 있어요. init 맨 처음에 lore 주민을 `WORLD.npcs` 에 `{ role: 'resident', resident: true, region, idle, lines }` 로 넣어요 (그래서 life 가 피규어를, rpg 가 대화를 맡아요).
 - **props**: `F.props = { obj(id), pos(id), show(id, on), setChange(key, on, instant) }` — id 는 셋피스(sp_…). `pickup: true` 셋피스는 처음엔 숨겨 두고 saga 가 켜요.
-- **saga**: `F.greet(id) → 대사 | null` (주민 · 기존 NPC 의 장별 인사), `F.saga = { chapterState(n) → 'before'|'during'|'after', openCodex(), target(o) → {x, z, label} | null, playIntro(n) }`
+- **saga**: `F.greet(id) → 대사 | null` (주민 · 기존 NPC 의 장별 인사), `F.saga = { chapterState(n) → 'before'|'during'|'after', openCodex(tab), target(o) → {x, z, label} | null, playIntro(n), playEpilogue(n), busy(), afterQuest(qid), changed(key) }`
 
 ## BUS 이벤트
 
