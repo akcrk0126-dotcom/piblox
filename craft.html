@@ -5008,7 +5008,7 @@ function doBreak(x,y,z,id){const b=B[id],harvest=canHarvest(id);if(typeof nvGuar
   const st=inv[sel],tool=toolOf(st);if(tool&&b.h>0&&!creative())damageHeld(1);player.exh+=.005;renderHotbar()}
 function damageHeld(n){const st=inv[sel],tool=toolOf(st);if(!tool)return;if(st.e&&st.e.unb&&Math.random()>1/(st.e.unb+1))return;st.d=(st.d||0)+n;if(st.d>=tool.dur){inv[sel]=null;sfx('tbreak');setHeld(true)}renderHotbar()}
 function faceToward(x,z){const dx=player.pos.x-(x+.5),dz=player.pos.z-(z+.5);return Math.abs(dx)>Math.abs(dz)?(dx>0?0:1):(dz>0?4:5)}
-function useItem(first){const st=inv[sel];if(targetMob&&first){feedMob(targetMob);return}if(targetBoat&&first&&!player.boat){player.boat=targetBoat;toast('W/S 앞뒤 · A/D 방향 · Shift 내리기');return}
+function useItem(first){const st=inv[sel];if(targetMob&&first){feedMob(targetMob);return}if(targetBoat&&first&&!player.boat&&!player.sneak){player.boat=targetBoat;toast('W/S 앞뒤 · A/D 방향 · Shift 내리기');return}
   if(first&&st&&st.id===BOAT){if(useBoat()){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}doSwing();sfx('place','wood')}return}
   if(st&&first&&ITEM[st.id].xpBottle){dropXP(player.pos.x,player.pos.y+1,player.pos.z,3+Math.floor(Math.random()*9));sfx('break','glass');if(!creative()){st.n--;if(!st.n)inv[sel]=null}renderHotbar();useCD=.3;return}
   if(target&&first&&st&&toolOf(st)){const tt=toolOf(st).type;if(tt==='axe'&&STRIPPED[target.id]){setBlock(target.x,target.y,target.z,STRIPPED[target.id],false,false,getM(target.x,target.y,target.z));sfx('place','wood');if(!creative())damageHeld(1);doSwing();useCD=.25;return}
@@ -6191,7 +6191,9 @@ function switchDim(dest,px,py,pz,then){if(dimBusy)return;dimBusy=true;closeScree
   player.pos.set(px,py,pz);player.vel.set(0,0,0);player.fallStart=null;dimVisual();
   afterDim=()=>{dimBusy=false;portalCD=4;portalStay=true;if(then)then();if(DIM==='end')spawnEndEntities();save()};
   phase='dim';loadDone=false;$('loadTxt').textContent=DIM_N[dest]+'(으)로 이동 중';$('loadSub').textContent='지형 준비 중';$('loadBar').style.width='0%';$('loading').classList.remove('hide');sfx('portal')}
-function scanPortal(x0,z0,r){let best=null,bd=1e9;for(let z=z0-r;z<=z0+r;z++)for(let x=x0-r;x<=x0+r;x++){if(!chunks.has(ck(x>>4,z>>4)))continue;for(let y=1;y<H-1;y++){if(getB(x,y,z)===NETHER_PORTAL&&getB(x,y-1,z)!==NETHER_PORTAL){const d=(x-x0)**2+(z-z0)**2;if(d<bd){bd=d;best={x,y,z}}}}}return best}
+// (P4-FIX) 마크 PortalForcer 처럼: 오버월드에선 128칸 · 네더에선 16칸 안의 가장 가까운 포털 (예전엔 24칸만 봐서 네더에서 돌아오면 새 포털이 생겼어요) · 불러온 청크 배열을 바로 훑어요
+function scanPortal(x0,z0,r){let best=null,bd=1e9;const NP=NETHER_PORTAL;for(let cz=(z0-r)>>4;cz<=(z0+r)>>4;cz++)for(let cx=(x0-r)>>4;cx<=(x0+r)>>4;cx++){const ch=chunks.get(ck(cx,cz));if(!ch)continue;const b=ch.b,top=Math.min(H-2,ch.maxY);
+    for(let y=1;y<=top;y++){const o=y<<8;for(let c=0;c<256;c++){if(b[o|c]!==NP||b[(o-256)|c]===NP)continue;const x=cx*16+(c&15),z=cz*16+(c>>4),dx=x-x0,dz=z-z0;if(Math.abs(dx)>r||Math.abs(dz)>r)continue;const d=dx*dx+dz*dz;if(d<bd){bd=d;best={x,y,z}}}}}return best}
 function buildPortal(x,y,z){for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=3;dx++){for(let dy=0;dy<4;dy++)if(getB(x+dx,y+dy,z+dz)!==BEDROCK)setBlock(x+dx,y+dy,z+dz,AIR);if(!SOLID[getB(x+dx,y-1,z+dz)])setBlock(x+dx,y-1,z+dz,OBSIDIAN)}
   for(let dx=-1;dx<=2;dx++){setBlock(x+dx,y-1,z,OBSIDIAN);setBlock(x+dx,y+3,z,OBSIDIAN)}for(let dy=0;dy<3;dy++){setBlock(x-1,y+dy,z,OBSIDIAN);setBlock(x+2,y+dy,z,OBSIDIAN)}
   for(let dy=0;dy<3;dy++)for(let dx=0;dx<2;dx++)setBlock(x+dx,y+dy,z,NETHER_PORTAL,true,false,0);for(const ch of chunks.values())ch.dirty=true}
@@ -6200,8 +6202,16 @@ function findPortalSpot(x0,z0){const nether=DIM==='nether',yMin=nether?N_LAVA+2:
     for(let y=yMin;y<yMax;y++){const f0=getB(x,y-1,z),f1=getB(x+1,y-1,z);if(!SOLID[f0]||!SOLID[f1]||f0===BEDROCK||f1===BEDROCK)continue;let ok=true;for(let ax=0;ax<2&&ok;ax++)for(let ay=0;ay<3&&ok;ay++)if(getB(x+ax,y+ay,z)!==AIR)ok=false;if(!ok)continue;
       let open=0;for(const sz of [-1,1])for(let ax=0;ax<2;ax++)if(getB(x+ax,y,z+sz)===AIR&&getB(x+ax,y+1,z+sz)===AIR)open++;const d=dx*dx+dz*dz+Math.abs(y-yPref)*.5-open*8;if(d<bd){bd=d;best={x,y,z}}}}
   if(best)return best;for(let y=yMin;y<yMax;y++)if(getB(x0,y,z0)===AIR&&getB(x0,y+1,z0)===AIR)return{x:x0,y,z:z0};return{x:x0,y:nether?N_FY-8:Math.max(SEA+2,surfaceY(x0,z0)),z:z0}}
-function travelNether(){const toN=DIM==='over',p=player.pos,tx=toN?Math.floor(p.x/8):Math.floor(p.x*8),tz=toN?Math.floor(p.z/8):Math.floor(p.z*8);
-  switchDim(toN?'nether':'over',tx+.5,toN?N_FY:SEA+20,tz+.5,()=>{let pt=scanPortal(tx,tz,24);if(!pt){const s=findPortalSpot(tx,tz);buildPortal(s.x,s.y,s.z);pt={x:s.x,y:s.y,z:s.z}}player.pos.set(pt.x+.5+(getB(pt.x+1,pt.y,pt.z)===NETHER_PORTAL?.5:0),pt.y+.01,pt.z+.5);player.vel.set(0,0,0);toast(DIM_N[DIM]+'에 왔어요')})}
+// (P4-FIX) 포털 목록 (dimState.portals · 저장돼요): 지나간 포털 · 새로 만든 포털을 적어 두고, 멀어서 아직 안 불러온 청크의 포털도 찾아가요 (마크는 그 청크를 불러와 POI 를 찾아요)
+function portalReg(dim,x,y,z){const P=dimState.portals||(dimState.portals={}),L=P[dim]||(P[dim]=[]);if(L.some(q=>Math.abs(q[0]-x)<=3&&Math.abs(q[1]-y)<=4&&Math.abs(q[2]-z)<=3))return;L.push([x,y,z]);if(L.length>64)L.shift()}
+function portalNear(dim,x0,z0,r){const L=dimState.portals&&dimState.portals[dim];let best=null,bd=1e9;if(L)for(const q of L){const dx=q[0]-x0,dz=q[2]-z0;if(Math.abs(dx)>r||Math.abs(dz)>r)continue;const d=dx*dx+dz*dz;if(d<bd){bd=d;best=q}}return best}
+function travelNether(){const toN=DIM==='over',p=player.pos,tx=toN?Math.floor(p.x/8):Math.floor(p.x*8),tz=toN?Math.floor(p.z/8):Math.floor(p.z*8),dest=toN?'nether':'over',R=toN?16:128;
+  {const src=scanPortal(Math.floor(p.x),Math.floor(p.z),2);if(src)portalReg(DIM,src.x,src.y,src.z)}
+  const known=portalNear(dest,tx,tz,R);
+  switchDim(dest,known?known[0]+.5:tx+.5,known?known[1]+.01:toN?N_FY:SEA+20,known?known[2]+.5:tz+.5,()=>{let pt=known&&scanPortal(known[0],known[2],3);
+    if(!pt&&known){const L=dimState.portals[dest],k=L.indexOf(known);if(k>=0)L.splice(k,1)}   // 부서진 포털은 목록에서 빼요
+    if(!pt)pt=scanPortal(tx,tz,R);if(!pt){const s=findPortalSpot(tx,tz);buildPortal(s.x,s.y,s.z);pt={x:s.x,y:s.y,z:s.z}}portalReg(DIM,pt.x,pt.y,pt.z);
+    player.pos.set(pt.x+.5+(getB(pt.x+1,pt.y,pt.z)===NETHER_PORTAL?.5:0),pt.y+.01,pt.z+.5);player.vel.set(0,0,0);toast(DIM_N[DIM]+'에 왔어요')})}
 function travelEnd(){if(DIM==='end'){const s=player.spawn||{x:.5,y:SEA+20,z:.5};switchDim('over',s.x,s.y,s.z,()=>{if(!SOLID[getB(Math.floor(s.x),Math.floor(s.y)-1,Math.floor(s.z))]){const y=surfaceY(Math.floor(s.x),Math.floor(s.z));if(y>0)player.pos.y=y+.01}toast('오버월드로 돌아왔어요')});return}
   switchDim('end',60.5,END_Y+1,.5,()=>{for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){setBlock(60+dx,END_Y-1,dz,OBSIDIAN);for(let dy=0;dy<3;dy++)setBlock(60+dx,END_Y+dy,dz,AIR)}player.pos.set(60.5,END_Y+.01,.5);player.yaw=Math.PI/2;toast(dimState.dragonDead?'엔드에 왔어요':'엔더 드래곤이 기다리고 있어요!')})}
 function portalTick(dt){if(dimBusy||!started||player.dead)return;if(portalCD>0)portalCD-=dt;const p=player.pos;let inN=false,inE=false,inT=false;
@@ -6475,7 +6485,7 @@ function rideTick(dt){const p=player,m=p.ride;if(!m)return false;
   p.pos.set(m.pos.x,m.pos.y+m.h*.72,m.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true;return true}
 function useOnMob(m){const st=inv[sel];if(piglinUse(m,st))return true;if(typeof nvMobUse==='function'&&nvMobUse(m,st))return true;
   if(m.type==='horse'){if(st&&st.id===SADDLE&&!m.saddle){m.saddle=1;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(m.P.saddle)m.P.saddle.visible=true;sfx('place','wood');return true}
-    if(!player.ride&&!m.baby){player.ride=m;m.tameT=0;toast(m.tamed?(m.saddle?'WASD 로 달려요 · Shift 로 내리기':'안장을 얹어야 몰 수 있어요'):'말이 날뛰어요... 길들이는 중');return true}}
+    if(!player.ride&&!m.baby&&!player.sneak){player.ride=m;m.tameT=0;toast(m.tamed?(m.saddle?'WASD 로 달려요 · Shift 로 내리기':'안장을 얹어야 몰 수 있어요'):'말이 날뛰어요... 길들이는 중');return true}}
   if(m.type==='mooshroom'&&st&&st.id===BOWL){st.n--;if(!st.n)inv[sel]=null;addItem({id:MUSHROOM_STEW||BOWL,n:1});renderHotbar();sfx('eat');return true}
   if(m.type==='cat'&&st&&(st.id===COD||st.id===SALMON)&&!m.tamed){if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}if(Math.random()<.34){m.tamed=1;for(let k=0;k<6;k++)heart(m.pos.x,m.pos.y+m.h,m.pos.z);toast('고양이를 길들였어요!')}else smoke(m.pos.x,m.pos.y+m.h,m.pos.z);return true}
   return false}
@@ -6640,7 +6650,7 @@ function setProf(st,prof){st.prof=prof;st.lvl=1;st.xp=0;st.offers=[];addLevelOff
 /* ── 거래 화면 ── */
 let tradeV=null,tradeSel=-1;const tradeIn=[null,null];
 function tradeState(){return tradeV&&VSTATE[tradeV.vill.key]}
-function openTrade(m){const st=VSTATE[m.vill.key];if(!st||m.baby>0||!PROF_BLOCK[st.prof]||!st.offers.length){sfx('villager_no');toast(st&&st.prof==='nitwit'?'이 주민은 거래를 하지 않아요':'일자리 블록이 없는 주민이에요');m.shake=.8;return}
+function openTrade(m){const st=m.vill&&VSTATE[m.vill.key];   /* (P4-FIX) 마을 밖 주민 (/summon · 번식 · 이글루) 을 누르면 창이 깨졌어요 */if(!st||m.baby>0||!PROF_BLOCK[st.prof]||!st.offers.length){sfx('villager_no');toast(st&&st.prof==='nitwit'?'이 주민은 거래를 하지 않아요':'일자리 블록이 없는 주민이에요');m.shake=.8;return}
   tradeV=m;tradeSel=-1;openScreen('trade');sfx('villager')}
 function tradeOut(){const st=tradeState();if(!st||tradeSel<0)return null;const o=st.offers[tradeSel];if(!o||o.uses>=o.max)return null;const a=tradeIn[0],b=tradeIn[1],need=offerCost(o);
   const has=(s,id,n)=>s&&s.id===id&&s.n>=n;const ok=o.b?((has(a,o.a[0],need)&&has(b,o.b[0],o.b[1]))||(has(b,o.a[0],need)&&has(a,o.b[0],o.b[1]))):(has(a,o.a[0],need)||has(b,o.a[0],need));
@@ -8266,8 +8276,8 @@ const pAt=(x,y,inner)=>`<div class="pa" style="left:calc(${x}px * var(--s));top:
 // 인벤토리 칸: 아이템 자리 (x,y) → 칸 테두리는 (x-1,y-1)
 const invMC=y=>{let h='';for(let r=0;r<3;r++)for(let c=0;c<9;c++)h+=pAt(7+c*18,y-1+r*18,S('inv',9+r*9+c));for(let c=0;c<9;c++)h+=pAt(7+c*18,y+57,S('inv',c));return h};
 const invGrid=()=>`<div class="grid">${Array.from({length:27},(_,k)=>S('inv',9+k)).join('')}</div><div class="gap"></div><div class="grid">${Array.from({length:9},(_,k)=>S('inv',k)).join('')}</div>`;
-function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMenu();let ech=false;if(type==='echest'){type='chest';ech=true}screenOpen=type;screenTile=null;breaking=null;mouseL=mouseR=false;eating=false;
-  if(tgt&&(type==='furnace'||type==='chest')){const k=tkey(tgt.x,tgt.y,tgt.z);screenTile=tiles.get(k);if(!screenTile){screenTile=type==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:chestLoot(VCHEST.get(k))};tiles.set(k,screenTile)}}if(ech)screenTile=ECHEST;
+function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMenu();keysRelease();let ech=false;if(type==='echest'){type='chest';ech=true}screenOpen=type;screenTile=null;breaking=null;mouseL=mouseR=false;eating=false;
+  if(tgt&&(type==='furnace'||type==='chest')){const k=tkey(tgt.x,tgt.y,tgt.z);screenTile=tiles.get(k);if(!screenTile||!Array.isArray(type==='furnace'?screenTile.s:screenTile.items)){   /* (P4-FIX) 다른 블록이 남긴 블록 엔티티면 새로 (화로 자리에 상자 → 창이 깨졌어요) */screenTile=type==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:chestLoot(VCHEST.get(k))};tiles.set(k,screenTile)}}if(ech)screenTile=ECHEST;
   let h='<button id="closeInv" aria-label="닫기"></button>';
   const mcfix=type==='inv'||type==='craft'||type==='chest'||type==='furnace'||type==='enchant'||type==='anvil'||type==='smith';$('panel').className='panel'+(mcfix?' mcfix':'')+(type==='chest'?' ch':'');
   if(type==='inv')h+=[0,1,2,3].map(i=>pAt(7,7+i*18,S('arm',i))).join('')+pAt(25,7,'<div class="pv"></div>')+pTl(97,6,'제작')+[0,1,2,3].map(i=>pAt(97+(i%2)*18,17+Math.floor(i/2)*18,S('c2',i))).join('')+pAt(134,28,'<div class="arrow"></div>')+pAt(149,23,S('res',0,1))+pAt(104,61,'<button class="bookBtn" id="bookBtn" title="조합법 책"><svg viewBox="0 0 16 16" class="px"><rect x="2" y="2" width="12" height="12" fill="#2f7a24"/><rect x="2" y="2" width="12" height="2" fill="#4fa83c"/><rect x="4" y="5" width="8" height="1" fill="#b8e0a0"/><rect x="4" y="8" width="6" height="1" fill="#b8e0a0"/><rect x="2" y="12" width="12" height="2" fill="#e8d8b0"/></svg></button>')+invMC(84);
@@ -8284,7 +8294,11 @@ function openScreen(type,tgt){if(player.dead)return;if(menuOpen==='ready')hideMe
   if($('bookBtn')){$('bookBtn').onclick=()=>{bookOpen=!bookOpen;renderBook()};renderBook()}else $('rbook').classList.add('hide');
   if(document.pointerLockElement)document.exitPointerLock();drawScreen();if(type!=='inv')sfx('click')}
 function closeScreen(){if(!screenOpen)return;if(screenOpen==='trade')closeTrade();if(screenOpen==='anvil')for(let k=0;k<2;k++)if(anvilIn[k]){giveOrDrop(anvilIn[k]);anvilIn[k]=null}if(screenOpen==='smith')for(let k=0;k<smithIn.length;k++)if(smithIn[k]){giveOrDrop(smithIn[k]);smithIn[k]=null}if(screenTile===ECHEST){try{localStorage.setItem('bc_echest',JSON.stringify(ECHEST.items))}catch(e){}}for(let i=0;i<2;i++)if(enchSlots[i]){giveOrDrop(enchSlots[i]);enchSlots[i]=null}if(screenTile){for(const [k,v] of tiles)if(v===screenTile){mpTile(k,v);break}}for(const g of [craft2,craft3])for(let i=0;i<g.length;i++)if(g[i]){giveOrDrop(g[i]);g[i]=null}
-  if(cursor){giveOrDrop(cursor);cursor=null}screenOpen=null;screenTile=null;drag=null;ghost=null;$('rbook').classList.add('hide');$('screen').classList.add('hide');$('cursor').classList.add('hide');$('tip').classList.add('hide');renderHotbar();if(started&&!player.dead&&!menuOpen)lockPointer()}
+  if(cursor){giveOrDrop(cursor);cursor=null}screenOpen=null;screenTile=null;drag=null;ghost=null;$('rbook').classList.add('hide');$('screen').classList.add('hide');$('cursor').classList.add('hide');$('tip').classList.add('hide');renderHotbar();keysRestore();if(started&&!player.dead&&!menuOpen)lockPointer()}
+// (P4-FIX) 마크 setScreen 처럼: 창을 열면 눌린 키를 모두 놓고 (예전엔 W 를 누른 채 E → 가방이 열린 채로 계속 걸었어요), 닫으면 아직 누르고 있는 이동 키만 다시 (KeyMapping.setAll)
+const physK={};addEventListener('keydown',e=>{physK[e.code]=true},true);addEventListener('keyup',e=>{physK[e.code]=false},true);addEventListener('blur',()=>{for(const k in physK)physK[k]=false});
+function keysRelease(){for(const k in keys)keys[k]=false}
+function keysRestore(){for(const k of ['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft'])if(physK[k])keys[k]=true}
 function giveOrDrop(st){const left=addItem(st);if(left>0)throwItem({id:st.id,n:left,d:st.d})}
 function throwItem(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);spawnItem(st,camera.position.x+d.x*.3,camera.position.y-.3,camera.position.z+d.z*.3,new V3(d.x*5,d.y*5+2,d.z*5),1.5)}
 function arrOf(c){return c==='cr'?crView:c==='trash'?[null]:c==='inv'?inv:c==='c2'?craft2:c==='c3'?craft3:c==='chest'?screenTile&&screenTile.items:c==='fur'?screenTile&&screenTile.s:c==='arm'?armor:c==='ench'?enchSlots:c==='tin'?tradeIn:c==='anv'?anvilIn:c==='smi'?smithIn:null}
@@ -8384,6 +8398,10 @@ const cvs=$('gl');
 function lockPointer(){if(isTouch)return;try{const r=cvs.requestPointerLock();if(r&&r.catch)r.catch(()=>{if(!screenOpen&&started&&!chatOpen&&!menuOpen)showMenu('ready')})}catch(e){}}
 document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement&&started&&!screenOpen&&!player.dead&&!menuOpen&&!chatOpen){mouseL=mouseR=false;showMenu('pause')}});
 cvs.addEventListener('click',()=>{if(chatOpen){$('chatIn').focus();return}if(started&&!menuOpen&&!screenOpen&&!document.pointerLockElement)lockPointer()});   // (P4-FIX) 채팅 중 화면을 누르면 마우스를 잠그지 말고 입력칸으로 (예전엔 잠겨서 Esc 가 안 먹고 채팅이 안 닫혔어요)
+// (P4-FIX) 마크처럼 Esc 로 메뉴 화면 닫기 (일시정지 → 게임으로 · 설정 → 완료 · 하위 화면 → 취소/뒤로). 예전엔 메뉴에서 Esc 가 아무것도 안 했어요
+addEventListener('keydown',e=>{if(e.key!=='Escape'||e.repeat||chatOpen||screenOpen||!menuOpen||menuOpen==='title'||menuOpen==='ready'||(typeof poemOn!=='undefined'&&poemOn))return;if(Date.now()-(window.__menuAt||0)<300)return;   // 포인터 잠금을 푼 바로 그 Esc 는 넘겨요
+  const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA')&&t.value)return;const bs=[...$('menu').querySelectorAll('[data-m]')].filter(b=>!b.disabled&&b.offsetParent!==null);
+  for(const lbl of ['게임으로 돌아가기','Back to Game','완료','Done','취소','Cancel','뒤로','Back','돌아가기']){const b=bs.find(b=>b.textContent.trim()===lbl);if(b){e.preventDefault();b.click();return}}});
 // (P4-FIX) 채팅이 열려 있는데 입력칸에서 포커스가 빠졌을 때: Esc 는 닫기 · Enter 는 보내기 · 다른 키는 입력칸으로 돌려보내요
 addEventListener('keydown',e=>{if(!chatOpen)return;const i=$('chatIn');if(e.target===i)return;if(e.code==='F11'||/^F\d+$/.test(e.code))return;
   if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeChat(false);return}if(e.key==='Enter'){e.preventDefault();e.stopImmediatePropagation();closeChat(true);return}
@@ -8574,7 +8592,7 @@ function bindSlider(id,label,min,max,fmt,on){const el=$(id);el.oninput=()=>{cons
 const MODE_N={survival:'서바이벌',creative:'크리에이티브'},TYPE_N={default:'기본',flat:'평지'};
 let selWorld=null,selServer=null,newW=null,phase='boot';
 const MENU2={},MACT={},MBACK={};   // (P4-MENU) 새 화면 · 버튼 동작 · Esc 로 돌아갈 곳 — 맨 아래 '설정 · 화면 바깥 UI' 칸에서 채워요
-function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;if(document.pointerLockElement)document.exitPointerLock();
+function showMenu(type,arg){menuOpen=type;const M=$('menu');M.classList.remove('hide');M.className=type==='title'?'title':type==='ready'?'rdy':'dirt';mouseL=mouseR=false;keysRelease();window.__menuAt=Date.now();if(document.pointerLockElement)document.exitPointerLock();
   const help=isTouch?'왼쪽 조이스틱 이동 · 화면 드래그로 시점<br>꾹 누르기: 부수기 · 짧게 탭: 놓기/사용':'WASD 이동 · 스페이스 점프 · Shift 웅크리기 · Ctrl 달리기 · E 인벤토리 · T 채팅 · F5 시점<br>왼쪽 클릭 부수기/공격 · 오른쪽 클릭 놓기/사용/먹이주기 · Q 버리기 · 1~9 / 휠 핫바';
   let h='';
   if(MENU2[type])h=MENU2[type].html(arg);
@@ -8671,7 +8689,7 @@ function worldsList(){try{return JSON.parse(localStorage.getItem(WKEY))||[]}catc
 function saveWorldsList(l){try{localStorage.setItem(WKEY,JSON.stringify(l))}catch(e){toast('저장 공간이 부족해요')}}
 (function migrate(){try{const old=localStorage.getItem('blockcraft_v1');if(old&&!worldsList().length){const d=JSON.parse(old);const w={id:'w'+Date.now().toString(36),name:'나의 세계',mode:'survival',type:'default',seed:d.seed,last:Date.now()};localStorage.setItem('bc_w_'+w.id,old);saveWorldsList([w])}if(old)localStorage.removeItem('blockcraft_v1')}catch(e){}})();
 function playerData(){const p=player;return{pos:[p.pos.x,p.pos.y,p.pos.z],yaw:p.yaw,pitch:p.pitch,hp:p.hp,food:p.food,sat:p.sat,spawn:p.spawn,dead:p.dead,fly:p.fly}}
-function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,ds:dimState,inv,sel,arm:armor,off:offh,xp:player.xp||0,pl:playerData(),time:worldTime,rest:player.lastRest};
+function save(){if(!started||!WORLD||dimBusy)return;try{const base={v:3,dim:DIM,ds:dimState,inv,sel,arm:armor,off:offh,xp:player.xp||0,pl:playerData(),time:worldTime,rest:player.lastRest,ents:entSave()};
   if(WORLD.mp)localStorage.setItem('bc_mp_'+WORLD.mp,JSON.stringify(base));
   else{localStorage.setItem('bc_w_'+WORLD.id,JSON.stringify(Object.assign(base,{seed:SEED,edits,tiles:[...(DIM==='over'?tiles:tilesByDim.over)],tilesD:{nether:[...(DIM==='nether'?tiles:tilesByDim.nether)],end:[...(DIM==='end'?tiles:tilesByDim.end)],time:[...(DIM==='time'?tiles:tilesByDim.time)]},dim:DIM,ds:dimState,saplings,crops,vill:VSTATE})));const L=worldsList(),w=L.find(x=>x.id===WORLD.id);if(w){w.last=Date.now();saveWorldsList(L)}}}catch(e){toast('저장 공간이 부족해요')}}
 function applyPlayer(d){if(!d)return false;(d.inv||[]).forEach((s,i)=>inv[i]=s);(d.arm||[]).forEach((s,i)=>armor[i]=s);player.xp=d.xp||0;sel=d.sel||0;const q=d.pl;if(!q)return false;player.pos.set(q.pos[0],q.pos[1],q.pos[2]);player.yaw=q.yaw;player.pitch=q.pitch;player.hp=q.hp;player.food=q.food;player.sat=q.sat;player.spawn=q.spawn;player.fly=!!q.fly;
@@ -8686,7 +8704,7 @@ let spawnFix=false;
 function enterWorld(w,data,mpData){resetWorld();WORLD=w;SEED=w.seed|0;WTYPE=w.type||'default';GEN=w.gen>=6?6:w.gen>=5?5:w.gen>=4?4:w.gen===3?3:w.gen===2?2:1;setDims();GAMEMODE=w.mode||'survival';
   if(mpData){edits=mpData.edits||{};(mpData.tiles||[]).forEach(([k,v])=>{if(/^[net]/.test(k))tilesByDim[{n:'nether',e:'end',t:'time'}[k[0]]].set(k.slice(1),v);else tilesByDim.over.set(k,v)})}
   else if(data){edits=data.edits||{};(data.tiles||[]).forEach(([k,v])=>tilesByDim.over.set(k,v));const td=data.tilesD||{};(td.nether||[]).forEach(([k,v])=>tilesByDim.nether.set(k,v));(td.end||[]).forEach(([k,v])=>tilesByDim.end.set(k,v));(td.time||[]).forEach(([k,v])=>tilesByDim.time.set(k,v));saplings=data.saplings||[];crops=data.crops||[];VSTATE=data.vill||{}}
-  if(data&&data.ds)dimState=Object.assign({dragonDead:false,crystals:0,egg:false},data.ds);DIM=(data&&(data.pl&&data.pl.dead&&data.pl.spawn?data.pl.spawn.dim:data.dim))||'over';portalStay=true;portalT=0;for(const [k,v] of tilesByDim[DIM])tiles.set(k,v);dimVisual();
+  if(data&&data.ds)dimState=Object.assign({dragonDead:false,crystals:0,egg:false},data.ds);DIM=(data&&(data.pl&&data.pl.dead&&data.pl.spawn?data.pl.spawn.dim:data.dim))||'over';portalStay=true;portalT=0;for(const [k,v] of tilesByDim[DIM])tiles.set(k,v);dimVisual();entLoad(data&&!mpData?data.ents:null);
   if(data&&data.time!=null)worldTime=data.time;player.lastRest=data&&data.rest!=null?data.rest:worldTime;if(mpData&&mpData.time!=null)worldTime=mpData.time;
   spawnFix=!applyPlayer(data);if(spawnFix){const [sx,sz]=findSpawnXZ();player.pos.set(sx+.5,terrainH(sx,sz)+1.01,sz+.5)}
   phase='loading';loadDone=false;hideMenu();$('loadTxt').textContent=mpData?'서버에 접속하는 중':'월드 생성 중';$('loadSub').textContent='지형 준비 중';$('loadBar').style.width='0%';$('loading').classList.remove('hide')}
@@ -8773,7 +8791,7 @@ function addRemote(uid,d){let h=0;for(const c of uid)h=Math.imul(h,31)+c.charCod
 let chatOpen=false;
 function chatLine(html,col,isHtml){const box=$('chatLog');const d=document.createElement('div');d.style.color=col||'#fff';if(isHtml)d.innerHTML=html;else d.textContent=html;d.dataset.t=Date.now();box.appendChild(d);while(box.children.length>60)box.firstChild.remove();box.scrollTop=1e9}
 function openChat(pre){if(!started||chatOpen)return;if(menuOpen==='ready')hideMenu();chatOpen=true;for(const k in keys)keys[k]=false;$('chat').classList.add('open');const i=$('chatIn');i.value=pre||'';hintSel=0;updateCmdHint();setTimeout(()=>i.focus(),10);if(document.pointerLockElement)document.exitPointerLock()}
-function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;$('cmdHint').classList.add('hide');$('chat').classList.remove('open');i.blur();
+function closeChat(send){const i=$('chatIn'),t=i.value.trim();chatOpen=false;keysRestore();$('cmdHint').classList.add('hide');$('chat').classList.remove('open');i.blur();
   if(send&&t){if(t.startsWith('/'))runCmd(t);else if(MPS)mpChat(t);else chatLine(`<${myName()}> ${t}`)}
   if(started&&!menuOpen&&!screenOpen&&!isTouch)lockPointer()}
 // ── 명령어 (Agent 05): 마크 자바 에디션 26.3 과 똑같은 명령어 ─────────────────────────────────────
@@ -11708,7 +11726,7 @@ function nvStriderAI(m,dt){if(!mobCommon(m,dt))return;if(m.baby>0){m.baby-=dt;if
   m.cold=warm?Math.max(0,(m.cold||0)-dt):Math.min(1,(m.cold||0)+dt);if(m.cold>0){m.g.traverse(o=>{if(o.isMesh&&o.userData.base)o.material.forEach(mt=>mt.color.lerp(STR_COLD,.55*m.cold))});m.g.position.x+=(Math.random()-.5)*.03*m.cold}}
 // 몹 손질: 안장 · 먹이 (번식) · 스트라이더 타기
 function nvMobUse(m,st){if(m.type==='strider'){if(st&&st.id===SADDLE&&!m.saddle&&!m.baby){m.saddle=1;if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}sfx('place','wood');return true}
-    if(st&&st.id===WARPED_FUNGUS)return false;if(m.saddle&&!player.ride&&!m.baby){player.ride=m;m.tamed=1;toast('뒤틀린 균 낚싯대를 들면 몰 수 있어요 · Shift 로 내리기');return true}}
+    if(st&&st.id===WARPED_FUNGUS)return false;if(m.saddle&&!player.ride&&!m.baby&&!player.sneak){player.ride=m;m.tamed=1;toast('뒤틀린 균 낚싯대를 들면 몰 수 있어요 · Shift 로 내리기');return true}}
   return false}
 // 낚싯대 부스트 (타고 있을 때 오른쪽 클릭)
 function nvStickUse(st){const m=player.ride;if(!m||m.type!=='strider'||(m.boost||0)>0)return false;m.boost=2.5;damageHeld(1);doSwing();useCD=.3;if(typeof advGrant==='function')advGrant('minecraft:nether/ride_strider');if(inv[sel]===null)inv[sel]={id:FISHING_ROD,n:1,d:0};renderHotbar();return true}
@@ -13616,7 +13634,7 @@ function updateBoats(dt){const p=player;
     {const lk=lightK(b.pos.x,b.pos.y+.5,b.pos.z);b.m.traverse(o=>{if(o.isMesh&&o.material.userData.base)o.material.color.copy(o.material.userData.base).multiplyScalar(lk)})}
     if(ride){p.pos.set(b.pos.x,b.pos.y+.3,b.pos.z);p.vel.set(0,0,0);p.fallStart=null;p.onGround=true}
     if(b.pos.y<-40){scene.remove(b.m);boats.splice(i,1);if(ride)p.boat=null}}}
-function boatRideTick(){const p=player,b=p.boat;if(!b)return false;if(!boats.includes(b)||p.dead){p.boat=null;return false}
+function boatRideTick(){const p=player,b=p.boat;if(!b)return false;if(!boats.includes(b)||p.dead||b.dm!==DIM){p.boat=null;return false}   // (P4-FIX) 보트째 포털을 지나면 다른 차원에서 몸이 굳었어요
   if(rideShift()){p.boat=null;dismountTo(b.pos.x,b.pos.y,b.pos.z,b.yaw,1.375,.5625);return false}return true}
 // (P4-FIX) 타고 있을 땐 updatePlayer 가 p.sneak 을 고치기 전에 돌아가서 Shift 가 안 먹었어요 → 키를 직접 읽어요 (채팅 · 창이 열려 있으면 무시)
 function rideShift(){return !!(keys.ShiftLeft||keys.ShiftRight||tSneak)&&!chatOpen&&!screenOpen}
@@ -13629,6 +13647,20 @@ function dismountTo(vx,vy,vz,yaw,vw,vh){const p=player,d=(vw*Math.SQRT2+.6)/2+.0
     if(spot)break}
   if(!spot)spot=boxHits(vx,vy+vh,vz,.3,1.8)?[vx,vy,vz]:[vx,vy+vh,vz];
   p.pos.set(spot[0],spot[1]+1e-3,spot[2]);p.prev.copy(p.pos);p.vel.set(0,0,0);p.fallStart=null;p.fallDist=0}
+// (P4-FIX) 보트 · 길들인/안장 얹은 몹이 사라지던 버그: 저장하고 불러와요 · 112칸 밖으로 멀어지거나 차원을 옮겨도 지우지 않고 맡겨 뒀다가 (청크 언로드처럼) 돌아오면 다시 꺼내요
+let ENT_STASH=[],entT=0;
+const entPersist=m=>!m.dead&&!m.D.boss&&!m.vill&&!!(m.tamed||m.saddle);
+const ENT_SKIP=new Set(['type','D','g','P','pos','vel','ai','hw','h','dead','deadT','hurtT','lastHurt','atk','panic','fuse','snd','walk','onGround','hitX','hitZ','fireT','burnT','angry','yaw','hp','baby','tameT','target','home']);
+function entSer(m,dim){const o={t:m.type,d:dim,x:+m.pos.x.toFixed(2),y:+m.pos.y.toFixed(2),z:+m.pos.z.toFixed(2),yaw:+(m.yaw||0).toFixed(3),hp:m.hp,b:m.baby||0,p:{}};
+  for(const k in m){if(ENT_SKIP.has(k))continue;const v=m[k];if(v==null)continue;const ty=typeof v;if(ty==='number'||ty==='string'||ty==='boolean'){o.p[k]=v;continue}
+    if(ty==='object'&&(Array.isArray(v)||Object.getPrototypeOf(v)===Object.prototype)){try{const s=JSON.stringify(v);if(s.length<4000)o.p[k]=JSON.parse(s)}catch(e){}}}return o}
+function entSave(){const L=ENT_STASH.slice();for(const m of mobs)if(entPersist(m))L.push(entSer(m,DIM));for(const b of boats)L.push({boat:1,d:b.dm,x:+b.pos.x.toFixed(2),y:+b.pos.y.toFixed(2),z:+b.pos.z.toFixed(2),yaw:+b.yaw.toFixed(3),ride:player.boat===b?1:0});return L}
+function entLoad(L){ENT_STASH=[];if(!Array.isArray(L))return;for(const e of L){if(e.boat){const b=placeBoat(e.x,e.y,e.z,e.yaw||0);b.dm=e.d||'over';if(e.ride&&b.dm===DIM)player.boat=b}else if(e.t&&MOBDEF[e.t])ENT_STASH.push(e)}}
+function entStashTick(){const pp=player.pos;for(let i=mobs.length-1;i>=0;i--){const m=mobs[i];if(!entPersist(m)||player.ride===m)continue;if(Math.hypot(m.pos.x-pp.x,m.pos.z-pp.z)>100){ENT_STASH.push(entSer(m,DIM));scene.remove(m.g);mobs.splice(i,1)}}
+  for(let i=ENT_STASH.length-1;i>=0;i--){const e=ENT_STASH[i];if(e.d!==DIM||Math.hypot(e.x-pp.x,e.z-pp.z)>90)continue;const ch=chunks.get(ck(Math.floor(e.x)>>4,Math.floor(e.z)>>4));if(!ch||!ch.sky)continue;
+    ENT_STASH.splice(i,1);try{const m=spawnMob(e.t,e.x,e.y,e.z,!!e.b);Object.assign(m,e.p||{});m.yaw=e.yaw||0;if(e.hp!=null)m.hp=e.hp;m.baby=e.b||0;m.pos.set(e.x,e.y,e.z)}catch(x){}}}
+{const _um=updateMobs;updateMobs=function(dt){if((entT-=dt)<=0){entT=.5;entStashTick()}return _um.apply(this,arguments)}}
+{const _cd=clearDimWorld;clearDimWorld=function(){for(const m of mobs)if(entPersist(m))ENT_STASH.push(entSer(m,DIM));return _cd.apply(this,arguments)}}
 function hitBoat(b){doSwing();b.hurtT=.25;b.hp-=creative()?4:1;sfx('dig','wood',.7);if(b.hp>0)return;const i=boats.indexOf(b);if(i>=0)boats.splice(i,1);scene.remove(b.m);if(player.boat===b)player.boat=null;if(!creative())spawnItem({id:BOAT,n:1},b.pos.x,b.pos.y+.5,b.pos.z)}
 // 친구 때리기: 내 칸 h/ 에 "누구를 얼마나" 적으면, 맞은 사람이 그걸 보고 스스로 다쳐요
 let hitKeys=[];
