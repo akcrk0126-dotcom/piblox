@@ -98,6 +98,9 @@
   .rc{ position:relative; margin-top:6px; display:flex; flex-direction:column; gap:2px; font-size:12px; } .rc div{ display:flex; justify-content:space-between; gap:6px; }
   .rc span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; } .rc em{ font-style:normal; font-family:var(--ui); font-size:11px; color:#ff9aa9; } .rc em.ok{ color:#9fffcf; }
   .card .acts button:disabled{ opacity:.4; }
+  #migrate{ position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.55); }
+  #migrate .mbox{ width:min(380px, calc(100% - 32px)); padding:18px; border-radius:16px; background:linear-gradient(170deg,rgba(26,24,40,.96),rgba(8,8,14,.96)); border:1px solid rgba(255,255,255,.2); }
+  #migrate b{ display:block; font-size:15px; margin-bottom:8px; } #migrate p{ font-size:13px; color:#cfcae0; margin-bottom:6px; line-height:1.5; } #migrate .mbtns{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
   #shatter{ position:fixed; inset:0; width:100%; height:100%; z-index:45; display:none; pointer-events:none; }
   .merchant{ display:flex; gap:12px; align-items:center; padding:10px 12px; margin-bottom:10px; border-radius:14px; background:linear-gradient(90deg,rgba(243,213,138,.14),rgba(243,213,138,.02)); border:1px solid rgba(243,213,138,.3); }
   .mAva{ width:52px; height:52px; flex:none; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; background:radial-gradient(circle,#3b2a5a,#160f24); border:2px solid var(--gold); box-shadow:0 0 14px rgba(243,213,138,.4); }
@@ -212,6 +215,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="flash"></div>
+<div id="migrate"><div class="mbox"><b>이 기기에 계정 구분 없이 저장된 기록이 있어요</b><p id="migInfo"></p><p><span id="migWho"></span>으로 가져올까요? 다른 사람 기록이면 '아니요'를 눌러요.</p><div class="mbtns"><button id="migNo">아니요</button><button id="migYes" class="on">가져오기</button></div></div></div>
 <canvas id="shatter"></canvas>
 <div id="quote"></div>
 <div id="cut">
@@ -360,11 +364,15 @@ const fontCSS = it => `"${it.font}", 'Pretendard', sans-serif`;
 const PERKS = { speed:'⚡ 이동 속도 +30%', jump:'🦘 점프력 +25%', glide:'🪽 활공 (공중에서 점프 꾹)', double:'✨ 2단 점프', all:'👑 모든 능력 (속도 · 점프 · 활공 · 2단 점프)' };
 const ANNOUNCE_TIER = 13;
 
+// 저장: 계정(uid)마다 따로. 예전 공용 저장(SAVE_KEY)은 한 번 물어보고 그 계정으로 옮겨요.
 const SAVE_KEY = 'ultrarng_save_v1';
-let S = { rolls:0, inv:{}, equipped:null, best:null, auto:false, fast:false, sound:true, music:true, rareSeq:0, lastRare:-1, skip:{}, pot:{}, fx:{}, nx:{} };
-try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); if (d) S = Object.assign(S, d); } catch(e){}
-['skip', 'pot', 'fx', 'nx'].forEach(k=>{ if (!S[k] || typeof S[k] !== 'object') S[k] = {}; }); S.auto = false; if (S.equipped != null && !POOL[S.equipped]) S.equipped = null;
-const save = ()=>{ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} };
+const DEFAULT_S = ()=>({ rolls:0, inv:{}, equipped:null, best:null, auto:false, fast:false, sound:true, music:true, rareSeq:0, lastRare:-1, skip:{}, pot:{}, fx:{}, nx:{} });
+const S = DEFAULT_S();
+let saveKey = null, saveUid = null;
+function readSave(key){ try { return JSON.parse(localStorage.getItem(key)); } catch(e){ return null; } }
+function applySave(d){ Object.keys(S).forEach(k=>delete S[k]); Object.assign(S, DEFAULT_S(), d || {});
+  ['skip', 'pot', 'fx', 'nx'].forEach(k=>{ if (!S[k] || typeof S[k] !== 'object') S[k] = {}; }); S.auto = false; if (S.equipped != null && !POOL[S.equipped]) S.equipped = null; }
+const save = ()=>{ if (!saveKey) return; try { localStorage.setItem(saveKey, JSON.stringify(S)); } catch(e){} };
 
 function paintText(el, it, glow){
   el.style.fontFamily = fontCSS(it);
@@ -1127,7 +1135,9 @@ function announceOther(o, tier){ const it = POOL[tier]; if (!it) return;
   showMsg('✨ ' + (o.name || '플레이어') + ' — ' + it.name, 2600, it);
   const pos = new THREE.Vector3(o.x, o.y, o.z); burst(pos, it); shockwave(pos, auraColors(it), 1); if (o.slot.aura) o.slot.aura.boost = 1.8; }
 if (mpOn){ MP.onPlayersUpdate(onPlayers);
-  MP.init(ROOM, (uid, err)=>{ if (err || !uid) return; try { MP.setPresence(GAME_ID, ROOM); } catch(e){}
+  MP.onAuthStateChange(user=>{ if (user && user.uid !== saveUid) useAccount(user.uid, !user.isAnonymous); });
+  MP.init(ROOM, (uid, err)=>{ if (err || !uid){ if (!saveKey) useOffline(); return; } try { MP.setPresence(GAME_ID, ROOM); } catch(e){}
+    if (uid !== saveUid){ let real = false; try { real = MP.isLoggedIn(); } catch(e){} useAccount(uid, real); }
     if (MP.fetchAccountAvatarLoadout) MP.fetchAccountAvatarLoadout(l=>{ if (l) buildMe(l); }); }); }
 let sendT = 0, lastSent = '', lastSentAt = 0;
 function netSend(dt, extra){ if (!mpOn) return; sendT -= dt; if (sendT > 0) return; sendT = .1;
@@ -1623,7 +1633,7 @@ let cdT0 = 0, cdOn = false;
 function cdLoop(){ if (!cdOn) return; const k = Math.min(1, (performance.now() - cdT0)/cdDur); $('cdFill').style.width = (k*100) + '%';
   $('cdTxt').textContent = k < 1 ? ((cdDur - (performance.now() - cdT0))/1000).toFixed(1) + 's' : ''; requestAnimationFrame(cdLoop); }
 async function roll(){
-  if (rolling || chatting()) return;
+  if (rolling || chatting() || !saveKey) return;
   rolling = true; skipReq = false; ac(); const t0 = performance.now();
   const rb = $('rollBtn'); rb.disabled = true; rb.classList.remove('ready'); cdT0 = t0; cdDur = rollCD(); cdOn = true; cdLoop();
   const L = currentLuck(); let it; if (S.nx.fate > 0){ it = pickMin(L, FATE_MIN); S.nx.fate--; } else it = pick(L);
@@ -1755,7 +1765,7 @@ function render(){
       <h4>조작</h4><p>WASD 이동 · Space 점프 · 드래그 시점 · 휠 줌 · R 굴리기 · F 자동 · Q 퀵 · B 가방 · P 상점 · / 채팅 · . 이모트</p>
       <h4>데이터</h4><div class="btns"><button id="resetBtn">저장 데이터 초기화</button></div></div>`;
     $('setSnd').onclick = ()=>$('soundBtn').click(); $('setMus').onclick = ()=>{ S.music = !S.music; save(); BGM.refresh(); render(); }; $('setFast').onclick = ()=>$('fastBtn').click();
-    $('resetBtn').onclick = ()=>{ if (confirm('정말 초기화할까요?')){ try { localStorage.removeItem(SAVE_KEY); } catch(e){} location.reload(); } };
+    $('resetBtn').onclick = ()=>{ if (confirm('정말 초기화할까요? (이 계정의 기록만 지워져요)')){ try { if (saveKey) localStorage.removeItem(saveKey); } catch(e){} location.reload(); } };
   }
 }
 function card(p, odds, sub){
@@ -1778,8 +1788,20 @@ function openTab(t){ const sd = $('side'); if (sd.classList.contains('open') && 
 // =====================================================================
 if (!mpOn) $('keys').textContent = $('keys').textContent.replace(' · / 채팅 · . 이모트', '');
 buildWorld(); respawn();
-setSlotAura(mySlot, S.equipped);
-if (S.equipped != null){ const ln = $('lastName'); ln.textContent = POOL[S.equipped].name; paintText(ln, POOL[S.equipped]); }
+// 계정 기록 불러오기 → 화면 갱신
+function afterLoad(){ setSlotAura(mySlot, S.equipped); const ln = $('lastName'); if (S.equipped != null){ ln.textContent = POOL[S.equipped].name; paintText(ln, POOL[S.equipped]); } else ln.textContent = '';
+  $('lastOdds').textContent = ''; $('log').innerHTML = ''; $('rollBtn').disabled = false; render(); }
+function useAccount(uid, real){ saveUid = uid; saveKey = SAVE_KEY + '_' + uid; const mine = readSave(saveKey), legacy = readSave(SAVE_KEY);
+  applySave(mine); afterLoad();
+  if (!mine && legacy) askMigrate(legacy); }
+function useOffline(){ saveUid = 'offline'; saveKey = SAVE_KEY; applySave(readSave(SAVE_KEY)); afterLoad(); }
+function askMigrate(legacy){ const m = $('migrate'); let who = ''; try { who = MP.getDisplayName() || ''; } catch(e){}
+  $('migWho').textContent = who ? who + ' 계정' : '이 계정'; $('migInfo').textContent = '굴리기 ' + fmt(legacy.rolls || 0) + '번 · 최고 ' + (legacy.best != null && POOL[legacy.best] ? POOL[legacy.best].name : '-');
+  m.style.display = 'flex';
+  $('migYes').onclick = ()=>{ applySave(legacy); save(); try { localStorage.removeItem(SAVE_KEY); } catch(e){} m.style.display = 'none'; afterLoad(); showMsg('기록을 이 계정으로 옮겼어요', 1800); };
+  $('migNo').onclick = ()=>{ m.style.display = 'none'; showMsg('새 기록으로 시작해요', 1500); }; }
+$('rollBtn').disabled = true;
+if (!mpOn) useOffline(); else setTimeout(()=>{ if (!saveKey) useOffline(); }, 9000);
 $('rollBtn').onclick = roll;
 $('autoBtn').onclick = ()=>{ S.auto = !S.auto; save(); render(); if (S.auto) roll(); };
 $('fastBtn').onclick = ()=>{ S.fast = !S.fast; save(); render(); };
@@ -1827,7 +1849,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   if (window.__starCap && starState && window.__starCap.length && starState.el/starState.dur >= window.__starCap[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .7)); window.__starCap.shift(); }
   if (window.__capT && cine && window.__capT.length && cine.t >= window.__capT[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .8)); window.__capT.shift(); } }
 loop();
-window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, pickups, replay, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
+window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, pickups, replay, useAccount, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
   fakeOther:(tier)=>{ onPlayers({ bot1:{ x:me.x + 6, y:me.y, z:me.z - 2, ry:0, name:'테스트봇', avatarLoadout:{}, d:{ au:tier, rl:-1, rs:0 } } }); } };
 })();
 </script>
