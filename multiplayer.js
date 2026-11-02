@@ -1688,6 +1688,15 @@ if (phLockMark.get()) phBlockDevice(true);
 const MP = (function () {
   let app = null, auth = null, db = null;
   let uid = null;
+  // ---- 계정 데이터 '받아 옴' 표시 (로그인/로그아웃 때 공개 프로필이 초보로 덮이던 버그) ----
+  // 이 기기의 캐시 (mp_xp · mp_avatar_loadout · mp_nickname …) 가 누구 것인지 mp_cache_uid 에 적어 둬요.
+  // 캐시가 지금 uid 의 것으로 확인되기 전에는 (= restoredUid !== uid) 이름 · 아바타 · 레벨 · 경험치 · 접속 상태를 DB 에 쓰지 않아요.
+  // 예전엔 로그인 순간 onAuthStateChanged 가 signIn 의 then (캐시 비우기 · 계정 받아 오기) 보다 먼저 불려서,
+  // 그 사이에 허브가 게스트 캐시 (이름 · 기본 아바타 · LV1) 로 presence 를 쓰고 화면을 그렸고, 받아 온 뒤에는 다시 그리지 않았어요.
+  let restoredUid = null, signingIn = false, signingUp = false, pendingXP = 0, presenceWanted = false;
+  const cacheUid = () => { try { return localStorage.getItem('mp_cache_uid'); } catch (e) { return null; } };
+  function markRestored(u) { restoredUid = u; try { localStorage.setItem('mp_cache_uid', u); } catch (e) {} }
+  function isRestored() { return !!uid && restoredUid === uid; }
   let myRef = null, playersRef = null;
   let presenceStaleTimer = null;
   let onPlayersCb = null;
@@ -1798,7 +1807,7 @@ const MP = (function () {
   // 예전엔 회원가입할 때만 이 레코드를 만들어서, 그 외 경로로 들어온 계정은
   // 친구 검색에 아예 안 잡혔다.
   function ensureUserRecord() {
-    if (!isConfigured() || !db || !uid) return;
+    if (!isConfigured() || !db || !uid || !isRestored()) return;   // 캐시가 이 사람 것이 아니면 이름 · 레벨을 쓰지 않아요
     const ref = db.ref(`${MP_ROOT}/users/${uid}`);
     ref.once('value').then(snap => {
       const cur = snap.val() || {};
@@ -1842,8 +1851,8 @@ const MP = (function () {
       const local = getOwnedItems();
       const merged = local.slice(); remote.forEach(id => { if (merged.indexOf(id) < 0) merged.push(id); });
       try { localStorage.setItem('mp_owned_items', JSON.stringify(merged)); } catch (e) {}
-      // 이 기기에만 있던 것도 계정으로 올린다
-      local.forEach(id => { if (remote.indexOf(id) < 0) db.ref(`${MP_ROOT}/users/${uid}/ownedItems/${id}`).set(true).catch(() => {}); });
+      // 이 기기에만 있던 것도 계정으로 올린다 (캐시가 이 사람 것일 때만)
+      if (isRestored()) local.forEach(id => { if (remote.indexOf(id) < 0) db.ref(`${MP_ROOT}/users/${uid}/ownedItems/${id}`).set(true).catch(() => {}); });
       cb && cb(merged);
     }).catch(() => cb && cb(getOwnedItems()));
   }
@@ -1863,6 +1872,7 @@ const MP = (function () {
     myAvatarLoadout = loadout; if (loadout && typeof loadout === 'object') EMO.loUid.set(loadout, 'self');
     try { localStorage.setItem('mp_avatar_loadout', JSON.stringify(loadout)); } catch (e) {}
     // 방에 접속 중이면 다른 플레이어에게 바로 보이도록 즉시 반영
+    if (!isRestored() && isConfigured() && uid) { cb && cb(false); return; }   // 계정을 받아 오기 전엔 (화면의 옛 값일 수 있어서) 계정에 쓰지 않아요
     if (myRef) { try { myRef.update({ avatarLoadout: loadout }); } catch (e) {} }
     // 계정에도 영구 저장(로그인/익명 uid 공통) - 다음 접속/다른 게임에서도 유지됨
     if (isConfigured() && db && uid) {
@@ -2115,7 +2125,7 @@ const MP = (function () {
     }).catch(() => {});
   }
   function pushShards() {
-    if (shardBusy || !db || !uid || window.__phBlocked) return;
+    if (shardBusy || !db || !uid || window.__phBlocked || !isRestored()) return;
     const local = getLocalShards();
     if (local === null || local === shardServer) return;
     if (window.__phTainted) { if (shardServer !== null) setLocalShards(shardServer); return; }   // 조작이 감지된 페이지의 샤드는 인정 안 해요
@@ -2170,9 +2180,15 @@ const MP = (function () {
     authReady = true;
     if (user) {
       uid = user.uid;
+      // 캐시 주인 확인: 같은 사람 → 바로 OK · 로그인/가입 중 → 그쪽이 처리 · 다른 계정 캐시 → 비우고 계정에서 받아 와요
+      const cu = cacheUid();
+      if (cu === user.uid || (!cu && user.isAnonymous)) markRestored(user.uid);
+      else if (signingIn || signingUp) { /* signIn · signUp 이 끝내요 */ }
+      else if (user.isAnonymous) { clearLocalCaches(); markRestored(user.uid); }   // 새 게스트는 앞사람 것을 들고 가지 않아요
+      else { if (cu) clearLocalCaches(); restoreAccountData(); }   // (예전 기기: 표시가 없으면 비우지 않고 합쳐요)
       checkDevice();
       startShardSync();
-      ensureUserRecord();
+      if (isRestored()) ensureUserRecord();
       if (roomMode && currentRoom) joinRoom(user.uid);
       if (!firstCallbackFired && firstCallback) { firstCallback(user.uid, null); firstCallbackFired = true; }
       if (onAuthCb) onAuthCb(user);
@@ -2286,6 +2302,9 @@ const MP = (function () {
     const cb = (u, e) => cb0 && cb0(u, fixAuthErr(e));
     const finalNick = (nickname || getNickname()).trim().slice(0,12);
     const finish = (user) => {
+      signingUp = false;
+      markRestored(user.uid);   // 이 기기 캐시 (게스트가 꾸민 아바타 · 레벨) 가 이제 이 계정 것
+      try { db.ref(`${MP_ROOT}/users/${user.uid}`).update({ avatarLoadout: getLocalAvatarLoadout(), xp: getLocalXP(), level: getLevel().level }).catch(() => {}); } catch (e) {}
       setNickname(finalNick);
       accountName = finalNick;
       db.ref(`${MP_ROOT}/users/${user.uid}`).update({
@@ -2299,6 +2318,7 @@ const MP = (function () {
     };
     const cur = auth.currentUser;
     const cred = firebase.auth.EmailAuthProvider.credential(email, password);
+    signingUp = true; setTimeout(() => { signingUp = false; }, 30000);
     if (cur && cur.isAnonymous) {
       // 게스트로 플레이하던 uid를 그대로 이어받아 계정으로 승격.
       // 이 프로젝트는 "이메일 열거 보호"가 켜져 있어서 옛 SDK(8.10.1)의 linkWithCredential(= 이메일 바꾸기 요청)이
@@ -2323,7 +2343,7 @@ const MP = (function () {
       });
       });
     } else {
-      auth.createUserWithEmailAndPassword(email, password).then(res => finish(res.user)).catch(err => cb && cb(null, err));
+      auth.createUserWithEmailAndPassword(email, password).then(res => finish(res.user)).catch(err => { signingUp = false; cb && cb(null, err); });
     }
   }
 
@@ -2331,16 +2351,18 @@ const MP = (function () {
     if (!isConfigured()) { cb0 && cb0(null, 'no-config'); return; }
     ensureApp(); email = cleanEmail(email);
     const cb = (u, e, info) => cb0 && cb0(u, fixAuthErr(e), info);
+    signingIn = true;
     auth.signInWithEmailAndPassword(email, password).then(res => {
       // 게스트로 쌓인 이 기기의 캐시가 계정 데이터에 섞이지 않게 비우고, 계정 데이터를 다시 받는다
       clearLocalCaches();
       uid = res.user.uid;
-      restoreAccountData(info => cb && cb(res.user, null, info));
-    }).catch(err => cb && cb(null, err));
+      restoreAccountData(info => { signingIn = false; cb && cb(res.user, null, info); });
+    }).catch(err => { signingIn = false; cb && cb(null, err); });
   }
   function clearLocalCaches() {
-    myAvatarLoadout = null; myXP = null;
-    try { ['mp_xp', 'mp_avatar_loadout', 'mp_owned_items', 'mp_nickname', 'mp_account_name'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    myAvatarLoadout = null; myXP = null; accountName = null; restoredUid = null; pendingXP = 0;
+    // shard_balance · mp_cache_uid 도: 로그아웃한 게스트가 계정 샤드를 들고 가서 자기 칸에 쓰지 않게 (게스트는 새 기기처럼 시작)
+    try { ['mp_xp', 'mp_avatar_loadout', 'mp_owned_items', 'mp_nickname', 'mp_account_name', 'shard_balance', 'mp_cache_uid'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
   }
   // 계정(users/{uid})에 저장된 이름·아바타·레벨·아이템을 이 기기로 다시 받아온다
   function restoreAccountData(cb) {
@@ -2354,10 +2376,23 @@ const MP = (function () {
         if (u.avatarLoadout) { myAvatarLoadout = Object.assign(mpDefaultLoadout(), u.avatarLoadout); localStorage.setItem('mp_avatar_loadout', JSON.stringify(myAvatarLoadout)); }
         if (typeof u.xp === 'number') { myXP = Math.max(u.xp, getLocalXP()); localStorage.setItem('mp_xp', String(myXP)); }
         const owned = Object.keys(u.ownedItems || {}); if (owned.length) { const loc = getOwnedItems(); owned.forEach(id => { if (loc.indexOf(id) < 0) loc.push(id); }); localStorage.setItem('mp_owned_items', JSON.stringify(loc)); }
+        if (typeof u.shards === 'number') { shardServer = u.shards; setLocalShards(u.shards); localStorage.setItem('shard_uid', uid); }
         localStorage.setItem('mp_nickname_set', '1');
       } catch (e) {}
+      markRestored(uid); publishRestored();
       cb && cb({ name: u.displayName || u.nickname || null, accountName: u.nickname || null, level: typeof u.xp === 'number' ? levelFromXP(u.xp).level : (u.level || 1), items: Object.keys(u.ownedItems || {}).length, avatar: u.avatarLoadout || null, email: u.email || (auth.currentUser && auth.currentUser.email) || null });
-    }).catch(err => { console.error('[MP] 계정 데이터 불러오기 실패', err && err.code || err); cb && cb(null, err); });
+    }).catch(err => { console.error('[MP] 계정 데이터 불러오기 실패', err && err.code || err); setTimeout(() => { if (uid && !isRestored() && !signingIn) restoreAccountData(); }, 5000); cb && cb(null, err); });
+  }
+  // 받아 온 진짜 값으로 공개 칸을 다시 맞추고 (users 의 이름 · 레벨 · 순위표 · 접속 상태 · 방의 내 정보) 화면에 다시 그리라고 알려요
+  function publishRestored() {
+    if (!isConfigured() || !db || !uid || !isRestored()) return;
+    ensureUserRecord();
+    const xp = getLocalXP();
+    if (xp > 0) db.ref(`${MP_ROOT}/users/${uid}`).update({ level: levelFromXP(xp).level }).catch(() => {});   // 예전 버그로 LV1 이 써져 있었으면 고쳐져요
+    if (pendingXP > 0) { const a = pendingXP; pendingXP = 0; addXP(a); }
+    if (presenceWanted) setPresence(presenceGame, presenceRoom);
+    if (myRef) { try { myRef.update({ name: getDisplayName(), avatarLoadout: getLocalAvatarLoadout() }); } catch (e) {} }
+    try { window.dispatchEvent(new Event('mp-account-restored')); } catch (e) {}
   }
   function resetPassword(email, cb0) {
     if (!isConfigured()) { cb0 && cb0(false, 'no-config'); return; }
@@ -2512,6 +2547,7 @@ const MP = (function () {
   function addXP(amount, cb){
     if (window.__phTainted || window.__phBlocked) amount = 0;   // 조작이 감지된 페이지에서는 경험치를 안 줘요
     const before = levelFromXP(getLocalXP()).level;
+    if (isConfigured() && uid && !isRestored()) { pendingXP += Math.max(0, Math.round(amount || 0)); const r0 = Object.assign({}, getLevel(), { leveledTo: null }); cb && cb(r0); return r0; }   // 계정을 받아 오는 중: 나중에 더해요 (0 에서 더해 LV1 로 덮지 않게)
     myXP = getLocalXP() + Math.min(3000, Math.max(0, Math.round(amount || 0)));   // 한 번에 너무 많이 못 올려요 (게임이 주는 최대치 3000)
     try { localStorage.setItem('mp_xp', String(myXP)); } catch (e) {}
     const after = levelFromXP(myXP);
@@ -2589,7 +2625,7 @@ const MP = (function () {
       if (typeof remote === 'number' && remote > getLocalXP()){
         myXP = remote;
         try { localStorage.setItem('mp_xp', String(myXP)); } catch(e){}
-      } else if (typeof remote !== 'number' && getLocalXP() > 0){
+      } else if (typeof remote !== 'number' && getLocalXP() > 0 && isRestored()){
         db.ref(`${MP_ROOT}/users/${uid}`).update({ xp: getLocalXP(), level: getLevel().level }).catch(()=>{});
       }
       cb && cb(getLevel());
@@ -2599,6 +2635,8 @@ const MP = (function () {
   let presenceRef = null;
   function setPresence(game, room) {
     if (!isConfigured() || !db || !uid) return;
+    presenceWanted = true;
+    if (!isRestored()) { presenceGame = game || null; presenceRoom = room || null; return; }   // 받아 온 뒤 publishRestored 가 다시 불러요 (게스트 이름이 계정 접속 상태에 안 써지게)
     if (!presenceRef || presenceRef.key !== uid) {
       presenceRef = db.ref(`${MP_ROOT}/presence/${uid}`);
       presenceRef.onDisconnect().update({ online:false, game:null, room:null, ts: firebase.database.ServerValue.TIMESTAMP });
