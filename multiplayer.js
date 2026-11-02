@@ -2296,10 +2296,31 @@ const MP = (function () {
     return { code, message: err.message, original: err };
   }
   const cleanEmail = e => String(e || '').trim().toLowerCase();
+  // ---------- 아이디 계정 ----------
+  // Firebase 는 이메일 하나에 계정 하나라서, 한 사람이 여러 계정을 쓰려면 '아이디' 로 가입해요.
+  // 아이디 (마크 이름처럼 영어 · 숫자 · _ · 3~16자, 대소문자 구분 없음) 는 메일을 받을 수 없는 가짜 주소
+  // <소문자 아이디>@users.playhub.invalid 로 Firebase 에 넣어요 (.invalid 는 형식 검사를 통과해요). 같은 아이디는 Firebase 가 EMAIL_EXISTS 로 막아요.
+  // 한국어는 닉네임 (표시 이름, 따로 · 바꿀 수 있음) 에만 써요.
+  const ID_DOMAIN = 'users.playhub.invalid';
+  function checkLoginId(id) {
+    id = String(id || '').trim();
+    if (!/^[A-Za-z0-9_]*$/.test(id)) return '아이디는 영어 · 숫자 · _ 만 쓸 수 있어요 (한국어는 닉네임에)';
+    if (id.length < 3 || id.length > 16) return '아이디는 3~16자로 정해 주세요.';
+    return null;
+  }
+  const idToEmail = id => String(id || '').trim().toLowerCase() + '@' + ID_DOMAIN;
+  const isIdEmail = e => String(e || '').toLowerCase().endsWith('@' + ID_DOMAIN);
+  // 가짜 주소 → 아이디 (화면에 "@users.playhub.invalid" 를 보이지 않게) · 진짜 이메일은 그대로
+  const emailToId = e => isIdEmail(e) ? String(e).slice(0, String(e).lastIndexOf('@')) : null;
+  function loginLabel(u) { const e = u && typeof u === 'object' ? u.email : u; return emailToId(e) || e || ''; }
+  // 로그인 칸: '@' 가 있으면 이메일, 없으면 아이디
+  function toLoginEmail(input) { const v = String(input || '').trim(); if (v.indexOf('@') >= 0) return { email: cleanEmail(v), isId: false }; const err = checkLoginId(v); return err ? { err } : { email: idToEmail(v), isId: true, id: v }; }
   function signUp(email, password, nickname, cb0) {
     if (!isConfigured()) { cb0 && cb0(null, 'no-config'); return; }
-    ensureApp(); email = cleanEmail(email);
-    const cb = (u, e) => cb0 && cb0(u, fixAuthErr(e));
+    ensureApp();
+    const L = toLoginEmail(email); if (L.err) { cb0 && cb0(null, { code: 'auth/invalid-id', message: L.err }); return; }
+    email = L.email;
+    const cb = (u, e) => { e = fixAuthErr(e); if (e && L.isId && e.code === 'auth/email-already-in-use') e = { code: 'auth/id-already-in-use', message: '이미 있는 아이디예요.' }; cb0 && cb0(u, e); };
     const finalNick = (nickname || getNickname()).trim().slice(0,12);
     const finish = (user) => {
       signingUp = false;
@@ -2308,7 +2329,7 @@ const MP = (function () {
       setNickname(finalNick);
       accountName = finalNick;
       db.ref(`${MP_ROOT}/users/${user.uid}`).update({
-        email: email,
+        email: L.isId ? null : email, loginId: L.isId ? L.id.toLowerCase() : null,   // 아이디 계정은 가짜 주소 대신 아이디를 적어요
         nickname: finalNick, nicknameLower: finalNick.toLowerCase(),          // 계정 이름(고정)
         displayName: finalNick, displayNameLower: finalNick.toLowerCase(),    // 표시 이름(변경 가능)
         createdAt: firebase.database.ServerValue.TIMESTAMP
@@ -2349,8 +2370,10 @@ const MP = (function () {
 
   function signIn(email, password, cb0) {
     if (!isConfigured()) { cb0 && cb0(null, 'no-config'); return; }
-    ensureApp(); email = cleanEmail(email);
-    const cb = (u, e, info) => cb0 && cb0(u, fixAuthErr(e), info);
+    ensureApp();
+    const L = toLoginEmail(email); if (L.err) { cb0 && cb0(null, { code: 'auth/invalid-id', message: L.err }); return; }
+    email = L.email;
+    const cb = (u, e, info) => { e = fixAuthErr(e); if (e && L.isId && e.code === 'auth/invalid-credential') e = { code: 'auth/invalid-id-credential', message: '아이디 또는 비밀번호가 맞지 않아요.' }; cb0 && cb0(u, e, info); };
     signingIn = true;
     auth.signInWithEmailAndPassword(email, password).then(res => {
       // 게스트로 쌓인 이 기기의 캐시가 계정 데이터에 섞이지 않게 비우고, 계정 데이터를 다시 받는다
@@ -2396,7 +2419,10 @@ const MP = (function () {
   }
   function resetPassword(email, cb0) {
     if (!isConfigured()) { cb0 && cb0(false, 'no-config'); return; }
-    ensureApp(); email = cleanEmail(email);
+    ensureApp();
+    // 아이디 계정은 메일을 받을 수 없어요 → 재설정 메일을 보내지 않아요
+    if (String(email || '').indexOf('@') < 0 || isIdEmail(email)) { cb0 && cb0(false, { code: 'auth/id-no-reset', message: '아이디 계정은 비밀번호를 찾을 수 없어요 — 관리자에게 문의하세요.' }); return; }
+    email = cleanEmail(email);
     const cb = (ok, e) => cb0 && cb0(ok, fixAuthErr(e));
     auth.sendPasswordResetEmail(email).then(() => cb && cb(true)).catch(err => cb && cb(false, err));
   }
@@ -3030,6 +3056,7 @@ const MP = (function () {
     removeFriend,
     restoreAccountData,
     resetPassword,
+    checkLoginId, loginLabel, emailToId, idToEmail,
     sendFriendRequest,
     acceptFriend,
     declineFriend,
