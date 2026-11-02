@@ -2300,13 +2300,27 @@ const MP = (function () {
     const cur = auth.currentUser;
     const cred = firebase.auth.EmailAuthProvider.credential(email, password);
     if (cur && cur.isAnonymous) {
-      // 게스트로 플레이하던 uid를 그대로 이어받아 계정으로 승격
+      // 게스트로 플레이하던 uid를 그대로 이어받아 계정으로 승격.
+      // 이 프로젝트는 "이메일 열거 보호"가 켜져 있어서 옛 SDK(8.10.1)의 linkWithCredential(= 이메일 바꾸기 요청)이
+      // "Please verify the new email before changing email." (auth/operation-not-allowed) 로 막힌다.
+      // 그래서 새 SDK 와 같은 방법(accounts:signUp 에 게스트 idToken 을 같이 보내기 = 같은 uid 로 승격)을 직접 쓰고,
+      // 그다음 이메일/비밀번호로 로그인해서 SDK 상태를 맞춘다. 그래도 안 되면 예전 방법으로.
+      const viaRest = () => cur.getIdToken().then(tok => fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(FIREBASE_CONFIG.apiKey), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: tok, email: email, password: password, returnSecureToken: true })
+        }).then(r => r.json())).then(d => {
+          if (d && d.error) { const m = String(d.error.message || ''); const e = new Error(m); e.code = /EMAIL_EXISTS/.test(m) ? 'auth/email-already-in-use' : /WEAK_PASSWORD/.test(m) ? 'auth/weak-password' : /INVALID_EMAIL/.test(m) ? 'auth/invalid-email' : /OPERATION_NOT_ALLOWED/.test(m) ? 'auth/operation-not-allowed' : /TOO_MANY/.test(m) ? 'auth/too-many-requests' : 'auth/internal-error'; throw e; }
+          return auth.signInWithEmailAndPassword(email, password);
+        });
+      viaRest().then(res => finish(res.user)).catch(e0 => {
+        if (e0 && (e0.code === 'auth/email-already-in-use' || e0.code === 'auth/weak-password' || e0.code === 'auth/invalid-email' || e0.code === 'auth/too-many-requests')) { cb && cb(null, e0); return; }
       cur.linkWithCredential(cred).then(res => finish(res.user)).catch(err => {
         if (err && err.code === 'auth/email-already-in-use') {
           auth.createUserWithEmailAndPassword(email, password).then(res => finish(res.user)).catch(e2 => cb && cb(null, e2));
         } else {
           cb && cb(null, err);
         }
+      });
       });
     } else {
       auth.createUserWithEmailAndPassword(email, password).then(res => finish(res.user)).catch(err => cb && cb(null, err));
