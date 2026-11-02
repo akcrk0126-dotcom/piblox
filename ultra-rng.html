@@ -66,6 +66,16 @@
   #cutPerk{ font-size:13px; margin-top:6px; opacity:0; transition:opacity .8s .6s; color:#fff; }
   #cut.show #cutLabel{ opacity:1; transform:none; } #cut.show #cutTag, #cut.show #cutOdds, #cut.show #cutPerk{ opacity:1; }
   #cutHint{ position:absolute; right:3vw; bottom:3.5vh; font-size:12px; color:#999; z-index:2; }
+  #cutLines{ position:absolute; inset:0; width:100%; height:100%; mix-blend-mode:screen; }
+  #cut.punch .bar{ height:15vh; transition:height .08s; }
+  #cutTitleWrap{ position:relative; display:inline-block; }
+  #cutShine{ position:absolute; left:0; top:0; white-space:nowrap; pointer-events:none; color:transparent; -webkit-background-clip:text; background-clip:text;
+    background-image:linear-gradient(105deg, transparent 40%, rgba(255,255,255,.95) 50%, transparent 60%); background-size:300% 100%; background-position:120% 0; opacity:0; }
+  #cut.shine #cutShine{ opacity:1; animation:shine 1.4s ease-in-out forwards; }
+  @keyframes shine{ to{ background-position:-120% 0; } }
+  #cutTierBig{ position:absolute; right:5vw; top:15vh; font-family:'Orbitron',sans-serif; font-weight:900; font-size:clamp(60px,14vw,180px); line-height:1; opacity:0; color:transparent; -webkit-text-stroke:2px rgba(255,255,255,.35); letter-spacing:-4px; transform:translateX(40px); transition:opacity 1s, transform 1.4s cubic-bezier(.2,.8,.2,1); pointer-events:none; }
+  #cut.show #cutTierBig{ opacity:.55; transform:none; }
+  #cutLabel .first{ color:#fff; background:linear-gradient(90deg,#ff5f8f,#c27bff); padding:2px 8px; border-radius:4px; margin-left:10px; letter-spacing:3px; font-size:11px; }
   /* 모바일 */
   #joy{ position:absolute; left:0; bottom:0; width:45%; height:60%; }
   #look{ position:absolute; right:0; top:0; width:55%; height:100%; }
@@ -83,8 +93,10 @@
 <div id="quote"></div>
 <div id="cut">
   <div id="cutVig"></div>
+  <canvas id="cutLines"></canvas>
   <div class="bar" id="barT"></div><div class="bar" id="barB"></div>
-  <div id="cutBox"><div id="cutLabel"></div><div id="cutTitle"></div><div id="cutLine"></div><div id="cutTag"></div><div id="cutOdds"></div><div id="cutPerk"></div></div>
+  <div id="cutBox"><div id="cutLabel"></div><div id="cutTitleWrap"><div id="cutTitle"></div><div id="cutShine"></div></div><div id="cutLine"></div><div id="cutTag"></div><div id="cutOdds"></div><div id="cutPerk"></div></div>
+  <div id="cutTierBig"></div>
   <div id="cutHint">클릭해서 넘기기</div>
 </div>
 <div id="hud">
@@ -242,6 +254,19 @@ function starSound(tier, phase, durMs){
       gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(.12, now + .3); gain.gain.linearRampToValueAtTime(.18, now + d*.7); gain.gain.linearRampToValueAtTime(0, now + d);
       f.frequency.setValueAtTime(300 + tier*30, now); f.frequency.linearRampToValueAtTime(4000, now + d);
       osc.start(now); osc.stop(now + d);
+    } else if (phase === 'riser'){
+      const d = durMs/1000, len = Math.ceil(ctx.sampleRate*d), buf = ctx.createBuffer(1, len, ctx.sampleRate), ch = buf.getChannelData(0); for (let i=0;i<len;i++) ch[i] = Math.random()*2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6; const g = ctx.createGain();
+      src.connect(bp); bp.connect(g); g.connect(ctx.destination); bp.frequency.setValueAtTime(250, now); bp.frequency.exponentialRampToValueAtTime(5200, now + d);
+      g.gain.setValueAtTime(.0001, now); g.gain.exponentialRampToValueAtTime(.22, now + d*.95); g.gain.linearRampToValueAtTime(0, now + d); src.start(now); src.stop(now + d);
+      osc.type = 'sine'; osc.frequency.setValueAtTime(70, now); osc.frequency.exponentialRampToValueAtTime(260, now + d); f.frequency.value = 1200;
+      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(.16, now + d*.9); gain.gain.linearRampToValueAtTime(0, now + d); osc.start(now); osc.stop(now + d);
+    } else if (phase === 'chord'){
+      const root = 110*Math.pow(2, ((tier*5) % 12)/12), notes = [1, 1.5, 2, 2.52, 3, 4];
+      notes.forEach((m, i)=>{ [-6, 6].forEach(det=>{ const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = root*m; o.detune.value = det;
+        lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, now); lp.frequency.exponentialRampToValueAtTime(500, now + 3); o.connect(lp); lp.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(.045/(1 + i*.25), now + .04); g.gain.exponentialRampToValueAtTime(.001, now + 3.2); o.start(now); o.stop(now + 3.3); }); });
+      osc.disconnect(); return;
     } else if (phase === 'boom'){
       osc.type = 'sine'; osc.frequency.setValueAtTime(110, now); osc.frequency.exponentialRampToValueAtTime(38, now + .9);
       gain.gain.setValueAtTime(.5, now); gain.gain.exponentialRampToValueAtTime(.001, now + 1.1); f.frequency.setValueAtTime(900, now);
@@ -284,7 +309,7 @@ if (postOK){
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:'uniform sampler2D tDiffuse;uniform float uSat,uVig,uTime,uHaze,uAsp,uCA,uZoom;uniform vec2 uP;uniform vec3 uTint;varying vec2 vUv;vec3 aces(vec3 x){x*=1.15;return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}'+
       'void main(){vec2 uv=vUv;vec2 d=uv-uP;float m=smoothstep(.22,.0,length(d*vec2(uAsp,1.)))*uHaze;uv+=vec2(sin(uv.y*90.+uTime*7.),cos(uv.x*80.+uTime*6.))*.0022*m;'+
-      'vec2 dir=uv-.5;vec3 raw=vec3(0.);for(int i=0;i<6;i++){float s=1.-uZoom*float(i)*.012;vec2 q=.5+dir*s;raw+=vec3(texture2D(tDiffuse,q+dir*uCA).r,texture2D(tDiffuse,q).g,texture2D(tDiffuse,q-dir*uCA).b);}raw/=6.;'+
+      'vec2 dir=uv-uP;vec3 raw=vec3(0.);for(int i=0;i<6;i++){float s=1.-uZoom*float(i)*.012;vec2 q=uP+dir*s;raw+=vec3(texture2D(tDiffuse,q+dir*uCA).r,texture2D(tDiffuse,q).g,texture2D(tDiffuse,q-dir*uCA).b);}raw/=6.;'+
       'vec3 c=aces(max(raw,0.));float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,uSat);float v=smoothstep(.35,1.05,length(vUv-.5)*1.5);c=mix(c,c*.25+uTint*.25,v*uVig);gl_FragColor=vec4(c,1.);}' });
   composer.addPass(gradePass);
 }
@@ -309,13 +334,13 @@ float vor(vec2 x){vec2 n=floor(x),f=fract(x);float m1=8.,m2=8.;for(int j=-1;j<=1
 
 // ---- 하늘 · 별 ----
 const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), new THREE.ShaderMaterial({
-  side:THREE.BackSide, depthWrite:false, uniforms:{ uTime:{ value:0 } },
+  side:THREE.BackSide, depthWrite:false, uniforms:{ uTime:{ value:0 }, uTint:{ value:new THREE.Color(0, 0, 0) }, uAmt:{ value:0 } },
   vertexShader:`varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:GLSL_NOISE + `varying vec3 vP;uniform float uTime;
+  fragmentShader:GLSL_NOISE + `varying vec3 vP;uniform float uTime,uAmt;uniform vec3 uTint;
   void main(){float h=vP.y;vec3 top=vec3(.03,.02,.08),mid=vec3(.12,.06,.24),hor=vec3(.3,.12,.38);
    vec3 c=mix(hor,mid,smoothstep(0.,.25,h));c=mix(c,top,smoothstep(.25,.9,h));
    float neb=fbm(vP*3.+vec3(uTime*.01,0,0));c+=vec3(.4,.14,.6)*pow(neb,3.)*smoothstep(-.1,.5,h)*1.2;
-   c+=vec3(.08,.2,.45)*pow(fbm(vP*5.+9.),4.)*1.5;gl_FragColor=vec4(c,1.);}`
+   c+=vec3(.08,.2,.45)*pow(fbm(vP*5.+9.),4.)*1.5;float sw=fbm(vec3(atan(vP.z,vP.x)*3.,h*4.-uTime*.6,uTime*.1));c=mix(c,c*.25+uTint*(.15+pow(sw,2.)*.9)*smoothstep(-.05,.6,h),uAmt);gl_FragColor=vec4(c,1.);}`
 })); scene.add(sky);
 let starPts;
 { const N = 2500, pos = new Float32Array(N*3), sz = new Float32Array(N);
@@ -989,49 +1014,105 @@ function endStar(){ starRig.visible = false; dim.material.opacity = 0; $('quote'
 // =====================================================================
 //  🎬 컷씬 — 시네마 바 · 낮은 앵글에서 밀고 들어가는 카메라 · 등급 폰트 타이틀
 // =====================================================================
-let cine = null, shakeT = 0;
+// 연출 소품: 빨려드는 입자 · 바닥 마법진 · 하늘 마법진
+const cineFx = (()=>{ const N = 520, sd = new Float32Array(N*4), dir = new Float32Array(N*3);
+  for (let i=0;i<N;i++){ const th = Math.random()*6.283, ph = Math.acos(Math.random()*2 - 1); dir.set([Math.sin(ph)*Math.cos(th), Math.cos(ph)*.7 + .15, Math.sin(ph)*Math.sin(th)], i*3); sd.set([Math.random(), Math.random(), Math.random(), Math.random()], i*4); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N*3), 3)); g.setAttribute('aDir', new THREE.BufferAttribute(dir, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(sd, 4));
+  const u = { uTime:{ value:0 }, uC1:{ value:new THREE.Color() }, uC2:{ value:new THREE.Color() }, uFade:{ value:0 }, uPR:{ value:renderer.getPixelRatio() } };
+  const pts = new THREE.Points(g, new THREE.ShaderMaterial({ uniforms:u, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`attribute vec3 aDir;attribute vec4 aSeed;uniform float uTime,uPR;varying float vA,vMix;void main(){float life=fract(aSeed.x+uTime*(.55+aSeed.y*.5));float r=mix(13.,.4,pow(life,1.7));
+      vec3 p=aDir*r+vec3(0.,2.,0.);vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=min(uPR*14.,uPR*(1.5+aSeed.z*3.)*(1.+life)*(40./-mv.z));vA=smoothstep(0.,.25,life)*(1.-smoothstep(.92,1.,life))*smoothstep(3.,6.,-mv.z);vMix=aSeed.w;}`,
+    fragmentShader:`uniform vec3 uC1,uC2;uniform float uFade;varying float vA,vMix;void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,0.,d);gl_FragColor=vec4(mix(uC1,vec3(1.),vMix*.4)*1.8,a*a*vA*uFade*.8);}` }));
+  pts.frustumCulled = false; pts.visible = false; scene.add(pts);
+  const mkSig = size=>{ const uu = { uTime:{ value:0 }, uC1:{ value:new THREE.Color() }, uC2:{ value:new THREE.Color() }, uInt:{ value:0 }, uRainbow:{ value:0 }, uDark:{ value:0 }, uBoost:{ value:1 }, uSpin:{ value:1 }, uGrid:{ value:0 } };
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.ShaderMaterial({ uniforms:uu, vertexShader:BASIC_VS, fragmentShader:CIRCLE_FS, transparent:true, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }));
+    m.rotation.x = -Math.PI/2; m.visible = false; m.frustumCulled = false; scene.add(m); return m; };
+  return { pts, u, ground:mkSig(30), sky:mkSig(90) }; })();
+const cineLight = new THREE.PointLight(0xffffff, 0, 16, 2); cineLight.visible = false; scene.add(cineLight);
+let cine = null, shakeT = 0, camBlend = 0; const cineEndPos = new THREE.Vector3(), cineEndLook = new THREE.Vector3();
 function flash(op){ const f = $('flash'); f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(()=>requestAnimationFrame(()=>{ f.style.transition = 'opacity .6s'; f.style.opacity = 0; })); }
+function countUp(el, to, ms){ const t0 = performance.now(); const step = ()=>{ const k = Math.min(1, (performance.now() - t0)/ms), e = 1 - Math.pow(1 - k, 4); el.textContent = '1 / ' + fmt(Math.max(1, Math.round(to*e))); if (k < 1 && cine) requestAnimationFrame(step); else el.textContent = '1 / ' + fmt(to); }; step(); }
 function cutscene(it){
   return new Promise(res=>{
-    const t = it.tier, col = mainCol(it), dur = t>=NEW_FROM ? 10000 : t>=40 ? 8500 : t>=32 ? 7000 : t>=21 ? 5800 : t>=13 ? 4800 : 4000;
+    const t = it.tier, col = mainCol(it), cc = new THREE.Color(col), first = !S.inv[t];
+    const charge = t >= 30 ? 2.3 : t >= 20 ? 1.9 : 1.5, hero = t >= NEW_FROM ? 7.5 : t >= 40 ? 6.5 : t >= 30 ? 5.5 : t >= 20 ? 4.6 : 3.8, dur = (charge + hero)*1000;
     const c = $('cut'); c.className = ''; c.style.display = 'block'; document.body.classList.add('cine');
-    $('cutVig').style.background = `radial-gradient(ellipse at 50% 45%, transparent 35%, ${col}26 70%, rgba(0,0,0,.55) 100%)`;
-    $('cutLabel').textContent = '✦ ' + (t >= NEW_FROM ? 'BEYOND' : 'TIER ' + t) + ' · SUMMONED'; $('cutLabel').style.color = col;
-    const ti = $('cutTitle'); ti.innerHTML = ''; ti.style.fontFamily = fontCSS(it); ti.style.textShadow = `0 0 30px ${col}, 0 0 70px ${col}66, 0 4px 0 rgba(0,0,0,.4)`;
-    ti.style.fontSize = it.name.length > 14 ? 'clamp(30px,6vw,80px)' : '';
-    [...it.name].forEach((ch, i)=>{ const s = document.createElement('span'); s.textContent = ch === ' ' ? ' ' : ch; s.style.animationDelay = (i*.045) + 's'; s.style.animationPlayState = 'paused';
-      s.style.color = (it.rainbow||0) >= .9 ? RBW[i % RBW.length] : col; ti.appendChild(s); });
+    $('cutVig').style.background = `radial-gradient(ellipse at 50% 45%, transparent 35%, ${col}26 70%, rgba(0,0,0,.6) 100%)`;
+    $('cutLabel').innerHTML = ''; $('cutLabel').append('✦ ' + (t >= NEW_FROM ? 'BEYOND' : 'TIER ' + t) + ' · SUMMONED'); if (first){ const f = document.createElement('span'); f.className = 'first'; f.textContent = 'FIRST DISCOVERY'; $('cutLabel').appendChild(f); }
+    $('cutLabel').style.color = col;
+    $('cutTierBig').textContent = t >= NEW_FROM ? 'Ω' : String(t).padStart(2, '0'); $('cutTierBig').style.webkitTextStroke = `2px ${col}66`;
+    const ti = $('cutTitle'), sh = $('cutShine'); ti.innerHTML = ''; ti.style.fontFamily = sh.style.fontFamily = fontCSS(it); ti.style.textShadow = `0 0 30px ${col}, 0 0 70px ${col}66, 0 4px 0 rgba(0,0,0,.4)`;
+    ti.style.fontSize = sh.style.fontSize = it.name.length > 14 ? 'clamp(30px,6vw,80px)' : ''; sh.textContent = it.name;
+    [...it.name].forEach((ch, i)=>{ const sp = document.createElement('span'); sp.textContent = ch === ' ' ? ' ' : ch; sp.style.animationDelay = (i*.04) + 's'; sp.style.animationPlayState = 'paused';
+      sp.style.color = (it.rainbow||0) >= .9 ? RBW[i % RBW.length] : col; ti.appendChild(sp); });
     $('cutLine').style.width = '0'; $('cutLine').style.background = `linear-gradient(90deg, ${col}, transparent)`; $('cutLine').style.boxShadow = `0 0 12px ${col}`;
     $('cutTag').textContent = '“' + it.tag + '”'; $('cutTag').style.textShadow = `0 0 12px ${col}`;
-    $('cutOdds').textContent = '1 / ' + fmt(it.odds);
-    $('cutPerk').textContent = it.perk ? '능력 · ' + PERKS[it.perk] : '';
+    $('cutOdds').textContent = ''; $('cutPerk').textContent = it.perk ? '능력 · ' + PERKS[it.perk] : '';
     requestAnimationFrame(()=>{ c.classList.add('on'); $('cutVig').style.opacity = 1; });
+    // 충전: 오라는 낮게 · 입자가 빨려든다 · 하늘이 물든다 · 상승음
     setSlotAura(mySlot, t); const A = ()=>mySlot.aura, P = ()=>new THREE.Vector3(me.x, me.y, me.z);
-    if (A()) A().boost = .4; cine = { t:0, dur, tier:t }; starSound(t, 'spin', 1100);
+    if (A()) A().boost = .35;
+    cineFx.u.uC1.value.copy(cc); cineFx.u.uFade.value = 0; cineFx.pts.visible = true; cineFx.pts.position.set(me.x, me.y, me.z);
+    [cineFx.ground, cineFx.sky].forEach(m=>{ const u = m.material.uniforms; u.uC1.value.copy(cc); u.uC2.value.copy(auraColors(it).c2); u.uRainbow.value = it.rainbow || 0; u.uInt.value = 0; m.visible = true; });
+    cineFx.ground.position.set(me.x, me.y + .07, me.z); cineFx.ground.scale.setScalar(.2); cineFx.sky.position.set(me.x, 48, me.z); cineFx.sky.rotation.x = Math.PI/2;
+    sky.material.uniforms.uTint.value.copy(cc);
+    cine = { t:0, start:performance.now(), charge, hero, dur:dur/1000, tier:t, impact:false, wide:t >= 40, timeScale:.3 }; cineLight.color.copy(cc); cineLight.visible = true;
+    starSound(t, 'riser', charge*1000);
     const timers = [], at = (ms, f)=>timers.push(setTimeout(f, ms));
-    at(1050, ()=>{ flash(t >= 29 ? .55 : .4); shakeT = .55; c.classList.add('show'); ti.querySelectorAll('span').forEach(s=>s.style.animationPlayState = 'running'); $('cutLine').style.width = Math.min(70, 18 + it.name.length*2.8) + 'vw';
-      if (A()){ A().boost = 1.6; shockwave(P(), A().col, 1.3); } burst(P(), it); starSound(t, 'boom'); if (gradePass){ gradePass.uniforms.uCA.value = .012; gradePass.uniforms.uZoom.value = 1.4; } });
-    const extra = t >= NEW_FROM ? 4 : t >= 40 ? 3 : t >= 30 ? 2 : t >= 20 ? 1 : 0;
-    for (let i=1;i<=extra;i++) at(1050 + i*1250, ()=>{ shakeT = .35; if (gradePass){ gradePass.uniforms.uCA.value = .007; gradePass.uniforms.uZoom.value = .8; } if (A()){ A().boost = 1.45; shockwave(P(), A().col, 1 + i*.2); } if (i === extra){ flash(.3); burst(P(), it); starSound(t, 'boom'); } });
+    at(charge*1000, ()=>{ // 임팩트
+      cine.impact = true; cine.timeScale = 1.6; flash(t >= 29 ? .75 : .6); shakeT = .7; c.classList.add('show', 'punch'); setTimeout(()=>c.classList.remove('punch'), 140);
+      ti.querySelectorAll('span').forEach(sp=>sp.style.animationPlayState = 'running'); $('cutLine').style.width = Math.min(70, 18 + it.name.length*2.8) + 'vw';
+      setTimeout(()=>c.classList.add('shine'), 900 + it.name.length*40); countUp($('cutOdds'), it.odds, 1300);
+      if (A()){ A().boost = 1.3; shockwave(P(), A().col, 1.6); shockwave(P(), A().col, .8); } burst(P(), it); burst(P(), it);
+      starSound(t, 'boom'); starSound(t, 'chord'); if (gradePass){ gradePass.uniforms.uCA.value = .016; gradePass.uniforms.uZoom.value = 2; } });
+    const extra = t >= NEW_FROM ? 3 : t >= 40 ? 2 : t >= 30 ? 1 : 0;
+    for (let i=1;i<=extra;i++) at(charge*1000 + i*1500, ()=>{ shakeT = .35; if (A()){ A().boost = 1.45; shockwave(P(), A().col, 1.1 + i*.25); } burst(P(), it); starSound(t, 'boom'); if (gradePass){ gradePass.uniforms.uCA.value = .008; gradePass.uniforms.uZoom.value = .9; } });
     let done = false;
     const finish = ()=>{ if (done) return; done = true; timers.forEach(clearTimeout); clearInterval(poll); c.removeEventListener('click', finish);
-      c.classList.remove('show', 'on'); $('cutVig').style.opacity = 0;
-      setTimeout(()=>{ c.style.display = 'none'; }, 600); document.body.classList.remove('cine'); cine = null; res(); };
+      c.classList.remove('show', 'on', 'shine'); $('cutVig').style.opacity = 0; const lc = $('cutLines'); lc.getContext('2d').clearRect(0, 0, lc.width, lc.height);
+      setTimeout(()=>{ c.style.display = 'none'; }, 600); document.body.classList.remove('cine');
+      cineEndPos.copy(camera.position); camera.getWorldDirection(cineEndLook).multiplyScalar(10).add(camera.position); camBlend = 1;
+      cineFx.pts.visible = false; cineLight.visible = false; cineLight.intensity = 0; cine = null; res(); };
     c.addEventListener('click', finish); at(dur, finish);
     const poll = setInterval(()=>{ if (skipReq) finish(); }, 50);
   });
 }
 const easeIO = x=>x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+const easeO = x=>1 - Math.pow(1 - x, 3);
 function cineCamera(dt){
-  cine.t += dt; const t = cine.t, push = easeIO(Math.min(1, t/1.1));
-  // 멀리 낮은 앵글 → 임팩트 순간 가까이 → 천천히 돌며 감상 (캐릭터는 화면 오른쪽, 타이틀은 왼쪽 아래)
-  const orbit = me.facing + .55 - push*.95 + Math.max(0, t - 1.1)*.1;
-  const dist = lerp(21, 9.5, push) + Math.max(0, t - 1.1)*.22, h = lerp(.4, 2.2, push);
-  camera.position.set(me.x + Math.sin(orbit)*dist, me.y + h, me.z + Math.cos(orbit)*dist);
-  const side = new THREE.Vector3(Math.cos(orbit), 0, -Math.sin(orbit)).multiplyScalar(-2.2*push);
-  camera.lookAt(me.x + side.x, me.y + lerp(3.4, 2.2, push), me.z + side.z);
-  camera.fov = lerp(camera.fov, t < 1.05 ? 40 : 52, Math.min(1, dt*3)); camera.updateProjectionMatrix();
-  hemi.intensity = lerp(hemi.intensity, .15, Math.min(1, dt*3));
+  cine.t = (performance.now() - cine.start)/1000; const t = cine.t, C = cine.charge, f = me.facing, P = new THREE.Vector3(me.x, me.y, me.z), look = new THREE.Vector3();
+  let fov = 50;
+  if (t < C*.5){ // 샷 1: 발밑 클로즈업, 낮게 돌며 올라간다
+    const k = t/(C*.5), a = f + 2.3 - k*.9; camera.position.set(P.x + Math.sin(a)*8, P.y + .4 + k*.8, P.z + Math.cos(a)*8); look.set(P.x, P.y + .7 + k*1.1, P.z); fov = 34 - k*4;
+  } else if (t < C){ // 샷 2: 등 뒤에서 하늘을 올려다본다
+    const k = (t - C*.5)/(C*.5), a = f + Math.PI + .25; camera.position.set(P.x + Math.sin(a)*(7 + k*2), P.y + .9, P.z + Math.cos(a)*(7 + k*2)); look.set(P.x + Math.sin(f)*2, P.y + 5 + k*10, P.z + Math.cos(f)*2); fov = 52 + k*8;
+  } else { const h = t - C;
+    if (cine.wide && h > 2.6 && h < 5){ // 샷 4: 와이드 — 빛기둥과 하늘 마법진
+      const k = (h - 2.6)/2.4, a = f + .8 + k*.25; camera.position.set(P.x + Math.sin(a)*(34 + k*6), P.y + 6 + k*3, P.z + Math.cos(a)*(34 + k*6)); look.set(P.x, P.y + 10 + k*4, P.z); fov = 55;
+    } else { // 샷 3: 영웅 샷 — 정면 3/4 낮은 앵글, 천천히 돌며 다가간다 (캐릭터는 오른쪽, 타이틀은 왼쪽 아래)
+      const k = easeO(Math.min(1, h/.5)), a = f + .55 - k*.15 + h*.06, d = lerp(16, 11.5, k) - h*.12; camera.position.set(P.x + Math.sin(a)*d, P.y + 2 + h*.05, P.z + Math.cos(a)*d);
+      const side = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a)).multiplyScalar(-2.1); look.set(P.x + side.x, P.y + 2.4, P.z + side.z); fov = lerp(62, 50, k); } }
+  camera.lookAt(look); camera.fov = fov; camera.updateProjectionMatrix();
+  hemi.intensity = lerp(hemi.intensity, cine.impact ? .3 : .2, Math.min(1, dt*3));
+  cineLight.position.set(camera.position.x*.4 + P.x*.6, P.y + 4, camera.position.z*.4 + P.z*.6); cineLight.intensity = lerp(cineLight.intensity, cine.impact ? 1.4 : 1.2 + Math.sin(t*20)*.15, Math.min(1, dt*6));
+  // 연출 소품
+  const charging = !cine.impact, ck = Math.min(1, t/C);
+  cineFx.u.uFade.value = charging ? Math.min(1, t*2) : Math.max(0, cineFx.u.uFade.value - dt*3); cineFx.pts.visible = cineFx.u.uFade.value > .01;
+  const gk = cine.impact ? easeO(Math.min(1, (t - C)/.6)) : ck*.15; cineFx.ground.scale.setScalar(.2 + gk*.8); cineFx.ground.material.uniforms.uInt.value = cine.impact ? 1.2*(1 - Math.max(0, (t - C - 2.2)/1.5)) : ck*.5;
+  cineFx.sky.material.uniforms.uInt.value = cine.tier >= 20 ? (t > C*.5 ? Math.min(1.4, (t - C*.5)*1.4) : 0) : 0;
+  sky.material.uniforms.uAmt.value = lerp(sky.material.uniforms.uAmt.value, charging ? .85*ck : .55, Math.min(1, dt*3));
+  if (cine.timeScale > 1) cine.timeScale = Math.max(1, cine.timeScale - dt*.8);
+  drawSpeedLines(charging, cine.impact ? Math.max(0, 1 - (t - C)*1.6) : ck);
+}
+// 만화 집중선 (충전 땐 안쪽으로 몰리고, 임팩트 순간 바깥으로 터진다)
+function drawSpeedLines(inward, amt){
+  const cv = $('cutLines'); if (cv.width !== innerWidth){ cv.width = innerWidth; cv.height = innerHeight; } const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); if (amt <= .02) return;
+  tmpW.set(me.x, me.y + 2, me.z).project(camera); const cx = (tmpW.x*.5 + .5)*cv.width, cy = (1 - (tmpW.y*.5 + .5))*cv.height, R = Math.hypot(cv.width, cv.height);
+  const col = cine ? mainCol(POOL[cine.tier]) : '#fff', n = Math.round((inward ? 34 : 46)*amt);
+  for (let i=0;i<n;i++){ const a = Math.random()*Math.PI*2, r0 = R*(inward ? .3 + Math.random()*.2 : .12 + Math.random()*.15), r1 = R*(.8 + Math.random()*.3), w = .6 + Math.random()*(inward ? 1.6 : 2.6);
+    g.strokeStyle = i % 4 ? `rgba(255,255,255,${.1*amt + Math.random()*.18*amt})` : col; g.globalAlpha = i % 4 ? 1 : .35*amt; g.lineWidth = w;
+    g.beginPath(); g.moveTo(cx + Math.cos(a)*r0, cy + Math.sin(a)*r0); g.lineTo(cx + Math.cos(a)*r1, cy + Math.sin(a)*r1); g.stroke(); }
+  g.globalAlpha = 1;
 }
 
 // =====================================================================
@@ -1148,14 +1229,15 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick = ()=>{ tab = b.d
 document.addEventListener('click', e=>{ const b = e.target.closest('button'); if (b) b.blur(); });
 render();
 
-const clock = new THREE.Clock(); let T = 0;
+const clock = new THREE.Clock(); let T = 0, AT = 0;
 function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta(), .05); T += dt;
   const [mx, mz] = readMove(); if (Math.hypot(mx, mz) > .05){ let d = Math.atan2(mx, mz) - me.facing; d = Math.atan2(Math.sin(d), Math.cos(d)); me.facing += d*Math.min(1, 14*dt); }
   stepPlayer(me, mx, mz, dt); if (me.y < -40) respawn();
   const hov = cine ? .25 + Math.sin(T*3)*.12 : (S.equipped != null && S.equipped >= 30 && me.grounded && !me.moving ? .22 + Math.sin(T*2)*.1 : 0);
   myActor.g.position.set(me.x, me.y + hov, me.z); myActor.g.rotation.y = me.facing; applyOutline(myActor, mySlot);
   if (cine) chargePose(myActor, dt); else animLimbs(myActor, dt, me.moving && me.grounded, !me.grounded, me.gliding);
-  mySlot.holder.position.set(me.x, me.y, me.z); if (mySlot.aura){ mySlot.aura.yaw = me.facing; mySlot.aura.grounded = me.grounded; mySlot.aura.update(dt, T); }
+  const ts = cine ? cine.timeScale : 1; AT += dt*ts;
+  mySlot.holder.position.set(me.x, me.y, me.z); if (mySlot.aura){ mySlot.aura.yaw = me.facing; mySlot.aura.grounded = me.grounded; mySlot.aura.update(dt*ts, AT); }
   for (const o of others.values()){ const k = Math.min(1, 12*dt); o.x = lerp(o.x, o.tx, k); o.y = lerp(o.y, o.ty, k); o.z = lerp(o.z, o.tz, k); let d = o.try - o.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); o.ry += d*k;
     if (Math.hypot(o.tx - o.x, o.tz - o.z) > 15){ o.x = o.tx; o.y = o.ty; o.z = o.tz; } o.a.g.position.set(o.x, o.y, o.z); o.a.g.rotation.y = o.ry; animLimbs(o.a, dt, o.an === 1, o.an === 2); applyOutline(o.a, o.slot);
     o.slot.holder.position.set(o.x, o.y, o.z); if (o.slot.aura){ o.slot.aura.yaw = o.ry; o.slot.aura.update(dt, T); } }
@@ -1163,18 +1245,23 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   if (cine) cineCamera(dt);
   else { if (Math.abs(camera.fov - 60) > .1){ camera.fov = lerp(camera.fov, 60, Math.min(1, dt*4)); camera.updateProjectionMatrix(); } hemi.intensity = lerp(hemi.intensity, .5, Math.min(1, dt*3));
     const px = me.x, py = me.y + 1.7, pz = me.z; camera.position.set(px - Math.sin(camYaw)*Math.cos(camPitch)*camDist, py + Math.sin(camPitch)*camDist, pz - Math.cos(camYaw)*Math.cos(camPitch)*camDist);
-    if (camera.position.y < .5) camera.position.y = .5; camera.lookAt(px, py, pz); }
+    if (camera.position.y < .5) camera.position.y = .5;
+    if (camBlend > 0){ camBlend = Math.max(0, camBlend - dt*1.6); const k = easeIO(camBlend); camera.position.lerp(cineEndPos, k); tmpW.set(px, py, pz).lerp(cineEndLook, k); camera.lookAt(tmpW); } else camera.lookAt(px, py, pz);
+    sky.material.uniforms.uAmt.value = lerp(sky.material.uniforms.uAmt.value, 0, Math.min(1, dt*2));
+    [cineFx.ground, cineFx.sky].forEach(m=>{ if (!m.visible) return; const u = m.material.uniforms; u.uInt.value = Math.max(0, u.uInt.value - dt*1.5); if (u.uInt.value <= 0) m.visible = false; }); }
+  cineFx.u.uTime.value = T; cineFx.ground.material.uniforms.uTime.value = T*.6; cineFx.sky.material.uniforms.uTime.value = T*.25;
   if (shakeT > 0){ shakeT -= dt; const s = shakeT*.8; camera.position.x += (Math.random() - .5)*s; camera.position.y += (Math.random() - .5)*s; }
-  if (gradePass){ const u = gradePass.uniforms, early = cine && cine.t < 1.05; u.uVig.value = lerp(u.uVig.value, cine ? .85 : 0, Math.min(1, dt*3)); u.uSat.value = lerp(u.uSat.value, early ? .25 : 1, Math.min(1, dt*(early ? 3 : 6)));
+  if (gradePass){ const u = gradePass.uniforms, early = cine && !cine.impact; u.uVig.value = lerp(u.uVig.value, cine ? .7 : 0, Math.min(1, dt*3)); u.uSat.value = lerp(u.uSat.value, early ? .45 : 1, Math.min(1, dt*(early ? 3 : 6)));
     if (cine) u.uTint.value.set(mainCol(POOL[cine.tier]));
     u.uTime.value = T; u.uAsp.value = camera.aspect; tmpW.set(me.x, me.y + 2, me.z).project(camera); u.uP.value.set(tmpW.x*.5 + .5, tmpW.y*.5 + .5);
     const eqT = S.equipped == null ? -1 : S.equipped; u.uHaze.value = lerp(u.uHaze.value, eqT >= 9 && tmpW.z < 1 ? .4 + eqT/MAXT*.9 : 0, Math.min(1, dt*3));
-    u.uCA.value *= Math.pow(.02, dt); u.uZoom.value *= Math.pow(.03, dt); }
+    const now = performance.now(), rdt = Math.min(.5, (now - (u.lastNow || now))/1000); u.lastNow = now; u.uCA.value *= Math.pow(.02, rdt); u.uZoom.value *= Math.pow(.03, rdt); }
   moon.position.set(me.x - 30, 60, me.z + 20); moon.target.position.set(me.x, 0, me.z);
   sky.material.uniforms.uTime.value = T; starPts.material.uniforms.uTime.value = T; motes.material.uniforms.uTime.value = T;
-  altarRing.rotation.z = T*.2; crystals.forEach((c, i)=>{ c.rotation.y = T*.8 + i; c.position.y = 12 + Math.sin(T*1.3 + i)*.5; });
+  altarRing.rotation.z = T*.2; altarRing.visible = !cine; crystals.forEach((c, i)=>{ c.rotation.y = T*.8 + i; c.position.y = 12 + Math.sin(T*1.3 + i)*.5; });
   netSend(dt, myExtraData());
-  if (composer) composer.render(dt); else renderer.render(scene, camera); }
+  if (composer) composer.render(dt); else renderer.render(scene, camera);
+  if (window.__capT && cine && window.__capT.length && cine.t >= window.__capT[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .8)); window.__capT.shift(); } }
 loop();
 window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, get aura(){ return mySlot.aura; },
   fakeOther:(tier)=>{ onPlayers({ bot1:{ x:me.x + 6, y:me.y, z:me.z - 2, ry:0, name:'테스트봇', avatarLoadout:{}, d:{ au:tier, rl:-1, rs:0 } } }); } };
