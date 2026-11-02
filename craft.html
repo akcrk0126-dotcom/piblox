@@ -16184,6 +16184,139 @@ document.head.appendChild(Object.assign(document.createElement('style'),{textCon
   '.advT.in{transform:none}.advT img{position:absolute;left:calc(8px * var(--s));top:calc(8px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s))}'+
   '.advT b{position:absolute;left:calc(30px * var(--s));top:calc(7px * var(--s));font-weight:normal;color:#ffff00;white-space:nowrap}.advT.ch b{color:#ff88ff}.advT span{position:absolute;left:calc(30px * var(--s));top:calc(18px * var(--s));right:calc(4px * var(--s));color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
   '#advToast{display:none!important}#chat.open .advChat{pointer-events:auto;cursor:default}'}));
+/* ═════════════ (P5-MP 4) Tab 고침 · 관리자 표시 · 사회적 상호 작용 (숨기기/차단) · 모바일 대화 · 관리자에게 코드 보이기 ═════════════ */
+// ── 1) Tab: 게임 중엔 브라우저 기본 동작 (다음 칸으로 초점 이동 → 주소창 → 포인터 잠금 풀림 → 게임 메뉴) 을 막아요. 누르고 있으면 키 반복도 막아야 해요 (예전엔 첫 번만 막혔어요)
+const p5sInGame=e=>started&&!chatOpen&&!menuOpen&&!screenOpen&&!(e&&e.target&&/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName||''));
+addEventListener('keydown',e=>{if((e.code==='Tab'||e.key==='Tab')&&p5sInGame(e)){e.preventDefault();if(!p5oTabOn){p5oTabOn=true;p5oTabT=0;p5oTabDraw()}}},true);
+addEventListener('keyup',e=>{if(e.code==='Tab'||e.key==='Tab'){if(started&&!chatOpen&&!menuOpen)e.preventDefault();if(!P5S.tabTouch){p5oTabOn=false;p5oTabHide()}}},true);
+// ── 4) 관리자에게만 보이는 코드 (#uid 앞 6자) · 계정 이름 (PlayHub 가입 이름, 바꿀 수 없음)
+const P5S={tabTouch:false,from:null,tab:0,seen:{}};
+const p5sCode=uid=>uid&&!String(uid).startsWith('n:')?'#'+String(uid).slice(0,6):'';
+const p5sAdmin=()=>p5dIsDev();   // 코드는 PlayHub 개발자 (playhub_mp/admins) 에게만
+const p5sAcct=()=>{try{return window.MP&&MP.getAccountName&&MP.getAccountName()||null}catch(e){return null}};
+{const _o=p5Out;p5Out=function(o){const r=_o.apply(this,arguments);const a=p5sAcct();if(a)o.an=String(a).slice(0,24);return r}}
+{const _r=p5Remote;p5Remote=function(r,dt){if(r.uid&&r.d)P5S.seen[r.uid]={n:r.name,an:r.d.an||''};return _r.apply(this,arguments)}}
+function p5sAllUids(){const S=new Set();if(typeof MPS!=='undefined'&&MPS)S.add(MPS.uid);for(const r of remotes.values())if(r.uid)S.add(r.uid);for(const L of [P5O.ops,P5O.bans,P5O.wl,P5S.seen])for(const k in L)if(!k.startsWith('n:'))S.add(k);return [...S]}
+// 이름 · 코드 (#abc123) · 전체 uid 를 모두 받아요 (op · deop · ban · pardon · whitelist · kick)
+{const _u=p5oUidOf;p5oUidOf=function(n){n=String(n||'');if(p5dIsDev()&&/^#[A-Za-z0-9_-]{3,}$/.test(n)){const c=n.slice(1).toLowerCase(),L=p5sAllUids().filter(u=>u.toLowerCase().startsWith(c));return L.length===1?L[0]:null}
+  const r=_u.call(this,n);if(r)return r;if(p5dIsDev()&&/^[A-Za-z0-9]{20,40}$/.test(n))return n;return null}}
+{const _n=p5oNameOf;p5oNameOf=function(uid){const s=P5S.seen[uid];if(s&&!(remotes.get(uid)))return s.n;return _n.apply(this,arguments)}}
+const p5sDisp=nm=>{const u=/^#|^[A-Za-z0-9]{20,40}$/.test(nm)?p5oUidOf(nm):null;return u?p5oNameOf(u):nm};
+// 이름 대신 코드로 적어도 · 저장은 uid (이름을 바꿔도 못 빠져나가요) · 피드백은 지금 이름
+{const _b=p5oBan;p5oBan=function(c,a){if(!p5oMP())return _b.apply(this,arguments);const why=a.reason?msgText(c,a.reason):cmdMsg('ban_reason');let n=0;
+  for(const nm of p5oNames(c,a)){const uid=p5oUidOf(nm),dn=uid?p5oNameOf(uid):nm;if(uid&&uid===p5oOwner())cFail('ban_owner');if(/^#/.test(nm)&&!uid)cFail('pl_unknown');const key=uid||p5oKeyName(nm);if(P5O.bans[key])continue;
+    if(!p5oWrite('bans/'+key,{n:dn,r:why,by:srvBy(c),t:Date.now()}))cFail('srv_nohost');P5O.bans[key]={n:dn,r:why};cFb(c,'ban_ok',dn,why);n++}if(!n)cFail('ban_f');return n}}
+function p5oOpNames(c,names,add){let n=0;for(const nm of names){const uid=p5oUidOf(nm);if(!uid)cFail('pl_unknown');const dn=p5oNameOf(uid);if(!add&&uid===p5oOwner())cFail('op_owner');const is=uid===p5oOwner()||!!P5O.ops[uid];if(add===is)continue;
+    if(!p5oWrite('ops/'+uid,add?{n:dn,l:4}:null))cFail('srv_nohost');if(add)P5O.ops[uid]={n:dn,l:4};else delete P5O.ops[uid];cFb(c,add?'op_ok':'deop_ok',dn);n++}if(!n)cFail(add?'op_f':'deop_f');return n}
+p5oOp=function(c,a,add){if(!p5oMP())return listMod(c,SRV().ops,p5oNames(c,a),add,add?'op_ok':'deop_ok',add?'op_f':'deop_f');return p5oOpNames(c,p5oNames(c,a),add)};
+cmdReg(cLit('pardon',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>{const MP=p5oMP(),S=MP?P5O.bans:SRV().bans;let n=0;
+  for(const nm of p5oNames(c,a)){const uid=MP?p5oUidOf(nm):null,keys=MP?Object.keys(S).filter(k=>S[k]&&(S[k].n===nm||k===uid||k===p5oKeyName(nm))):S[nm]?[nm]:[];if(!keys.length)continue;
+    const dn=MP&&keys[0]&&S[keys[0]]?S[keys[0]].n:nm;for(const k of keys){if(MP&&!p5oWrite('bans/'+k,null))cFail('srv_nohost');delete S[k]}cFb(c,'pardon_ok',dn);n++}if(!n)cFail('pardon_f');return n})));
+cmdReg(cLit('ban',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>p5oBan(c,a),cArg('reason',CmdArg.msg(),(c,a)=>p5oBan(c,a)))));
+p5oBanList=function(c,w){if(!p5oMP())return banList(c,w);const K=Object.keys(P5O.bans).filter(k=>P5O.bans[k]);if(!K.length){cFb(c,'bl_none');return 0}cFb(c,'bl_list',K.length);
+  for(const k of K){const b=P5O.bans[k];cFb(c,'bl_entry',(b.n||'?')+(p5sCode(k)?' '+p5sCode(k):''),b.by||'Server',b.r||'')}return K.length};
+// /kick 은 엔티티 고르개라 코드를 지금 이름으로 바꿔 넣어요
+{const _rc=runCmd;runCmd=function(t){if(typeof MPS!=='undefined'&&MPS&&p5dIsDev()&&typeof t==='string'&&/^\/(kick|msg|tell|w|tp|teleport)\s/.test(t))t=t.replace(/(\s)(#[A-Za-z0-9_-]{3,})(?=\s|$)/g,(m,s,code)=>{const u=p5oUidOf(code);if(!u)return m;const nm=u===MPS.uid?myName():remotes.get(u)?remotes.get(u).name:null;return nm?s+(/\s/.test(nm)?'"'+nm+'"':nm):m});return _rc.call(this,t)}}
+// /list: 주인 · 관리자 표시
+{const _ld=listDo;listDo=function(c,u){if(!(typeof MPS!=='undefined'&&MPS))return _ld.apply(this,arguments);const L=cmdPlayers(),max=Math.max(20,L.length),en=LANG==='en';
+  const nm=L.map(p=>{const uid=p===player?MPS.uid:p.uid,r=p5oRank(uid);return cmdEntName(p)+(r===2?(en?' (owner)':' (주인)'):r===1?(en?' (operator)':' (관리자)'):'')+(u?` (${uid||'-'})`:'')}).join(', ');cFb(c,'list',L.length,max,nm);return L.length}}
+// Tab 목록: 관리자에게는 계정 이름 · 코드 (전체 uid 는 가리키면/누르면)
+{const _d=p5oTabDraw;p5oTabDraw=function(){_d.apply(this,arguments);const el=document.getElementById('p5tab');if(!el)return;el.classList.toggle('touch',P5S.tabTouch);if(!p5sAdmin())return;
+  for(const rw of el.querySelectorAll('.rw')){const uid=rw.dataset.uid;if(!uid)continue;const s=P5S.seen[uid],an=uid===MPS.uid?p5sAcct():s&&s.an,nm=rw.querySelector('.nm');
+    nm.insertAdjacentHTML('beforeend',(an&&an!==nm.textContent?` <span class="an">(${esc(an)})</span>`:'')+` <span class="cd" data-uid="${esc(uid)}" title="${esc(uid)}">${esc(p5sCode(uid))}</span>`)}}}
+const P5S_CSS=`#p5tab .an{color:#aaa}#p5tab .cd{color:#777;pointer-events:auto}#p5tab.touch{pointer-events:auto}
+#touch #tChat{left:calc(50% - 64px);top:20px}#touch #tList{left:calc(50% + 8px);top:20px}
+#p5cbar{position:fixed;left:calc(2px * var(--s));right:calc(2px * var(--s));bottom:calc(16px * var(--s) + var(--kb,0px));z-index:13;display:none;gap:6px;justify-content:flex-end}
+#p5cbar button{min-width:52px;height:40px;font-family:var(--mcf);font-size:16px;color:#fff;background:rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.55)}
+body.p5chat #p5cbar{display:flex}
+#chat{bottom:calc(40px * var(--s) + var(--kb,0px))!important}#chatIn{bottom:calc(2px * var(--s) + var(--kb,0px))!important}#cmdHint{transform:translateY(calc(-1 * var(--kb,0px)))}
+body.p5chat #chat{bottom:calc(64px * var(--s) + var(--kb,0px))!important}
+#menu .socrow{position:absolute;display:flex;align-items:center;gap:calc(3px * var(--s));font-size:calc(8px * var(--s));background:rgba(255,255,255,.08)}
+#menu .socrow img{width:calc(16px * var(--s));height:calc(16px * var(--s));image-rendering:pixelated}#menu .socrow .cd{color:#888;cursor:pointer}#menu .socrow .an{color:#aaa}`;
+{const st=document.createElement('style');st.textContent=P5S_CSS;document.head.appendChild(st)}
+document.addEventListener('click',e=>{const c=e.target.closest&&e.target.closest('.cd[data-uid]');if(!c)return;const u=c.dataset.uid;try{navigator.clipboard&&navigator.clipboard.writeText(u)}catch(er){}sysToast('UID',u)});
+// 대화 이름표 머리 위 왕관 · 대화 색은 P5-MP 3 그대로
+// ── 2) 사회적 상호 작용 (P · 게임 메뉴 '플레이어 신고' 자리): 모두 / 숨김 / 차단됨 · 숨기기 = 그 사람 대화가 안 보여요 · 차단 = 숨기기 + 차단 목록 (이 컴퓨터에만 저장)
+function p5sLoad(){try{const v=JSON.parse(localStorage.getItem('bc_social')||'{}');return{h:v.h||{},b:v.b||{}}}catch(e){return{h:{},b:{}}}}
+function p5sSave(v){try{localStorage.setItem('bc_social',JSON.stringify(v))}catch(e){}}
+const p5sHidden=uid=>{if(!uid)return false;const v=p5sLoad();return!!(v.h[uid]||v.b[uid])};
+{const _cs=mpChatShow;mpChatShow=function(m){if(m&&m.u&&(typeof MPS==='undefined'||!MPS||m.u!==MPS.uid)&&p5sHidden(m.u))return;return _cs.apply(this,arguments)}}
+function p5sPlayers(){const L=[],v=p5sLoad(),seen=new Set();for(const r of remotes.values()){if(!r.uid||!r.d)continue;seen.add(r.uid);L.push({uid:r.uid,n:r.name,tex:r.tex,on:true})}
+  for(const k of ['h','b'])for(const u in v[k])if(!seen.has(u)){seen.add(u);L.push({uid:u,n:v[k][u],tex:null,on:false})}
+  return L.sort((a,b)=>(b.on-a.on)||(a.n<b.n?-1:1))}
+MENU2.social={back:()=>{if(P5S.from==='pause')showMenu('pause');else menuAct('resume')},html:()=>{const W=gW(),H=gH(),cx=Math.floor(W/2),v=p5sLoad(),adm=p5sAdmin(),t=P5S.tab;
+  let L=p5sPlayers();if(t===1)L=L.filter(p=>v.h[p.uid]);else if(t===2)L=L.filter(p=>v.b[p.uid]);else L=L.filter(p=>p.on);
+  const x0=cx-118,w=236;let h=mT(12,'사회적 상호 작용')+mB(cx-118,28,76,(t===0?'&gt; ':'')+'모두'+(t===0?' &lt;':''),'soT0')+mB(cx-38,28,76,(t===1?'&gt; ':'')+'숨김'+(t===1?' &lt;':''),'soT1')+mB(cx+42,28,76,(t===2?'&gt; ':'')+'차단됨'+(t===2?' &lt;':''),'soT2');
+  h+=`<div class="mlistbg" style="${gSt(0,52,W,H-86)}"></div>`;let y=56;
+  if(!L.length)h+=`<div class="mtl" style="top:${(y+20)*GS}px;color:#aaa">${t===0?'이 서버에 다른 플레이어가 없어요':t===1?'숨긴 플레이어가 없어요':'차단한 플레이어가 없어요'}</div>`;
+  for(const p of L){const rk=p5oRank(p.uid),hid=!!v.h[p.uid],blk=!!v.b[p.uid];
+    h+=`<div class="socrow" style="${gSt(x0,y,w-114,24)};overflow:hidden;white-space:nowrap">${p.tex?`<img src="${p5oHead(p.tex)}">`:'<span style="width:calc(16px * var(--s))"></span>'}${rk?`<img src="${p5oCrownURL(rk)}" style="width:calc(8px * var(--s));height:calc(5px * var(--s))">`:''}<span translate="no" style="color:${P5O_COL[rk]}">${esc(p.n)}</span>`
+      +(adm?`${P5S.seen[p.uid]&&P5S.seen[p.uid].an?` <span class="an">(${esc(P5S.seen[p.uid].an)})</span>`:''} <span class="cd" data-uid="${esc(p.uid)}" title="${esc(p.uid)}">${esc(p5sCode(p.uid))}</span>`:'')+(p.on?'':' <span style="color:#777">(오프라인)</span>')+`</div>`
+      +mB(x0+w-112,y+2,54,hid?'보이기':'숨기기','soH:'+p.uid)+mB(x0+w-56,y+2,54,blk?'차단 해제':'차단','soB:'+p.uid);y+=26}
+  return h+mB(cx-100,H-28,200,'완료',P5S.from==='pause'?'soBack':'resume')}};
+MACT.soT0=()=>{P5S.tab=0;showMenu('social')};MACT.soT1=()=>{P5S.tab=1;showMenu('social')};MACT.soT2=()=>{P5S.tab=2;showMenu('social')};MACT.soBack=()=>showMenu('pause');
+{const _ma=menuAct;menuAct=function(a){if(typeof a==='string'&&(a.startsWith('soH:')||a.startsWith('soB:'))){const uid=a.slice(4),v=p5sLoad(),k=a[2]==='H'?'h':'b',p=p5sPlayers().find(q=>q.uid===uid);if(v[k][uid])delete v[k][uid];else v[k][uid]=p?p.n:uid;p5sSave(v);showMenu('social');return}return _ma.apply(this,arguments)}}
+MACT.preport=()=>{P5S.from='pause';showMenu('social')};
+{const _ph=MENU2.pause.html;MENU2.pause.html=function(){return _ph.apply(this,arguments).replace(/(data-m="preport"[^>]*?) disabled/,'$1')}}
+function p5sOpenSocial(from){if(!started)return;P5S.from=from||null;P5S.tab=0;showMenu('social')}
+addEventListener('keydown',e=>{if(e.code==='KeyP'&&!e.repeat&&p5sInGame(e)&&typeof MPS!=='undefined'&&MPS){e.preventDefault();p5sOpenSocial(null)}});
+// ── 3) 모바일: 대화 (말풍선) · 플레이어 목록 단추 · 대화 중 '/' · 보내기 · 닫기 · 가상 키보드 높이 (visualViewport)
+const p5sTouch=()=>isTouch||!!window.__p5touch;
+{const T=document.getElementById('touch');if(T){T.insertAdjacentHTML('beforeend','<div class="tb" id="tChat" title="대화"><svg viewBox="0 0 24 24"><path d="M4 5h16v10H10l-4 4v-4H4z"/></svg></div><div class="tb" id="tList" title="플레이어 목록"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M16 6h5M16 10h5M17 14h4"/></svg></div>')}
+  document.body.insertAdjacentHTML('beforeend','<div id="p5cbar"><button id="p5cSlash">/</button><button id="p5cSend">보내기</button><button id="p5cClose">닫기</button></div>')}
+function p5sChatOpen(pre){if(!started||menuOpen&&menuOpen!=='ready')return;if(!chatOpen)openChat(pre||'');const i=$('chatIn');try{i.focus()}catch(e){}if(p5sTouch())document.body.classList.add('p5chat')}   // 누른 그 순간에 초점 (iOS 는 손짓 안에서만 키보드가 떠요)
+$('tChat')&&$('tChat').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();p5sChatOpen('')});
+$('tList')&&$('tList').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(p5oTabOn){p5oTabOn=false;P5S.tabTouch=false;p5oTabHide()}else{P5S.tabTouch=true;p5oTabOn=true;p5oTabT=0;p5oTabDraw()}});
+$('p5cSlash').addEventListener('pointerdown',e=>{e.preventDefault();const i=$('chatIn');if(!i.value.startsWith('/'))i.value='/'+i.value;i.focus();i.dispatchEvent(new Event('input',{bubbles:true}))});
+$('p5cSend').addEventListener('pointerdown',e=>{e.preventDefault();closeChat(true)});
+$('p5cClose').addEventListener('pointerdown',e=>{e.preventDefault();closeChat(false)});
+{const _cc=closeChat;closeChat=function(){document.body.classList.remove('p5chat');return _cc.apply(this,arguments)}}
+{const _oc=openChat;openChat=function(){const r=_oc.apply(this,arguments);if(p5sTouch())document.body.classList.add('p5chat');return r}}
+$('cmdHint').addEventListener('touchstart',e=>{const d=e.target.closest('[data-i]');if(!d)return;e.preventDefault();cmdCyc=false;cmdApply(+d.dataset.i);cmdCyc=false;hintSel=0;updateCmdHint();try{$('chatIn').focus()}catch(er){}},{passive:false});
+function p5sKb(){const v=window.visualViewport;let k=0;if(v&&chatOpen)k=Math.max(0,Math.round(innerHeight-v.height-v.offsetTop));document.documentElement.style.setProperty('--kb',k+'px')}
+if(window.visualViewport){visualViewport.addEventListener('resize',p5sKb);visualViewport.addEventListener('scroll',p5sKb)}
+{const _cc=closeChat;closeChat=function(){const r=_cc.apply(this,arguments);document.documentElement.style.setProperty('--kb','0px');return r}}
+for(const [a,b] of [['사회적 상호 작용','Social Interactions'],['모두','All'],['숨김','Hidden'],['차단됨','Blocked'],['숨기기','Hide'],['보이기','Show'],['차단','Block'],['차단 해제','Unblock'],['완료','Done'],
+  ['이 서버에 다른 플레이어가 없어요','There are no other players on this server'],['숨긴 플레이어가 없어요','No hidden players'],['차단한 플레이어가 없어요','No blocked players'],['(오프라인)','(offline)'],['보내기','Send'],['닫기','Close'],['대화','Chat'],['플레이어 목록','Player List'],['플레이어 신고','Player Reporting']])i18nAdd(a,b);
+
+/* ═════════════ (P5-MP 4b) PlayHub 개발자 (사이트 전체 관리자 = playhub_mp/admins, multiplayer.js · admin.html 과 같은 곳) ═════════════
+   개발자: 어느 서버에서나 4단계 · 아무도 내보내거나 차단하거나 뺄 수 없어요 · 닉네임 옆 코드 (#uid 앞 6자 · 가리키면/누르면 전체 uid) 는 개발자만 보고 · 코드로 명령어를 쓸 수 있어요.
+   개발자가 차단하면 admin.html 처럼 playhub_mp/banned/<uid> = {name, ts, by} (+ r 이유) 에 써요 (DB 규칙: admins 만 쓸 수 있고 · 차단된 사람은 아무 데도 못 써요) + 이 서버 차단도.
+   다른 사람에게 개발자는 보통 플레이어처럼 보여요 (그 서버의 주인/관리자일 때만 왕관). 서버 주인 · 관리자는 예전 그대로 (이름만, 코드 없음). */
+const P5D={admins:{}};
+const p5dIsDev=()=>typeof MPS!=='undefined'&&!!MPS&&!!P5D.admins[MPS.uid];
+const p5dRef=p=>firebase.database().ref('playhub_mp/'+p);
+{const _l=p5oLevel;p5oLevel=function(uid){if(typeof MPS!=='undefined'&&MPS&&uid&&P5D.admins[uid])return 4;return _l.apply(this,arguments)}}
+{const _ms=mpStart;mpStart=function(){P5D.admins={};const r=_ms.apply(this,arguments);try{
+    const a=p5dRef('admins');a.on('value',s=>{const v=s.val();P5D.admins=typeof v==='string'?{[v]:true}:v&&typeof v==='object'?Object.assign({},v):{}});MPS.refs.push(a);
+    const b=p5dRef('banned/'+MPS.uid);b.on('value',s=>{const v=s.val();if(v&&MPS&&!p5dIsDev())p5oDrop({t:'연결이 끊어졌어요',r:'PlayHub 에서 차단됐어요.\n이유: '+String(v.r||v.why||'관리자에게 차단됐어요.').slice(0,200)})});MPS.refs.push(b)}catch(e){}return r}}
+{const _c=p5oCheckMe;p5oCheckMe=function(){if(p5dIsDev())return;return _c.apply(this,arguments)}}
+// 받은 일: 개발자의 kick 은 주인도 따르고 · 개발자는 아무 kick 도 안 따라요 · 개발자를 겨눈 srv 요청은 개발자가 보낸 것만
+{const _a=p5mOnAct;p5mOnAct=function(u,v){if(typeof MPS!=='undefined'&&MPS&&v&&v.to===MPS.uid){
+    if(v.k==='kick'){if(p5dIsDev())return;if(P5D.admins[u]&&Date.now()-(v.ts||0)<8000){const S=P5M.seen,key=u+(v.ts||0)+'kickD';if(S.has(key))return;S.set(key,1);p5oDrop({t:'연결이 끊어졌어요',r:String(v.r||'서버에서 내보내졌어요').slice(0,256)});return}}
+    if(v.k==='srv'&&!P5D.admins[u]){const key=String(v.p||'').split('/')[1];if(key&&P5D.admins[key])return}}return _a.apply(this,arguments)}}
+cmdMsgs({kick_dev:['그 플레이어는 내보내거나 차단할 수 없어요','That player cannot be kicked or banned']});
+{const _k=p5oKick;p5oKick=function(c,a){if(!p5oMP())return _k.apply(this,arguments);const L=cTargets(c,a.targets,true),why=a.reason?msgText(c,a.reason):cmdMsg('kick_reason'),dev=p5dIsDev();
+  for(const p of L){if(p===player)cFail('kick_self');if(P5D.admins[p.uid]&&!dev)cFail('kick_dev');if(!dev&&p.uid===p5oOwner())cFail('kick_owner')}let n=0;
+  for(const p of L){p5mSend({k:'kick',to:p.uid,r:why});cFb(c,'kick_ok',cmdEntName(p),why);n++}return n}}
+cmdReg(cLit('kick',{perm:3},cArg('targets',CmdArg.ent(false,true),(c,a)=>p5oKick(c,a),cArg('reason',CmdArg.msg(),(c,a)=>p5oKick(c,a)))));
+{const _b=p5oBan;p5oBan=function(c,a){if(!p5oMP())return _b.apply(this,arguments);const names=p5oNames(c,a);
+  if(!p5dIsDev()){for(const nm of names){const u=p5oUidOf(nm);if(u&&P5D.admins[u])cFail('kick_dev')}return _b.apply(this,arguments)}
+  const why=a.reason?msgText(c,a.reason):cmdMsg('ban_reason');let n=0;
+  for(const nm of names){const uid=p5oUidOf(nm);if(!uid)cFail('pl_unknown');if(uid===MPS.uid)cFail('kick_self');const dn=p5oNameOf(uid);
+    let ts=Date.now();try{ts=firebase.database.ServerValue.TIMESTAMP||ts}catch(e){}
+    try{p5dRef('banned/'+uid).set({name:dn,ts,by:MPS.uid,r:why}).catch(()=>{})}catch(e){}   // PlayHub 전체 차단 (admin.html 과 같은 모양)
+    if(uid!==p5oOwner()&&!P5O.bans[uid])p5oWrite('bans/'+uid,{n:dn,r:why,by:srvBy(c),t:Date.now()});P5O.bans[uid]={n:dn,r:why};
+    if(remotes.has(uid))p5mSend({k:'kick',to:uid,r:'PlayHub 에서 차단됐어요.\n이유: '+why});cFb(c,'ban_ok',dn,why);n++}return n}}
+cmdReg(cLit('ban',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>p5oBan(c,a),cArg('reason',CmdArg.msg(),(c,a)=>p5oBan(c,a)))));
+// 개발자의 /pardon 은 PlayHub 전체 차단도 풀어요
+function p5dPardon(c,a){const MP=p5oMP(),S=MP?P5O.bans:SRV().bans,dev=MP&&p5dIsDev();let n=0;
+  for(const nm of p5oNames(c,a)){const uid=MP?p5oUidOf(nm):null;if(dev&&uid){try{p5dRef('banned/'+uid).remove().catch(()=>{})}catch(e){}}
+    const keys=MP?Object.keys(S).filter(k=>S[k]&&(S[k].n===nm||k===uid||k===p5oKeyName(nm))):S[nm]?[nm]:[];if(!keys.length&&!(dev&&uid))continue;
+    const dn=MP&&keys[0]&&S[keys[0]]?S[keys[0]].n:uid?p5oNameOf(uid):nm;for(const k of keys){if(MP&&!p5oWrite('bans/'+k,null))cFail('srv_nohost');delete S[k]}cFb(c,'pardon_ok',dn);n++}if(!n)cFail('pardon_f');return n}
+cmdReg(cLit('pardon',{perm:3},cArg('targets',CmdArg.prof6(),(c,a)=>p5dPardon(c,a))));
+{const _o=p5oOpNames;p5oOpNames=function(c,names,add){if(!add&&!p5dIsDev())for(const nm of names){const u=p5oUidOf(nm);if(u&&P5D.admins[u]&&u!==MPS.uid)cFail('kick_dev')}return _o.apply(this,arguments)}}
+i18nAdd('PlayHub 에서 차단됐어요.','You are banned from PlayHub.');
 </script>
 </body>
 </html>
