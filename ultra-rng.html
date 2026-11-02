@@ -88,6 +88,16 @@
   @keyframes readyPulse{ 0%{ box-shadow:0 0 0 4px rgba(0,0,0,.35), 0 0 60px rgba(255,255,255,.75), inset 0 1px 0 #fff; } }
   #luckRow{ display:flex; align-items:center; gap:8px; font-family:var(--ui); font-size:11px; letter-spacing:1px; color:#e8e2c8; pointer-events:none!important; }
   #pips{ display:flex; gap:3px; } #pips i{ width:14px; height:5px; border-radius:2px; background:rgba(255,255,255,.14); } #pips i.on{ background:linear-gradient(90deg,#9fffcf,#f3d58a); box-shadow:0 0 6px rgba(243,213,138,.6); } #pips i.x5{ background:linear-gradient(90deg,#ff8fd0,#c27bff); box-shadow:0 0 6px #c27bff; }
+  #buffs{ position:absolute; right:12px; bottom:14px; display:flex; flex-direction:column-reverse; gap:5px; align-items:flex-end; pointer-events:none!important; }
+  .buff{ display:flex; align-items:center; gap:6px; padding:4px 10px 4px 6px; border-radius:999px; background:rgba(8,8,14,.6); border:1px solid var(--c); box-shadow:0 0 12px -3px var(--c); font-family:var(--ui); font-size:12px; animation:logIn .3s; }
+  .buff span{ font-size:15px; } .buff b{ font-weight:400; color:var(--c); min-width:34px; text-align:right; }
+  body.touch #buffs{ bottom:auto; top:120px; }
+  .sec{ font-family:var(--ui); letter-spacing:2px; font-size:12px; color:var(--gold); margin:4px 2px 8px; } .grid + .sec{ margin-top:14px; }
+  .empty{ color:#aaa3c4; font-size:12.5px; padding:6px 2px 4px; }
+  .card.pot .nm{ font-family:var(--ui); font-size:16px; } .card.pot .pk{ white-space:normal; }
+  .rc{ position:relative; margin-top:6px; display:flex; flex-direction:column; gap:2px; font-size:12px; } .rc div{ display:flex; justify-content:space-between; gap:6px; }
+  .rc span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; } .rc em{ font-style:normal; font-family:var(--ui); font-size:11px; color:#ff9aa9; } .rc em.ok{ color:#9fffcf; }
+  .card .acts button:disabled{ opacity:.4; }
   #statLine,#keys{ font-size:12px; color:#ddd; pointer-events:none!important; text-align:center; }
   #keys{ font-size:11px; color:#999; }
   #msg{ position:absolute; left:50%; top:30%; transform:translateX(-50%); font-size:26px; font-weight:900; opacity:0; transition:opacity .25s; white-space:nowrap; pointer-events:none!important; }
@@ -151,13 +161,14 @@
   <div id="info">불러오는 중…</div>
   <div id="rightBtns"><button id="skipAnim">SKIP ▶▶</button><button id="soundBtn">🔊</button></div>
   <div id="perk" class="ol"></div>
-  <div id="menu"><button id="bagBtn" data-tab="inv"><span>🎒</span><em>가방</em></button><button data-tab="index"><span>📖</span><em>도감</em></button><button data-tab="rank"><span>🏆</span><em>랭킹</em></button><button data-tab="info"><span>⚙️</span><em>설정</em></button></div>
+  <div id="menu"><button id="bagBtn" data-tab="inv"><span>🎒</span><em>가방</em></button><button data-tab="pot"><span>🧪</span><em>물약</em></button><button data-tab="index"><span>📖</span><em>도감</em></button><button data-tab="rank"><span>🏆</span><em>랭킹</em></button><button data-tab="info"><span>⚙️</span><em>설정</em></button></div>
   <div id="side">
     <div id="sideHead"><b id="sideTitle"></b><span id="sideSub"></span><button id="sideX">✕</button></div>
     <div id="sideTools"></div>
     <div class="list" id="listBox"></div>
   </div>
   <div id="log" class="ol"></div>
+  <div id="buffs"></div>
   <div id="msg" class="ol"></div>
   <div id="bottom">
     <div id="lastName"></div>
@@ -165,7 +176,7 @@
     <div id="rollRow"><button id="autoBtn" class="side"><i>AUTO</i><small>OFF</small></button><button id="rollBtn"><span id="cdFill"></span><b>ROLL</b><small id="cdTxt"></small></button><button id="fastBtn" class="side"><i>QUICK</i><small>OFF</small></button></div>
     <div id="luckRow"><span id="luckTxt"></span><div id="pips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
     <div id="statLine" class="ol"></div>
-    <div id="keys" class="ol">WASD 이동 · Space 점프 · 드래그 시점 · 휠 줌 · R 굴리기 · F 자동 · Q 퀵 · B 가방 · / 채팅 · . 이모트</div>
+    <div id="keys" class="ol">WASD 이동 · Space 점프 · 드래그 시점 · 휠 줌 · R 굴리기 · F 자동 · Q 퀵 · B 가방 · P 물약 · / 채팅 · . 이모트</div>
   </div>
   <div id="bJump">⬆</div>
 </div>
@@ -272,9 +283,9 @@ const PERKS = { speed:'⚡ 이동 속도 +30%', jump:'🦘 점프력 +25%', glid
 const ANNOUNCE_TIER = 13;
 
 const SAVE_KEY = 'ultrarng_save_v1';
-let S = { rolls:0, inv:{}, equipped:null, best:null, auto:false, fast:false, sound:true, rareSeq:0, lastRare:-1, skip:{} };
+let S = { rolls:0, inv:{}, equipped:null, best:null, auto:false, fast:false, sound:true, rareSeq:0, lastRare:-1, skip:{}, pot:{}, fx:{}, nx:{} };
 try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); if (d) S = Object.assign(S, d); } catch(e){}
-if (!S.skip || typeof S.skip !== 'object') S.skip = {}; S.auto = false; if (S.equipped != null && !POOL[S.equipped]) S.equipped = null;
+['skip', 'pot', 'fx', 'nx'].forEach(k=>{ if (!S[k] || typeof S[k] !== 'object') S[k] = {}; }); S.auto = false; if (S.equipped != null && !POOL[S.equipped]) S.equipped = null;
 const save = ()=>{ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} };
 
 function paintText(el, it, glow){
@@ -934,7 +945,7 @@ let jumpHeld = false;
 function groundAt(x, z, y){ let best = -1e9; for (const b of colliders){ if (x + .35 < b.minX || x - .35 > b.maxX || z + .35 < b.minZ || z - .35 > b.maxZ) continue; if (b.maxY <= y + STEP && b.maxY > best) best = b.maxY; } return best; }
 function collide(p){ for (const b of colliders){ if (b.maxY <= p.y + STEP*.99 || b.minY >= p.y + CHAR_H) continue; const qx = clamp(p.x, b.minX, b.maxX), qz = clamp(p.z, b.minZ, b.maxZ), dx = p.x - qx, dz = p.z - qz, d2 = dx*dx + dz*dz; if (d2 >= RAD*RAD) continue;
     if (d2 > 1e-9){ const d = Math.sqrt(d2), k = (RAD - d)/d; p.x += dx*k; p.z += dz*k; } else { const l = p.x - b.minX, r = b.maxX - p.x, u = p.z - b.minZ, dn = b.maxZ - p.z, m = Math.min(l, r, u, dn); if (m === l) p.x = b.minX - RAD; else if (m === r) p.x = b.maxX + RAD; else if (m === u) p.z = b.minZ - RAD; else p.z = b.maxZ + RAD; } } }
-function stepPlayer(p, mx, mz, dt){ const pk = perks(), walk = WALK*(pk.speed ? 1.3 : 1), jump = JUMP*(pk.jump ? 1.25 : 1);
+function stepPlayer(p, mx, mz, dt){ const pk = perks(), walk = WALK*(pk.speed ? 1.3 : 1)*(windOn() ? 1.4 : 1), jump = JUMP*(pk.jump ? 1.25 : 1)*(windOn() ? 1.3 : 1);
   p.moving = Math.hypot(mx, mz) > .05; p.x += mx*walk*dt; p.z += mz*walk*dt;
   if (p.grounded){ const g = groundAt(p.x, p.z, p.y); if (g > p.y + .05 && g <= p.y + STEP) p.y = g; }
   collide(p); p.jumpBuf = Math.max(0, p.jumpBuf - dt); p.coyote = p.grounded ? .12 : Math.max(0, p.coyote - dt);
@@ -959,6 +970,7 @@ addEventListener('keydown', e=>{ if (chatting()) return; keys[e.code] = true;
   if (e.code === 'KeyF' && !e.repeat) $('autoBtn').click();
   if (e.code === 'KeyB' && !e.repeat) $('bagBtn').click();
   if (e.code === 'KeyQ' && !e.repeat) $('fastBtn').click();
+  if (e.code === 'KeyP' && !e.repeat) openTab('pot');
   if (e.code.startsWith('Arrow')) e.preventDefault(); });
 addEventListener('keyup', e=>{ keys[e.code] = false; if (e.code === 'Space') jumpHeld = false; });
 addEventListener('blur', ()=>{ for (const k in keys) keys[k] = false; jumpHeld = false; });
@@ -1213,11 +1225,77 @@ function drawSpeedLines(inward, amt){
 // =====================================================================
 //  🎲 굴리기
 // =====================================================================
+// =====================================================================
+//  🧪 물약 — 맵에서 줍거나 · 굴리다 가끔 나오거나 · 남는 오라로 만든다
+// =====================================================================
+// dur: 초 단위 지속 / rolls: 다음 N번 굴리기 / recipe: { 오라 티어: 개수 } (마지막 1개는 늘 남김)
+const POTIONS = {
+  luck1:  { name:'행운 물약',        icon:'🍀', col:'#5dff8a', desc:'60초 동안 행운 +0.5',               dur:60,  w:40, recipe:{ 0:5, 1:3 } },
+  swift:  { name:'신속 물약',        icon:'⚡', col:'#ffe95c', desc:'60초 동안 굴리기 쿨타임 1.5초',     dur:60,  w:22, recipe:{ 1:6, 3:4 } },
+  wind:   { name:'바람 물약',        icon:'🪽', col:'#9fe6ff', desc:'90초 동안 이동 +40% · 점프 +30%',  dur:90,  w:22, recipe:{ 0:8, 6:2 } },
+  luck2:  { name:'강한 행운 물약',   icon:'☘️', col:'#2affc0', desc:'90초 동안 행운 +1.5',              dur:90,  w:10, recipe:{ 2:6, 5:3, 7:1 } },
+  chain:  { name:'연쇄 물약',        icon:'🔗', col:'#c27bff', desc:'다음 10번 굴리기 행운 x3',          rolls:10, w:5, recipe:{ 2:5, 8:2, 9:1 } },
+  fate:   { name:'운명의 물약',      icon:'🎯', col:'#ff5c8a', desc:'다음 1번은 1/1,000 이상 확정',      rolls:1,  w:1.5, recipe:{ 10:2, 12:1, 13:1 } },
+  miracle:{ name:'기적의 물약',      icon:'🌌', col:'#ffffff', rainbow:1, desc:'다음 1번 행운 x100',      rolls:1,  w:.5, recipe:{ 9:3, 14:1, 15:1, 16:1 } },
+};
+const POT_IDS = Object.keys(POTIONS);
+const FATE_MIN = POOL.findIndex(p=>p.odds >= 1000);
+const potFake = id=>{ const P = POTIONS[id]; return { color:P.col, accent:'#ffffff', tier:10, rainbow:P.rainbow || 0, name:P.name }; };
+function randPotion(maxW){ const ids = POT_IDS.filter(id=>POTIONS[id].w <= (maxW || 99)), tot = ids.reduce((s, id)=>s + POTIONS[id].w, 0); let r = Math.random()*tot; for (const id of ids) if ((r -= POTIONS[id].w) <= 0) return id; return ids[0]; }
+function bubble(){ if (!S.sound) return; try { const ctx = ac(); if (!ctx) return; const n = ctx.currentTime;
+  for (let i=0;i<5;i++){ const o = ctx.createOscillator(), g = ctx.createGain(), t = n + i*.06; o.type = 'sine'; o.frequency.setValueAtTime(300 + Math.random()*300, t); o.frequency.exponentialRampToValueAtTime(900 + Math.random()*600, t + .08);
+    g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.0001, t + .1); o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + .11); } } catch(e){} }
+function gainPotion(id, from){ S.pot[id] = (S.pot[id] || 0) + 1; save(); const P = POTIONS[id]; bubble();
+  showMsg(P.icon + ' ' + P.name + ' 획득!' + (from ? ' (' + from + ')' : ''), 2000, potFake(id)); render(); }
+function drinkPotion(id){ const P = POTIONS[id]; if (!S.pot[id]) return; S.pot[id]--;
+  if (P.dur) S.fx[id] = (S.fx[id] || 0) + P.dur; else S.nx[id] = (S.nx[id] || 0) + P.rolls;
+  const pos = new THREE.Vector3(me.x, me.y, me.z), f = potFake(id); burst(pos, f); shockwave(pos, auraColors(f), 1); flash(.18, P.col); bubble(); chime(f);
+  if (mySlot.aura) mySlot.aura.boost = 1.6; showMsg(P.icon + ' ' + P.name + ' — ' + P.desc, 2200, f); save(); render(); }
+// 재료: 오라마다 마지막 1개는 남기고 쓸 수 있는 개수
+const spare = t=>Math.max(0, (S.inv[t] || 0) - 1);
+const canCraft = id=>Object.entries(POTIONS[id].recipe).every(([t, n])=>spare(+t) >= n);
+function craftPotion(id){ if (!canCraft(id)) return; for (const [t, n] of Object.entries(POTIONS[id].recipe)) S.inv[t] -= n; gainPotion(id, '제작'); }
+function potLuck(){ return 1 + (S.fx.luck1 > 0 ? .5 : 0) + (S.fx.luck2 > 0 ? 1.5 : 0); }
+const windOn = ()=>S.fx.wind > 0;
+const rollCD = ()=>S.fx.swift > 0 ? 1500 : 2500;
+function pickMin(luck, minT){ // 운명의 물약: minT 이상에서 확률 비율대로
+  const c = POOL.filter(p=>p.tier >= minT), tot = c.reduce((s, p)=>s + p.chance, 0); let r = Math.random()*tot; for (const p of c) if ((r -= p.chance) <= 0) return p; return c[0]; }
+// 맵에 떠 있는 물약 병
+const potGlass = new THREE.SphereGeometry(.55, 20, 14), potNeck = new THREE.CylinderGeometry(.16, .2, .45, 12), potCork = new THREE.CylinderGeometry(.18, .15, .22, 10), potBeam = new THREE.CylinderGeometry(.12, .5, 14, 12, 1, true);
+const potCorkMat = new THREE.MeshLambertMaterial({ color:0x8d5a35 });
+const pickups = [];
+function makeBottle(id){ const P = POTIONS[id], c = new THREE.Color(P.col), g = new THREE.Group();
+  const liquid = new THREE.Mesh(new THREE.SphereGeometry(.42, 16, 12), new THREE.MeshBasicMaterial({ color:c.clone().multiplyScalar(1.7) })); liquid.scale.y = .85; liquid.position.y = -.06;
+  const glass = new THREE.Mesh(potGlass, new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.22, depthWrite:false, blending:THREE.AdditiveBlending }));
+  const neck = new THREE.Mesh(potNeck, glass.material); neck.position.y = .62; const cork = new THREE.Mesh(potCork, potCorkMat); cork.position.y = .92;
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map:spriteTex, color:c.clone().multiplyScalar(1.6), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })); glow.scale.set(3.2, 3.2, 1);
+  const beam = new THREE.Mesh(potBeam, new THREE.MeshBasicMaterial({ color:c.clone().multiplyScalar(1.2), transparent:true, opacity:.16, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide })); beam.position.y = 6;
+  const bottle = new THREE.Group(); bottle.add(liquid, glass, neck, cork); g.add(bottle, glow, beam); g.userData = { bottle, liquid, rb:P.rainbow }; return g; }
+function spawnPickup(){ for (let k=0;k<30;k++){ const a = Math.random()*Math.PI*2, r = 10 + Math.random()*95, x = Math.cos(a)*r, z = Math.sin(a)*r; if (Math.abs(x) > 120 || Math.abs(z) > 120) continue;
+    const gy = groundAt(x, z, 200); if (gy < -1e8) continue; const id = randPotion(), m = makeBottle(id); m.position.set(x, gy + 1.4, z); scene.add(m); pickups.push({ id, m, y:gy + 1.4, ph:Math.random()*6 }); return; } }
+let pickT = 4;
+function tickPotions(dt){
+  if (!tickPotions.init){ tickPotions.init = 1; for (let i=0;i<3;i++) spawnPickup(); }
+  let any = false; for (const k in S.fx){ if (S.fx[k] > 0){ S.fx[k] = Math.max(0, S.fx[k] - dt); any = true; if (S.fx[k] === 0) showMsg(POTIONS[k].icon + ' ' + POTIONS[k].name + ' 효과 끝', 1500); } }
+  if (any){ tickPotions.s = (tickPotions.s || 0) + dt; if (tickPotions.s > 3){ tickPotions.s = 0; save(); } }
+  pickT -= dt; if (pickT <= 0){ pickT = 22 + Math.random()*12; if (pickups.length < 6) spawnPickup(); }
+  for (let i=pickups.length - 1;i>=0;i--){ const p = pickups[i], u = p.m.userData; p.ph += dt; p.m.position.y = p.y + Math.sin(p.ph*2)*.25; u.bottle.rotation.y += dt*1.5; u.bottle.rotation.z = Math.sin(p.ph*1.3)*.15;
+    if (u.rb) u.liquid.material.color.setHSL((p.ph*.2) % 1, .9, .6).multiplyScalar(1.7);
+    const dx = me.x - p.m.position.x, dy = (me.y + 1.2) - p.m.position.y, dz = me.z - p.m.position.z;
+    if (!cine && dx*dx + dy*dy + dz*dz < 2.2*2.2){ scene.remove(p.m); pickups.splice(i, 1); burst(p.m.position.clone().setY(p.m.position.y - 2), potFake(p.id)); gainPotion(p.id); } }
+  tickPotions.b = (tickPotions.b || 0) - dt; if (tickPotions.b <= 0){ tickPotions.b = .25; renderBuffs(); }
+}
+function renderBuffs(){ const box = $('buffs'), items = [];
+  for (const k in S.fx) if (S.fx[k] > 0){ const s = Math.ceil(S.fx[k]); items.push([k, Math.floor(s/60) + ':' + String(s % 60).padStart(2, '0')]); }
+  for (const k in S.nx) if (S.nx[k] > 0) items.push([k, S.nx[k] + '회']);
+  const html = items.map(([k, v])=>`<div class="buff" style="--c:${POTIONS[k].col}"><span>${POTIONS[k].icon}</span><b>${v}</b></div>`).join('');
+  if (box.innerHTML !== html) box.innerHTML = html; }
+
 let rolling = false;
-const ROLL_CD = 2500;          // 한 번 굴리는 데 2.5초
+let cdDur = 2500;              // 한 번 굴리는 데 2.5초 (신속 물약 1.5초)
 const CUT_ODDS = 1000;         // 1/1,000 이상 → 별 + 컷씬
 const STAR_ODDS = 100;         // 1/100 초과 → 별 + 화면 흔들림 / 그 이하 → 반짝임만
-function currentLuck(){ let l = 1; const nx = S.rolls + 1; if (nx % 10 === 0) l *= 2; if (nx % 100 === 0) l *= 5; return l; }
+function currentLuck(){ let l = potLuck(); const nx = S.rolls + 1; if (nx % 10 === 0) l *= 2; if (nx % 100 === 0) l *= 5; if (S.nx.chain > 0) l *= 3; if (S.nx.miracle > 0) l *= 100; return Math.round(l*100)/100; }
 function pick(luck){
   for (let i=MAXT;i>=5;i--) if (Math.random() < POOL[i].chance/100*luck) return POOL[i];
   const low = POOL.slice(0, 5), tot = low.reduce((s, p)=>s + p.chance, 0); let r = Math.random()*tot;
@@ -1238,18 +1316,19 @@ function spinNames(){
 }
 // 쿨타임 바 (버튼 안에서 채워진다)
 let cdT0 = 0, cdOn = false;
-function cdLoop(){ if (!cdOn) return; const k = Math.min(1, (performance.now() - cdT0)/ROLL_CD); $('cdFill').style.width = (k*100) + '%';
-  $('cdTxt').textContent = k < 1 ? ((ROLL_CD - (performance.now() - cdT0))/1000).toFixed(1) + 's' : ''; requestAnimationFrame(cdLoop); }
+function cdLoop(){ if (!cdOn) return; const k = Math.min(1, (performance.now() - cdT0)/cdDur); $('cdFill').style.width = (k*100) + '%';
+  $('cdTxt').textContent = k < 1 ? ((cdDur - (performance.now() - cdT0))/1000).toFixed(1) + 's' : ''; requestAnimationFrame(cdLoop); }
 async function roll(){
   if (rolling || chatting()) return;
   rolling = true; skipReq = false; ac(); const t0 = performance.now();
-  const rb = $('rollBtn'); rb.disabled = true; rb.classList.remove('ready'); cdT0 = t0; cdOn = true; cdLoop();
-  const it = pick(currentLuck()); S.rolls++;
+  const rb = $('rollBtn'); rb.disabled = true; rb.classList.remove('ready'); cdT0 = t0; cdDur = rollCD(); cdOn = true; cdLoop();
+  const L = currentLuck(); let it; if (S.nx.fate > 0){ it = pickMin(L, FATE_MIN); S.nx.fate--; } else it = pick(L);
+  if (S.nx.miracle > 0) S.nx.miracle--; if (S.nx.chain > 0) S.nx.chain--; S.rolls++;
   const tierFx = it.odds >= CUT_ODDS ? 2 : it.odds > STAR_ODDS ? 1 : 0, spin = spinNames();
   if (tierFx && !S.fast){ await sleep(350); spin.stop(); $('skipAnim').style.display = 'block'; await starAnim(it); if (!skipReq && tierFx === 2) await cutscene(it); $('skipAnim').style.display = 'none'; }
-  else { await sleep(1750); spin.stop(); }
+  else { await sleep(cdDur - 750); spin.stop(); }
   finishRoll(it, tierFx);
-  const left = ROLL_CD - (performance.now() - t0); if (left > 0) await sleep(left);
+  const left = cdDur - (performance.now() - t0); if (left > 0) await sleep(left);
   cdOn = false; $('cdFill').style.width = '0'; $('cdTxt').textContent = ''; rb.disabled = false; void rb.offsetWidth; rb.classList.add('ready');
   rolling = false;
   if (S.auto) setTimeout(roll, 60);
@@ -1269,6 +1348,7 @@ function finishRoll(it, tierFx){
   else { burst(pos, it); if (S.fast){ shakeT = tierFx === 2 ? .7 : .45; flash(.3, mainCol(it)); starSound(it.tier, 'boom'); } }
   if (mySlot.aura && S.equipped === it.tier && !skipped){ mySlot.aura.boost = Math.max(mySlot.aura.boost, tierFx ? 1.4 : 1.15); if (tierFx) shockwave(pos, mySlot.aura.col, .8); }
   if (it.tier >= 9) addLog(it, isNew, skipped);
+  if (Math.random() < .04) setTimeout(()=>gainPotion(randPotion(), '굴리기 보너스'), 500);
   save(); render();
 }
 function addLog(it, isNew, skipped){
@@ -1283,13 +1363,13 @@ function addLog(it, isNew, skipped){
 let msgT = null; function showMsg(text, ms, it){ const e = $('msg'); e.textContent = text; if (it) paintText(e, it); else { e.style.color = '#fff'; e.style.fontFamily = ''; } e.style.opacity = 1; clearTimeout(msgT); msgT = setTimeout(()=>{ e.style.opacity = 0; }, ms || 1800); }
 function updateInfo(){ $('info').textContent = '🎲 ' + fmt(S.rolls) + ' · 👥 ' + (others.size + 1) + '명' + (mpOn ? '' : ' (혼자)'); }
 let tab = 'inv', rankCache = null, rankAt = 0;
-const TAB_TITLE = { inv:['AURA STORAGE', '모은 오라 · 중복을 받을지 고를 수 있어요'], index:['COLLECTION', ''], rank:['LEADERBOARD', '최고 오라 (희귀도)'], info:['SETTINGS', ''] };
+const TAB_TITLE = { inv:['AURA STORAGE', '모은 오라 · 중복을 받을지 고를 수 있어요'], pot:['POTIONS', ''], index:['COLLECTION', ''], rank:['LEADERBOARD', '최고 오라 (희귀도)'], info:['SETTINGS', ''] };
 const tierLabel = p=>p.tier >= NEW_FROM ? 'BEYOND' : 'TIER ' + p.tier;
 const perkShort = p=>p.perk ? PERKS[p.perk].split(' (')[0] : '';
 function render(){
   updateInfo();
   const L = currentLuck(), r10 = S.rolls % 10;
-  $('luckTxt').textContent = '🍀 LUCK x' + L + (L > 1 ? '!' : '');
+  $('luckTxt').textContent = '🍀 LUCK x' + fmt(L) + (L > 1 ? '!' : '');
   [...$('pips').children].forEach((e, i)=>{ e.classList.toggle('on', i < r10 || L > 1); e.classList.toggle('x5', (S.rolls + 1) % 100 === 0); });
   $('statLine').textContent = '최고 ' + (S.best != null ? POOL[S.best].name + ' (1/' + fmt(POOL[S.best].odds) + ')' : '-') + ' · 10번째 x2 · 100번째 x10';
   $('autoBtn').querySelector('small').textContent = S.auto ? 'ON' : 'OFF'; $('autoBtn').classList.toggle('on', S.auto);
@@ -1319,6 +1399,19 @@ function render(){
       const k = document.createElement('button'); k.textContent = sk ? '🚫 안받기' : '✓ 받기'; k.title = '이 오라가 또 나오면 가방에 넣을지'; if (sk) k.classList.add('no');
       k.onclick = ()=>{ if (S.skip[p.tier]) delete S.skip[p.tier]; else S.skip[p.tier] = 1; save(); render(); };
       acts.append(e, k); c.appendChild(acts); g.appendChild(c); });
+  } else if (tab === 'pot'){
+    const have = POT_IDS.filter(id=>S.pot[id] > 0);
+    $('sideSub').textContent = '맵에서 빛나는 병을 줍거나 · 굴리다 가끔 · 남는 오라로 제작';
+    const h1 = document.createElement('div'); h1.className = 'sec'; h1.textContent = '내 물약'; box.appendChild(h1);
+    if (!have.length){ const e = document.createElement('div'); e.className = 'empty'; e.textContent = '아직 물약이 없어요. 맵에 빛기둥이 보이면 가 봐요!'; box.appendChild(e); }
+    else { const g = grid(); have.forEach(id=>{ const c = potCard(id); const cnt = document.createElement('div'); cnt.className = 'cnt'; cnt.textContent = '×' + S.pot[id]; c.appendChild(cnt);
+      const acts = document.createElement('div'); acts.className = 'acts'; const b = document.createElement('button'); b.textContent = '마시기'; b.classList.add('on'); b.onclick = ()=>drinkPotion(id); acts.appendChild(b); c.appendChild(acts); g.appendChild(c); }); }
+    const h2 = document.createElement('div'); h2.className = 'sec'; h2.textContent = '제작 (오라마다 1개는 남겨요)'; box.appendChild(h2);
+    const g2 = grid(); POT_IDS.forEach(id=>{ const c = potCard(id), rc = document.createElement('div'); rc.className = 'rc';
+      for (const [t, n] of Object.entries(POTIONS[id].recipe)){ const q = POOL[t], row = document.createElement('div'), nm = document.createElement('span'), ct = document.createElement('em');
+        nm.textContent = S.inv[t] ? q.name : '???'; if (S.inv[t]) paintText(nm, q, false); ct.textContent = Math.min(spare(+t), n) + '/' + n; if (spare(+t) >= n) ct.className = 'ok'; row.append(nm, ct); rc.appendChild(row); }
+      const acts = document.createElement('div'); acts.className = 'acts'; const b = document.createElement('button'); b.textContent = '제작'; b.disabled = !canCraft(id); b.onclick = ()=>craftPotion(id); acts.appendChild(b);
+      c.append(rc, acts); g2.appendChild(c); });
   } else if (tab === 'index'){
     $('sideSub').textContent = '발견 ' + POOL.filter(p=>S.inv[p.tier]).length + ' / ' + POOL.length;
     const g = grid();
@@ -1339,9 +1432,10 @@ function render(){
       <h4>QUICK 굴리기</h4><div class="btns"><button id="setFast" class="${S.fast ? 'on' : ''}">${S.fast ? 'ON — 별 · 컷씬 생략' : 'OFF'}</button></div>
       <h4>연출</h4><p>1/100 이하는 반짝임만 · 1/1,000 아래는 별 + 화면 흔들림 · 1/1,000 이상은 별 + 시네마틱 컷씬.</p><p>굴리기 쿨타임 2.5초. 10번째 행운 x2, 100번째 x10.</p>
       <h4>오라 · 능력</h4><p>등급마다 모양 · 폰트 · 대사가 달라요. 몇몇은 장착하면 ⚡ 속도 · 🦘 점프 · 🪽 활공 · ✨ 2단 점프. 제단 동쪽 노란 탑에서 시험해 봐요!</p>
+      <h4>물약</h4><p>맵 곳곳에 빛기둥이 솟은 물약 병이 생겨요 (가까이 가면 획득). 굴릴 때 4% 확률로도 나와요. 🧪 탭에서 남는 오라로 만들 수도 있어요.</p>
       <h4>BEYOND</h4><p>GOD EMPEROR 너머의 7등급. 최고는 ΩMEGA ORIGIN (1/500,000,000).</p>
       <h4>멀티</h4><p>같은 방 사람들의 오라가 서로 보여요. Nightshade 이상은 방 전체 알림. 친구랑은 주소 끝에 ?room=이름</p>
-      <h4>조작</h4><p>WASD 이동 · Space 점프 · 드래그 시점 · 휠 줌 · R 굴리기 · F 자동 · Q 퀵 · B 가방 · / 채팅 · . 이모트</p>
+      <h4>조작</h4><p>WASD 이동 · Space 점프 · 드래그 시점 · 휠 줌 · R 굴리기 · F 자동 · Q 퀵 · B 가방 · P 물약 · / 채팅 · . 이모트</p>
       <h4>데이터</h4><div class="btns"><button id="resetBtn">저장 데이터 초기화</button></div></div>`;
     $('setSnd').onclick = ()=>$('soundBtn').click(); $('setFast').onclick = ()=>$('fastBtn').click();
     $('resetBtn').onclick = ()=>{ if (confirm('정말 초기화할까요?')){ try { localStorage.removeItem(SAVE_KEY); } catch(e){} location.reload(); } };
@@ -1355,6 +1449,11 @@ function card(p, odds, sub){
   const s = document.createElement('div'); s.className = 'pk'; s.textContent = sub;
   c.append(tl, b, o, s); return c;
 }
+function potCard(id){ const P = POTIONS[id], c = document.createElement('div'); c.className = 'card pot'; c.style.setProperty('--c', P.col);
+  c.innerHTML = '<div class="tierL">' + (P.dur ? P.dur + '초' : '다음 ' + P.rolls + '번') + '</div><b class="nm"></b><div class="pk"></div>';
+  const b = c.querySelector('.nm'), t = document.createElement('span'); b.textContent = P.icon + ' '; t.textContent = P.name; b.appendChild(t); t.style.color = P.col; t.style.textShadow = `0 0 12px ${P.col}88`;
+  if (P.rainbow){ t.style.background = RB_CSS; t.style.webkitBackgroundClip = 'text'; t.style.backgroundClip = 'text'; t.style.color = 'transparent'; t.style.textShadow = 'none'; }
+  c.querySelector('.pk').textContent = P.desc; return c; }
 function openTab(t){ const sd = $('side'); if (sd.classList.contains('open') && tab === t) sd.classList.remove('open'); else { tab = t; sd.classList.add('open'); } render(); }
 
 // =====================================================================
@@ -1386,7 +1485,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   for (const o of others.values()){ const k = Math.min(1, 12*dt); o.x = lerp(o.x, o.tx, k); o.y = lerp(o.y, o.ty, k); o.z = lerp(o.z, o.tz, k); let d = o.try - o.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); o.ry += d*k;
     if (Math.hypot(o.tx - o.x, o.tz - o.z) > 15){ o.x = o.tx; o.y = o.ty; o.z = o.tz; } o.a.g.position.set(o.x, o.y, o.z); o.a.g.rotation.y = o.ry; animLimbs(o.a, dt, o.an === 1, o.an === 2); applyOutline(o.a, o.slot);
     o.slot.holder.position.set(o.x, o.y, o.z); if (o.slot.aura){ o.slot.aura.yaw = o.ry; o.slot.aura.update(dt, T); } }
-  tickStar(dt); tickFx(dt);
+  tickStar(dt); tickFx(dt); tickPotions(dt);
   if (cine) cineCamera(dt);
   else { if (Math.abs(camera.fov - 60) > .1){ camera.fov = lerp(camera.fov, 60, Math.min(1, dt*4)); camera.updateProjectionMatrix(); } hemi.intensity = lerp(hemi.intensity, .5, Math.min(1, dt*3));
     const px = me.x, py = me.y + 1.7, pz = me.z; camera.position.set(px - Math.sin(camYaw)*Math.cos(camPitch)*camDist, py + Math.sin(camPitch)*camDist, pz - Math.cos(camYaw)*Math.cos(camPitch)*camDist);
@@ -1409,7 +1508,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   if (window.__starCap && starState && window.__starCap.length && starState.el/starState.dur >= window.__starCap[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .7)); window.__starCap.shift(); }
   if (window.__capT && cine && window.__capT.length && cine.t >= window.__capT[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .8)); window.__capT.shift(); } }
 loop();
-window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, get aura(){ return mySlot.aura; }, get star(){ return starState; },
+window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, pickups, get aura(){ return mySlot.aura; }, get star(){ return starState; },
   fakeOther:(tier)=>{ onPlayers({ bot1:{ x:me.x + 6, y:me.y, z:me.z - 2, ry:0, name:'테스트봇', avatarLoadout:{}, d:{ au:tier, rl:-1, rs:0 } } }); } };
 })();
 </script>
