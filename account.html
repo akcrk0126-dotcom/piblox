@@ -57,7 +57,7 @@
   <!-- 이메일 계정으로 로그인한 상태 -->
   <div class="card hide" id="loggedCard">
     <h2>로그인되어 있어요</h2>
-    <div class="desc">이름·아바타·레벨·아이템은 계정에 저장돼 있어요. 다른 기기에서도 같은 이메일로 로그인하면 그대로 돌아와요.</div>
+    <div class="desc">이름·아바타·레벨·아이템은 계정에 저장돼 있어요. 다른 기기에서도 같은 아이디(이메일)로 로그인하면 그대로 돌아와요.</div>
     <button class="btn" id="reloadBtn" type="button">☁ 계정 데이터 다시 불러오기</button>
     <button class="btn warn" id="logoutBtn" type="button">로그아웃</button>
     <div class="msg" id="loggedMsg"></div>
@@ -67,18 +67,18 @@
   <div class="card" id="authCard">
     <div class="tabs"><button id="tLogin" class="on" type="button">로그인</button><button id="tJoin" type="button">회원가입</button></div>
     <div id="loginBox">
-      <h2>이메일로 로그인</h2>
-      <div class="desc">전에 이메일로 가입했던 계정이면 여기서 로그인하면 돼요. 이 기기의 게스트 기록 대신 <b>계정 데이터</b>를 불러와요.</div>
-      <input id="lEmail" type="email" placeholder="이메일" autocomplete="email">
+      <h2>아이디 · 이메일로 로그인</h2>
+      <div class="desc">전에 아이디나 이메일로 가입했던 계정이면 여기서 로그인하면 돼요. 이 기기의 게스트 기록 대신 <b>계정 데이터</b>를 불러와요.</div>
+      <input id="lEmail" type="text" placeholder="아이디 또는 이메일" autocomplete="username" autocapitalize="none" spellcheck="false">
       <input id="lPw" type="password" placeholder="비밀번호" autocomplete="current-password">
       <button class="btn pri" id="loginBtn" type="button">로그인</button>
       <button class="link" id="forgotBtn" type="button">비밀번호를 잊었어요</button>
     </div>
     <div id="joinBox" class="hide">
-      <h2>지금 계정을 이메일로 저장하기</h2>
-      <div class="desc">게스트 계정은 이 기기(브라우저)에만 묶여 있어서, 브라우저 기록을 지우면 사라져요. 이메일로 가입하면 지금 기록을 그대로 계정으로 옮겨요.</div>
+      <h2>지금 계정을 아이디 · 이메일로 저장하기</h2>
+      <div class="desc">게스트 계정은 이 기기(브라우저)에만 묶여 있어서, 브라우저 기록을 지우면 사라져요. 아이디나 이메일로 가입하면 지금 기록을 그대로 계정으로 옮겨요.</div>
       <input id="jName" type="text" maxlength="12" placeholder="계정 이름 (나중에 못 바꿔요)">
-      <input id="jEmail" type="email" placeholder="이메일" autocomplete="email">
+      <input id="jEmail" type="text" placeholder="아이디 (영어 · 숫자 · _ 3~16자) 또는 이메일" autocomplete="username" autocapitalize="none" spellcheck="false">
       <input id="jPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password">
       <button class="btn ok" id="joinBtn" type="button">회원가입</button>
     </div>
@@ -100,13 +100,15 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const ERR = {
     'auth/invalid-email':'이메일 형식이 올바르지 않아요.', 'auth/weak-password':'비밀번호는 6자 이상이어야 해요.',
     'auth/email-already-in-use':'이미 가입된 이메일이에요. 로그인 탭에서 로그인해 주세요.', 'auth/wrong-password':'비밀번호가 틀렸어요.',
     'auth/user-not-found':'가입되지 않은 이메일이에요.', 'auth/invalid-credential':'이메일 또는 비밀번호가 맞지 않아요. 가입한 적이 없다면 회원가입을, 비밀번호가 기억나지 않으면 비밀번호 찾기를 눌러 주세요.', 'auth/user-disabled':'사용이 중지된 계정이에요.',
     'auth/invalid-login-credentials':'이메일 또는 비밀번호가 맞지 않아요. 가입한 적이 없다면 회원가입을, 비밀번호가 기억나지 않으면 비밀번호 찾기를 눌러 주세요.', 'auth/too-many-requests':'시도가 너무 많아요. 잠시 후 다시 해주세요.',
-    'auth/network-request-failed':'인터넷 연결을 확인해 주세요.', 'auth/missing-email':'이메일을 입력해 주세요.' };
-  const errText = e => { const c = e && (e.code || e.message || e); return ERR[c] || ('실패했어요 (' + (c || '알 수 없는 오류') + ')'); };
+    'auth/network-request-failed':'인터넷 연결을 확인해 주세요.', 'auth/missing-email':'이메일을 입력해 주세요.',
+    'auth/id-already-in-use':'이미 있는 아이디예요.', 'auth/invalid-id-credential':'아이디 또는 비밀번호가 맞지 않아요.', 'auth/id-no-reset':'아이디 계정은 비밀번호를 찾을 수 없어요 — 관리자에게 문의하세요.' };
+  const errText = e => { const c = e && (e.code || e.message || e); if (c === 'auth/invalid-id' && e.message) return e.message; return ERR[c] || ('실패했어요 (' + (c || '알 수 없는 오류') + ')'); };
   const say = (id, t, kind) => { const m = $(id); m.textContent = t || ''; m.className = 'msg' + (kind ? ' ' + kind : ''); };
   const ok = !!(window.MP && !window.__mpFail && MP.isConfigured && MP.isConfigured() && window.firebase);
   if (!ok){ $('name').textContent = '서버에 연결할 수 없어요'; $('sub').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; return; }
@@ -118,15 +120,15 @@
     $('face').innerHTML = faceOf(info && info.avatar);
     $('name').textContent = (info && info.name) || MP.getDisplayName();
     const acct = (info && info.accountName) || (MP.getAccountName && MP.getAccountName());
-    $('sub').innerHTML = (logged ? (u.email || '') : '이 기기에만 저장된 게스트 계정') + (acct && acct !== $('name').textContent ? '<br>계정 이름 · ' + acct : '');
-    $('badge').className = 'badge ' + (logged ? 'email' : 'guest'); $('badge').textContent = logged ? '이메일 계정' : '게스트';
+    $('sub').textContent = '';$('sub').innerHTML = (logged ? esc(MP.loginLabel ? MP.loginLabel(u) : (u.email || '')) : '이 기기에만 저장된 게스트 계정') + (acct && acct !== $('name').textContent ? '<br>계정 이름 · ' + acct : '');
+    $('badge').className = 'badge ' + (logged ? 'email' : 'guest'); $('badge').textContent = logged ? (MP.emailToId && MP.emailToId(u.email) ? '아이디 계정' : '이메일 계정') : '게스트';
     const lv = MP.getLevel ? MP.getLevel() : { level:1 }, items = MP.getOwnedItems ? MP.getOwnedItems().length : 0;
     $('stats').innerHTML = '<div><b>LV ' + ((info && info.level) || lv.level) + '</b>레벨</div><div><b>' + ((info && info.items) || items) + '</b>아이템</div><div><b>' + (logged ? '안전' : '주의') + '</b>' + (logged ? '다른 기기 OK' : '이 기기만') + '</div>';
     $('uid').textContent = u ? 'ID ' + u.uid : '';
     $('loggedCard').classList.toggle('hide', !logged);
     $('tJoin').classList.toggle('hide', logged);
     if (logged && !$('joinBox').classList.contains('hide')) showTab('login');
-    $('authCard').querySelector('#loginBox h2').textContent = logged ? '다른 계정으로 로그인' : '이메일로 로그인';
+    $('authCard').querySelector('#loginBox h2').textContent = logged ? '다른 계정으로 로그인' : '아이디 · 이메일로 로그인';
   }
   $('uid').addEventListener('click', ()=>{ const u = MP.currentUser(); if (u && navigator.clipboard) navigator.clipboard.writeText(u.uid).then(()=>say('authMsg', 'ID를 복사했어요', 'ok')).catch(()=>{}); });
   MP.initAuthOnly(user=>{ if (user) setTimeout(()=>render(), 300); });
@@ -138,7 +140,7 @@
   // ---- 로그인 ----
   function doLogin(){
     const em = $('lEmail').value.trim(), pw = $('lPw').value;
-    if (!em || !pw){ say('authMsg', '이메일과 비밀번호를 입력해 주세요.', 'err'); return; }
+    if (!em || !pw){ say('authMsg', '아이디(또는 이메일)와 비밀번호를 입력해 주세요.', 'err'); return; }
     $('loginBtn').disabled = true; say('authMsg', '로그인 중…');
     const go = ()=> MP.signIn(em, pw, (user, err, info)=>{
       $('loginBtn').disabled = false;
@@ -148,12 +150,12 @@
       render(info);
     });
     // 이미 다른 이메일 계정이면 먼저 로그아웃
-    const u = MP.currentUser(); if (u && !u.isAnonymous && u.email !== em) MP.signOutUser(go); else go();
+    const u = MP.currentUser(); if (u && !u.isAnonymous && String(MP.loginLabel ? MP.loginLabel(u) : u.email).toLowerCase() !== em.toLowerCase()) MP.signOutUser(go); else go();
   }
   $('loginBtn').addEventListener('click', doLogin);
   $('lPw').addEventListener('keydown', e=>{ if (e.key === 'Enter') doLogin(); });
   $('forgotBtn').addEventListener('click', ()=>{
-    const em = $('lEmail').value.trim(); if (!em){ say('authMsg', '위에 이메일을 먼저 입력하고 다시 눌러주세요.', 'err'); return; }
+    const em = $('lEmail').value.trim(); if (!em){ say('authMsg', '위에 아이디 또는 이메일을 먼저 입력하고 다시 눌러주세요.', 'err'); return; }
     MP.resetPassword(em, (sent, err)=>{ if (sent) say('authMsg', em + ' 으로 비밀번호 재설정 메일을 보냈어요.\n메일함(스팸함도)에서 링크를 눌러 새 비밀번호를 정한 뒤 로그인하세요.', 'ok'); else say('authMsg', errText(err), 'err'); }); });
 
   // ---- 로그아웃 ----
@@ -169,11 +171,11 @@
   // ---- 회원가입 (게스트 → 이메일 계정) ----
   $('joinBtn').addEventListener('click', ()=>{
     const nm = $('jName').value.trim(), em = $('jEmail').value.trim(), pw = $('jPw').value;
-    if (!em || !pw){ say('authMsg', '이메일과 비밀번호를 입력해 주세요.', 'err'); return; }
+    if (!em || !pw){ say('authMsg', '아이디(또는 이메일)와 비밀번호를 입력해 주세요.', 'err'); return; }
     $('joinBtn').disabled = true; say('authMsg', '가입 중…');
     MP.signUp(em, pw, nm || MP.getDisplayName(), (user, err)=>{ $('joinBtn').disabled = false;
       if (err){ say('authMsg', errText(err), 'err'); return; }
-      say('authMsg', '가입했어요! 이제 어느 기기에서든 이 이메일로 로그인하면 돼요.', 'ok'); showTab('login'); setTimeout(()=>render(), 500); });
+      say('authMsg', '가입했어요! 이제 어느 기기에서든 이 ' + (em.indexOf('@') >= 0 ? '이메일' : '아이디') + '로 로그인하면 돼요.', 'ok'); showTab('login'); setTimeout(()=>render(), 500); });
   });
   window.__A = { render };
 })();
