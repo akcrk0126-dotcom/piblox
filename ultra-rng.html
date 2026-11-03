@@ -2204,6 +2204,56 @@ function screenIntro(it){ return new Promise(res=>{ introShow(); const W = intro
 // 원형으로 열리며 3D 컷씬이 드러난다
 function introOpen(){ const t0 = performance.now(); flash(.7); const s = ()=>{ const k = Math.min(1, (performance.now() - t0)/550), r = easeIO(k)*150; introCv.style.clipPath = `circle(150% at 50% 46%)`; introCv.style.webkitMaskImage = introCv.style.maskImage = `radial-gradient(circle at 50% 46%, transparent ${r}%, #000 ${r + 6}%)`;
   if (k < 1) requestAnimationFrame(s); else { introHide(); introCv.style.webkitMaskImage = introCv.style.maskImage = 'none'; } }; s(); }
+// =====================================================================
+//  💥 컷씬 이펙트 팩 — 소용돌이 · 임팩트 빛줄기 · 날아가는 파편 · 바닥 균열 · 번개 아크 · 렌즈 플레어 · 잔상 고리
+// =====================================================================
+const vfx = (()=>{ const root = new THREE.Group(); root.visible = false; scene.add(root);
+  const add = m=>{ root.add(m); return m; }, addMat = (c, op)=>new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:op == null ? 1 : op, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+  // 1) 소용돌이: 바닥에서 나선으로 감아 올라가는 빛 입자
+  const VN = 900, vs = new Float32Array(VN*4); for (let i=0;i<VN;i++) vs.set([Math.random(), Math.random(), Math.random(), Math.random()], i*4);
+  const vg = new THREE.BufferGeometry(); vg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(VN*3), 3)); vg.setAttribute('aSeed', new THREE.BufferAttribute(vs, 4));
+  const vu = { uTime:{ value:0 }, uC1:{ value:new THREE.Color() }, uC2:{ value:new THREE.Color() }, uAmt:{ value:0 }, uPR:{ value:renderer.getPixelRatio() } };
+  const vortex = add(new THREE.Points(vg, new THREE.ShaderMaterial({ uniforms:vu, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`attribute vec4 aSeed;uniform float uTime,uPR,uAmt;varying float vA,vM;void main(){float life=fract(aSeed.x+uTime*(.25+aSeed.y*.35));float r=mix(7.,.6,life)*(.6+aSeed.z*.6);float a=aSeed.w*6.2832+life*9.+uTime*2.;
+      vec3 p=vec3(cos(a)*r,life*14.,sin(a)*r);vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=min(uPR*10.,uPR*(1.+aSeed.y*2.5)*(70./-mv.z));vA=uAmt*sin(life*3.1416);vM=aSeed.z;}`,
+    fragmentShader:`uniform vec3 uC1,uC2;varying float vA,vM;void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,0.,d);gl_FragColor=vec4(mix(uC1,uC2,vM)*1.8,a*a*vA);}` }))); vortex.frustumCulled = false;
+  // 2) 임팩트 빛줄기: 사방으로 뻗는 날카로운 빛 (가로 방사)
+  const streaks = [...Array(18)].map((_, i)=>{ const m = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), addMat(0xffffff, 0))); m.userData.a = i/18*6.283 + Math.random()*.2; m.userData.l = 18 + Math.random()*22; m.userData.y = .4 + Math.random()*4; return m; });
+  // 3) 파편: 땅이 부서져 사방으로 튀었다 떨어진다
+  const DN = 46, debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(.45, 0), new THREE.MeshLambertMaterial({ color:0x22202c, emissive:0x000000 }), DN); debris.frustumCulled = false; add(debris);
+  const dd = [...Array(DN)].map(()=>({ v:new THREE.Vector3(), p:new THREE.Vector3(), r:new THREE.Euler(), w:new THREE.Vector3(), s:.5 + Math.random()*1.6 }));
+  // 4) 바닥 균열: 빛나는 금이 퍼진다
+  const cu = { uC1:{ value:new THREE.Color() }, uC2:{ value:new THREE.Color() }, uTime:{ value:0 }, uInt:{ value:0 }, uBoost:{ value:1 } };
+  const crack = add(new THREE.Mesh(new THREE.PlaneGeometry(34, 34), new THREE.ShaderMaterial({ uniforms:cu, vertexShader:BASIC_VS, fragmentShader:CRACK_FS, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }))); crack.rotation.x = -Math.PI/2; crack.position.y = .06;
+  // 5) 번개 아크: 몸에서 바닥 고리로 지지직
+  const AN = 6, SEG = 10, ap = new Float32Array(AN*SEG*6), ag = new THREE.BufferGeometry(); ag.setAttribute('position', new THREE.BufferAttribute(ap, 3));
+  const arcs = add(new THREE.LineSegments(ag, new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }))); arcs.frustumCulled = false; let arcT = 0;
+  // 6) 잔상 고리: 위로 올라가며 커지는 빛 고리 여러 겹
+  const rings = [...Array(6)].map(()=>{ const m = add(new THREE.Mesh(new THREE.TorusGeometry(1, .06, 6, 80), addMat(0xffffff, 0))); m.rotation.x = Math.PI/2; m.userData.t = 9; return m; });
+  // 7) 렌즈 플레어: 화면 쪽 빛망울 (카메라에 붙음)
+  const flare = new THREE.Group(); camera.add(flare); const fl = [[0, 3.2, .9], [.35, 1.1, .5], [.6, .6, .45], [1.1, 1.6, .3], [1.5, .8, .35]].map(([d, s, o])=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:spriteTex, color:0xffffff, transparent:true, opacity:0, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending })); sp.scale.setScalar(s); sp.userData = { d, o }; flare.add(sp); return sp; });
+  let t0 = 0, impactT = -1, col = new THREE.Color(), col2 = new THREE.Color();
+  return {
+    start(it){ const a = auraColors(it); col.set(mainCol(it)); col2.copy(a.dark ? a.c1 : a.c2); vu.uC1.value.copy(col); vu.uC2.value.copy(col2); cu.uC1.value.copy(col); cu.uC2.value.copy(col2); cu.uInt.value = 0;
+      root.visible = true; root.position.set(me.x, me.y, me.z); t0 = performance.now(); impactT = -1; vu.uAmt.value = 0; streaks.forEach(m=>m.material.color.copy(col).lerp(new THREE.Color(1, 1, 1), .5).multiplyScalar(1.5));
+      rings.forEach(r=>{ r.userData.t = 9; r.material.color.copy(col).multiplyScalar(1.8); }); arcs.material.color.copy(col2).lerp(new THREE.Color(1, 1, 1), .5).multiplyScalar(1.8); debris.material.emissive.copy(col).multiplyScalar(.35); fl.forEach(s=>s.material.color.copy(col).lerp(new THREE.Color(1, 1, 1), .4)); },
+    impact(){ impactT = 0; const P = new THREE.Vector3(); dd.forEach(d=>{ const a = Math.random()*6.283, sp = 8 + Math.random()*22; d.p.set(Math.cos(a)*rr(.5, 3), .3, Math.sin(a)*rr(.5, 3)); d.v.set(Math.cos(a)*sp, rr(8, 26), Math.sin(a)*sp); d.r.set(rr(0, 6), rr(0, 6), rr(0, 6)); d.w.set(rr(-8, 8), rr(-8, 8), rr(-8, 8)); });
+      rings.forEach((r, i)=>{ r.userData.t = -i*.12; }); },
+    pulse(){ const r = rings.find(r=>r.userData.t > 1.6) || rings[0]; r.userData.t = 0; },
+    stop(){ root.visible = false; fl.forEach(s=>s.material.opacity = 0); arcs.material.opacity = 0; },
+    tick(dt){ if (!root.visible) return; const t = (performance.now() - t0)/1000; root.position.set(me.x, me.y, me.z); vu.uTime.value = t; cu.uTime.value = t;
+      const charging = impactT < 0; vu.uAmt.value = lerp(vu.uAmt.value, charging ? 1 : .35, Math.min(1, dt*3));
+      if (impactT >= 0){ impactT += dt; const it = impactT;
+        streaks.forEach(m=>{ const u = m.userData, k = Math.min(1, it/.18), o = Math.max(0, 1 - it/.9); m.scale.set(u.l*k, .12 + (1 - k)*.6, 1); m.position.set(Math.cos(u.a)*u.l*k*.5, u.y, Math.sin(u.a)*u.l*k*.5); m.rotation.set(0, -u.a, 0); m.material.opacity = o; });
+        dd.forEach((d, i)=>{ if (it > 4) return; d.v.y -= 40*dt; d.p.addScaledVector(d.v, dt); if (d.p.y < .3){ d.p.y = .3; d.v.multiplyScalar(.4); d.v.y = Math.abs(d.v.y)*.3; } d.r.x += d.w.x*dt; d.r.y += d.w.y*dt; _d.position.copy(d.p); _d.rotation.copy(d.r); _d.scale.setScalar(d.s*(it < 3 ? 1 : Math.max(0, 1 - (it - 3)))); _d.updateMatrix(); debris.setMatrixAt(i, _d.matrix); }); debris.instanceMatrix.needsUpdate = true;
+        cu.uInt.value = Math.min(1.6, it*3)*(it < 4 ? 1 : Math.max(0, 1 - (it - 4)*.5)); crack.scale.setScalar(.3 + easeO(Math.min(1, it/.6))*.7);
+        arcT -= dt; if (arcT <= 0 && it > .4){ arcT = .09; const show = Math.random() < .55; arcs.material.opacity = show ? .9 : 0; if (show){ for (let a=0;a<AN;a++){ const ang = Math.random()*6.283, R = rr(3, 7); let x = 0, y = rr(1.5, 3.2), z = 0; for (let s=0;s<SEG;s++){ const f = (s + 1)/SEG, nx = Math.cos(ang)*R*f + rr(-.5, .5), ny = y*(1 - f) + rr(-.3, .3)*(1 - f), nz = Math.sin(ang)*R*f + rr(-.5, .5); ap.set([x, y*(s ? 1 : 1), z, nx, ny, nz], (a*SEG + s)*6); x = nx; y = ny; z = nz; } } ag.attributes.position.needsUpdate = true; } } }
+      else { debris.count = DN; for (let i=0;i<DN;i++){ _d.position.set(0, -50, 0); _d.updateMatrix(); debris.setMatrixAt(i, _d.matrix); } debris.instanceMatrix.needsUpdate = true; streaks.forEach(m=>m.material.opacity = 0); }
+      rings.forEach(r=>{ const u = r.userData; u.t += dt; const k = u.t/1.6; if (k < 0 || k > 1){ r.visible = false; return; } r.visible = true; r.scale.setScalar(1.5 + k*9); r.position.y = .2 + k*6; r.material.opacity = (1 - k)*.9; });
+      // 렌즈 플레어: 내 위치를 화면에 투영해서 중심 쪽으로 빛망울이 늘어선다
+      tmpW.set(me.x, me.y + 2.4, me.z).project(camera); const on = cine && tmpW.z < 1 && Math.abs(tmpW.x) < 1.2 && Math.abs(tmpW.y) < 1.2, fa = on ? (impactT >= 0 ? 1 : .4) : 0;
+      fl.forEach(s=>{ const u = s.userData, x = tmpW.x*(1 - u.d), y = tmpW.y*(1 - u.d); s.position.set(x*3.6*camera.aspect, y*3.6, -6.5); s.material.opacity = lerp(s.material.opacity, fa*u.o*(.8 + .2*Math.sin(t*9 + u.d*20)), Math.min(1, dt*8)); }); },
+  }; })();
 // 오라 컨셉 → 타이틀 글자 연출
 function conceptOf(it){ const m = it.mods.map(x=>x[0]), has = n=>m.includes(n);
   if (has('glitch') || has('shards')) return 'glitch'; if (has('clock')) return 'time'; if (has('ice')) return 'ice';
@@ -2247,8 +2297,8 @@ function cutscene(it){
       $('cutLine').style.width = Math.min(66, 16 + it.name.length*2.6) + 'vw';
       setTimeout(()=>c.classList.add('shine'), 700 + it.name.length*st*1000); countUp($('cutOdds'), it.odds, 1400);
       if (A()){ A().boost = 1.15; shockwave(P(), A().col, 1.6); shockwave(P(), A().col, .8); } burst(P(), it); burst(P(), it);
-      starSound(t, 'boom'); starSound(t, 'chord'); BGM.setAura(it, true); BGM.duck(false); if (gradePass){ gradePass.uniforms.uCA.value = .016; gradePass.uniforms.uZoom.value = 2; } });
-    realm.enter(it, P()); makeGiant(it); at((charge + hero*.42)*1000, ()=>strike(it));
+      vfx.impact(); starSound(t, 'boom'); starSound(t, 'chord'); BGM.setAura(it, true); BGM.duck(false); if (gradePass){ gradePass.uniforms.uCA.value = .016; gradePass.uniforms.uZoom.value = 2; } });
+    realm.enter(it, P()); vfx.start(it); makeGiant(it); at((charge + hero*.42)*1000, ()=>strike(it));
     const extra = t >= NEW_FROM ? 2 : t >= 40 ? 1 : 0;
     for (let i=1;i<=extra;i++) at(charge*1000 + i*1500, ()=>{ shakeT = .35; if (A()){ A().boost = 1.45; shockwave(P(), A().col, 1.1 + i*.25); } burst(P(), it); starSound(t, 'boom'); if (gradePass){ gradePass.uniforms.uCA.value = .008; gradePass.uniforms.uZoom.value = .9; } });
     // 피날레: 이름이 가운데로 모이고 카메라가 확 파고든 뒤 — 번쩍, 컷
@@ -2260,7 +2310,7 @@ function cutscene(it){
       document.body.classList.remove('cine'); camBlend = natural === true ? 0 : 1;
       cineEndPos.copy(camera.position); camera.getWorldDirection(cineEndLook).multiplyScalar(10).add(camera.position);
       if (mySlot.aura){ mySlot.aura.group.scale.setScalar(mySlot.aura.gs); if (mySlot.aura.label) mySlot.aura.label.visible = true; mySlot.aura.group.traverse(o=>{ if (o.userData.shell) o.visible = true; }); mySlot.aura.mats.forEach(m=>{ if (m.userData.uI != null){ m.uniforms.uInt.value = m.userData.uI; m.userData.uI = null; } }); }
-      realm.exit(); dropGiant(); skyBeam.visible = false; cineFx.pts.visible = false; cineLight.visible = false; cineLight.intensity = 0; cine = null; res(); };
+      realm.exit(); vfx.stop(); dropGiant(); skyBeam.visible = false; cineFx.pts.visible = false; cineLight.visible = false; cineLight.intensity = 0; cine = null; res(); };
     const onClick = ()=>finish(false); c.addEventListener('click', onClick); at(dur, ()=>finish(true));
     const poll = setInterval(()=>{ if (skipReq) finish(false); }, 50);
   });
@@ -2285,7 +2335,7 @@ function cineCamera(dt){
   SHOTS[sh.name](k, t - sh.from, P, f, out, sh);
   camera.position.copy(out.pos); camera.lookAt(look); if (out.roll) camera.rotateZ(out.roll); const fov = out.fov;
   camera.fov = fov; camera.updateProjectionMatrix();
-  if (cine.impact && mySlot.aura){ const bt = Math.floor((t - C)/.55); if (bt !== cine.beat){ cine.beat = bt; mySlot.aura.boost = Math.max(mySlot.aura.boost, cine.finale ? 1.35 : 1.12); cineLight.intensity = 2.4; } }   // 번쩍 번쩍
+  if (cine.impact && mySlot.aura){ const bt = Math.floor((t - C)/.55); if (bt !== cine.beat){ cine.beat = bt; mySlot.aura.boost = Math.max(mySlot.aura.boost, cine.finale ? 1.35 : 1.12); cineLight.intensity = 2.4; vfx.pulse(); } }   // 번쩍 번쩍
   if (cine.finale && mySlot.aura) mySlot.aura.group.scale.setScalar(mySlot.aura.gs*(1 + (t - cine.dur + 1.15)*.2));
   hemi.intensity = lerp(hemi.intensity, cine.impact ? .3 : .2, Math.min(1, dt*3));
   cineLight.position.set(camera.position.x*.4 + P.x*.6, P.y + 4, camera.position.z*.4 + P.z*.6); cineLight.intensity = lerp(cineLight.intensity, cine.impact ? 1.4 : 1.2 + Math.sin(t*20)*.15, Math.min(1, dt*6));
@@ -2979,7 +3029,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   for (const o of others.values()){ const k = Math.min(1, 12*dt); o.x = lerp(o.x, o.tx, k); o.y = lerp(o.y, o.ty, k); o.z = lerp(o.z, o.tz, k); let d = o.try - o.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); o.ry += d*k;
     if (Math.hypot(o.tx - o.x, o.tz - o.z) > 15){ o.x = o.tx; o.y = o.ty; o.z = o.tz; } o.a.g.position.set(o.x, o.y, o.z); o.a.g.rotation.y = o.ry; if (o.an === 0 && o.data && o.data.au >= 0 && POOL[o.data.au]) o.a.g.position.y += applyPose(o.a, poseOf(POOL[o.data.au]), dt, T, o.x); else animLimbs(o.a, dt, o.an === 1, o.an === 2); applyOutline(o.a, o.slot);
     o.slot.holder.position.set(o.x, o.y, o.z); if (o.slot.aura){ o.slot.aura.yaw = o.ry; o.slot.aura.update(dt, T); } }
-  tickStar(dt); tickFx(dt); signature(dt); tickPotions(dt); tickObby(dt, T); realm.tick(dt, T); decoAnim.forEach(f=>f(T)); tickGiant(dt); tickEvents(dt, T); tickOrb(dt, T); tickBeam(dt);
+  tickStar(dt); tickFx(dt); signature(dt); tickPotions(dt); tickObby(dt, T); realm.tick(dt, T); vfx.tick(dt); decoAnim.forEach(f=>f(T)); tickGiant(dt); tickEvents(dt, T); tickOrb(dt, T); tickBeam(dt);
   if (cine) cineCamera(dt);
   else { if (Math.abs(camera.fov - 60) > .1){ camera.fov = lerp(camera.fov, 60, Math.min(1, dt*4)); camera.updateProjectionMatrix(); } hemi.intensity = lerp(hemi.intensity, .5, Math.min(1, dt*3));
     const slx = shiftLock ? -Math.cos(camYaw)*1.7 : 0, slz = shiftLock ? Math.sin(camYaw)*1.7 : 0, px = me.x + slx, py = me.y + 1.7 + (shiftLock ? .4 : 0), pz = me.z + slz; camera.position.set(px - Math.sin(camYaw)*Math.cos(camPitch)*camDist, py + Math.sin(camPitch)*camDist, pz - Math.cos(camYaw)*Math.cos(camPitch)*camDist);
