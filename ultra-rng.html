@@ -2142,13 +2142,37 @@ function tickRareFx(dt, s){
 }
 function thump(f){ if (!S.sound) return; try { const ctx = ac(); if (!ctx) return; const n = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine';
   o.frequency.setValueAtTime(f*2, n); o.frequency.exponentialRampToValueAtTime(f*.6, n + .25); g.gain.setValueAtTime(.18, n); g.gain.exponentialRampToValueAtTime(.0001, n + .3); o.connect(g); g.connect(ctx.destination); o.start(n); o.stop(n + .32); } catch(e){} }
+// ✦ 별의 빛 — 하얀 코어 · 날카로운 십자 별빛 · 가로 렌즈 플레어 · 양옆 점선 · 가는 원 (희귀할수록 화려해짐)
+const starFx = (()=>{ const g = new THREE.Group(); starRig.add(g); const add = (o, ro)=>{ o.renderOrder = ro; g.add(o); return o; };
+  const M = (map, op)=>new THREE.MeshBasicMaterial({ map, color:0xffffff, transparent:true, opacity:op == null ? 1 : op, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending });
+  const FLARE_TEX = canvasTex(256, 32, (c, w, h)=>{ const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    const v = c.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(0,0,0,1)'); v.addColorStop(.5, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,1)'); c.globalCompositeOperation = 'destination-out'; c.fillStyle = v; c.fillRect(0, 0, w, h); });
+  const glintA = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M(GLINT_TEX)), 26), glintB = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M(GLINT_TEX, .7)), 26);
+  const core = add(new THREE.Sprite(new THREE.SpriteMaterial({ map:spriteTex, color:0xffffff, transparent:true, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending })), 27);
+  const flare = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M(FLARE_TEX)), 25), flare2 = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M(FLARE_TEX, .5)), 25); flare2.rotation.z = Math.PI/2;
+  const dash = []; for (let i=0;i<12;i++){ const m = add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), M(null, .8)), 25); m.userData = { side:i < 6 ? -1 : 1, k:(i % 6)/6, w:.25 + Math.random()*.6 }; dash.push(m); }
+  const rings = [0, 1, 2, 3].map(i=>{ const m = add(new THREE.Mesh(new THREE.RingGeometry(1, 1.012 + i*.006, 128, 1, i % 2 ? 0 : .3, i % 2 ? 6.283 : 5.4), M(null, .7)), 24); m.userData = { r:2.2 + i*1.15, sp:(i % 2 ? -1 : 1)*(.2 + i*.08) }; return m; });
+  let lvl = 0, col = new THREE.Color(), rb = 0;
+  return {
+    set(it){ col.set(mainCol(it)); if (it.dark) col.set(it.accent || '#ffffff'); rb = it.rainbow || 0; lvl = it.odds >= 1e7 ? 3 : it.odds >= 1e5 ? 2 : it.odds >= 1000 ? 1 : 0;
+      const c2 = col.clone().lerp(new THREE.Color(1, 1, 1), .35).multiplyScalar(1.6); [glintA, glintB, flare, flare2].forEach(m=>m.material.color.copy(c2)); dash.forEach(m=>m.material.color.copy(c2)); rings.forEach(m=>m.material.color.copy(col).multiplyScalar(1.4));
+      g.visible = true; dash.forEach(m=>m.visible = lvl >= 1); rings.forEach((m, i)=>m.visible = i < 1 + lvl); flare2.visible = lvl >= 2; starMainMat.opacity = .45; },
+    tick(s, dt){ if (!s){ g.visible = false; return; } const p = Math.min(1, s.el/s.dur), t = s.el/1000, fo = s.fade ? Math.max(0, s.fade/(s.fade0 || .35)) : 1, glow = p*p;
+      if (rb){ col.setHSL((t*.35) % 1, .9, .62); const c2 = col.clone().lerp(new THREE.Color(1, 1, 1), .3).multiplyScalar(1.6); [glintA, glintB, flare, flare2].forEach(m=>m.material.color.copy(c2)); rings.forEach(m=>m.material.color.copy(col).multiplyScalar(1.4)); }
+      const pulse = 1 + Math.sin(t*9)*.06 + (p > .92 ? (p - .92)*12 : 0);
+      glintA.scale.setScalar((3.2 + glow*6 + lvl)*pulse); glintA.rotation.z = -s.angle*Math.PI/180*.5; glintB.scale.setScalar((2 + glow*3.5)*pulse); glintB.rotation.z = Math.PI/4 + s.angle*Math.PI/180*.3;
+      core.scale.setScalar(1.2 + glow*2.4); flare.scale.set(6 + glow*(20 + lvl*8), .22 + glow*.25, 1); flare2.scale.set(3 + glow*10, .12 + glow*.12, 1);
+      [glintA, glintB, flare, flare2].forEach(m=>m.material.opacity = (m === glintB || m === flare2 ? .7 : 1)*fo); core.material.opacity = fo;
+      dash.forEach(m=>{ const u = m.userData, k = (u.k + t*(.25 + glow*.6)) % 1; m.position.set(u.side*(2.2 + k*9), 0, 0); m.scale.set(u.w*(1 + glow), .06, 1); m.material.opacity = Math.sin(k*Math.PI)*.85*fo; });
+      rings.forEach((m, i)=>{ const u = m.userData; m.rotation.z += dt*u.sp*(1 + glow*2); m.scale.setScalar(u.r*(1 + glow*.25) + (p > .95 ? (p - .95)*60*(i + 1) : 0)); m.material.opacity = (.55 - i*.08)*(.4 + glow*.6)*fo; }); },
+  }; })();
 let starState = null, skipReq = false;
 function starAnim(it){
   return new Promise(res=>{
     const dur = clamp(900 + Math.log10(it.odds)*1250, 1200, 14000)*(it.odds < CUT_ODDS ? .8 : 1);
     const col = new THREE.Color(mainCol(it));
     starMainMat.color.copy(col).multiplyScalar(2.2); starSubMat.color.copy(col).multiplyScalar(2.2); starGlow.material.color.copy(col).multiplyScalar(2); sparkMat.color.copy(col).multiplyScalar(2.5);
-    starRig.visible = true; starSpin.rotation.z = 0; starMainMat.opacity = 1; starSubMat.opacity = .55;
+    starRig.visible = true; starSpin.rotation.z = 0; starMainMat.opacity = 1; starSubMat.opacity = .55; starFx.set(it);
     const q = it.tier >= 9 ? getQuote(it.tier) : ''; $('quote').textContent = q; $('quote').style.color = mainCol(it); $('quote').style.textShadow = `0 0 20px ${mainCol(it)}`;
     starSound(it.tier, 'spin', dur);
     // lvl 0: 반쯤 어둡게 / 1: 완전 암전 + 별만 / 2: + 빛기둥 · 링 · 펑 / 3: BEYOND — 무지개 기둥 · 이중 폭발
@@ -2159,7 +2183,7 @@ function starAnim(it){
   });
 }
 function tickStar(dt){
-  if (!starState) return; const s = starState;
+  starFx.tick(starState, dt); if (!starState) return; const s = starState;
   if (skipReq && !s.fade){ endStar(); return; }
   tickRareFx(dt, s); rayMesh.material.uniforms.uT.value = s.el/1000*(.6 + s.lvl*.3);
   if (s.frozen) return;
@@ -2175,7 +2199,7 @@ function tickStar(dt){
   const decel = Math.pow(1 - p, 3); s.angle += (.3 + decel*2.1)*60*dt*s.spinMul;
   starSpin.rotation.z = -s.angle*Math.PI/180;
   const sc = 1 + (1 - Math.pow(1 - p, 2))*.35; starSpin.scale.setScalar(sc);
-  const glow = p*p; starGlow.scale.setScalar(4 + glow*10); starGlow.material.opacity = .25 + glow*.75;
+  const glow = p*p; starGlow.scale.setScalar(3 + glow*6); starGlow.material.opacity = .12 + glow*.38;
   if (s.rainbow){ const c = new THREE.Color().setHSL((s.el/1500) % 1, .85, .6).multiplyScalar(2.2); starMainMat.color.copy(c); starGlow.material.color.copy(c); }
   dim.material.opacity = Math.min(1, s.el/350);
   if (s.lvl){ // 광선 · 링 · 빛기둥 · 떨림이 점점 쌓인다
@@ -3247,7 +3271,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   if (window.__starCap && starState && window.__starCap.length && starState.el/starState.dur >= window.__starCap[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .7)); window.__starCap.shift(); }
   if (window.__capT && cine && window.__capT.length && cine.t >= window.__capT[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .8)); window.__capT.shift(); } }
 loop();
-window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, screenIntro, pickups, replay, useAccount, obby, dg, attack, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
+window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, screenIntro, get star2(){ return starState; }, pickups, replay, useAccount, obby, dg, attack, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
   fakeOther:(tier)=>{ onPlayers({ bot1:{ x:me.x + 6, y:me.y, z:me.z - 2, ry:0, name:'테스트봇', avatarLoadout:{}, d:{ au:tier, rl:-1, rs:0 } } }); } };
 })();
 </script>
