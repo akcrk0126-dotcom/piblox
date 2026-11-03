@@ -3152,7 +3152,7 @@ function drawTiming(){ if (!tg.on) return; const cv = $('tmCv'), g = cv.getConte
 let rolling = false;
 let cdDur = 2500;              // 한 번 굴리는 데 2.5초 (신속 물약 1.5초)
 const CUT_ODDS = 1000;         // 1/1,000 이상 → 별 + 컷씬
-const STAR_ODDS = 100;         // 1/100 초과 → 별 + 화면 흔들림 / 그 이하 → 반짝임만
+const STAR_ODDS = 100;         // 1/100 초과 → 화면 흔들림만 (별 없음) / 그 이하 → 반짝임만
 function currentLuck(){ let l = potLuck()*(1 + gearStat('luck'))*evLuck(); const nx = S.rolls + 1; if (nx % 10 === 0) l *= 2; if (nx % 100 === 0) l *= 5; if (S.nx.chain > 0) l *= 3; if (S.nx.miracle > 0) l *= 100; if (S.nx.thousand > 0) l *= 1000; return Math.round(l*100)/100; }
 function pick(luck){
   for (let i=MAXT;i>=5;i--){ const p = POOL[i]; if (p.ev && !evById(p.ev)) continue; if (Math.random() < p.chance/100*luck*evBoost(p)) return p; }
@@ -3184,7 +3184,7 @@ async function roll(){
   if (S.nx.thousand > 0){ const mn = POOL.findIndex(p=>p.odds >= 10000); for (let k=0;k<200 && it.tier < mn;k++) it = pick(L); if (it.tier < mn) it = pickMin(L, mn); }
   if (S.nx.miracle > 0) S.nx.miracle--; if (S.nx.thousand > 0) S.nx.thousand--; if (S.nx.chain > 0) S.nx.chain--; S.rolls++;
   const tierFx = it.odds >= CUT_ODDS ? 2 : it.odds > STAR_ODDS ? 1 : 0, spin = spinNames();
-  if (tierFx && !S.fast){ await sleep(350); spin.stop(); await reveal(it, tierFx); }
+  if (tierFx === 2 && !S.fast){ await sleep(350); spin.stop(); await reveal(it, tierFx); }   // 별 + 컷씬은 1/1,000 이상만
   else { await sleep(cdDur - 750); spin.stop(); }
   finishRoll(it, tierFx);
   const left = cdDur - (performance.now() - t0); if (left > 0) await sleep(left);
@@ -3202,7 +3202,7 @@ async function reveal(it, tierFx){
 // 🎬 다시보기 (가방 · 도감)
 async function replay(t){ if (rolling || cine || starState) return; const it = POOL[t]; $('side').classList.remove('open'); render();
   rolling = true; skipReq = false; $('rollBtn').disabled = true; ac();
-  await reveal(it, it.odds >= CUT_ODDS ? 2 : 1); setSlotAura(mySlot, S.equipped); rolling = false; $('rollBtn').disabled = false; }
+  await reveal(it, 2); setSlotAura(mySlot, S.equipped); rolling = false; $('rollBtn').disabled = false; }
 function finishRoll(it, tierFx){
   const isNew = !S.inv[it.tier], skipped = !isNew && !!S.skip[it.tier];
   if (!skipped) S.inv[it.tier] = (S.inv[it.tier] || 0) + 1;
@@ -3215,7 +3215,7 @@ function finishRoll(it, tierFx){
   $('lastOdds').innerHTML = '1 / ' + fmt(it.odds) + (isNew ? '<span class="new">NEW</span>' : skipped ? '<span class="no">안받음</span>' : '');
   const pos = new THREE.Vector3(me.x, me.y, me.z);
   if (tierFx === 0){ flash(.1 + it.tier*.012, mainCol(it)); chime(it); if (!skipped) burst(pos, it); } // 반짝임만
-  else { burst(pos, it); if (S.fast){ shakeT = tierFx === 2 ? .7 : .45; flash(.3, mainCol(it)); starSound(it.tier, 'boom'); } }
+  else { burst(pos, it); if (S.fast || tierFx === 1){ shakeT = tierFx === 2 ? .7 : .45; flash(.3, mainCol(it)); starSound(it.tier, 'boom'); } }
   if (mySlot.aura && S.equipped === it.tier && !skipped){ mySlot.aura.boost = Math.max(mySlot.aura.boost, tierFx ? 1.4 : 1.15); if (tierFx) shockwave(pos, mySlot.aura.col, .8); }
   if (it.tier >= 9) addLog(it, isNew, skipped);
   lum(rollLumen(it)*(1 + gearStat('lumen'))*evLumen()); if (isNew) onDiscover(it);
@@ -3273,7 +3273,7 @@ function render(){
       k.onclick = ()=>{ if (S.skip[p.tier]) delete S.skip[p.tier]; else S.skip[p.tier] = 1; save(); render(); };
       if (S.inv[p.tier] > 1){ const sb = document.createElement('button'); sb.textContent = '💠' + fmt(sellLumen(p)); sb.title = '1개 판매'; sb.style.flex = '0 0 auto'; sb.onclick = ()=>{ S.inv[p.tier]--; lum(sellLumen(p)); save(); render(); uiSound('buy'); }; acts.appendChild(sb); }
       const rp = document.createElement('button'); rp.textContent = '▶'; rp.title = '컷씬 다시보기'; rp.style.flex = '0 0 34px'; rp.onclick = ()=>replay(p.tier);
-      acts.append(e, k, rp); c.appendChild(acts); g.appendChild(c); });
+      acts.append(e, k); if (p.odds >= CUT_ODDS) acts.append(rp); c.appendChild(acts); g.appendChild(c); });
   } else if (tab === 'pot'){
     $('sideSub').textContent = '';
     const mer = document.createElement('div'); mer.className = 'merchant'; mer.innerHTML = '<div class="mAva">🧙</div><div class="mTalk"><b>떠돌이 연금술사 마를</b><span></span></div>';
@@ -3290,8 +3290,8 @@ function render(){
       const d = document.createElement('button'); d.textContent = '마시기'; d.disabled = !S.pot[id]; d.onclick = ()=>drinkPotion(id); acts.appendChild(d);
       g.appendChild(c); });
   } else if (tab === 'replay'){
-    const list = POOL.filter(p=>S.inv[p.tier] && p.odds > STAR_ODDS).sort((a, b)=>b.odds - a.odds); $('sideSub').textContent = list.length + '개 · 희귀한 순';
-    if (!list.length){ box.innerHTML = '<div class="empty">1/100보다 희귀한 오라를 뽑으면 여기서 다시 볼 수 있어요.</div>'; return; }
+    const list = POOL.filter(p=>S.inv[p.tier] && p.odds >= CUT_ODDS).sort((a, b)=>b.odds - a.odds); $('sideSub').textContent = list.length + '개 · 희귀한 순';
+    if (!list.length){ box.innerHTML = '<div class="empty">1/1,000 이상 오라를 뽑으면 여기서 다시 볼 수 있어요.</div>'; return; }
     list.forEach(p=>{ const r = document.createElement('div'); r.className = 'row1'; r.style.cursor = 'pointer'; r.innerHTML = '<div class="rk"></div><div class="nm"><b></b><small></small></div>';
       r.querySelector('.rk').textContent = p.odds >= CUT_ODDS ? '🎬' : '⭐'; const b = r.querySelector('b'); b.textContent = p.name; paintText(b, p, false); r.querySelector('small').textContent = '1 / ' + fmt(p.odds) + (p.odds >= CUT_ODDS ? ' · 컷씬' : ' · 별');
       const pb = document.createElement('button'); pb.textContent = '▶'; pb.className = 'buy'; pb.onclick = ()=>replay(p.tier); r.appendChild(pb); box.appendChild(r); });
@@ -3329,7 +3329,7 @@ function render(){
     const sets = document.createElement('div'); sets.className = 'sets'; SETS.forEach(st=>{ const all = POOL.filter(st.pred), got = all.filter(p=>S.inv[p.tier]).length, d = document.createElement('div'); d.className = 'set1' + (got === all.length ? ' done' : '');
       d.innerHTML = '<b></b><small></small><div class="bar2"><i></i></div>'; d.querySelector('b').textContent = st.icon + ' ' + st.name; d.querySelector('small').textContent = got + ' / ' + all.length + ' · ' + lumFmt(st.reward); d.querySelector('i').style.width = (all.length ? got/all.length*100 : 0) + '%'; sets.appendChild(d); }); box.appendChild(sets);
     const g = grid();
-    POOL.slice().reverse().forEach(p=>{ if (S.inv[p.tier]){ const c = card(p, '1 / ' + fmt(p.odds), '“' + p.tag + '”' + (p.ev ? ' · 📅 이벤트 한정' : '')); if (p.odds > STAR_ODDS){ const a = document.createElement('div'); a.className = 'acts'; const b = document.createElement('button'); b.textContent = '▶ 다시보기'; b.onclick = ()=>replay(p.tier); a.appendChild(b); c.appendChild(a); } g.appendChild(c); }
+    POOL.slice().reverse().forEach(p=>{ if (S.inv[p.tier]){ const c = card(p, '1 / ' + fmt(p.odds), '“' + p.tag + '”' + (p.ev ? ' · 📅 이벤트 한정' : '')); if (p.odds >= CUT_ODDS){ const a = document.createElement('div'); a.className = 'acts'; const b = document.createElement('button'); b.textContent = '▶ 다시보기'; b.onclick = ()=>replay(p.tier); a.appendChild(b); c.appendChild(a); } g.appendChild(c); }
       else { const c = card({ name:'???', color:'#555', tier:p.tier, locked:1 }, '1 / ' + fmt(p.odds), p.ev ? '📅 ' + (EVENTS.find(e=>e.id === p.ev) || {}).name + ' 때만' : ''); c.classList.add('locked'); g.appendChild(c); } });
   } else if (tab === 'rank'){
     if (!mpOn){ box.innerHTML = '<div style="color:#aaa3c4;padding:20px;text-align:center">온라인일 때만 랭킹을 볼 수 있어요.</div>'; return; }
