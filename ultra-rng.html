@@ -129,6 +129,7 @@
   .row1 button.buy{ flex:none; }
   #zoomBtns{ position:absolute; right:12px; bottom:148px; display:flex; flex-direction:column; gap:6px; } #zoomBtns button{ width:40px; height:40px; padding:0; border-radius:50%; font-size:18px; } body:not(.touch) #zoomBtns{ display:none; }
   #menu{ max-height:calc(100% - 300px); overflow-y:auto; overflow-x:hidden; scrollbar-width:none; } #menu button{ flex:none; }
+  #intro{ position:fixed; inset:0; width:100%; height:100%; z-index:44; display:none; pointer-events:none; background:#000; }
   #shatter{ position:fixed; inset:0; width:100%; height:100%; z-index:45; display:none; pointer-events:none; }
   .merchant{ display:flex; gap:12px; align-items:center; padding:10px 12px; margin-bottom:10px; border-radius:14px; background:linear-gradient(90deg,rgba(243,213,138,.14),rgba(243,213,138,.02)); border:1px solid rgba(243,213,138,.3); }
   .mAva{ width:52px; height:52px; flex:none; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; background:radial-gradient(circle,#3b2a5a,#160f24); border:2px solid var(--gold); box-shadow:0 0 14px rgba(243,213,138,.4); }
@@ -244,6 +245,7 @@
 <canvas id="c"></canvas>
 <div id="flash"></div>
 <div id="migrate"><div class="mbox"><b>이 기기에 계정 구분 없이 저장된 기록이 있어요</b><p id="migInfo"></p><p><span id="migWho"></span>으로 가져올까요? 다른 사람 기록이면 '아니요'를 눌러요.</p><div class="mbtns"><button id="migNo">아니요</button><button id="migYes" class="on">가져오기</button></div></div></div>
+<canvas id="intro"></canvas>
 <canvas id="shatter"></canvas>
 <div id="fanfare"></div>
 <div id="timing"><canvas id="tmCv"></canvas><p>Space 또는 클릭 — 바늘이 노란 구간에 있을 때!</p><button id="tmQuit">그만하기</button></div>
@@ -2003,7 +2005,7 @@ function tickStar(dt){
       beams.forEach(b=>{ b.on = false; b.m.visible = false; }); }
     else { flash(.6); spawnRing(s.col, 14, .5, 2.5); } }
 }
-function endStar(){ starRig.visible = false; dim.material.opacity = 0; rayMesh.material.uniforms.uA.value = 0; starRig.position.set(0, 0, -9); document.body.classList.remove('starOn');
+function endStar(){ if (starState && starState.it.odds >= CUT_ODDS && !skipReq) introShow(); starRig.visible = false; dim.material.opacity = 0; rayMesh.material.uniforms.uA.value = 0; starRig.position.set(0, 0, -9); document.body.classList.remove('starOn');
   beams.forEach(b=>{ b.on = false; b.m.visible = false; }); rings.forEach(r=>{ r.on = false; r.m.visible = false; }); $('quote').style.opacity = 0; const r = starState.res; starState = null; r(); }
 
 // =====================================================================
@@ -2160,6 +2162,48 @@ function applyPose(a, name, dt, t, ph){ const L = a.limbs; if (!L.legL) return 0
 let sigT = 6;
 function signature(dt){ const it = S.equipped != null ? POOL[S.equipped] : null; if (!it || it.odds < 500 || !mySlot.aura || cine || me.moving || !me.grounded) return; sigT -= dt; if (sigT > 0) return;
   sigT = 7 + Math.random()*4; const A = mySlot.aura, P = new THREE.Vector3(me.x, me.y, me.z); A.boost = Math.max(A.boost, 1.45); shockwave(P, A.col, .7 + Math.min(1.2, Math.log10(it.odds)/8)); if (it.odds > 1e5) burst(P, it); }
+// =====================================================================
+//  🖤 화면 연출 — 3D 오라를 보여주기 전, 까만 화면 위에서 그려지는 오라의 문장
+//  선이 그려지고 → 컨셉 그림이 살아나고 → 숫자가 치솟고 → 원형으로 열리며 컷씬으로
+// =====================================================================
+const introCv = $('intro'), IG = introCv.getContext('2d');
+function introShow(){ introCv.width = innerWidth*Math.min(2, devicePixelRatio || 1); introCv.height = innerHeight*Math.min(2, devicePixelRatio || 1); IG.fillStyle = '#000'; IG.fillRect(0, 0, introCv.width, introCv.height); introCv.style.display = 'block'; introCv.style.clipPath = 'none'; }
+function introHide(){ introCv.style.display = 'none'; }
+function screenIntro(it){ return new Promise(res=>{ introShow(); const W = introCv.width, H = introCv.height, cx = W/2, cy = H*.46, R = Math.min(W, H)*.26, dpr = W/innerWidth, kc = conceptOf(it), col = mainCol(it), c2 = it.accent || '#ffffff';
+  const L = it.odds >= 1e8 ? 3.8 : it.odds >= 1e5 ? 3.1 : 2.4, t0 = performance.now(), parts = [...Array(140)].map(()=>({ a:Math.random()*6.283, r:Math.random(), s:.5 + Math.random()*2, v:.3 + Math.random() }));
+  const seeds = [...Array(12)].map(()=>Math.random()); let lastTick = 0;
+  const glowLine = (w, c, blur)=>{ IG.lineWidth = w*dpr; IG.strokeStyle = c; IG.shadowColor = c; IG.shadowBlur = blur*dpr; };
+  const arc = (r, a0, a1)=>{ IG.beginPath(); IG.arc(cx, cy, r, a0, a1); IG.stroke(); };
+  const step = ()=>{ if (skipReq){ introHide(); res(); return; } const t = (performance.now() - t0)/1000, p = t/L, e1 = Math.min(1, t/.7), e2 = clamp((t - .6)/(L*.55), 0, 1), e3 = clamp((t - L*.72)/(L*.28), 0, 1);
+    IG.globalCompositeOperation = 'source-over'; IG.shadowBlur = 0; IG.fillStyle = 'rgba(0,0,0,.35)'; IG.fillRect(0, 0, W, H); IG.globalCompositeOperation = 'lighter';
+    // 1) 바깥 원이 그려지고 눈금이 돈다
+    glowLine(2, col, 18); arc(R*1.25, -Math.PI/2, -Math.PI/2 + e1*6.283);
+    glowLine(1, c2, 8); for (let i=0;i<48;i++){ if (i/48 > e1) break; const a = i/48*6.283 + t*.4, r0 = R*1.32, r1 = R*(i % 4 ? 1.36 : 1.42); IG.beginPath(); IG.moveTo(cx + Math.cos(a)*r0, cy + Math.sin(a)*r0); IG.lineTo(cx + Math.cos(a)*r1, cy + Math.sin(a)*r1); IG.stroke(); }
+    // 2) 컨셉 그림
+    const k = easeIO(e2); glowLine(3, col, 26);
+    if (kc === 'fire'){ for (let i=0;i<9;i++){ const x = cx + (i - 4)*R*.2, h = R*(.5 + .5*Math.sin(t*6 + i))*k*(1 - Math.abs(i - 4)/6); IG.beginPath(); IG.moveTo(x - R*.08, cy + R*.6); IG.quadraticCurveTo(x + Math.sin(t*5 + i)*R*.12, cy + R*.6 - h, x, cy + R*.6 - h*1.4); IG.quadraticCurveTo(x + R*.06, cy + R*.6 - h*.5, x + R*.08, cy + R*.6); IG.stroke(); } }
+    else if (kc === 'ice'){ for (let b=0;b<6;b++){ const a = b/6*6.283 + t*.1, l = R*k; IG.beginPath(); IG.moveTo(cx, cy); IG.lineTo(cx + Math.cos(a)*l, cy + Math.sin(a)*l); IG.stroke(); for (let j=1;j<4;j++){ const q = l*j/4, s = R*.18*(1 - j/5)*k; [-1, 1].forEach(sg=>{ IG.beginPath(); IG.moveTo(cx + Math.cos(a)*q, cy + Math.sin(a)*q); IG.lineTo(cx + Math.cos(a)*q + Math.cos(a + sg*.8)*s, cy + Math.sin(a)*q + Math.sin(a + sg*.8)*s); IG.stroke(); }); } } }
+    else if (kc === 'void'){ for (let i=0;i<5;i++){ arc(R*(1 - k*.8)*(1 - i*.12), 0, 6.283); } parts.forEach(q=>{ q.r -= .006*q.v*(1 + k*3); if (q.r < .05) q.r = 1; IG.fillStyle = col; IG.beginPath(); IG.arc(cx + Math.cos(q.a + t)*R*1.2*q.r, cy + Math.sin(q.a + t)*R*1.2*q.r, q.s*dpr, 0, 6.283); IG.fill(); }); IG.globalCompositeOperation = 'source-over'; IG.fillStyle = '#000'; IG.beginPath(); IG.arc(cx, cy, R*.28*k, 0, 6.283); IG.fill(); IG.globalCompositeOperation = 'lighter'; }
+    else if (kc === 'cosmic'){ for (let i=0;i<4;i++){ IG.save(); IG.translate(cx, cy); IG.rotate(i*.8 + t*.15); IG.scale(1, .35); IG.beginPath(); IG.arc(0, 0, R*(.45 + i*.22)*k, 0, 6.283); IG.restore(); IG.stroke(); const a = t*(1.2 - i*.2) + i*2; IG.fillStyle = i % 2 ? c2 : col; IG.beginPath(); IG.arc(cx + Math.cos(a)*R*(.45 + i*.22)*k, cy + Math.sin(a)*R*(.45 + i*.22)*k*.35, (4 + i*2)*dpr, 0, 6.283); IG.fill(); } }
+    else if (kc === 'divine'){ for (let i=0;i<24;i++){ const a = i/24*6.283 + t*.1, l = R*(.6 + (i % 2)*.5)*k; IG.beginPath(); IG.moveTo(cx + Math.cos(a)*R*.25, cy + Math.sin(a)*R*.25); IG.lineTo(cx + Math.cos(a)*l, cy + Math.sin(a)*l); IG.stroke(); } [-1, 1].forEach(sg=>{ for (let f=0;f<5;f++){ IG.beginPath(); IG.moveTo(cx + sg*R*.2, cy); IG.quadraticCurveTo(cx + sg*R*(.6 + f*.12)*k, cy - R*(.7 - f*.1)*k, cx + sg*R*(.9 + f*.15)*k, cy - R*(.1 - f*.12)*k); IG.stroke(); } }); }
+    else if (kc === 'time'){ arc(R*.95, 0, 6.283); for (let i=0;i<12;i++){ const a = i/12*6.283; IG.beginPath(); IG.moveTo(cx + Math.cos(a)*R*.82, cy + Math.sin(a)*R*.82); IG.lineTo(cx + Math.cos(a)*R*.95, cy + Math.sin(a)*R*.95); IG.stroke(); }
+      const sp = 12*(1 - k) + .2, h1 = t*sp*.3, h2 = t*sp; [[h1, .5], [h2, .8]].forEach(([a, l])=>{ IG.beginPath(); IG.moveTo(cx, cy); IG.lineTo(cx + Math.sin(a)*R*l, cy - Math.cos(a)*R*l); IG.stroke(); }); if (t - lastTick > .12 && k < 1){ lastTick = t; tick(1600); } }
+    else if (kc === 'storm'){ if (Math.sin(t*17) > .3) for (let b=0;b<3;b++){ IG.beginPath(); let x = cx + (seeds[b] - .5)*R*1.6, y = cy - R*1.1; IG.moveTo(x, y); while (y < cy + R){ x += (Math.random() - .5)*R*.35; y += R*.18; IG.lineTo(x, y); } IG.stroke(); } arc(R*.6*k, 0, 6.283); }
+    else if (kc === 'glitch'){ for (let i=0;i<14;i++){ const y = (seeds[i % 12]*H + t*600*(i % 3 + 1)) % H; IG.fillStyle = [col, c2, '#00e5ff'][i % 3]; IG.globalAlpha = .25; IG.fillRect(0, y, W, (2 + seeds[i % 12]*14)*dpr); } IG.globalAlpha = 1; IG.strokeRect(cx - R*.7*k, cy - R*.7*k, R*1.4*k, R*1.4*k); }
+    else { IG.beginPath(); for (let i=0;i<=16;i++){ const a = i/16*6.283 - Math.PI/2 + t*.3, r = (i % 2 ? .38 : 1)*R*k; i ? IG.lineTo(cx + Math.cos(a)*r, cy + Math.sin(a)*r) : IG.moveTo(cx + Math.cos(a)*r, cy + Math.sin(a)*r); } IG.stroke(); }
+    // 떠다니는 빛 입자
+    if (kc !== 'void') parts.forEach(q=>{ const r = R*(.3 + q.r*1.4), a = q.a + t*.25*q.v; IG.fillStyle = q.v > .9 ? c2 : col; IG.globalAlpha = .6*e1; IG.beginPath(); IG.arc(cx + Math.cos(a)*r, cy + Math.sin(a)*r - t*20*q.v*dpr % (R*.4), q.s*dpr, 0, 6.283); IG.fill(); }); IG.globalAlpha = 1;
+    // 3) 글자 — 등급 → 확률 숫자가 치솟는다
+    IG.shadowBlur = 0; IG.globalCompositeOperation = 'source-over'; IG.textAlign = 'center'; IG.fillStyle = '#fff';
+    IG.font = `${13*dpr}px Russo One, sans-serif`; IG.globalAlpha = e1; IG.fillText((it.tier >= NEW_FROM ? 'BEYOND' : 'TIER ' + it.tier) + '  ·  ' + kc.toUpperCase(), cx, cy + R*1.95);
+    const n = Math.round(Math.pow(it.odds, Math.min(1, e2*1.15))); IG.font = `${Math.round(28*dpr + e3*14*dpr)}px Russo One, sans-serif`; IG.globalAlpha = Math.min(1, e2*3); IG.shadowColor = col; IG.shadowBlur = 20*dpr; IG.fillText('1 / ' + fmt(Math.min(n, it.odds)), cx, cy + R*1.68); IG.globalAlpha = 1; IG.shadowBlur = 0;
+    // 마지막: 중심이 하얗게 차오른다
+    if (e3 > 0){ IG.globalCompositeOperation = 'lighter'; const gr = IG.createRadialGradient(cx, cy, 0, cx, cy, R*(.2 + e3*3)); gr.addColorStop(0, `rgba(255,255,255,${e3})`); gr.addColorStop(.4, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); IG.globalAlpha = e3; IG.fillStyle = gr; IG.fillRect(0, 0, W, H); IG.globalAlpha = 1; }
+    if (p < 1) requestAnimationFrame(step); else res(); };
+  starSound(it.tier, 'riser', L*1000); step(); }); }
+// 원형으로 열리며 3D 컷씬이 드러난다
+function introOpen(){ const t0 = performance.now(); flash(.7); const s = ()=>{ const k = Math.min(1, (performance.now() - t0)/550), r = easeIO(k)*150; introCv.style.clipPath = `circle(150% at 50% 46%)`; introCv.style.webkitMaskImage = introCv.style.maskImage = `radial-gradient(circle at 50% 46%, transparent ${r}%, #000 ${r + 6}%)`;
+  if (k < 1) requestAnimationFrame(s); else { introHide(); introCv.style.webkitMaskImage = introCv.style.maskImage = 'none'; } }; s(); }
 // 오라 컨셉 → 타이틀 글자 연출
 function conceptOf(it){ const m = it.mods.map(x=>x[0]), has = n=>m.includes(n);
   if (has('glitch') || has('shards')) return 'glitch'; if (has('clock')) return 'time'; if (has('ice')) return 'ice';
@@ -2712,8 +2756,9 @@ async function roll(){
 async function reveal(it, tierFx){
   if (shiftLock) setShiftLock(false);
   $('skipAnim').style.display = 'block'; await starAnim(it);
-  if (!skipReq && tierFx === 2){ if (shatter === null && it.odds > SHATTER_ODDS){ await crackSeq(it); } const pr = cutscene(it); if (shatter) breakShards(); await pr; }
-  hideShatter(); $('skipAnim').style.display = 'none'; BGM.duck(false); }
+  if (!skipReq && tierFx === 2){ if (shatter === null && it.odds > SHATTER_ODDS){ await crackSeq(it); introShow(); breakShards(); }
+    if (!skipReq) await screenIntro(it); if (!skipReq){ const pr = cutscene(it); introOpen(); await pr; } }
+  hideShatter(); introHide(); $('skipAnim').style.display = 'none'; BGM.duck(false); }
 // 🎬 다시보기 (가방 · 도감)
 async function replay(t){ if (rolling || cine || starState) return; const it = POOL[t]; $('side').classList.remove('open'); render();
   rolling = true; skipReq = false; $('rollBtn').disabled = true; ac();
@@ -2959,7 +3004,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
   if (window.__starCap && starState && window.__starCap.length && starState.el/starState.dur >= window.__starCap[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .7)); window.__starCap.shift(); }
   if (window.__capT && cine && window.__capT.length && cine.t >= window.__capT[0]){ (window.__caps = window.__caps || []).push(canvas.toDataURL('image/jpeg', .8)); window.__capT.shift(); } }
 loop();
-window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, pickups, replay, useAccount, obby, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
+window.__GAME = { me, others, S, POOL, roll, mpOn, setAura:t=>{ S.equipped = t; setSlotAura(mySlot, t); render(); }, cutscene, starAnim, screenIntro, pickups, replay, useAccount, obby, get cine(){ return cine; }, get aura(){ return mySlot.aura; }, get star(){ return starState; },
   fakeOther:(tier)=>{ onPlayers({ bot1:{ x:me.x + 6, y:me.y, z:me.z - 2, ry:0, name:'테스트봇', avatarLoadout:{}, d:{ au:tier, rl:-1, rs:0 } } }); } };
 })();
 </script>
