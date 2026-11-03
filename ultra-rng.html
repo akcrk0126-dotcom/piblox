@@ -683,13 +683,13 @@ if (postOK){
   const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat, type:THREE.HalfFloatType });
   composer = new THREE.EffectComposer(renderer, rt);
   composer.addPass(new THREE.RenderPass(scene, camera));
-  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), .85, .5, .82); composer.addPass(bloomPass);
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), .65, .45, .86); composer.addPass(bloomPass);
   gradePass = new THREE.ShaderPass({ uniforms:{ tDiffuse:{ value:null }, uSat:{ value:1 }, uVig:{ value:0 }, uTint:{ value:new THREE.Color(0, 0, 0) }, uTime:{ value:0 }, uP:{ value:new THREE.Vector2(.5, .5) }, uHaze:{ value:0 }, uAsp:{ value:1 }, uCA:{ value:0 }, uZoom:{ value:0 } },
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:'uniform sampler2D tDiffuse;uniform float uSat,uVig,uTime,uHaze,uAsp,uCA,uZoom;uniform vec2 uP;uniform vec3 uTint;varying vec2 vUv;vec3 aces(vec3 x){x*=1.15;return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}'+
       'void main(){vec2 uv=vUv;vec2 d=uv-uP;float m=smoothstep(.22,.0,length(d*vec2(uAsp,1.)))*uHaze;uv+=vec2(sin(uv.y*90.+uTime*7.),cos(uv.x*80.+uTime*6.))*.0022*m;'+
       'vec2 dir=uv-uP;vec3 raw=vec3(0.);for(int i=0;i<6;i++){float s=1.-uZoom*float(i)*.012;vec2 q=uP+dir*s;raw+=vec3(texture2D(tDiffuse,q+dir*uCA).r,texture2D(tDiffuse,q).g,texture2D(tDiffuse,q-dir*uCA).b);}raw/=6.;'+
-      'vec3 c=aces(max(raw,0.));float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,uSat);float v=smoothstep(.35,1.05,length(vUv-.5)*1.5);c=mix(c,c*.25+uTint*.25,v*uVig);gl_FragColor=vec4(c,1.);}' });
+      'raw=max(raw,0.);float mx=max(max(raw.r,raw.g),max(raw.b,1e-4));vec3 c=mix(raw*(aces(vec3(mx)).r/mx),aces(raw),.22);float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,uSat);float v=smoothstep(.35,1.05,length(vUv-.5)*1.5);c=mix(c,c*.25+uTint*.25,v*uVig);gl_FragColor=vec4(c,1.);}' });
   composer.addPass(gradePass);
 }
 function resize(){ renderer.setSize(innerWidth, innerHeight); if (composer) composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
@@ -1915,14 +1915,33 @@ Object.assign(MODS, {
   // 발밑에서 빨려드는 가스 웅덩이
   gaspool(A, o){ const R = o.r || 4.5, u = A.U(o, { uA:o.a || .9, uK:o.k || 1.2 }); const m = A.plane(R*2, u, GAS_FS, THREE.NormalBlending); m.rotation.x = -Math.PI/2; m.position.y = .045; m.renderOrder = 1; },
 });
+// ⚡ 쏜살같은 빛 — 여러 색 빛줄기가 기울어진 궤도로 휙휙 돈다 (꼬리가 길게, 머리만 하얗게)
+const FLUX_VS = `attribute vec4 aSeed,aOrb;attribute vec3 aCol;attribute vec2 aSS;uniform float uTime,uLen,uW;varying vec3 vCol;varying float vS,vX;
+  vec3 orb(float ang){vec3 p=vec3(cos(ang)*aOrb.x,sin(ang*aOrb.w)*.35,sin(ang)*aOrb.x);float cx=cos(aSeed.y),sx=sin(aSeed.y),cz=cos(aSeed.z),sz=sin(aSeed.z);
+    p=vec3(p.x,p.y*cx-p.z*sx,p.y*sx+p.z*cx);p=vec3(p.x*cz-p.y*sz,p.x*sz+p.y*cz,p.z);return p+vec3(0.,aOrb.y,0.);}
+  void main(){float s=aSS.x;float ang=aSeed.x+uTime*aOrb.z-s*uLen*sign(aOrb.z);vec3 p=orb(ang);vec3 q=orb(ang+.02*sign(aOrb.z));vec3 t=normalize(q-p);
+    vec4 mv=modelViewMatrix*vec4(p,1.);vec3 tv=normalize((modelViewMatrix*vec4(t,0.)).xyz);vec3 side=normalize(cross(tv,vec3(0.,0.,1.)));
+    float w=uW*(1.-s)*(.6+aSeed.w*.8);mv.xyz+=side*aSS.y*w;gl_Position=projectionMatrix*mv;vCol=aCol;vS=s;vX=aSS.y;}`;
+const FLUX_FS = `uniform float uInt,uBoost;varying vec3 vCol;varying float vS,vX;void main(){float a=pow(1.-vS,2.2)*(1.-vX*vX);float head=smoothstep(.06,0.,vS);
+  vec3 c=mix(vCol,vec3(1.),head*.8)*(1.+head*2.)*1.25;gl_FragColor=vec4(c*a*uInt*min(uBoost,1.6),1.);}`;
+Object.assign(MODS, {
+  flux(A, o){ const N = Math.round((o.n || 10)*(A.lite ? .5 : 1)), SEG = 36, V = N*SEG*2, pos = new Float32Array(V*3), seed = new Float32Array(V*4), orbA = new Float32Array(V*4), colA = new Float32Array(V*3), ss = new Float32Array(V*2), idx = [];
+    const pal = [A.col.c1, A.col.c2, A.col.c1.clone().offsetHSL(.07, 0, 0), A.col.c2.clone().offsetHSL(-.07, 0, 0)].map(c=>{ const h = {}; c.getHSL(h); return new THREE.Color().setHSL(h.h, Math.max(h.s, h.s > .08 ? .9 : 0), Math.min(.6, Math.max(.45, h.l))); });
+    for (let i=0;i<N;i++){ const sd = [Math.random()*6.283, (Math.random() - .5)*1.6, (Math.random() - .5)*1.2, Math.random()], ob = [(o.r || 2.4)*(.8 + Math.random()*.6), 1 + Math.random()*(o.h || 4.5), (Math.random() < .5 ? -1 : 1)*(2.4 + Math.random()*2.6)*(o.sp || 1), 1 + Math.floor(Math.random()*3)];
+      const c = A.col.rainbow ? new THREE.Color().setHSL(i/N, .9, .58) : pal[i % pal.length];
+      for (let s=0;s<SEG;s++) for (let e=0;e<2;e++){ const v = (i*SEG + s)*2 + e; seed.set(sd, v*4); orbA.set(ob, v*4); colA.set([c.r, c.g, c.b], v*3); ss.set([s/(SEG - 1), e ? 1 : -1], v*2); }
+      for (let s=0;s<SEG - 1;s++){ const a = (i*SEG + s)*2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('aOrb', new THREE.BufferAttribute(orbA, 4)); g.setAttribute('aCol', new THREE.BufferAttribute(colA, 3)); g.setAttribute('aSS', new THREE.BufferAttribute(ss, 2)); g.setIndex(idx);
+    const m = A.add(new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms:A.U(o, { uLen:o.len || 1.6, uW:o.w || .07 }), vertexShader:FLUX_VS, fragmentShader:FLUX_FS, transparent:true, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }))); m.frustumCulled = false; m.renderOrder = 4; },
+});
 class Aura {
   constructor(it, lite){
     this.it = it; this.t = it.tier; this.k = it.tier/MAXT; this.lite = !!lite; this.lc = lite ? .5 : 1;
     this.col = auraColors(it); this.gs = AURA_SCALE*(1 + clamp((Math.log10(it.odds || 1) - 3.5)/5.5, 0, 1)*1.15); this.group = new THREE.Group(); this.group.scale.setScalar(this.gs);
-    this.mats = []; this.texs = []; this.ups = []; this.facing = []; this.boost = 1; this.top = 6.2; this.I = .62 + this.k*.38;
+    this.mats = []; this.texs = []; this.ups = []; this.facing = []; this.boost = 1; this.top = 6.2; this.I = .45 + this.k*.22;
     const base = [], od = it.odds || 1, lg = Math.log10(od); if (this.t >= 2 && od < 300 && !it.mods.some(m=>m[0] === 'floor')) base.push(['pool', {}]);
     if (od >= 300) base.push(['sigil', { r:4.5 + Math.min(4, lg - 2.5) }]); if (od >= 1000) base.push(['gyro', { n:Math.min(6, Math.floor(lg - 1)) }], ['glint', { n:6 + Math.floor(lg)*2 }]); if (od >= 1e5) base.push(['comets', { n:Math.min(12, 4 + Math.floor(lg - 5)*2) }]); if (this.t >= 9) base.push(['streaks', {}]);
-    if (od >= 1000) base.push(['gaspool', { r:3.6 + Math.min(3.4, (lg - 3)*.9), k:1 + Math.min(1.2, (lg - 3)*.25) }]); if (od >= 1e4) base.push(['gas', { n:Math.min(120, 26 + Math.floor((lg - 4)*16)), r:2.2 + Math.min(1.6, (lg - 4)*.3), h:6 + Math.min(4, lg - 4) }]);
+    if (od >= 300) base.push(['flux', { n:Math.min(22, 4 + Math.floor((lg - 2.5)*3)), r:2 + Math.min(1.6, (lg - 2.5)*.25), sp:1 + Math.min(.6, (lg - 3)*.1), len:1.4 + Math.min(1.4, (lg - 2.5)*.2) }]); if (od >= 1000) base.push(['gaspool', { r:3.6 + Math.min(3.4, (lg - 3)*.9), k:1 + Math.min(1.2, (lg - 3)*.25) }]); if (od >= 1e4) base.push(['gas', { n:Math.min(120, 26 + Math.floor((lg - 4)*16)), r:2.2 + Math.min(1.6, (lg - 4)*.3), h:6 + Math.min(4, lg - 4) }]);
     const has = n=>it.mods.some(m=>m[0] === n);
     if (!(it.dom || it.sig) && this.t >= 22) base.push(['ribbons', { n:this.t >= 40 ? 5 : this.t >= 30 ? 4 : 3 }]);
     if (!(it.dom || it.sig) && this.t >= 26 && !has('glyphs')) base.push(['glyphs', { n:this.t >= 40 ? 3 : 2 }]);
@@ -2269,14 +2288,14 @@ const starFx = (()=>{ const g = new THREE.Group(); starRig.add(g); const add = (
     set(it){ col.set(mainCol(it)); if (it.dark) col.set(it.accent || '#ffffff'); rb = it.rainbow || 0; el = elemOf(it); const od = it.odds;
       lvl = od >= 1e7 ? 3 : od >= 1e5 ? 2 : od >= 1000 ? 1 : 0;
       const c2 = col.clone().lerp(new THREE.Color(1, 1, 1), .35).multiplyScalar(1.5); [glintA, glintB, flare, flare2].forEach(m=>m.material.color.copy(c2)); dash.forEach(m=>m.material.color.copy(c2)); rings.forEach(m=>m.material.color.copy(col).multiplyScalar(1.3));
-      g.visible = true; dash.forEach(m=>m.visible = lvl >= 1); rings.forEach((m, i)=>m.visible = i < lvl); flare2.visible = lvl >= 2; starMainMat.opacity = .5;
+      g.visible = true; const fx = lvl >= 2; glintA.visible = glintB.visible = false; core.visible = fx && od < 1e7; flare.visible = fx; dash.forEach(m=>m.visible = fx); rings.forEach((m, i)=>m.visible = fx && i < lvl - 1); flare2.visible = lvl >= 3; starMainMat.opacity = 1;   // 1/10만 아래는 원래 별 그대로
       // 1) 날리는 것 (1/100 ~ 1/1000만 미만)
       dk = od >= 100 && od < 1e7 ? DRIFT_OF[el] : ''; const nb = dk === 'leaf' || dk === 'ash';
       drift.forEach((m, i)=>{ m.visible = !!dk && i < (od >= 1e4 ? 26 : od >= 1000 ? 18 : 10); if (!dk) return; m.material.map = driftTex(dk); m.material.blending = nb ? THREE.NormalBlending : THREE.AdditiveBlending;
         const cc = dk === 'leaf' ? new THREE.Color(i % 3 ? '#3f7a23' : '#8fcf4a').lerp(col, .2) : dk === 'ash' ? new THREE.Color('#0b0610') : col.clone().lerp(new THREE.Color(1, 1, 1), dk === 'flake' || dk === 'feather' ? .6 : .25).multiplyScalar(nb ? 1 : 1.5);
         m.material.color.copy(cc); m.material.needsUpdate = true; resetDrift(m, true); });
       // 2) 실루엣 (1/1만 ~ 1/1000만 미만)
-      sil0 = od >= 1e4 && od < 1e7 ? 1 : 0; sil.visible = silGlow.visible = !!sil0; if (sil0){ silMat.map = silGlow.material.map = silTex(el); silMat.color.copy(col).multiplyScalar(it.dark ? .03 : .07); silGlow.material.color.copy(col).multiplyScalar(.6); silMat.needsUpdate = silGlow.material.needsUpdate = true; }
+      sil0 = 0; sil.visible = silGlow.visible = !!sil0; if (sil0){ silMat.map = silGlow.material.map = silTex(el); silMat.color.copy(col).multiplyScalar(it.dark ? .03 : .07); silGlow.material.color.copy(col).multiplyScalar(.6); silMat.needsUpdate = silGlow.material.needsUpdate = true; }
       // 3) 소용돌이 가스 (1/10만 ~)
       gas.visible = od >= 1e5; const ac = auraColors(it); gasU.uC1.value.copy(ac.dark ? ac.c2 : ac.c1); gasU.uC2.value.copy(ac.dark ? ac.c1 : ac.c2); gasU.uRainbow.value = rb; gasU.uA.value = 0;
       // 4) 원소 별 (1/1000만 ~)
@@ -2299,7 +2318,7 @@ const starFx = (()=>{ const g = new THREE.Group(); starRig.add(g); const add = (
 let starState = null, skipReq = false;
 function starAnim(it){
   return new Promise(res=>{
-    const dur = clamp(900 + Math.log10(it.odds)*1250, 1200, 14000)*(it.odds < CUT_ODDS ? .8 : 1);
+    const dur = clamp(900 + Math.log10(it.odds)*1250, 1200, 14000)*(it.odds < CUT_ODDS ? .8 : 1) + (it.odds >= CUT_ODDS ? 3500 : 0);   // 별 씬 3.5초 더 길게
     const col = new THREE.Color(mainCol(it));
     starMainMat.color.copy(col).multiplyScalar(2.2); starSubMat.color.copy(col).multiplyScalar(2.2); starGlow.material.color.copy(col).multiplyScalar(2); sparkMat.color.copy(col).multiplyScalar(2.5);
     starRig.visible = true; starSpin.rotation.z = 0; starMainMat.opacity = 1; starSubMat.opacity = .55; starFx.set(it);
@@ -3412,7 +3431,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
     [cineFx.ground, cineFx.sky].forEach(m=>{ if (!m.visible) return; const u = m.material.uniforms; u.uInt.value = Math.max(0, u.uInt.value - dt*1.5); if (u.uInt.value <= 0) m.visible = false; }); }
   cineFx.u.uTime.value = T; cineFx.ground.material.uniforms.uTime.value = T*.6; cineFx.sky.material.uniforms.uTime.value = T*.25;
   if (shakeT > 0){ shakeT -= dt; const s = shakeT*.8; camera.position.x += (Math.random() - .5)*s; camera.position.y += (Math.random() - .5)*s; }
-  if (bloomPass) bloomPass.strength = lerp(bloomPass.strength, cine && cine.impact ? .6 : .85, Math.min(1, dt*3));
+  if (bloomPass) bloomPass.strength = lerp(bloomPass.strength, cine && cine.impact ? .5 : .65, Math.min(1, dt*3));
   if (gradePass){ const u = gradePass.uniforms, early = cine && !cine.impact; u.uVig.value = lerp(u.uVig.value, cine ? .7 : 0, Math.min(1, dt*3)); u.uSat.value = lerp(u.uSat.value, early ? .45 : 1, Math.min(1, dt*(early ? 3 : 6)));
     if (cine) u.uTint.value.set(mainCol(POOL[cine.tier]));
     u.uTime.value = T; u.uAsp.value = camera.aspect; tmpW.set(me.x, me.y + 2, me.z).project(camera); u.uP.value.set(tmpW.x*.5 + .5, tmpW.y*.5 + .5);
