@@ -671,7 +671,7 @@ function starSound(tier, phase, durMs){
 // =====================================================================
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:!isTouch, powerPreference:'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 1.75));
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.75 : 2));
 renderer.shadowMap.enabled = !isTouch; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 if (MP && MP.hookRenderer) MP.hookRenderer(renderer);
 const scene = new THREE.Scene();
@@ -680,10 +680,11 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000
 let composer = null, gradePass = null, bloomPass = null;
 const postOK = !window.__postfxFail && THREE.EffectComposer && THREE.UnrealBloomPass && THREE.RenderPass && THREE.ShaderPass;
 if (postOK){
-  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat, type:THREE.HalfFloatType });
+  const rtOpt = { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat, type:THREE.HalfFloatType };   // 후처리에서도 계단 없이 매끈하게 (WebGL2 MSAA)
+  const rt = renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget && !isTouch ? Object.assign(new THREE.WebGLMultisampleRenderTarget(innerWidth, innerHeight, rtOpt), { samples:4 }) : new THREE.WebGLRenderTarget(innerWidth, innerHeight, rtOpt);
   composer = new THREE.EffectComposer(renderer, rt);
   composer.addPass(new THREE.RenderPass(scene, camera));
-  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), .65, .45, .86); composer.addPass(bloomPass);
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(512, 512), .65, .45, .86); composer.addPass(bloomPass);
   gradePass = new THREE.ShaderPass({ uniforms:{ tDiffuse:{ value:null }, uSat:{ value:1 }, uVig:{ value:0 }, uTint:{ value:new THREE.Color(0, 0, 0) }, uTime:{ value:0 }, uP:{ value:new THREE.Vector2(.5, .5) }, uHaze:{ value:0 }, uAsp:{ value:1 }, uCA:{ value:0 }, uZoom:{ value:0 } },
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:'uniform sampler2D tDiffuse;uniform float uSat,uVig,uTime,uHaze,uAsp,uCA,uZoom;uniform vec2 uP;uniform vec3 uTint;varying vec2 vUv;vec3 aces(vec3 x){x*=1.15;return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}'+
@@ -733,7 +734,7 @@ let starPts;
 // =====================================================================
 //  맵
 // =====================================================================
-function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; }
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy()); return t; }
 const STUD = canvasTex(128, 128, (g, w, h)=>{ g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); for (let i=0;i<2;i++) for (let j=0;j<2;j++){ g.fillStyle = 'rgba(0,0,0,.10)'; g.beginPath(); g.arc(32 + i*64, 34 + j*64, 18, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(30 + i*64, 30 + j*64, 16, 0, 7); g.fill(); } g.strokeStyle = 'rgba(0,0,0,.12)'; g.lineWidth = 3; g.strokeRect(0, 0, w, h); });
 const matCache = new Map();
 function mat(color, rep){ const key = color + '|' + rep; if (matCache.has(key)) return matCache.get(key); const o = { color }; if (rep){ o.map = STUD.clone(); o.map.needsUpdate = true; o.map.repeat.set(rep, rep); } const m = new THREE.MeshLambertMaterial(o); matCache.set(key, m); return m; }
@@ -1854,7 +1855,7 @@ const GLINT_TEX = canvasTex(128, 128, (g, w)=>{ const c = w/2; g.globalComposite
   for (const [len, th, a] of [[62, 2.2, 1], [40, 1.2, .7]]) for (let r=0;r<4;r++){ g.save(); g.translate(c, c); g.rotate(r*Math.PI/2 + (a < 1 ? Math.PI/4 : 0)); const gr = g.createLinearGradient(0, 0, len, 0); gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.moveTo(0, -th); g.lineTo(len, 0); g.lineTo(0, th); g.fill(); g.restore(); }
   const rg = g.createRadialGradient(c, c, 0, c, c, 18); rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(0, 0, w, w); });
 const RUNES = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ✦✧';
-const SIGIL_TEX = [11, 47].map(seed=>canvasTex(1024, 1024, (g, w)=>{ let s = seed; const R = ()=>{ s = (s*16807) % 2147483647; return s/2147483647; }, c = w/2; g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineCap = 'round';
+const SIGIL_TEX = [11, 47].map(seed=>canvasTex(2048, 2048, (g, w)=>{ g.scale(2, 2); w = 1024; let s = seed; const R = ()=>{ s = (s*16807) % 2147483647; return s/2147483647; }, c = w/2; g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineCap = 'round';
   const ring = (r, lw)=>{ g.lineWidth = lw; g.beginPath(); g.arc(c, c, r, 0, 6.283); g.stroke(); };
   ring(500, 6); ring(482, 2); ring(400, 3); ring(330, 1.5); ring(190, 4); ring(120, 1.5);
   g.font = '34px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; for (let i=0;i<40;i++){ const a = i/40*6.283; g.save(); g.translate(c + Math.cos(a)*441, c + Math.sin(a)*441); g.rotate(a + Math.PI/2); g.fillText(RUNES[Math.floor(R()*RUNES.length)], 0, 0); g.restore(); }
@@ -1863,6 +1864,11 @@ const SIGIL_TEX = [11, 47].map(seed=>canvasTex(1024, 1024, (g, w)=>{ let s = see
   for (let i=0;i<n;i++){ const a = i/n*6.283; g.lineWidth = 2; g.beginPath(); g.arc(c + Math.cos(a)*260, c + Math.sin(a)*260, 46, 0, 6.283); g.stroke(); g.font = '40px serif'; g.fillText(RUNES[Math.floor(R()*RUNES.length)], c + Math.cos(a)*260, c + Math.sin(a)*260); }
   g.lineWidth = 2; for (let i=0;i<n*2;i++){ const a = i/(n*2)*6.283; g.beginPath(); g.moveTo(c + Math.cos(a)*120, c + Math.sin(a)*120); g.lineTo(c + Math.cos(a)*190, c + Math.sin(a)*190); g.stroke(); }
   g.beginPath(); for (let i=0;i<=8;i++){ const a = i/8*6.283, r = i % 2 ? 40 : 110; i ? g.lineTo(c + Math.cos(a)*r, c + Math.sin(a)*r) : g.moveTo(c + Math.cos(a)*r, c + Math.sin(a)*r); } g.fill(); }));
+// 마법진 선을 따라 빛이 '흐른다' — 그림이 도는 게 아니라 에너지가 선을 타고 달린다
+const SIGIL_FS = `uniform sampler2D uMap;uniform vec3 uC1,uC2;uniform float uTime,uInt,uBoost,uRainbow,uOp,uDir;varying vec2 vUv;void main(){float m=texture2D(uMap,vUv).a;if(m<.003)discard;
+  vec2 p=vUv-.5;float r=length(p)*2.,a=atan(p.y,p.x)/6.2832+.5;float sw=pow(fract(a*2.-uTime*.32*uDir),14.)*1.6+pow(fract(a*3.+uTime*.21*uDir+.37),22.)*1.2;
+  float wave=exp(-pow((r-fract(uTime*.28))*9.,2.))*1.3+exp(-pow((r-fract(uTime*.28+.5))*9.,2.))*.7;vec3 b=uC1;if(uRainbow>0.)b=mix(b,.5+.5*cos(6.2832*(a+uTime*.05+vec3(0.,.33,.67))),uRainbow);
+  vec3 hi=mix(mix(uC2,b,.3),vec3(1.),.35);float fl=.8+.2*sin(uTime*3.1+a*40.);vec3 c=b*.42*fl+hi*(sw+wave)*1.4;gl_FragColor=vec4(c*m*uOp*uInt*1.5*min(uBoost,1.6),1.);}`;
 const GYRO_FS = `uniform vec3 uC1,uC2;uniform float uTime,uInt,uBoost,uSp,uPh,uRainbow;varying vec2 vUv;void main(){float x=fract(vUv.x-uTime*uSp-uPh);float tail=pow(x,6.)*1.6+pow(x,40.)*3.;
   vec3 c=mix(uC2,uC1,x);if(uRainbow>0.)c=mix(c,.5+.5*cos(6.2832*(vUv.x+uTime*.2+vec3(0.,.33,.67))),uRainbow);c=mix(c,vec3(1.),pow(x,30.));gl_FragColor=vec4(c*tail*uInt*min(uBoost,1.4)*1.3,1.);}`;
 Object.assign(MODS, {
@@ -1876,10 +1882,10 @@ Object.assign(MODS, {
     A.up((dt, t)=>list.forEach(q=>{ const k = Math.pow(Math.max(0, Math.sin(t*q.sp + q.ph)), 12); if (k < .01 && Math.random() < .02){ q.a = Math.random()*6.283; q.r = 1.2 + Math.random()*(o.r || 3); q.y = Math.random()*6.5; }
       q.s.position.set(Math.cos(q.a)*q.r, q.y, Math.sin(q.a)*q.r); q.s.scale.setScalar(.2 + k*(o.s || 2.2)); q.s.material.rotation = t*.5 + q.ph; })); },
   // 룬 마법진: 바닥에 두 겹, 서로 반대로 돈다
-  sigil(A, o){ const R = o.r || 5.5, mk = (tex, r, op, sp)=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(r*2, r*2), new THREE.MeshBasicMaterial({ map:tex, color:(sp > 0 ? A.col.c1 : A.col.c2).clone().multiplyScalar(op), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
-      A.mats.push(m.material); m.rotation.x = -Math.PI/2; m.position.y = .05 + (sp > 0 ? 0 : .01); A.group.add(m); return { m, sp }; };
+  sigil(A, o){ const R = o.r || 5.5, mk = (tex, r, op, sp)=>{ const m = A.add(new THREE.Mesh(new THREE.PlaneGeometry(r*2, r*2), new THREE.ShaderMaterial({ uniforms:A.U(sp > 0 ? {} : { c1:'#' + A.col.c2.getHexString(), c2:'#' + A.col.c1.getHexString() }, { uMap:tex, uOp:op, uDir:sp > 0 ? 1 : -1 }), vertexShader:BASIC_VS, fragmentShader:SIGIL_FS, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })));
+      if (A.col.rainbow) m.material.uniforms.uRainbow.value = A.col.rainbow; m.rotation.x = -Math.PI/2; m.position.y = .05 + (sp > 0 ? 0 : .01); return { m, sp:sp*.2 }; };
     const L = [mk(SIGIL_TEX[0], R, 1.1, .12), mk(SIGIL_TEX[1], R*.62, 1.3, -.2)];
-    A.up((dt, t)=>{ L.forEach(q=>{ q.m.rotation.z += dt*q.sp; }); L[0].m.material.opacity = .75 + .25*Math.sin(t*1.7); }); },
+    A.up((dt, t)=>{ L.forEach(q=>{ q.m.rotation.z += dt*q.sp; }); }); },
   // 혜성 꼬리: 빛 머리가 나선을 그리며 몸을 타고 올라간다
   comets(A, o){ const n = o.n || 6, SEG = 18, pos = new Float32Array(n*SEG*2*3), col = new Float32Array(n*SEG*2*3), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const ls = A.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }))); ls.frustumCulled = false; const cs = [...Array(n)].map((_, i)=>({ ph:i/n, sp:.35 + Math.random()*.3, r:2 + Math.random()*1.4, dir:i % 2 ? 1 : -1 }));
@@ -1906,11 +1912,11 @@ const PUFF_VS = `attribute vec4 aSeed;uniform float uTime,uVH,uGS,uSize,uH,uR,uS
 const PUFF_FS = `uniform sampler2D uTex;uniform vec3 uC1,uC2;uniform float uInt,uBoost,uRainbow,uTime,uDark;varying float vA,vRot,vMix;
   void main(){vec2 s=gl_PointCoord-.5;float cs=cos(vRot),sn=sin(vRot);mat2 m=mat2(cs,-sn,sn,cs);float d=texture2D(uTex,m*s+.5).a;if(d<.01)discard;float d2=texture2D(uTex,m*(s+vec2(.05,-.07))+.5).a;
     float lit=clamp((d-d2)*4.+.08,0.,1.);vec3 b=mix(uC1,uC2,vMix);if(uRainbow>0.)b=mix(b,.5+.5*cos(6.2832*(vMix+uTime*.08+vec3(0.,.33,.67))),uRainbow);
-    vec3 col=mix(b*.025,b*mix(.3,.15,uDark),smoothstep(.2,.9,d));col+=mix(b,vec3(1.),.12)*lit*.9*uInt*min(uBoost,1.5);gl_FragColor=vec4(col,clamp(d*1.3,0.,1.)*vA*.65);}`;
+    vec3 col=mix(b*.025,b*mix(.3,.15,uDark),smoothstep(.2,.9,d));col+=mix(b,vec3(1.),.12)*lit*.9*uInt*min(uBoost,1.5);gl_FragColor=vec4(col,clamp(d*1.1,0.,1.)*vA*.3);}`;
 Object.assign(MODS, {
   // 몸을 휘감고 올라가는 구름 덩어리
   gas(A, o){ const N = Math.round((o.n || 50)*(A.lite ? .5 : 1)), sd = new Float32Array(N*4); for (let i=0;i<N;i++) sd.set([Math.random(), Math.random(), Math.random(), Math.random()], i*4);
-    const u = A.U(o, { uTex:CLOUD_TEX, uVH:renderer.domElement.height, uGS:A.gs, uSize:o.size || 1.7, uH:o.h || 7, uR:o.r || 2.4, uSp:o.sp || .09 });
+    const u = A.U(o, { uTex:CLOUD_TEX, uVH:renderer.domElement.height, uGS:A.gs, uSize:o.size || 2.3, uH:o.h || 7, uR:o.r || 2.4, uSp:o.sp || .09 });
     const p = A.points(N, { aSeed:[sd, 4] }, u, PUFF_VS, PUFF_FS, THREE.NormalBlending); p.renderOrder = 3; A.up(()=>{ u.uVH.value = renderer.domElement.height; }); },
   // 발밑에서 빨려드는 가스 웅덩이
   gaspool(A, o){ const R = o.r || 4.5, u = A.U(o, { uA:o.a || .9, uK:o.k || 1.2 }); const m = A.plane(R*2, u, GAS_FS, THREE.NormalBlending); m.rotation.x = -Math.PI/2; m.position.y = .045; m.renderOrder = 1; },
@@ -2354,7 +2360,7 @@ function tickStar(dt){
   if (s.lvl){ // 광선 · 링 · 빛기둥 · 떨림이 점점 쌓인다
     rayMesh.material.uniforms.uA.value = ((s.lvl === 1 ? .35 : .5)*p + (s.lvl >= 2 ? p*p*.8 : 0))*.32;
     s.ringT -= dt; if (s.ringT <= 0 && p > .15){ s.ringT = Math.max(.25, (s.lvl >= 2 ? .9 : 1.4)*(1 - p*.7)); spawnRing(s.col, 6 + s.lvl*2, 1.1, 1.2 + p); }
-    if (s.lvl >= 2 && p > .2 && p < .93){ s.beamT -= dt; if (s.beamT <= 0){ s.beamT = Math.max(.12, (s.lvl >= 3 ? .45 : .6)*(1 - p*.8)); spawnBeam(s); if (s.lvl >= 3 && p > .6) spawnBeam(s); } }
+    if (false && s.lvl >= 2 && p > .2 && p < .93){ s.beamT -= dt; if (s.beamT <= 0){ s.beamT = Math.max(.12, (s.lvl >= 3 ? .45 : .6)*(1 - p*.8)); spawnBeam(s); if (s.lvl >= 3 && p > .6) spawnBeam(s); } }
     s.conv = s.lvl >= 2 ? Math.max(0, (p - .8)/.2) : 0;
     const sh = s.lvl >= 2 ? Math.pow(p, 3)*.22 : 0; starRig.position.x = (Math.random() - .5)*sh; starRig.position.y = (Math.random() - .5)*sh; }
   const a = sparkG.attributes.position.array; sparkData.forEach((d, i)=>{ d.a += d.v*dt*(1 + decel*3); const r = d.r*sc*(1 + glow*.4); a[i*3] = Math.cos(d.a)*r; a[i*3+1] = Math.sin(d.a)*r; a[i*3+2] = 0; });
