@@ -2045,8 +2045,8 @@ const realm = (()=>{ const g = new THREE.Group(); g.visible = false; scene.add(g
   // 거대한 고리 셋 · 빛기둥 원 · 떠다니는 파편 · 하늘의 별 문장
   const ringMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false }), rings = [];
   [[46, .35, 0, 0], [38, .22, .5, .3], [58, .18, -.35, -.5]].forEach(([r, w, rx, rz])=>{ const m = new THREE.Mesh(new THREE.TorusGeometry(r, w, 8, 200), ringMat); m.rotation.set(Math.PI/2 + rx, 0, rz); m.position.y = 6; g.add(m); rings.push(m); });
-  const beamM = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.35, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }), beams = [];
-  for (let i=0;i<14;i++){ const a = i/14*6.283, m = new THREE.Mesh(new THREE.CylinderGeometry(.5, 1.6, 120, 10, 1, true), beamM); m.position.set(Math.cos(a)*34, 60, Math.sin(a)*34); g.add(m); beams.push(m); }
+  const beamM = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.14, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }), beams = [];
+  for (let i=0;i<14;i++){ const a = i/14*6.283, m = new THREE.Mesh(new THREE.CylinderGeometry(.25, .7, 120, 10, 1, true), beamM); m.position.set(Math.cos(a)*48, 60, Math.sin(a)*48); g.add(m); beams.push(m); }
   const shardM = new THREE.MeshLambertMaterial({ color:0x10101a, emissive:0x000000 }), shards = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), shardM, 70), sd = [];
   for (let i=0;i<70;i++){ const a = Math.random()*6.283, r = rr(14, 40); sd.push({ a, r, y:rr(1, 22), s:rr(.4, 2.2), sp:rr(.02, .08), rot:Math.random()*6 }); } shards.frustumCulled = false; g.add(shards);
   // 하늘의 룬 원 · 떠 있는 섬 · 중앙 빛줄기 (컷씬 전용)
@@ -2054,6 +2054,35 @@ const realm = (()=>{ const g = new THREE.Group(); g.visible = false; scene.add(g
   const isl = [...Array(9)].map((_, i)=>{ const s = rr(3, 7), gg = new THREE.Group(); const rock = new THREE.Mesh(new THREE.ConeGeometry(s, s*2, 6), new THREE.MeshLambertMaterial({ color:0x15121f, emissive:0x000000 })); rock.rotation.x = Math.PI; rock.position.y = -s; gg.add(rock);
     const cr = new THREE.Mesh(new THREE.OctahedronGeometry(s*.5, 0), new THREE.MeshBasicMaterial({ color:0xffffff })); cr.position.y = s*.6; gg.add(cr); g.add(gg); return { gg, cr, a:i/9*6.283, r:rr(24, 44), y:rr(4, 20), s }; });
   const godRay = new THREE.Mesh(new THREE.ConeGeometry(14, 90, 32, 1, true), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.12, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); godRay.position.y = 45; g.add(godRay);
+  // 🌅 컨셉 상징물 — 오라마다 거대한 그림 하나가 하늘에 나타난다 (불: 타오르는 태양 · 얼음: 솟는 빙결정 · 공허: 열리는 블랙홀 · 우주: 내려오는 행성 · 신성: 빛의 문 · 시간: 거대한 시계 · 폭풍: 번개 고리 · 기타: 별 문장)
+  const icon = new THREE.Group(); g.add(icon); let iconT = 0, iconKind = '';
+  const glowS = (col, s)=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:spriteTex, color:new THREE.Color(col).multiplyScalar(1.6), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })); sp.scale.setScalar(s); return sp; };
+  function buildIcon(kind, c1, c2){ while (icon.children.length) icon.remove(icon.children[0]); iconKind = kind; const C1 = new THREE.Color(c1), C2 = new THREE.Color(c2), add = o=>{ icon.add(o); return o; };
+    if (kind === 'fire'){ add(new THREE.Mesh(new THREE.SphereGeometry(16, 40, 24), new THREE.ShaderMaterial({ uniforms:{ uC1:{ value:C1 }, uC2:{ value:C2 }, uTime:u.uTime }, vertexShader:BASIC_VS, fragmentShader:GLSL_NOISE + `uniform vec3 uC1,uC2;uniform float uTime;varying vec3 vP,vN,vV;void main(){float n=fbm(vP*.15+vec3(0.,uTime*.3,0.));float f=pow(1.-abs(dot(normalize(vN),normalize(vV))),2.);gl_FragColor=vec4(mix(uC1,uC2,n)*(.8+n)+vec3(1.,.8,.5)*f,1.);}` })));
+      add(glowS(c1, 90)); const rays = add(new THREE.Mesh(new THREE.PlaneGeometry(120, 120), rayMesh.material.clone())); rays.material.uniforms.uC.value = C1; rays.material.uniforms.uA.value = 1.4; rays.position.z = -1; icon.userData.rays = rays; }
+    else if (kind === 'ice'){ const m = new THREE.MeshLambertMaterial({ color:C1, emissive:C1.clone().multiplyScalar(.45), transparent:true, opacity:.85 }); for (let i=0;i<7;i++){ const s = i ? rr(3, 6) : 9, cr = add(new THREE.Mesh(new THREE.OctahedronGeometry(s, 0), m)); cr.scale.y = 3.2; cr.position.set(i ? rr(-18, 18) : 0, s*1.6, i ? rr(-6, 6) : 0); cr.rotation.y = rr(0, 3); cr.add(new THREE.LineSegments(new THREE.EdgesGeometry(cr.geometry), new THREE.LineBasicMaterial({ color:new THREE.Color('#ffffff').multiplyScalar(2) }))); } add(glowS(c2, 70)).position.y = 20; }
+    else if (kind === 'void'){ add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 20), new THREE.MeshBasicMaterial({ color:0x000000 }))); const disk = add(new THREE.Mesh(new THREE.RingGeometry(11, 30, 96), new THREE.ShaderMaterial({ uniforms:{ uC1:{ value:C1 }, uC2:{ value:C2 }, uTime:u.uTime }, vertexShader:BASIC_VS, side:THREE.DoubleSide, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false,
+        fragmentShader:`uniform vec3 uC1,uC2;uniform float uTime;varying vec2 vUv;varying vec3 vP;void main(){float r=length(vP.xy);float a=atan(vP.y,vP.x);float s=.5+.5*sin(a*6.-uTime*3.+r*.6);float k=1.-smoothstep(11.,30.,r);gl_FragColor=vec4(mix(uC2,uC1,s)*k*k*2.2,1.);}` })));
+      disk.rotation.x = 1.2; icon.userData.spin = disk; add(glowS(c1, 60)); }
+    else if (kind === 'cosmic'){ const pl = add(new THREE.Mesh(new THREE.SphereGeometry(14, 40, 28), new THREE.ShaderMaterial({ uniforms:{ uC1:{ value:C1 }, uC2:{ value:C2 }, uTime:u.uTime }, vertexShader:BASIC_VS, fragmentShader:GLSL_NOISE + `uniform vec3 uC1,uC2;uniform float uTime;varying vec3 vP,vN,vV;void main(){float b=fbm(vec3(vP.y*.3,vP.x*.05+uTime*.05,vP.z*.05));float l=max(.12,dot(normalize(vN),normalize(vec3(.6,.5,.6))));float f=pow(1.-abs(dot(normalize(vN),normalize(vV))),3.);gl_FragColor=vec4(mix(uC1,uC2,b)*l*1.2+uC2*f*1.5,1.);}` })));
+      const rg = add(new THREE.Mesh(new THREE.RingGeometry(19, 30, 96), new THREE.MeshBasicMaterial({ color:C2.clone().multiplyScalar(1.2), transparent:true, opacity:.55, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false }))); rg.rotation.x = 1.25; icon.userData.spin = pl; }
+    else if (kind === 'divine'){ const gm = new THREE.MeshLambertMaterial({ color:0xfff1c4, emissive:C1.clone().multiplyScalar(.6) }); [-14, 14].forEach(x=>{ const p = add(new THREE.Mesh(new THREE.BoxGeometry(3.4, 44, 3.4), gm)); p.position.set(x, 22, 0); });
+      const arch = add(new THREE.Mesh(new THREE.TorusGeometry(14, 1.6, 10, 60, Math.PI), gm)); arch.position.y = 44; const halo = add(new THREE.Mesh(new THREE.TorusGeometry(9, .5, 8, 80), new THREE.MeshBasicMaterial({ color:C1.clone().multiplyScalar(2.2) }))); halo.position.y = 50; icon.userData.spin = halo;
+      const door = add(new THREE.Mesh(new THREE.PlaneGeometry(24, 44), new THREE.MeshBasicMaterial({ color:new THREE.Color('#fff8e1').multiplyScalar(1.5), transparent:true, opacity:.7, blending:THREE.AdditiveBlending, depthWrite:false }))); door.position.y = 22; icon.userData.door = door; }
+    else if (kind === 'time'){ const face = add(new THREE.Mesh(new THREE.CircleGeometry(20, 64), new THREE.MeshBasicMaterial({ color:C2.clone().multiplyScalar(.25), transparent:true, opacity:.8 }))); const rim = add(new THREE.Mesh(new THREE.TorusGeometry(20, .8, 8, 80), new THREE.MeshBasicMaterial({ color:C1.clone().multiplyScalar(2) })));
+      for (let i=0;i<12;i++){ const tk = add(new THREE.Mesh(new THREE.BoxGeometry(.8, i % 3 ? 2.5 : 5, .3), rim.material)); const a = i/12*6.283; tk.position.set(Math.sin(a)*16.5, Math.cos(a)*16.5, .2); tk.rotation.z = -a; }
+      const h1 = new THREE.Mesh(new THREE.BoxGeometry(1, 12, .4).translate(0, 6, 0), rim.material), h2 = new THREE.Mesh(new THREE.BoxGeometry(.6, 17, .4).translate(0, 8.5, 0), rim.material); h1.position.z = h2.position.z = .5; add(h1); add(h2); icon.userData.hands = [h1, h2]; }
+    else if (kind === 'storm'){ for (let i=0;i<14;i++){ const a = i/14*6.283, cl = add(new THREE.Mesh(new THREE.SphereGeometry(rr(5, 8), 12, 8), new THREE.MeshLambertMaterial({ color:0x2a3040, emissive:C1.clone().multiplyScalar(.15) }))); cl.position.set(Math.cos(a)*22, 30 + Math.sin(a*3)*2, Math.sin(a)*22); cl.scale.y = .6; }
+      const bolt = add(new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, 34, 6), new THREE.MeshBasicMaterial({ color:C1.clone().multiplyScalar(2.5), transparent:true }))); bolt.position.y = 13; icon.userData.bolt = bolt; add(glowS(c1, 50)).position.y = 28; }
+    else { const st = add(new THREE.Mesh(mkPoly(STAR_MAIN, 22/65), new THREE.MeshBasicMaterial({ color:C1.clone().multiplyScalar(1.8), side:THREE.DoubleSide }))); const st2 = add(new THREE.Mesh(mkPoly(STAR_SUB, 22/65), new THREE.MeshBasicMaterial({ color:C2.clone().multiplyScalar(1.8), side:THREE.DoubleSide }))); st2.rotation.z = Math.PI/4; st2.position.z = .1; add(glowS(c1, 70)); icon.userData.spin = st; icon.userData.spin2 = st2; }
+    icon.visible = false; }
+  function tickIcon(dt, t){ if (!cine || !cine.impact){ icon.visible = false; iconT = 0; return; } iconT += dt; icon.visible = true; const k = easeO(Math.min(1, iconT/2.2)), U = icon.userData;
+    const f = me.facing, D = 75; icon.position.set(-Math.sin(f)*D, (iconKind === 'ice' || iconKind === 'divine' || iconKind === 'storm' ? -2 : 18) + (1 - k)*(iconKind === 'ice' || iconKind === 'divine' ? -50 : 60), -Math.cos(f)*D); icon.rotation.set(0, f, 0);
+    icon.scale.setScalar(.4 + k*.6);
+    if (U.spin) U.spin.rotation.z += dt*.4; if (U.spin2) U.spin2.rotation.z -= dt*.6; if (U.rays) U.rays.material.uniforms.uT.value = t;
+    if (U.hands){ const sp = iconT < 3 ? 6 - iconT*1.8 : .2; U.hands[0].rotation.z -= dt*sp*.3; U.hands[1].rotation.z -= dt*sp; }
+    if (U.door) U.door.material.opacity = Math.min(.8, iconT*.4)*(.85 + .15*Math.sin(t*3));
+    if (U.bolt) U.bolt.visible = Math.sin(t*23) > .55 || (iconT % 1.7) < .12; }
   const emb = new THREE.Mesh(mkPoly(STAR_MAIN, 30/65), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.5, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide })); emb.position.set(0, 40, -120); g.add(emb);
   const embRing = new THREE.Mesh(new THREE.RingGeometry(34, 35, 128), emb.material); embRing.position.copy(emb.position); g.add(embRing);
   let hidden = [], fogSave = null;
@@ -2061,12 +2090,13 @@ const realm = (()=>{ const g = new THREE.Group(); g.visible = false; scene.add(g
     enter(it, P){ const ac2 = auraColors(it), hl = {}; new THREE.Color(mainCol(it)).getHSL(hl); const RC = hl.l > .72 && it.accent ? it.accent : mainCol(it); it = Object.assign({}, it, { color:RC, dark:0 }); u.uC1.value.set(mainCol(it)); u.uC2.value.copy(ac2.dark ? ac2.c1 : ac2.c2); g.position.set(P.x, P.y, P.z); g.visible = true; u.uAmt.value = 1;
       ringMat.color.set(mainCol(it)).multiplyScalar(1.6); beamM.color.set(mainCol(it)).multiplyScalar(1.2); shardM.emissive.set(mainCol(it)).multiplyScalar(.25); emb.material.color.set(mainCol(it)).multiplyScalar(1.4);
       runeRings.forEach(r=>r.material.color.set(mainCol(it)).multiplyScalar(1.4)); isl.forEach((q, i)=>q.cr.material.color.set(i % 2 ? mainCol(it) : '#' + (ac2.dark ? ac2.c1 : ac2.c2).getHexString()).multiplyScalar(1.6)); godRay.material.color.set(mainCol(it));
-      const dom = !!it.dom; rings.forEach(r=>r.visible = !dom); beams.forEach(b=>b.visible = !dom); emb.visible = embRing.visible = true;
+      buildIcon(conceptOf(it), RC, '#' + (ac2.dark ? ac2.c1 : ac2.c2).getHexString());
+      const dom = !!it.dom; rings.forEach(r=>r.visible = !dom); beams.forEach(b=>b.visible = !dom); emb.visible = embRing.visible = false;
       hidden = []; worldObjs.concat(pickups.map(p=>p.m)).forEach(o=>{ if (o.visible){ o.visible = false; hidden.push(o); } }); for (const o of others.values()){ if (o.a.g.visible){ o.a.g.visible = false; hidden.push(o.a.g); } if (o.slot.holder.visible){ o.slot.holder.visible = false; hidden.push(o.slot.holder); } }
       fogSave = scene.fog.color.getHex(); scene.fog.color.set(mainCol(it)).multiplyScalar(.06); sky.visible = false; },
     exit(){ if (!g.visible) return; g.visible = false; hidden.forEach(o=>o.visible = true); hidden = []; if (fogSave != null) scene.fog.color.setHex(fogSave); sky.visible = true; },
-    tick(dt, t){ if (!g.visible) return; u.uTime.value = t; runeRings.forEach((r, i)=>{ r.rotation.z += dt*(.1 + i*.06)*(i % 2 ? -1 : 1); }); isl.forEach((q, i)=>{ q.a += dt*.05; q.gg.position.set(Math.cos(q.a)*q.r, q.y + Math.sin(t*.6 + i)*.8, Math.sin(q.a)*q.r); q.cr.rotation.y += dt; }); godRay.material.opacity = .08 + .05*Math.sin(t*1.5); rings.forEach((r, i)=>{ r.rotation.z += dt*(.08 + i*.05)*(i % 2 ? -1 : 1); }); emb.rotation.z += dt*.1; embRing.rotation.z -= dt*.05;
-      beams.forEach((b, i)=>{ b.material.opacity = .25 + .15*Math.sin(t*2 + i); });
+    tick(dt, t){ if (!g.visible) return; u.uTime.value = t; tickIcon(dt, t); runeRings.forEach((r, i)=>{ r.rotation.z += dt*(.1 + i*.06)*(i % 2 ? -1 : 1); }); isl.forEach((q, i)=>{ q.a += dt*.05; q.gg.position.set(Math.cos(q.a)*q.r, q.y + Math.sin(t*.6 + i)*.8, Math.sin(q.a)*q.r); q.cr.rotation.y += dt; }); godRay.material.opacity = .08 + .05*Math.sin(t*1.5); rings.forEach((r, i)=>{ r.rotation.z += dt*(.08 + i*.05)*(i % 2 ? -1 : 1); }); emb.rotation.z += dt*.1; embRing.rotation.z -= dt*.05;
+      beams.forEach((b, i)=>{ b.material.opacity = .1 + .06*Math.sin(t*2 + i); });
       sd.forEach((s, i)=>{ s.a += dt*s.sp; s.rot += dt*.5; _d.position.set(Math.cos(s.a)*s.r, s.y + Math.sin(t*.6 + i)*.8, Math.sin(s.a)*s.r); _d.rotation.set(s.rot, s.rot*.7, 0); _d.scale.setScalar(s.s); _d.updateMatrix(); shards.setMatrixAt(i, _d.matrix); }); shards.instanceMatrix.needsUpdate = true; },
   }; })();
 // =====================================================================
@@ -2258,6 +2288,7 @@ const SHOTS = {
   lowHero(k, h, P, f, o, s){ const a = f + s.side*(.3 + k*.4); o.pos.copy(at3(P, a, 5.2 - k*.6, .25)); o.look.set(P.x, P.y + 4.2, P.z); o.fov = 78 - k*6; o.roll = -s.side*.08; },
   skyDown(k, h, P, f, o, s){ const a = f + s.side*k*1.2; o.pos.set(P.x + Math.sin(a)*2, P.y + 26 - k*4, P.z + Math.cos(a)*2); o.look.set(P.x, P.y, P.z); o.fov = 48; o.roll = s.side*k*.5; },
   wide(k, h, P, f, o, s){ const a = f + s.side*(.8 + k*.25); o.pos.copy(at3(P, a, 34 + k*6, 6 + k*3)); o.look.set(P.x, P.y + 10 + k*4, P.z); o.fov = 55; },
+  reveal(k, h, P, f, o, s){ const e = easeIO(k), a = f + s.side*(.25 - e*.15); o.pos.copy(at3(P, a, 13 + e*5, .9 + e*1.2)); o.look.set(P.x - Math.sin(f)*75, P.y + 13 + e*4, P.z - Math.cos(f)*75); o.fov = 62 - e*6; o.roll = s.side*.04; },
   finale(k, h, P, f, o, s){ const e = k*k*k, a = f + .35*s.side*(1 - e); o.pos.copy(at3(P, a, lerp(9.5, 3.2, e), lerp(2.2, 3, e))); o.look.set(P.x, P.y + lerp(2.4, 2.9, e), P.z); o.fov = lerp(48, 80, e); o.roll = s.side*e*.12; },
   orbitHold(k, h, P, f, o, s){ const a = f + .55 + s.side*k*.5; o.pos.copy(at3(P, a, 9.5 - k*1.2, 2.4)); const sd = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a)).multiplyScalar(-1.8); o.look.set(P.x + sd.x, P.y + 2.4, P.z + sd.z); o.fov = 50; },
 };
@@ -2267,7 +2298,7 @@ function buildShots(tier, C, H){
   const charge = pickN(['orbitLow', 'topDown', 'dolly', 'face', 'flyIn', 'spiralUp'], C >= 1.9 ? 1 : 2);
   if (C >= 1.9){ push(charge[0], 0, C*.55); push(tier >= 20 ? 'behindUp' : pickN(['face', 'dolly', 'spiralUp'].filter(n=>n !== charge[0]), 1)[0], C*.55, C); }
   else { push(charge[0], 0, C*.5); push(charge[1], C*.5, C); }
-  let t = C; push('heroPush', t, t += Math.min(2.4, H*.45));
+  let t = C; push('reveal', t, t += 2.3); push('heroPush', t, t += Math.min(2.2, H*.35));
   const pool = ['whip', 'crane', 'dutch', 'lowHero', 'skyDown']; let extra = pickN(pool, 4); if (tier >= 40) extra.splice(1, 0, 'wide');
   while (t < C + H - .1){ const len = Math.min(C + H - t, 1.2 + Math.random()*.6), last = C + H - t - len < 1; const name = last ? 'orbitHold' : (extra.shift() || 'orbitHold'); push(name, t, last ? C + H - 1.15 : t + len); t += len; if (last) break; }
   push('finale', C + H - 1.15, C + H + 5);
