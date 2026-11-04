@@ -18516,7 +18516,7 @@ function rbMatch(e,q){const it=ITEM[e.out];if(!it)return false;const n=String(it
 function rbFits(L){const v=inv.slice(0,36).map(s=>s&&Object.assign({},s));for(const s0 of L){const s=Object.assign({},s0);toRange(s,v,rng(0,36));if(s.n>0)return false}return true}
 function rbClear(arr,idx){const L=idx.map(i=>arr[i]).filter(Boolean);if(!L.length)return true;if(!rbFits(L))return false;for(const i of idx){const s=arr[i];if(!s)continue;arr[i]=null;toRange(s,inv,rng(0,36));if(s.n>0)giveOrDrop(s)}return true}
 function rbTake(id,t){let got=0;for(let i=0;i<36&&got<t;i++){const s=inv[i];if(!s||s.id!==id||s.d>0||s.e||s.name)continue;const k=Math.min(s.n,t-got);s.n-=k;got+=k;if(!s.n)inv[i]=null}return got}
-function rbPlace(e,max){const k=rbKind();if(!k)return;RB.ghost=null;
+function rbPlace(e,max){const k=rbKind();if(!k)return;RB.ghost=null;if($('screen').classList.contains('rbNarrow')){rbSt(k)[0]=0;bookOpen=false;RB.over=null;rbMount()}
   if(e.k==='c'){if(k!=='c')return;const [g,n]=grid();self.__rbLast=null;craftOut();const lr=self.__rbLast,same=e.rs.includes(lr),P=rbPool(),cur=same?Math.min(...g.filter(Boolean).map(s=>s.n)):0,lim=max?64:same?cur+1:1;
     let best=null,bt=0;for(const r of (same?[lr]:[]).concat(e.rs.filter(r=>r!==lr&&rbFitR(r,n))))for(let t=bt+1;t<=lim;t++){const p=rbPlan(r,P,t,n);if(!p)break;best=p;bt=t}
     if(!best){if(rbClear(g,rng(0,g.length)))RB.ghost={e};drawScreen();return}
@@ -18537,8 +18537,8 @@ function rbPaintGhost(){document.querySelectorAll('#panel .slot.rbGs').forEach(e
 
 /* ── 책 그리기 */
 const rp=v=>`calc(${v}px * var(--s))`,rpos=(x,y)=>`left:${rp(x)};top:${rp(y)}`;
-function rbMount(){const B2=$('rbook'),k=rbKind(),scr=$('screen');if(!k||!bookOpen){B2.classList.add('hide');B2.classList.remove('rb8');B2.innerHTML='';scr.classList.remove('rbOpen');return}
-  B2.className='panel rbook rb8'+(gW()<379?' narrow':'');scr.classList.add('rbOpen');B2.style.background=`url(${rbBG()}) 0 0/100% 100%`;
+function rbMount(){const B2=$('rbook'),k=rbKind(),scr=$('screen');if(!k||!bookOpen){B2.classList.add('hide');B2.classList.remove('rb8');B2.innerHTML='';scr.classList.remove('rbOpen','rbNarrow');return}
+  const nar=gW()<379;B2.className='panel rbook rb8'+(nar?' narrow':'');scr.classList.add('rbOpen');scr.classList.toggle('rbNarrow',nar);B2.style.background=`url(${rbBG()}) 0 0/100% 100%`;
   B2.innerHTML=`<div class="rbTabs"></div><img class="px rbMag" src="${rbMagURL()}"><input id="rbQ" class="rbQ" maxlength="50" autocomplete="off" spellcheck="false" translate="no"><button class="rbF" id="rbF"><img class="px"></button><div class="rbP"></div>`+
     `<button class="rbPg rbPrev" id="rbPrev" aria-label="이전 페이지"></button><button class="rbPg rbNext" id="rbNext" aria-label="다음 페이지"></button><div class="rbPn" id="rbPn"></div><div class="rbO hide" id="rbO"></div>`;
   const q=$('rbQ');q.value=RB.q;q.placeholder=TR('검색...');q.oninput=()=>{RB.q=q.value;RB.page=0;RB.over=null;rbRender()};q.onkeydown=e=>{if(e.key!=='Escape')e.stopPropagation()};q.onkeyup=e=>e.stopPropagation();
@@ -18577,7 +18577,11 @@ function rbDown(ev){const t=ev.target;if(t.id==='rbQ')return;ev.preventDefault()
   if(t.closest('#rbPrev')){RB.page--;sfx('click');rbRender();return}if(t.closest('#rbNext')){RB.page++;sfx('click');rbRender();return}
   const b=t.closest('.rbB');if(!b)return;const o=RB.list[RB.page*20+(+b.dataset.j)];if(!o)return;
   if(ev.button===2){if(o.es.length>1){RB.over={c:o.c,x:11+25*((+b.dataset.j)%5),y:31+25*Math.floor((+b.dataset.j)/5)};hideTip();rbRender()}return}
-  if(ev.button!==0)return;sfx('click');hideTip();rbPlace(o.es[RB.cyc%o.es.length],ev.shiftKey)}
+  if(ev.button!==0)return;
+  // 터치: 꾹 누르면 (0.4초) 다른 조합법 목록 · 짧게 누르면 채우기
+  if(ev.pointerType!=='mouse'&&o.es.length>1){clearTimeout(RB.lp);let fired=false;const j=+b.dataset.j;RB.lp=setTimeout(()=>{fired=true;RB.over={c:o.c,x:11+25*(j%5),y:31+25*Math.floor(j/5)};rbRender()},400);
+    addEventListener('pointerup',()=>{if(!fired){clearTimeout(RB.lp);sfx('click');rbPlace(o.es[RB.cyc%o.es.length],false)}},{once:true});return}
+  sfx('click');hideTip();rbPlace(o.es[RB.cyc%o.es.length],ev.shiftKey)}
 function rbOverTip(ev){ev.stopPropagation();const t=ev.target,k=rbKind();if(!k)return;
   if(t.closest('#rbF')){const s=rbSt(k)[1];showTip([[TR(s?{c:'제작 가능한 아이템 표시 중',f:'제련 가능한 아이템 표시 중',b:'용광 가능한 아이템 표시 중',s:'훈연 가능한 아이템 표시 중'}[k]:'모두 표시 중'),'#ffffff']],ev.clientX,ev.clientY);return}
   const b=!RB.over&&t.closest('.rbB');if(b){const o=RB.list[RB.page*20+(+b.dataset.j)];if(o){const e=o.es[RB.cyc%o.es.length],L=tipLines({id:e.out,n:e.n,d:0}).map(l=>[TR(l[0]),l[1],l[2]]);if(o.es.length>1)L.push([TR('우클릭하여 더 보기'),'#ffffff']);showTip(L,ev.clientX,ev.clientY);return}}
@@ -18612,13 +18616,13 @@ renderBook=function(){};
   const bb=$('bookBtn');if(bb&&k){bb.title='';bb.innerHTML=`<img class="px rbBb0" src="${rbBtnURL(0)}"><img class="px rbBb1" src="${rbBtnURL(1)}">`;bb.onclick=e=>{e.preventDefault();rbToggle()};
     bb.onpointerover=e=>{e.stopPropagation();showTip([[TR('제작법 책'),'#ffffff']],e.clientX,e.clientY)};bb.onpointerout=()=>hideTip()}
   bookOpen=k?!!rbSt(k)[0]:false;rbMount();if(bookOpen)drawScreen();return r}}
-{const _cl=closeScreen;closeScreen=function(){const r=_cl.apply(this,arguments);if(!screenOpen){RB.ghost=null;RB.over=null;const B2=$('rbook');B2.classList.remove('rb8');B2.innerHTML='';$('screen').classList.remove('rbOpen');bookOpen=false}return r}}
+{const _cl=closeScreen;closeScreen=function(){const r=_cl.apply(this,arguments);if(!screenOpen){RB.ghost=null;RB.over=null;const B2=$('rbook');B2.classList.remove('rb8');B2.innerHTML='';$('screen').classList.remove('rbOpen','rbNarrow');bookOpen=false}return r}}
 // 바깥을 누르면 검색 칸에서 빠져요 (E 가 다시 창을 닫게)
 $('screen').addEventListener('pointerdown',e=>{const q=$('rbQ');if(q&&e.target!==q&&document.activeElement===q)q.blur()},true);
 {const _ft=furnaceTick;furnaceTick=function(dt){const r=_ft.apply(this,arguments);try{rbScan();if(screenOpen&&(RB.ghost||bookOpen&&rbKind())){RB.acc+=dt;if(RB.acc>=1.5){RB.acc-=1.5;if(!physK.ControlLeft&&!physK.ControlRight){RB.cyc++;if(bookOpen&&rbKind())rbRender();rbPaintGhost()}}}}catch(e){console.warn(e)}return r}}
 document.head.appendChild(Object.assign(document.createElement('style'),{textContent:
   '#screen.rbOpen{gap:calc(2px * var(--s))}#rbook.rb8{display:block;position:relative;width:calc(147px * var(--s));height:calc(166px * var(--s));max-height:none;padding:0;box-shadow:none;border-radius:0;align-self:center;flex:none;font-family:var(--mcf);image-rendering:pixelated}'+
-  '#rbook.rb8.narrow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3}#rbook.rb8>*{position:absolute}.rb8 .rbTabs,.rb8 .rbP{left:0;top:0;width:0;height:0}'+
+  '#rbook.rb8.narrow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3}#screen.rbNarrow #panel{visibility:hidden}#rbook.rb8>*{position:absolute}.rb8 .rbTabs,.rb8 .rbP{left:0;top:0;width:0;height:0}'+
   '.rbTab{position:absolute;width:calc(35px * var(--s));height:calc(27px * var(--s));background-size:100% 100%;cursor:pointer;z-index:1}.rbTab img{position:absolute;top:calc(5px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s));pointer-events:none}'+
   '.rbTab.rbBn,.rbB.rbBn{animation:rbBn .75s ease-in-out}@keyframes rbBn{50%{transform:scale(1.1)}}'+
   '.rbMag{left:calc(12px * var(--s));top:calc(15px * var(--s));width:calc(11px * var(--s));height:calc(11px * var(--s))}'+
