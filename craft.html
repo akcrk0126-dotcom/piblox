@@ -5496,7 +5496,7 @@ function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(
   if(!p.stuck){let gone=false;for(let n=hbTicks(p,dt);n>0&&!gone&&!p.stuck;n--)gone=hbArrowTick(p);   // 틱마다 움직이며 블록 · 엔티티 상자를 쓸어 봐요 (Agent 10)
     if(gone){scene.remove(p.m);projs.splice(i,1);continue}
     if(p.stuck)p.m.position.copy(p.pos);else{p.m.position.lerpVectors(p.prev,p.pos,p.acc/TICK);p.m.lookAt(p.m.position.x+p.vel.x,p.m.position.y+p.vel.y,p.m.position.z+p.vel.z)}}
-  else if(p.owner==='player'&&!p.noPick&&p.life>.5&&p.pos.distanceTo(new V3(player.pos.x,player.pos.y+.8,player.pos.z))<1.5&&addItem({id:ARROW,n:1})===0){sfx('pop');renderHotbar();scene.remove(p.m);projs.splice(i,1);continue}
+  else if(p.owner==='player'&&!p.noPick&&p.life>.5&&p.pos.distanceTo(new V3(player.pos.x,player.pos.y+.8,player.pos.z))<1.5&&addItem(p.item?Object.assign({},p.item):{id:ARROW,n:1})===0){sfx('pop');renderHotbar();scene.remove(p.m);projs.splice(i,1);continue}
   else if(!boxHits(p.pos.x,p.pos.y-.06,p.pos.z,.06,.12)){p.stuck=false;p.life=0;p.vel.set(0,0,0);p.prev.copy(p.pos);p.acc=0}   // 꽂힌 블록이 없어지면 떨어져요 (마크 shouldFall)
   if(p.life>(p.stuck?60:10)){scene.remove(p.m);projs.splice(i,1)}}}
 function explode(x,y,z,r,o){sfx('boom',null,1,{x,y,z});explodeHurt(x,y,z,r,o);const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
@@ -16824,6 +16824,108 @@ try{const M=MOBDEF,EY=R4.SPIDER_EYE;
   for(const t of ['spider','cave_spider'])if(M[t]){const d0=M[t].drops;M[t].drops=r=>{const L=d0(r);if(EY>0&&r4ByPlayer()){const n=Math.floor(Math.random()*3)-1+Math.floor(Math.random()*(r4Loot()+1));if(n>0)L.push([EY,n])}return L}}
   if(M.witch){const W=[GLOW_DUST,SUGAR,REDSTONE,EY>0?EY:SUGAR,GLASS_BOTTLE,GUNPOWDER,STICK,STICK];M.witch.drops=()=>{const L=[],n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)L.push([W[Math.floor(Math.random()*W.length)],Math.floor(Math.random()*3)]);return L}}
   for(const t of ['zombie','husk','zombie_villager'])if(M[t]){const d0=M[t].drops;M[t].drops=r=>{const L=d0(r);if(r4ByPlayer()&&Math.random()<.025+.01*r4Loot()){const R=[IRON,CARROT,POTATO];L.push([R[Math.floor(Math.random()*3)],1])}return L}}}catch(e){console.warn('r4 drops',e)}
+
+/* ── (P4-FIX 라운드 4) 마법부여대 · 모루를 바닐라 식으로 (EnchantmentHelper.getEnchantmentCost · selectEnchantment · AnvilMenu.createResult) ── */
+// [무게, 최소 비용(레벨), 최대-최소, 모루 비용]
+const ENCH_V={prot:[10,l=>1+(l-1)*11,11,1],fall:[5,l=>5+(l-1)*6,6,2],resp:[2,l=>10*l,30,4],thorns:[1,l=>10+(l-1)*20,50,8],depth:[2,l=>10*l,15,4],sharp:[10,l=>1+(l-1)*11,20,1],smite:[5,l=>5+(l-1)*8,20,2],bane:[5,l=>5+(l-1)*8,20,2],
+  knock:[5,l=>5+(l-1)*20,50,2],fire:[2,l=>10+(l-1)*20,50,4],loot:[2,l=>15+(l-1)*9,50,4],eff:[10,l=>1+(l-1)*10,50,1],silk:[1,()=>15,50,8],unb:[5,l=>5+(l-1)*8,50,2],fortune:[2,l=>15+(l-1)*9,50,4],power:[10,l=>1+(l-1)*10,15,1],
+  punch:[2,l=>12+(l-1)*20,25,4],flame:[2,()=>20,30,4],infin:[1,()=>20,30,8],mend:[2,l=>25*l,50,4],vanish:[1,()=>25,25,8],swift:[1,l=>25*l,50,8]};
+const ENCH_TREASURE=new Set(['mend','vanish','swift']);
+// 마법부여 능력 (Item enchantable): 재료마다
+function enchability(st){const n=String(MCID[st.id]||'').replace('minecraft:',''),arm=!!(ITEM[st.id]&&ITEM[st.id].armor);if(st.id===BOOK)return 1;
+  if(/^wooden_/.test(n))return 15;if(/^stone_/.test(n))return 5;if(/^iron_/.test(n))return arm?9:14;if(/^golden_/.test(n))return arm?25:22;if(/^diamond_/.test(n))return 10;if(/^netherite_/.test(n))return 15;
+  if(/^leather_/.test(n))return 15;if(/^chainmail_/.test(n))return 12;if(n==='turtle_helmet')return 9;if(/^(bow|crossbow|trident|fishing_rod)$/.test(n))return 1;if(n==='mace')return 15;
+  const t=toolOf(st);if(t&&t.tier){return [15,5,14,10][t.tier-1]||10}if(arm)return 9;return 0}
+const enchCandsV=st=>st.id===BOOK?BOOK_ENCH.filter((k,i,a)=>a.indexOf(k)===i&&ENCH_V[k]&&!ENCH_TREASURE.has(k)):enchCands(st).filter(k=>ENCH_V[k]&&!ENCH_TREASURE.has(k));
+function rollEnchV(st,lv,seed){const r=mulberry(seed),E=enchability(st);if(!E)return null;const ri=n=>Math.floor(r()*n);
+  let L=lv+1+ri(Math.floor(E/4)+1)+ri(Math.floor(E/4)+1);L=Math.max(1,Math.round(L*(1+(r()+r()-1)*.15)));
+  let av=[];for(const k of enchCandsV(st)){const V=ENCH_V[k];for(let l=ENCH_MAX[k];l>=1;l--){const mn=V[1](l);if(L>=mn&&L<=mn+V[2]){av.push({k,l,w:V[0]});break}}}
+  const pick=()=>{const tot=av.reduce((a,o)=>a+o.w,0);if(tot<=0)return null;let x=ri(tot);for(const o of av){x-=o.w;if(x<0)return o}return av[av.length-1]};
+  const e={};let o=pick();if(!o)return null;e[o.k]=o.l;
+  while(ri(50)<=L){av=av.filter(q=>!e[q.k]&&!enchClash(e,q.k));if(!av.length)break;o=pick();if(!o)break;e[o.k]=o.l;L=Math.floor(L/2)}
+  if(st.id===BOOK){const ks=Object.keys(e);if(ks.length>1)delete e[ks[ri(ks.length)]]}return e}
+enchOptions=function(){const st=enchSlots[0];if(!st||st.e)return null;const E=enchability(st);if(!E||!enchCandsV(st).length)return null;
+  const sh=enchAt?shelfCount(enchAt.x,enchAt.y,enchAt.z):0,seed=(player.enchSeed||(player.enchSeed=Math.floor(Math.random()*1e9)))>>>0,r=mulberry(seed),ri=n=>Math.floor(r()*n);
+  return [0,1,2].map(i=>{const base=1+ri(8)+(sh>>1)+ri(sh+1),lv=i===0?Math.max(Math.floor(base/3),1):i===1?Math.floor(base*2/3)+1:Math.max(base,sh*2);if(lv<i+1)return{lv,e:null,cost:i+1};return{lv,e:rollEnchV(st,lv,seed+i),cost:i+1}})};
+// 책을 마법부여하면 마법이 부여된 책
+{const _re=renderEnch;renderEnch=function(){const s=enchSlots[0];if(s&&s.id===BOOK&&s.e)s.id=ENCH_BOOK;return _re.apply(this,arguments)}}
+// 모루: 재료로 고치기 (한 개에 25%) · 같은 것 합치기 (+12%) · 마법 합치기 (모루 비용 × 레벨, 책은 절반) · 맞지 않는 마법 +1 · 작업 벌점 2^n−1 · 40 이상 '너무 비싸요!'
+const REPAIR_MAT=st=>{const n=String(MCID[st.id]||'').replace('minecraft:',''),id=x=>idOfMC('minecraft:'+x);if(/^wooden_/.test(n))return ANYP;if(/^stone_/.test(n))return ANYC;if(/^(iron_|chainmail_)/.test(n))return[id('iron_ingot')];
+  if(/^golden_/.test(n))return[id('gold_ingot')];if(/^diamond_/.test(n))return[id('diamond')];if(/^netherite_/.test(n))return[id('netherite_ingot')];if(/^leather_/.test(n))return[id('leather')];if(n==='elytra')return[id('phantom_membrane')];if(n==='turtle_helmet')return[id('turtle_scute')];if(n==='shield')return ANYP;if(n==='mace')return[id('breeze_rod')];return[]};
+const maxDurOf=st=>{const t=toolOf(st),a=ITEM[st.id]&&ITEM[st.id].armor;return t&&t.dur||a&&a.dur||ITEM[st.id]&&ITEM[st.id].dur||0};
+anvilOut=function(){const a=anvilIn[0],b=anvilIn[1];if(!a||!b)return null;const md=maxDurOf(a);let cost=0,changed=false,d=a.d||0,use=1;const e=Object.assign({},a.e||{});
+  const mats=REPAIR_MAT(a);if(md&&d>0&&mats.includes(b.id)){let k=0;while(d>0&&k<b.n){d=Math.max(0,d-Math.floor(md/4));k++;cost++}use=k;changed=true}
+  else{const book=b.id===ENCH_BOOK;if(!book&&b.id!==a.id)return null;
+    if(!book&&md&&(a.d||0)>0){const left=md-(a.d||0),right=md-(b.d||0),nd=Math.max(0,md-(left+right+Math.floor(md*12/100)));if(nd<d){d=nd;cost+=2;changed=true}}
+    const cands=a.id===ENCH_BOOK?BOOK_ENCH:enchCands(a);let anyOk=false,anyBad=false;
+    for(const k in (b.e||{})){const ok=(cands.includes(k)||creative())&&!enchClash(Object.assign({},e,{[k]:0}),k);if(!ok){anyBad=true;cost++;continue}anyOk=true;
+      const cur=e[k]||0,bl=b.e[k];let nv=cur===bl?cur+1:Math.max(cur,bl);nv=Math.min(nv,ENCH_MAX[k]||nv);if(nv!==cur)changed=true;e[k]=nv;const ac=(ENCH_V[k]?ENCH_V[k][3]:1);cost+=nv*(book?Math.max(1,ac>>1):ac)}
+    if(anyBad&&!anyOk)return null}
+  if(!changed)return null;const pen=(a.rep||0)+(b.rep||0);cost+=pen;const o={id:a.id,n:1,d,e:Object.keys(e).length?e:undefined,rep:Math.max(a.rep||0,b.rep||0)*2+1,cost,use};if(a.name)o.name=a.name;return o};
+{const _at=anvilTake;anvilTake=function(){const o=anvilOut();if(!o)return;const b=anvilIn[1];if(o.use>1||(b&&b.n>o.use)){const keep=b&&b.n-o.use;const r=_at.apply(this,arguments);if(!anvilIn[1]&&keep>0&&cursor){anvilIn[1]={id:b.id,n:keep,d:b.d||0}}return r}return _at.apply(this,arguments)}}
+
+/* ── (P4-FIX 라운드 4) 낚시 (FishingHook) · 삼지창 · 끈 ── */
+{const mk=(id,mc,n,en,ic,o)=>{if(ITEM[id]||B[id])return -1;item(id,n,ic,o);MCID[id]='minecraft:'+mc;if(MC_ITEM['minecraft:'+mc]==null)MC_ITEM['minecraft:'+mc]=id;i18nAdd(n,en);return id};
+  R4.TRIDENT=mk(1661,'trident','삼지창','Trident',spr(9508,P=>{for(let i=0;i<11;i++){P.set(3+i,13-i,i<2?'#3a6a6a':'#5ab8a8');P.set(4+i,13-i,'#2a8a80')}for(const [x,y] of [[11,1],[14,4],[12,2],[13,3],[10,2],[13,5],[9,3],[12,6]])P.set(x,y,'#9ff2e0')}),{stack:1,tool:{type:'trident',tier:0,speed:1,dur:250,dmg:9}});
+  R4.LEAD=mk(1662,'lead','끈','Lead',spr(9509,P=>{for(let a=0;a<40;a++){const t=a/40*Math.PI*1.7,x=Math.round(8+Math.cos(t)*5),y=Math.round(8+Math.sin(t)*4.5);P.set(x,y,a%5?'#a08050':'#6a5030')}P.set(12,12,'#5ac84a');P.set(13,13,'#4a9a3a')}),{});
+  if(R4.LEAD>0&&typeof SLIMEBALL!=='undefined')rc(['SS ','SB ','  S'],{S:[STRING],B:[SLIMEBALL]},R4.LEAD,2);
+  // 물에 빠진 좀비 (drowned): 삼지창 8.5% (+약탈 1%) · 플레이어가 잡았을 때
+  try{if(MOBDEF.drowned&&R4.TRIDENT>0){const d0=MOBDEF.drowned.drops;MOBDEF.drowned.drops=r=>{const L=d0(r);if(r4ByPlayer()&&Math.random()<.085+.01*r4Loot())L.push([R4.TRIDENT,1]);return L}}}catch(e){}}
+// ── 낚시: 던지기 (속도 · 중력 0.03 · 끌림 0.92) → 물에 뜨면 100~600틱 기다림 (비 오면 빨라져요 · 지붕 아래면 느려요) → 물고기가 20~80틱에 다가와서 → 20~40틱 동안 찌가 잠겨요 → 그때 당기면 전리품 + 경험치 1~6
+const FISH={hook:null};
+function fishLoot(luck){const id=n=>idOfMC('minecraft:'+n),r=Math.random()*100,wF=85-luck,wJ=Math.max(0,10-luck*2),wT=5+luck*2,tot=wF+wJ+wT,x=r*tot/100;
+  const pickW=L=>{let t=L.reduce((a,o)=>a+o[1],0),q=Math.random()*t;for(const o of L){q-=o[1];if(q<0)return o[0]}return L[0][0]};
+  if(x<wF)return{id:pickW([[COD,60],[SALMON,25],[TROPICAL_FISH,2],[PUFFERFISH,13]]),n:1,d:0};
+  if(x<wF+wJ){const J=[[LILY_PAD,17],[id('leather_boots'),10],[LEATHER,10],[BONE,10],[R4.WATER_BOTTLE,10],[STRING,5],[FISHING_ROD,2],[BOWL,10],[STICK,5],[INK_SAC,1],[TRIPWIRE_HOOK,10],[FLESH,10]].filter(o=>o[0]>0);const k=pickW(J);
+    const st={id:k,n:k===INK_SAC?10:1,d:0};const md=k===FISHING_ROD?64:k===id('leather_boots')?65:0;if(md)st.d=Math.floor(md*(.1+Math.random()*.8));return st}
+  const T=[[BOW,1],[ENCH_BOOK,1],[FISHING_ROD,1],[NAME_TAG,1],[SADDLE,1]];const k=pickW(T),st={id:k,n:1,d:0};
+  if(k===BOW||k===FISHING_ROD){st.d=Math.floor((k===BOW?384:64)*Math.random()*.25);try{const e=rollEnchV(st,30,Math.floor(Math.random()*1e9));if(e)st.e=e}catch(e){}}
+  if(k===ENCH_BOOK){try{const e=rollEnchV({id:BOOK,n:1},30,Math.floor(Math.random()*1e9));if(e)st.e=e}catch(e){}}return st}
+function fishCast(){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion),o=camera.position.clone().addScaledVector(d,.3);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.12),new THREE.MeshBasicMaterial({color:0xd02020}));m.position.copy(o);scene.add(m);
+  const lg=new THREE.BufferGeometry().setFromPoints([o.clone(),o.clone()]),line=new THREE.Line(lg,new THREE.LineBasicMaterial({color:0x202020}));line.frustumCulled=false;scene.add(line);
+  const sp=.6*(1+(Math.random()-.5)*.0045*2);FISH.hook={pos:o.clone(),vel:d.multiplyScalar(sp*20),m,line,state:'fly',wait:0,lure:0,bite:0,t:0,dim:DIM};sfx('throw')}
+function fishRemove(){const h=FISH.hook;if(!h)return;scene.remove(h.m);scene.remove(h.line);h.line.geometry.dispose();FISH.hook=null}
+function fishReel(){const h=FISH.hook;if(!h)return;let dmg=0;
+  if(h.state==='bite'){const st=inv[sel],luck=st&&st.e&&st.e.luck||0,L=fishLoot(luck),e=spawnItem(L,h.pos.x,h.pos.y+.2,h.pos.z);const dx=player.pos.x-h.pos.x,dy=player.pos.y+1-h.pos.y,dz=player.pos.z-h.pos.z;e.vel.set(dx*2,dy*2+Math.sqrt(Math.hypot(dx,dy,dz))*1.6,dz*2);
+    dropXP(player.pos.x,player.pos.y+.5,player.pos.z,1+Math.floor(Math.random()*6));dmg=1;sfx('pop')}else if(h.state==='ground')dmg=2;
+  fishRemove();if(dmg&&!creative())damageHeld(dmg)}
+function fishTick(dt){const h=FISH.hook;if(!h)return;const st=inv[sel];if(!st||st.id!==FISHING_ROD||player.dead||h.dim!==DIM||h.pos.distanceTo(player.pos)>32){fishRemove();return}h.acc=(h.acc||0)+dt;
+  while(h.acc>=.05){h.acc-=.05;h.t++;const x=Math.floor(h.pos.x),y=Math.floor(h.pos.y),z=Math.floor(h.pos.z),inW=getB(x,y,z)===WATER;
+    if(h.state==='fly'||h.state==='ground'){if(inW){h.state='water';h.vel.set(0,0,0);h.wait=100+Math.floor(Math.random()*500)-(h.lure||0)*100}
+      else{h.vel.y-=.03*20;h.vel.multiplyScalar(.92);const nx=h.pos.clone().addScaledVector(h.vel,.05);if(SOLID[getB(Math.floor(nx.x),Math.floor(nx.y),Math.floor(nx.z))]){h.vel.set(0,0,0);h.state='ground'}else h.pos.copy(nx)}continue}
+    // 물: 수면에 떠요
+    const top=getB(x,y+1,z)===WATER;h.pos.y+=(top?.06:(y+.88-h.pos.y)*.2);if(h.state==='water'||h.state==='near'){let k=1;const sky=lightAt(x,y+1,z)[0]>=15;if(typeof isWet==='function'&&isWet(x,y+1,z)&&Math.random()<.25)k++;if(!sky&&Math.random()<.5)k--;
+      if(h.state==='water'){h.wait-=k;if(h.wait<=0){h.state='near';h.near=20+Math.floor(Math.random()*61)}}else{h.near-=k;if(Math.random()<.15)p6Spell(h.pos.x+(Math.random()-.5),h.pos.y,h.pos.z+(Math.random()-.5),0xc8e0ff,false);if(h.near<=0){h.state='bite';h.bite=20+Math.floor(Math.random()*21);h.pos.y-=.2;sfx('splash')}}}
+    else if(h.state==='bite'){h.bite--;if(h.bite<=0){h.state='water';h.wait=100+Math.floor(Math.random()*500)}}}
+  h.m.position.copy(h.pos);const a=h.line.geometry.attributes.position.array,hand=camera.position.clone().add(new V3(.35,-.35,-.5).applyQuaternion(camera.quaternion));a[0]=hand.x;a[1]=hand.y;a[2]=hand.z;a[3]=h.pos.x;a[4]=h.pos.y;a[5]=h.pos.z;h.line.geometry.attributes.position.needsUpdate=true}
+// ── 삼지창: 10틱 이상 당겼다 놓으면 던져요 (2.5칸/틱 · 피해 8) · 다시 주우면 그 삼지창 (내구도 −1)
+R4.trT=0;
+function tridentTick(dt){const st=inv[sel];if(!st||st.id!==R4.TRIDENT||screenOpen||player.dead){R4.trT=0;return}if(mouseR){R4.trT+=dt;return}
+  if(R4.trT>=.5){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);shootArrow(camera.position.clone().addScaledVector(d,.5),d,50,'player',8);const pr=projs[projs.length-1];
+    if(pr&&pr.owner==='player'){pr.item=Object.assign({},st,{d:(st.d||0)+(creative()?0:1)});pr.base=8/2.5;pr.m.scale.set(1.4,1.4,2.2);pr.m.material.color.setHex(0x5ab8a8);if(creative())pr.noPick=1}
+    if(!creative()){inv[sel]=null;renderHotbar()}doSwing()}R4.trT=0}
+// ── 끈: 몹을 묶어 끌고 다녀요 (6칸 넘으면 당기고 10칸 넘으면 끊어져요) · 울타리를 누르면 매듭에 묶어요 · 다시 누르면 풀어요
+const LEASH=[];
+function leashLine(m){const g=new THREE.BufferGeometry().setFromPoints([new V3(),new V3()]),l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0x6a5030}));l.frustumCulled=false;scene.add(l);return l}
+function leashDrop(L,give){scene.remove(L.line);L.line.geometry.dispose();L.m.leash=null;LEASH.splice(LEASH.indexOf(L),1);if(give)spawnItem({id:R4.LEAD,n:1,d:0},L.m.pos.x,L.m.pos.y+.5,L.m.pos.z)}
+function leashTick(dt){for(let i=LEASH.length-1;i>=0;i--){const L=LEASH[i],m=L.m;if(m.dead||!mobs.includes(m)){leashDrop(L,!m.dead||true);continue}
+    if(L.knot&&!(B[getB(L.knot.x,L.knot.y,L.knot.z)]&&(B[getB(L.knot.x,L.knot.y,L.knot.z)].shape==='fence'))){leashDrop(L,true);continue}
+    const hp=L.knot?new V3(L.knot.x+.5,L.knot.y+.6,L.knot.z+.5):new V3(player.pos.x,player.pos.y+1,player.pos.z);if(!L.knot&&(player.dead||player.ride===m)){if(player.dead)leashDrop(L,true);continue}
+    const d=hp.distanceTo(m.pos);if(d>10){leashDrop(L,true);continue}if(d>6){const k=(d-6)*.4;m.vel.x+=(hp.x-m.pos.x)/d*k;m.vel.z+=(hp.z-m.pos.z)/d*k;if(hp.y>m.pos.y+1)m.vel.y=Math.max(m.vel.y,2)}
+    const a=L.line.geometry.attributes.position.array;a[0]=hp.x;a[1]=hp.y;a[2]=hp.z;a[3]=m.pos.x;a[4]=m.pos.y+(m.h||1)*.7;a[5]=m.pos.z;L.line.geometry.attributes.position.needsUpdate=true}}
+{const _fm=feedMob;feedMob=function(m){const st=inv[sel];
+  if(m&&m.leash){const L=LEASH.find(q=>q.m===m);if(L&&!L.knot){leashDrop(L,!creative());return true}}
+  if(st&&st.id===R4.LEAD&&R4.LEAD>0&&m&&!m.dead&&!m.leash&&!m.D.hostile&&!m.D.villager){const L={m,line:leashLine(m),knot:null};m.leash=L;LEASH.push(L);if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}sfx('place','wool');return true}
+  return _fm.apply(this,arguments)}}
+{const _ui=useItem;useItem=function(first){const st=inv[sel];
+  if(first&&st&&st.id===FISHING_ROD){if(FISH.hook)fishReel();else fishCast();doSwing();useCD=.25;return}
+  if(st&&st.id===R4.TRIDENT&&!(target&&first&&B[target.id]&&B[target.id].use))return;   // 당기기는 tridentTick 에서
+  if(first&&target&&!targetMob&&B[target.id]&&B[target.id].shape==='fence'){const mine=LEASH.filter(L=>!L.knot);if(mine.length){for(const L of mine)L.knot={x:target.x,y:target.y,z:target.z};sfx('place','wool');useCD=.25;return}
+    const tied=LEASH.filter(L=>L.knot&&L.knot.x===target.x&&L.knot.y===target.y&&L.knot.z===target.z);if(tied.length){for(const L of tied)L.knot=null;useCD=.25;return}}
+  return _ui.apply(this,arguments)}}
+{const _ft=furnaceTick;furnaceTick=function(dt){try{fishTick(dt);tridentTick(dt);leashTick(dt)}catch(e){console.warn(e)}return _ft.apply(this,arguments)}}
+i18nAdd('양조기','Brewing Stand');
 </script>
 </body>
 </html>
