@@ -17459,7 +17459,8 @@ function cartLoad(e){if(!CART_K[e.cart])return;const c=cartSpawn(e.cart,e.x,e.y,
   if(c.te&&Array.isArray(e.inv))e.inv.forEach((s,i)=>{if(i<c.te.items.length)c.te.items[i]=s&&ITEM[s.id]?s:null});if(e.fuel){c.fuel=e.fuel;c.px=e.px||0;c.pz=e.pz||0}if(e.fuse!=null)c.fuse=e.fuse;if(e.en===0)c.en=false;
   if(e.ride&&c.dm===DIM)player.boat=c;return c}
 const cartRider=c=>player.boat===c||(c.rider&&!c.rider.dead&&mobs.includes(c.rider));
-const cartMax=c=>c.cart==='furnace'?(c.inW?3:4)/20:(c.inW?4:8)/20;
+const cartMax=c=>{if(c.cart==='furnace')return(c.inW?3:4)/20;const g=+gameRule('max_minecart_speed')||8;return(c.inW?g/2:g)/20};   // 마크: 땅 8 m/s (게임 규칙 max_minecart_speed) · 물 절반 · 화로 수레 4/3
+if(GR_DEF.max_minecart_speed)GR_DEF.max_minecart_speed.ok=true;if(GR_DEF.entity_drops)GR_DEF.entity_drops.ok=true;
 const cartCond=(x,y,z)=>{const id=getB(x,y,z);return !!(OP[id]&&SOLID[id])};
 // 레일 위 자리 (마크 AbstractMinecart.getPos)
 function cartRailPos(x,y,z){const i=Math.floor(x),k=Math.floor(z);let j=Math.floor(y);if(RAILK[getB(i,j-1,k)])j--;const id=getB(i,j,k);if(!RAILK[id])return null;
@@ -17496,7 +17497,7 @@ function cartEject(c){if(player.boat===c){player.boat=null;dismountTo(c.pos.x,c.
 function cartPrime(c){c.fuse=80;sfx('fuse',null,1,{x:c.pos.x,y:c.pos.y,z:c.pos.z})}
 function cartBoom(c,sp){cartRemove(c);const d=Math.min(5,Math.sqrt(sp));explode(c.pos.x,c.pos.y+.35,c.pos.z,Math.round(4+Math.random()*1.5*d))}
 function cartRemove(c){const i=boats.indexOf(c);if(i>=0)boats.splice(i,1);scene.remove(c.m);if(player.boat===c)player.boat=null;if(c.rider){c.rider.cart=null;c.rider=null}cartSndStop(c)}
-function cartDrop(c){if(c.te)for(const s of c.te.items)if(s)spawnItem(s,c.pos.x,c.pos.y+.4,c.pos.z);spawnItem({id:CART_K[c.cart].item,n:1},c.pos.x,c.pos.y+.4,c.pos.z)}
+function cartDrop(c){if(gameRule('entity_drops')===false)return;if(c.te)for(const s of c.te.items)if(s)spawnItem(s,c.pos.x,c.pos.y+.4,c.pos.z);spawnItem({id:CART_K[c.cart].item,n:1},c.pos.x,c.pos.y+.4,c.pos.z)}
 // 맞음 (마크 AbstractMinecart.hurt): 흔들림 10틱 · 피해 += 양×10 · 40 넘으면 부서져 아이템 (창작 모드 플레이어는 바로 사라짐)
 function cartHurt(c,amt,src){if(c.dead)return;c.hurtDir=-c.hurtDir;c.hurt=10;c.dmg+=(amt||1)*10;const cre=src==='player'&&creative();sfx('dig','metal',.6,{x:c.pos.x,y:c.pos.y+.3,z:c.pos.z});
   if(cre||c.dmg>40){if(cartRider(c))cartEject(c);
@@ -17580,6 +17581,12 @@ function cartOpen(c){const D=CART_K[c.cart],K={x:'~cart',y:0,z:0};tiles.set(tkey
     const c=cartSpawn(ITEM[st.id].cartK,target.x+.5,target.y+.0625+(s>=2&&s<=5?.5:0),target.z+.5,(s===1||s===2||s===3||s>=6)?0:Math.PI/2);c.pyaw=c.yaw;
     if(!creative()){st.n--;if(!st.n)inv[sel]=null;renderHotbar()}doSwing();useCD=.25;return}
   return _ui.apply(this,arguments)}}
+// 공급기: 앞 칸 (또는 그 아래) 이 레일이면 수레를 레일 위에 놓아요 (마크 MinecartDispenseItemBehavior) · 아니면 그냥 던짐
+{const _rs=runSched;runSched=function(s){if(s.k==='disp'){const {x,y,z}=s,b=B[getB(x,y,z)],c=b&&b.disp===2?contOf(x,y,z):null;
+    if(c){const full=c.items.map((v,i)=>v?i:-1).filter(i=>i>=0);if(full.length){const i=full[Math.floor(Math.random()*full.length)],st=c.items[i];
+      if(ITEM[st.id]&&ITEM[st.id].cartK){const d=FACES[HDIRS[getM(x,y,z)&3]].d,fx=x+d[0],fz=z+d[2];let ty=y,rid=getB(fx,y,fz);if(!RAILK[rid]&&rid===AIR&&RAILK[getB(fx,y-1,fz)]){ty=y-1;rid=getB(fx,ty,fz)}
+        if(RAILK[rid]){SKEYS.delete('disp|'+x+','+y+','+z);const sh=railShapeOf(rid,getM(fx,ty,fz));cartSpawn(ITEM[st.id].cartK,fx+.5,ty+.0625+(sh>=2&&sh<=5?.5:0),fz+.5,sh===0||sh===4||sh===5?Math.PI/2:0);st.n--;if(!st.n)c.items[i]=null;sfx('dispense',null,1,{x:x+.5,y:y+.5,z:z+.5});return}}}}}
+  return _rs(s)}}
 // 탄 몹: 몹 움직임이 수레 자리를 덮어쓰지 않게
 {const _um=updateMobs;updateMobs=function(dt){const r=_um.apply(this,arguments);for(const m of mobs){const c=m.cart;if(!c)continue;if(!boats.includes(c)||m.dead){m.cart=null;if(c.rider===m)c.rider=null;continue}
   m.pos.set(c.pos.x,c.pos.y+(m.h>1.2?-.35:0)+.1,c.pos.z);if(m.vel)m.vel.set(0,0,0);if(m.g)m.g.position.copy(m.pos)}return r}}
