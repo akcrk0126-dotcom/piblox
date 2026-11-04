@@ -5520,7 +5520,7 @@ function dropFor(x,y,z,id,harvest){const b=B[id];{const E=inv[sel]&&inv[sel].e;i
 function bedPartner(x,y,z,id){const want=id===BED?BED_HEAD:BED,m=getM(x,y,z),d=FACES[HDIRS[m&3]].d,sg=id===BED?1:-1;if(getB(x+d[0]*sg,y,z+d[2]*sg)===want)return[x+d[0]*sg,y,z+d[2]*sg];
   for(const f of HDIRS){const e=FACES[f].d;if(getB(x+e[0],y,z+e[2])===want)return[x+e[0],y,z+e[2]]}return null}
 function doBreak(x,y,z,id){const b=B[id],harvest=canHarvest(id);if(typeof nvGuard==='function')nvGuard(x,y,z,id,false);if(!creative())dropFor(x,y,z,id,harvest);if(id===DECORATED_POT)trialPotBreak(x,y,z);if(id===BED||id===BED_HEAD){const q=bedPartner(x,y,z,id);if(q)setBlock(q[0],q[1],q[2],AIR)}
-  const te=tiles.get(tkey(x,y,z));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,x+.5,y+.5,z+.5)});tiles.delete(tkey(x,y,z));mpTile(tkey(x,y,z),null);if(screenOpen&&screenTile===te)closeScreen()}
+  const te=tiles.get(tkey(x,y,z));if(te){(te.items||te.s||[]).forEach(s=>{if(s)contDrop(s,x,y,z)});tiles.delete(tkey(x,y,z));mpTile(tkey(x,y,z),null);if(screenOpen&&screenTile===te)closeScreen()}
   const wet=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0]].some(([a,c,e])=>getB(x+a,y+c,z+e)===WATER);
   blockBreakFx(x,y,z,id);setBlock(x,y,z,wet?WATER:AIR);sfx('break',b.snd,1,{x:x+.5,y:y+.5,z:z+.5});
   const above=getB(x,y+1,z);if(B[above]&&(B[above].cross||(B[above].torch&&!((above===TORCH||above===SOUL_TORCH)&&(getM(x,y+1,z)&7))))){dropFor(x,y+1,z,above,true);setBlock(x,y+1,z,AIR)}
@@ -5718,7 +5718,7 @@ function fxRender(pt){_pr.set(1,0,0).applyQuaternion(camera.quaternion);_pu.set(
     (p,x,y,z)=>{const k=p.bright?1:lightK(x,y,z);if(p.rgb){_c[0]=p.rgb[0]*k;_c[1]=p.rgb[1]*k;_c[2]=p.rgb[2]*k}else _c[0]=_c[1]=_c[2]=p.col*k;return _c})}
 // 달릴 때 발밑 흙먼지 · 높은 데서 떨어지면 착지 먼지 (마크 spawnSprintParticle · checkFallDamage)
 function sprintDust(p){const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(!id||!B[id]||B[id].liquid)return;terrainP(p.pos.x+(Math.random()-.5)*.6,p.pos.y+.1,p.pos.z+(Math.random()-.5)*.6,-p.vel.x*TICK*4,1.5,-p.vel.z*TICK*4,id)}
-function landDust(p,fd){const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(!id||!B[id]||B[id].liquid)return;const n=Math.floor(150*Math.min(.2+fd/15,2.5)/6);for(let i=0;i<n;i++)terrainP(p.pos.x+(Math.random()-.5)*.6,p.pos.y+.05,p.pos.z+(Math.random()-.5)*.6,(Math.random()-.5),.3,(Math.random()-.5),id,.6)}
+function landDust(p,fd){const id=getB(Math.floor(p.pos.x),Math.floor(p.pos.y-.2),Math.floor(p.pos.z));if(!id||!B[id]||B[id].liquid)return;const n=Math.floor(150*Math.min(.2+Math.ceil(fd-3)/15,2.5)),g=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};for(let i=0;i<n;i++)terrainP(p.pos.x,p.pos.y,p.pos.z,g()*.15,g()*.15,g()*.15,id)}   // (P7-FEEL) LivingEntity.checkFallDamage: 150 × min(0.2 + ⌈떨어진 거리 − 3⌉/15, 2.5) 개 · 발 위치에서 · 속도 가우스 × 0.15
 
 // ── 그림자 (마크: 발밑 블록 윗면에 동그란 그림자 · 높이 뜰수록 옅어져요) ──
 const shadowTex=(()=>{const c=cv(32,32),g=c.getContext('2d'),gr=g.createRadialGradient(16,16,0,16,16,16);gr.addColorStop(0,'rgba(0,0,0,1)');gr.addColorStop(.55,'rgba(0,0,0,.85)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,32,32);const t=new THREE.CanvasTexture(c);return t})();
@@ -5745,7 +5745,8 @@ function groundItemMesh(id){const size=.25;const g=new THREE.Group();let one;
   // 예전 코드 호환: material.color 를 건드려도 괜찮게
   return g}
 function itemCopies(g,n){const want=n>48?5:n>32?4:n>16?3:n>1?2:1;if(g.userData.copies===want)return;while(g.children.length>want)g.remove(g.children[g.children.length-1]);
-  const r=mulberry(g.userData.seed);while(g.children.length<want){const c=g.userData.one(),k=g.children.length;if(g.userData.block)c.position.set((r()*2-1)*.15/.25*.5,(r()*2-1)*.15/.25*.5,(r()*2-1)*.15/.25*.5);else c.position.set((r()*2-1)*.15,(r()*2-1)*.15,k*.09375*2);g.add(c)}g.userData.copies=want}
+  const r=mulberry(g.userData.seed);while(g.children.length<want){const c=g.userData.one(),k=g.children.length;if(g.userData.block)c.position.set((r()*2-1)*.15/.25,(r()*2-1)*.15/.25,(r()*2-1)*.15/.25);   // (P7-FEEL) renderMultipleFromCount: 블록은 세계 단위 ±0.15 (크기 0.25 이전)
+  else c.position.set((r()*2-1)*.15,(r()*2-1)*.15,k*.09375*2);g.add(c)}g.userData.copies=want}
 function itemEntityDraw(e,pt){const g=e.m;if(!g||!g.userData||!g.userData.one)return;itemCopies(g,e.stack.n);pt=pt==null?1:pt;const age=e.age*20+pt-1,bob=Math.sin(age/10+(e.bobOffs||0))*.1+.1,blk=g.userData.block;
   const sc=blk?.25:.5;const q=e.prev||e.pos;g.position.set(lerp(q.x,e.pos.x,pt),lerp(q.y,e.pos.y,pt)+bob+.25*sc+(blk?3/16:2/16)*1,lerp(q.z,e.pos.z,pt));g.rotation.set(0,age/20+(e.bobOffs||0),0);g.scale.setScalar(sc);
   const lm=lmColor(e.pos.x,e.pos.y+.3,e.pos.z,new THREE.Color());g.traverse(o=>{if(o.isMesh)[].concat(o.material).forEach(mt=>{if(mt.uniforms&&mt.uniforms.lm)mt.uniforms.lm.value.copy(lm)})})}
@@ -5764,6 +5765,8 @@ function spawnItem(stack,x,y,z,vel,pick,net){const m=groundItemMesh(stack.id);sc
   const e={stack:st,pos:new V3(x,y,z),prev:new V3(x,y,z),vel:vel||new V3((Math.random()*.2-.1)/TICK,.2/TICK,(Math.random()*.2-.1)/TICK),age:0,tc:0,eid:Math.random()*1e6|0,hp:5,pick:pick==null?.5:pick,m,onGround:false,noStep:true,spin:Math.random()*6,bobOffs:Math.random()*Math.PI*2};if(net)e.net=net;ents.push(e);if(!net&&typeof MPS!=='undefined'&&MPS)mpDropAdd(e);return e}
 // (P7-FEEL) 다 자란 작물 (loot_table blocks/wheat · carrots · potatoes · beetroots): 1 + 이항 (3 + 행운, 0.5714286) — 풀마다 따로 떨어져요
 function cropBin(){const st=inv[sel],fo=st&&st.e&&st.e.fortune||0;let c=0;for(let i=0;i<3+fo;i++)if(Math.random()<.5714286)c++;return c}
+// Containers.dropItemStack: 상자 안 물건은 10~30 개씩 나뉘어 블록 안 아무 데서나 · 속도 삼각분포 (0 / 0.2 위 / 0, 폭 0.11485)
+function contDrop(st,x,y,z){let n=st.n;const tri=(a,b)=>a+b*(Math.random()-Math.random());while(n>0){const k=Math.min(n,10+Math.floor(Math.random()*21));n-=k;spawnItem(Object.assign({},st,{n:k}),Math.floor(x)+.125+Math.random()*.75,Math.floor(y)+Math.random()*.75,Math.floor(z)+.125+Math.random()*.75,new V3(tri(0,.11485)/TICK,tri(.2,.11485)/TICK,tri(0,.11485)/TICK))}}
 // Block.popResource: 블록 가운데 ± 0.25 (높이는 아이템 반 키 0.125 아래)
 const popP=(x,y,z)=>[x+.5+Math.random()*.5-.25,y+.5+Math.random()*.5-.25-.125,z+.5+Math.random()*.5-.25];
 // 주울 때 (ItemPickupParticle): 3틱 동안 (t²) 플레이어 발 + 0.5 로 날아가요 · 크기 그대로
@@ -5870,7 +5873,7 @@ function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx(
   if(m.D.neutral&&!m.tamed){m.angry=30;if(typeof nvAnger==='function')nvAnger(m,src)}
   if(m.D.ender&&m.hp>0)enderTP(m);if(m.D.blink&&m.hp>0&&Math.random()<.35)shadowBlink(m);
   if(m.D.villager&&src&&Math.hypot(src.x-player.pos.x,src.z-player.pos.z)<6)golemAngry=40;
-  if(m.hp<=0){m.dead=true;m.deadT=0;sndMob(m,'d');if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby||m.D.hostile){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y+.5,m.pos.z);if(m.type==='dragon')dragonDied(m);else if(m.byPlayer!==undefined&&!MOB_NOXP.has(m.type))m.xpDue=(Math.floor((m.D.xp??(m.D.hostile?5:1+Math.floor(Math.random()*3)))*(m.baby&&m.D.hostile?2.5:1)))}}}   // (P4-FIX) 마크: 플레이어가 잡았을 때만 경험치 · 주민 · 골렘 · 박쥐는 0
+  if(m.hp<=0){m.dead=true;m.deadT=0;sndMob(m,'d');if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby||m.D.hostile){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y,m.pos.z);if(m.type==='dragon')dragonDied(m);else if(m.byPlayer!==undefined&&!MOB_NOXP.has(m.type))m.xpDue=(Math.floor((m.D.xp??(m.D.hostile?5:1+Math.floor(Math.random()*3)))*(m.baby&&m.D.hostile?2.5:1)))}}}   // (P4-FIX) 마크: 플레이어가 잡았을 때만 경험치 · 주민 · 골렘 · 박쥐는 0
 function tamedAI(m,dt,dx,dz,dist){let foe=null,fd=12;for(const o of mobs)if(o!==m&&!o.dead&&o.D.hostile&&!o.tamed&&!o.D.neutral&&!o.D.boss){const d=o.pos.distanceTo(m.pos);if(d<fd){fd=d;foe=o}}
   if(foe){m.ai.dir=Math.atan2(foe.pos.x-m.pos.x,foe.pos.z-m.pos.z);m.ai.sp=m.D.sp*1.3;if(fd<1.6&&m.atk<=0){m.atk=1;hurtMob(foe,4,m.pos)}return true}
   if(dist>18){m.pos.set(player.pos.x+(Math.random()-.5)*2,player.pos.y,player.pos.z+(Math.random()-.5)*2);return false}if(dist>4){m.ai.dir=Math.atan2(dx,dz);m.ai.sp=m.D.sp;return true}return false}
@@ -5890,7 +5893,7 @@ function updateProjs(dt){for(let i=projs.length-1;i>=0;i--){const p=projs[i];if(
   else if(!boxHits(p.pos.x,p.pos.y-.06,p.pos.z,.06,.12)){p.stuck=false;p.life=0;p.vel.set(0,0,0);p.prev.copy(p.pos);p.acc=0}   // 꽂힌 블록이 없어지면 떨어져요 (마크 shouldFall)
   if(p.life>(p.stuck?60:10)){scene.remove(p.m);projs.splice(i,1)}}}
 function explode(x,y,z,r,o){sfx('boom',null,1,{x,y,z});explodeHurt(x,y,z,r,o);const rr=r+.5;for(let dy=-r;dy<=r;dy++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const d=Math.hypot(dx,dy,dz);if(d>rr-Math.random()*.9)continue;const bx=Math.floor(x+dx),by=Math.floor(y+dy),bz=Math.floor(z+dz),id=getB(bx,by,bz);
-    if(!id||id===BEDROCK||id===OBSIDIAN||B[id].liquid||CMD_NOGRIEF)continue;if(Math.random()<.3)dropFor(bx,by,bz,id,true);const te=tiles.get(tkey(bx,by,bz));if(te){(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,bx+.5,by+.5,bz+.5)});tiles.delete(tkey(bx,by,bz))}setBlock(bx,by,bz,AIR,true)}
+    if(!id||id===BEDROCK||id===OBSIDIAN||B[id].liquid||CMD_NOGRIEF)continue;if(Math.random()<.3)dropFor(bx,by,bz,id,true);const te=tiles.get(tkey(bx,by,bz));if(te){(te.items||te.s||[]).forEach(s=>{if(s)contDrop(s,bx,by,bz)});tiles.delete(tkey(bx,by,bz))}setBlock(bx,by,bz,AIR,true)}
   explosionFx(x,y,z,r);
   camKick=.6}
 // (P4-MOB 후속 2) 마크 ServerExplosion.hurtEntities: 거리/지름 · 노출 (몸 상자 격자에서 중심이 보이는 비율) → 피해 ⌊(e²+e)/2×7×지름+1⌋ · 밀기 e (블록을 부수기 전에 계산)
@@ -10219,7 +10222,7 @@ function dropXPForce(x,y,z,n){const g=GAMEMODE;GAMEMODE='survival';try{dropXP(x,
 cmdReg(cLit('summon',cArg('entity',Object.assign(CmdArg.res('minecraft:entity_type',sumList),{sug:b=>cmdSugRes(b,sumOK())}),(c,a)=>summonDo(c,a.entity,null,null),cArg('pos',CmdArg.vec3(),(c,a)=>summonDo(c,a.entity,a.pos,null),cArg('nbt',CmdArg.nbt(),(c,a)=>summonDo(c,a.entity,a.pos,a.nbt))))));
 // /setblock · /fill: 블록 놓기 (destroy 는 원래 블록을 떨어뜨리고, keep 은 공기 자리에만)
 function cLoaded(P){if(!chunks.has(ck(P.x>>4,P.z>>4)))cFail('unloaded');if(P.y<0||P.y>=H)cFail('out_world')}
-function cmdDestroy(x,y,z,id){const te=tiles.get(tkey(x,y,z));if(te)(te.items||te.s||[]).forEach(s=>{if(s)spawnItem(s,x+.5,y+.5,z+.5)});if(B[id]&&!B[id].liquid){dropFor(x,y,z,id);sfx('break',B[id].snd)}}
+function cmdDestroy(x,y,z,id){const te=tiles.get(tkey(x,y,z));if(te)(te.items||te.s||[]).forEach(s=>{if(s)contDrop(s,x,y,z)});if(B[id]&&!B[id].liquid){dropFor(x,y,z,id);sfx('break',B[id].snd)}}
 function cmdPut(x,y,z,id,meta,lazy){const k=tkey(x,y,z);tiles.delete(k);VCHEST.delete(k);const r=setBlock(x,y,z,id,!!lazy,false,meta),b=B[id];   // 상자 · 화로 · 통은 빈 블록 개체로 (P4-CMD: 예전엔 열 때 무작위 전리품이 생겼어요)
   if(r&&b&&(b.use==='chest'||b.use==='furnace'||typeof BARREL!=='undefined'&&id===BARREL))tiles.set(k,b.use==='furnace'?{t:'furnace',f:4,s:[null,null,null],burn:0,burnMax:0,cook:0}:{t:'chest',f:4,items:new Array(27).fill(null)});return r}
 function setblockDo(c,a,mode){const P=cmdCoordBlock(a.pos,c);cLoaded(P);const nb=a.block,old=getB(P.x,P.y,P.z),om=getM(P.x,P.y,P.z);
