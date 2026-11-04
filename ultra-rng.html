@@ -396,7 +396,7 @@ const AURAS = [
   A('Thousand Blades',0.00011,'#cfd8ff',{ font:'Black Ops One', accent:'#ff1744', tag:'천 개의 칼날', perk:'speed', mods:[['flame',{ layers:3, style:2 }],['swordstorm',{ n:28 }],['claws',{ c:'#ff1744' }],['floor',{ k:4, r:8, c1:'#ff1744', c2:'#cfd8ff' }]] }),
   A('Demiurge',0.0001,'#fffde7',{ font:'Cinzel', accent:'#ffd700', tag:'세계를 빚는 손', mods:[['flame',{ layers:3 }],['planets',{ n:4 }],['wire',{ n:2 }],['rocks',{ n:16 }],['halo',{ n:2, wave:1 }],['pillar',{}],['runestones',{ n:6, r:4.5 }],['floor',{ k:5, r:8 }],['nebula',{ r:6 }]] }),
   A('Starfall Observatory',0.00008,'#9fc6ff',{ font:'Syncopate', accent:'#ffd27a', tag:'별이 떨어지는 천문대', perk:'double', dom:1, mods:[['flame',{ layers:2 }],['observatory',{}],['constel',{}]] }),
-  A('Akashic Lord',0.00006,'#1a237e',{ font:'Major Mono Display', accent:'#ffd700', dark:1, tag:'모든 기록의 주인', mods:[['flame',{ layers:2 }],['glyphs',{ n:4 }],['orbs',{ n:6 }],['eye',{}],['circle',{}],['pillar',{}],['runestones',{ n:10, r:4.4 }],['floor',{ k:6, r:8 }],['nebula',{ r:6 }]] }),
+  A('Akashic Lord',0.00006,'#5a2eff',{ font:'Major Mono Display', accent:'#a77bff', tag:'모든 기록의 주인', clean:1, mods:[['astra',{}],['sparks',{ n:.6 }]] }),
   A('Phoenix Rebirth',0.000045,'#ff6d00',{ font:'Cinzel Decorative', accent:'#ffe082', tag:'재에서 다시 날아오른다', perk:'glide', mods:[['flame',{ layers:3, style:2 }],['phoenix',{}],['wings',{ pairs:1, fire:1 }],['embers',{ n:180, rise:2.4, c1:'#ff6d00', c2:'#ffe082' }],['floor',{ k:4, r:8 }]] }),
   A('Transcendent',0.00004,'#ffffff',{ font:'Monoton', rainbow:1, tag:'초월', perk:'glide', mods:[['flame',{ layers:3 }],['prism',{ n:8 }],['wings',{ pairs:2 }],['halo',{ n:2, wave:1 }],['headStar',{}],['pillar',{}],['gems',{ n:10, r:3.6 }],['floor',{ k:3, r:8, c1:'#ffffff', c2:'#e1bee7' }],['nebula',{ r:6.5 }]] }),
   A('Library of Aeons',0.00003,'#ffd98a',{ font:'UnifrakturMaguntia', accent:'#c3a6ff', tag:'모든 이야기가 잠든 서고', perk:'glide', dom:1, mods:[['flame',{ layers:2 }],['library',{}],['halo',{}]] }),
@@ -1945,6 +1945,56 @@ Object.assign(MODS, {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('aOrb', new THREE.BufferAttribute(orbA, 4)); g.setAttribute('aCol', new THREE.BufferAttribute(colA, 3)); g.setAttribute('aSS', new THREE.BufferAttribute(ss, 2)); g.setIndex(idx);
     const m = A.add(new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms:A.U(o, { uLen:o.len || 1.6, uW:o.w || .07 }), vertexShader:FLUX_VS, fragmentShader:FLUX_FS, transparent:true, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }))); m.frustumCulled = false; m.renderOrder = 4; },
 });
+// =====================================================================
+//  🌌 성운 스타일 키트 — 소용돌이 빛안개 바닥 · 감아 오르는 빛 덩굴 · 등 뒤 빛구체 · 가로 플레어 별빛
+//  (각진 부품 없이 빛과 안개만으로)
+// =====================================================================
+const AMIST_FS = GLSL_NOISE + `uniform vec3 uC1,uC2;uniform float uTime,uInt,uBoost,uSpin,uCore;varying vec2 vUv;
+  void main(){vec2 p=(vUv-.5)*2.;float r=length(p);if(r>1.)discard;float a=atan(p.y,p.x);
+    float sw=a+uSpin*(2.4/(r+.25))+uTime*.35;vec2 q=vec2(cos(sw),sin(sw))*r;
+    float n=fbm(vec3(q*3.2,uTime*.12));float n2=fbm(vec3(q*7.+3.,uTime*.2));
+    float arms=pow(.5+.5*sin(sw*3.+n*4.),3.);float body=smoothstep(1.,.15,r)*(.35+arms*.9)*smoothstep(.25,.75,n+.15);
+    float ring=exp(-pow((r-.62)*9.,2.))*(.5+n2*.8)+exp(-pow((r-.92)*22.,2.))*.5;float core=exp(-r*r*14.)*uCore;
+    float wisp=smoothstep(.62,.9,n2)*smoothstep(1.,.3,r);
+    vec3 c=mix(uC1,uC2,smoothstep(.2,.9,n2))*(body*.75+ring*1.1)+mix(uC2,vec3(1.),.3)*(wisp*.45+core*1.2);
+    gl_FragColor=vec4(c*uInt*.75*min(uBoost,1.6),1.);}`;
+// 빛 덩굴: 바닥에서 감아 올라가 공중의 작은 빛안개로 이어진다 (화면을 향한 띠, 빛이 위로 흐른다)
+const TENDRIL_VS = `attribute vec2 aT;attribute vec4 aP;uniform float uTime,uW;varying float vS,vX;
+  vec3 path(float s){float a=aP.x+s*aP.y+sin(s*3.+uTime*.6+aP.w)*.25;float r=mix(aP.z,aP.z*1.35,s)+sin(s*5.+aP.w)*.25;return vec3(cos(a)*r,s*aP.z*2.6+.1,sin(a)*r);}
+  void main(){float s=aT.x;vec3 p=path(s),q=path(min(s+.01,1.));vec4 mv=modelViewMatrix*vec4(p,1.);vec3 t=normalize((modelViewMatrix*vec4(q-p,0.)).xyz);vec3 side=normalize(cross(t,vec3(0.,0.,1.)));
+    float w=uW*(.35+.65*sin(s*3.1416))*(1.+.6*smoothstep(.8,1.,s));mv.xyz+=side*aT.y*w;gl_Position=projectionMatrix*mv;vS=s;vX=aT.y;}`;
+const TENDRIL_FS = `uniform vec3 uC1,uC2;uniform float uTime,uInt,uBoost;varying float vS,vX;void main(){float x=abs(vX);float core=exp(-x*x*60.)*1.8,halo=exp(-x*x*5.)*.55;
+  float flow=.55+.45*pow(.5+.5*sin(vS*26.-uTime*5.),4.);float fade=smoothstep(0.,.08,vS)*smoothstep(1.,.9,vS);
+  vec3 c=mix(uC1,uC2,vS)*(halo+core*.7)+vec3(1.)*core*.3;gl_FragColor=vec4(c*flow*fade*uInt*1.4*min(uBoost,1.6),1.);}`;
+// 등 뒤 빛구체: 안쪽이 소용돌이치는 커다란 빛 덩어리 (테두리가 밝다)
+const AORB_FS = GLSL_NOISE + `uniform vec3 uC1,uC2;uniform float uTime,uInt,uBoost;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float r=length(p);if(r>1.)discard;float a=atan(p.y,p.x);
+  float n=fbm(vec3(cos(a+r*3.-uTime*.4)*r*2.5,sin(a+r*3.-uTime*.4)*r*2.5,uTime*.15));float rim=pow(smoothstep(.55,1.,r),3.)*smoothstep(1.,.93,r);
+  float fill=smoothstep(1.,.2,r)*(.12+n*.4);vec3 c=mix(uC1*.6,uC2,n)*fill+mix(uC1,uC2,.5)*rim*1.3;gl_FragColor=vec4(c*uInt*.9*min(uBoost,1.6),1.);}`;
+// 가로 플레어 별빛: 십자 별 + 긴 가로 빛줄기
+const HFLARE_TEX = canvasTex(512, 64, (g, w, h)=>{ const lg = g.createLinearGradient(0, 0, w, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(.5, 'rgba(255,255,255,1)'); lg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = lg; g.fillRect(0, 0, w, h);
+  const v = g.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(0,0,0,1)'); v.addColorStop(.5, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,1)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = v; g.fillRect(0, 0, w, h); });
+MODS.astra = function(A, o){ const c1 = A.col.c1, c2 = A.col.c2;
+  // 1) 바닥 빛안개
+  const mist = A.plane((o.mist || 9)*2, A.U(o, { uSpin:o.spin || .9, uCore:1 }), AMIST_FS); mist.rotation.x = -Math.PI/2; mist.position.y = .05;
+  const mist2 = A.plane((o.mist || 9)*1.2, A.U(o, { uSpin:-(o.spin || .9)*1.4, uCore:.5 }), AMIST_FS); mist2.rotation.x = -Math.PI/2; mist2.position.y = .07;
+  // 2) 등 뒤 빛구체 (항상 화면을 향함)
+  const orb = A.plane(o.orb || 6.5, A.U(o), AORB_FS); orb.renderOrder = 1; A.billboard(orb, 4.2, 1.6);
+  // 3) 빛 덩굴 + 끝의 작은 빛안개 원반
+  const NT = o.tendrils || 3, SEG = 80, V = NT*SEG*2, aT = new Float32Array(V*2), aP = new Float32Array(V*4), idx = [], tops = [];
+  for (let i=0;i<NT;i++){ const P = [i/NT*6.283 + .5, (Math.random() < .5 ? -1 : 1)*(1.6 + Math.random()*.8), 2.2 + Math.random()*.6, Math.random()*6];
+    for (let s=0;s<SEG;s++) for (let e=0;e<2;e++){ const v = (i*SEG + s)*2 + e; aT.set([s/(SEG - 1), e ? 1 : -1], v*2); aP.set(P, v*4); }
+    for (let s=0;s<SEG - 1;s++){ const a = (i*SEG + s)*2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } tops.push(P); }
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(V*3), 3)); tg.setAttribute('aT', new THREE.BufferAttribute(aT, 2)); tg.setAttribute('aP', new THREE.BufferAttribute(aP, 4)); tg.setIndex(idx);
+  const tu = A.U(o, { uW:o.tw || .55 }), tm = A.add(new THREE.Mesh(tg, new THREE.ShaderMaterial({ uniforms:tu, vertexShader:TENDRIL_VS, fragmentShader:TENDRIL_FS, transparent:true, depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending }))); tm.frustumCulled = false; tm.renderOrder = 4;
+  const discs = tops.map(P=>{ const d = A.plane(2.6, A.U(o, { uSpin:1.2, uCore:.8 }), AMIST_FS); d.rotation.x = -Math.PI/2 + .25; return { d, P }; });
+  // 4) 가로 플레어 별빛
+  const fl = []; for (let i=0;i<(o.flares || 5);i++){ const g = new THREE.Group(), star = new THREE.Sprite(new THREE.SpriteMaterial({ map:GLINT_TEX, color:c2.clone().lerp(new THREE.Color(1, 1, 1), .5).multiplyScalar(2.2), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })),
+      bar = new THREE.Sprite(new THREE.SpriteMaterial({ map:HFLARE_TEX, color:c1.clone().lerp(new THREE.Color(1, 1, 1), .35).multiplyScalar(1.8), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
+    A.mats.push(star.material, bar.material); g.add(star, bar); A.group.add(g); fl.push({ g, star, bar, a:Math.random()*6.283, r:1.5 + Math.random()*2.6, y:1 + Math.random()*5.5, ph:Math.random()*6, sp:.6 + Math.random()*.8 }); }
+  A.up((dt, t)=>{ discs.forEach(({ d, P })=>{ const s = 1, a = P[0] + s*P[1] + Math.sin(s*3 + t*.6 + P[3])*.25, r = P[2]*1.35 + Math.sin(s*5 + P[3])*.25; d.position.set(Math.cos(a)*r, s*P[2]*2.6 + .1, Math.sin(a)*r); });
+    fl.forEach(f=>{ const k = Math.pow(Math.max(0, Math.sin(t*f.sp + f.ph)), 3); if (k < .01 && Math.random() < .03){ f.a = Math.random()*6.283; f.r = 1.5 + Math.random()*2.6; f.y = 1 + Math.random()*5.5; }
+      f.g.position.set(Math.cos(f.a)*f.r, f.y, Math.sin(f.a)*f.r); f.star.scale.setScalar(.3 + k*1.6); f.bar.scale.set(.5 + k*7, .22 + k*.25, 1); f.star.material.opacity = f.bar.material.opacity = k; }); });
+};
 class Aura {
   constructor(it, lite){
     this.it = it; this.t = it.tier; this.k = it.tier/MAXT; this.lite = !!lite; this.lc = lite ? .5 : 1;
@@ -1957,6 +2007,7 @@ class Aura {
     if (!hasM('sparks')) base.push(['sparks', {}]);
     if (this.t >= 3 && !hasM('flame')) base.push(['flame', { layers:this.t >= 28 ? 3 : this.t >= 12 ? 2 : 1, speed:1.8, op:it.dom || it.sig ? .4 : 1 }]);
     if (this.t >= 9 && !hasM('circle') && !hasM('floor')) base.push(['circle', {}]);
+    if (it.clean) base.length = 0;   // 스타일 키트 오라: 공통 덧붙임 없이 그것만
     for (const [name, o] of base.concat(it.mods)){ try { MODS[name](this, o || {}); } catch(e){ console.warn('[aura]', name, e); } }
     if (!lite){ this.light = new THREE.PointLight(this.col.dark ? this.col.c2 : this.col.c1, 1 + this.k*2.5, 10 + this.k*8, 2); this.light.position.y = 3; this.group.add(this.light); }
     this.label = makeLabel(it, lite); this.label.position.y = this.top + .9; this.group.add(this.label);
