@@ -8494,9 +8494,9 @@ for(const k in CORALB)ITEM[CORALB[k]].smelt=0;
 
 function matchCraft(g,size){let x0=size,y0=size,x1=-1,y1=-1,cnt=0;for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(g[y*size+x]){cnt++;x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)}
   if(x1<0)return null;const w=x1-x0+1,h=y1-y0+1,at=(x,y)=>{const s=g[(y0+y)*size+x0+x];return s?s.id:0};
-  for(const r of RECIPES){if(r.shapeless){if(cnt!==r.shapeless.length)continue;const ids=g.filter(Boolean).map(s=>s.id).sort(),need=r.shapeless.slice().sort();if(ids.every((v,i)=>v===need[i]))return r.out;continue}
+  for(const r of RECIPES){if(r.shapeless){if(cnt!==r.shapeless.length)continue;const ids=g.filter(Boolean).map(s=>s.id).sort(),need=r.shapeless.slice().sort();if(ids.every((v,i)=>v===need[i]))return (self.__rbLast=r).out;continue}
     if(r.pat.length!==h||r.pat[0].length!==w)continue;
-    for(const mir of [false,true]){let ok=true;for(let y=0;y<h&&ok;y++)for(let x=0;x<w&&ok;x++){const c=r.pat[y][mir?w-1-x:x],id=at(x,y);if(c===' '){if(id)ok=false}else if(!id||!r.key[c].includes(id))ok=false}if(ok)return r.out}}
+    for(const mir of [false,true]){let ok=true;for(let y=0;y<h&&ok;y++)for(let x=0;x<w&&ok;x++){const c=r.pat[y][mir?w-1-x:x],id=at(x,y);if(c===' '){if(id)ok=false}else if(!id||!r.key[c].includes(id))ok=false}if(ok)return (self.__rbLast=r).out}}
   return null}
 // (P4-FIX) 굽기 경험치 (바닐라 레시피 experience)
 const SMELT_XPN={iron_ingot:.7,gold_ingot:1,copper_ingot:.7,diamond:1,emerald:1,lapis_lazuli:.2,redstone:.7,coal:.1,quartz:.2,netherite_scrap:2,glass:.1,stone:.1,smooth_stone:.1,charcoal:.15,brick:.3,nether_brick:.1,terracotta:.35,green_dye:1,lime_dye:.1,dried_kelp:.1,sponge:.15,popped_chorus_fruit:.1,
@@ -11996,12 +11996,12 @@ function advCrit(c,a,grant){const P=cTargets(c,a.targets,true).filter(p=>p===pla
 cmdMsgs({rec_unk:['알 수 없는 제작법이에요: %s','Unknown recipe: %s'],rec_g1:['%2$s에게 제작법 %1$s개를 알려 줬어요','Unlocked %1$s recipe(s) for %2$s'],rec_gN:['플레이어 %2$s명에게 제작법 %1$s개를 알려 줬어요','Unlocked %1$s recipe(s) for %2$s players'],
   rec_gf:['새로 배운 제작법이 없어요','No new recipes were learned'],rec_t1:['%2$s에게서 제작법 %1$s개를 빼앗았어요','Took %1$s recipe(s) from %2$s'],rec_tN:['플레이어 %2$s명에게서 제작법 %1$s개를 빼앗았어요','Took %1$s recipe(s) from %2$s players'],
   rec_tf:['잊게 할 제작법이 없어요','No recipes could be forgotten'],rec_toast:['새로운 제작법 잠금 해제!','New Recipe(s) Unlocked!']});
-let REC_IDS=null;const recIds=()=>REC_IDS||(REC_IDS=[...new Set(RECIPES.map(r=>MCID[r.out.id]&&mcN(MCID[r.out.id].replace(/\[.*$/,''))).filter(Boolean))].sort());
+const recIds=()=>rbIds();   // (P8-BOOK) 제작법 이름 = 바닐라 조합법 이름 (제작 · 화로 · 용광로 · 훈연기)
 const RECD=()=>dimState.rec||(dimState.rec=[]);
 CmdArg.rec6=()=>({parse(r){const st=r.i,id=r.id();if(!recIds().includes(mcN(id)))throw r.at(st,'rec_unk',id);return mcN(id)},sug:b=>cmdSugRes(b,recIds().map(k=>'minecraft:'+k))});
-function recDo(c,a,give,all){const P=cTargets(c,a.targets,true).filter(p=>p===player),L=all?recIds():[a.recipe],K=RECD();let n=0;
-  for(const p of P)for(const id of L){const i=K.indexOf(id);if(give&&i<0){K.push(id);n++}else if(!give&&i>=0){K.splice(i,1);n++}}
-  if(!n)cFail(give?'rec_gf':'rec_tf');if(give)toast(cmdMsg('rec_toast'));const k=give?'rec_g':'rec_t';P.length===1?cFb(c,k+'1',n,cmdEntName(P[0])):cFb(c,k+'N',n,P.length);return n}
+function recDo(c,a,give,all){const P=cTargets(c,a.targets,true).filter(p=>p===player),L=all?recIds():[a.recipe],K=RECD();let n=0;const nw=[],KS=new Set(K);
+  for(const p of P)for(const id of L){const has=KS.has(id);if(give&&!has){K.push(id);KS.add(id);nw.push(id);n++}else if(!give&&has){K.splice(K.indexOf(id),1);KS.delete(id);nw.push(id);n++}}
+  rbRecCmd(give,L,nw);if(!n)cFail(give?'rec_gf':'rec_tf');const k=give?'rec_g':'rec_t';P.length===1?cFb(c,k+'1',n,cmdEntName(P[0])):cFb(c,k+'N',n,P.length);return n}
 {const act=g=>cArg('targets',CmdArg.ent(false,true),cLit('*',(c,a)=>recDo(c,a,g,true)),cArg('recipe',CmdArg.rec6(),(c,a)=>recDo(c,a,g,false)));cmdReg(cLit('recipe',cLit('give',act(true)),cLit('take',act(false))))}
 
 // ── 수 제공자 (context_int/float_provider): 5 · 1.5 · {type:"uniform",min,max} · binomial · clamped · constant ──
@@ -17332,6 +17332,1314 @@ function leashTick(dt){for(let i=LEASH.length-1;i>=0;i--){const L=LEASH[i],m=L.m
 i18nAdd('양조기','Brewing Stand');
 // (P7-FEEL) 나중에 더한 아이템 (물약 · 달걀 · 우유 · 삼지창 · 말린 켈프 …) 도 창작 목록에 (ALL_ITEMS 는 처음 한 번만 만들어졌어요)
 {const k0=i=>i<256?i:i>=1024&&i<2048?256+i-1024:i+5000,k=i=>{const o=ITEM[i].ord;return o!=null?k0(Math.floor(o))+(o-Math.floor(o)):k0(i)};const L=Object.keys(ITEM).map(Number).filter(id=>!ITEM[id].hidden).sort((a,b)=>k(a)-k(b));ALL_ITEMS.length=0;ALL_ITEMS.push(...L);CR_ORDER=null}
+/* ═════════════ (P8-BOOK) 제작법 책 — 마크 자바 RecipeBookComponent · RecipeBookPage · OverlayRecipeComponent · GhostSlots · RecipeToast 그대로
+   · 왼쪽 탭 (검색 · 장비 · 건축 · 기타 · 레드스톤 / 화로: 음식 · 블록 · 기타 / 용광로 · 훈연기) · 검색 칸 · "제작 가능만" 단추 · 한 쪽 5×4 · 쪽 화살표
+   · 재료가 모자라면 빨간 칸 · 누르면 재료 채우기 (쉬프트 = 최대한) / 모자라면 유령 조합법 · 같은 묶음 (group) 은 한 칸에서 번갈아 · 우클릭 = 다른 조합법 목록
+   · 잠금 해제: 바닐라 recipes/* 발전 과제의 inventory_changed (재료를 얻으면) + 직접 만들면 · "새로운 제작법 잠금 해제!" 알림 · /recipe · limited_crafting
+   · 세계마다 저장: dimState.rec (아는 제작법) · recNew (새로 · 반짝) · recT (/recipe take 로 뺏긴 것) · rbook (책 열림 · 거르기)
+   바닐라 데이터 (misode/mcmeta recipe · advancement · tag): 이름|결과|종류 분류|묶음|잠금 해제 아이템|재료 (결과가 같은 조합법이 여럿일 때만) */
+const RB_VL=["black_shulker_box,blue_shulker_box,brown_shulker_box,cyan_shulker_box,gray_shulker_box,green_shulker_box,light_blue_shulker_box,light_gray_shulker_box,lime_shulker_box,magenta_shulker_box,orange_shulker_box,pink_shulker_box,purple_shulker_box,red_shulker_box,shulker_box,white_shulker_box,yellow_shulker_box", "chiseled_stone_bricks,cracked_stone_bricks,mossy_stone_bricks,stone_bricks", "golden_axe,golden_boots,golden_chestplate,golden_helmet,golden_hoe,golden_leggings,golden_pickaxe,golden_shovel,golden_sword", "chainmail_boots,chainmail_chestplate,chainmail_helmet,chainmail_leggings,iron_axe,iron_boots,iron_chestplate,iron_helmet,iron_hoe,iron_leggings,iron_pickaxe,iron_shovel,iron_sword"];
+const RB_VTXT=`|acacia_button|cr|wooden_button|acacia_planks|
+|acacia_door|cr|wooden_door|acacia_planks|
+|acacia_fence|cm|wooden_fence|acacia_planks|
+|acacia_fence_gate|cr|wooden_fence_gate|acacia_planks|
+|acacia_hanging_sign|cm|wooden_hanging_sign|stripped_acacia_log|
+|acacia_planks|cb|planks|acacia_log,acacia_wood,stripped_acacia_log,stripped_acacia_wood|
+|acacia_pressure_plate|cr|wooden_pressure_plate|acacia_planks|
+|acacia_sign|cm|wooden_sign|acacia_planks|
+|acacia_slab|cb|wooden_slab|acacia_planks|
+|acacia_stairs|cb|wooden_stairs|acacia_planks|
+|acacia_trapdoor|cr|wooden_trapdoor|acacia_planks|
+|acacia_wood|cb|bark|acacia_log|
+|activator_rail|cm||rail|
+|amethyst_block|cb||amethyst_shard|
+|andesite|cb||diorite|
+|andesite_slab|cb||andesite|
+|andesite_stairs|cb||andesite|
+|andesite_wall|cm||andesite|
+|anvil|cm||iron_block|
+|arrow|ce||feather,flint|
+|baked_potato|ff||potato|=
+baked_potato_from_smoking|baked_potato|sf||potato|=
+|bamboo_block|cb||bamboo|
+|bamboo_button|cr|wooden_button|bamboo_planks|
+|bamboo_door|cr|wooden_door|bamboo_planks|
+|bamboo_fence|cm|wooden_fence|bamboo_planks|
+|bamboo_fence_gate|cr|wooden_fence_gate|bamboo_planks|
+|bamboo_hanging_sign|cm|wooden_hanging_sign|stripped_bamboo_block|
+|bamboo_mosaic|cm||bamboo_slab|
+|bamboo_mosaic_slab|cb||bamboo_mosaic|
+|bamboo_mosaic_stairs|cb||bamboo_mosaic|
+|bamboo_planks|cb|planks|bamboo_block,stripped_bamboo_block|
+|bamboo_pressure_plate|cr|wooden_pressure_plate|bamboo_planks|
+|bamboo_sign|cm|wooden_sign|bamboo_planks|
+|bamboo_slab|cb|wooden_slab|bamboo_planks|
+|bamboo_stairs|cb|wooden_stairs|bamboo_planks|
+|bamboo_trapdoor|cr|wooden_trapdoor|bamboo_planks|
+|barrel|cm||acacia_planks,acacia_slab,bamboo_planks,bamboo_slab,birch_planks,birch_slab,cherry_planks,cherry_slab,crimson_planks,crimson_slab,dark_oak_planks,dark_oak_slab,jungle_planks,jungle_slab,mangrove_planks,mangrove_slab,oak_planks,oak_slab,pale_oak_planks,pale_oak_slab,spruce_planks,spruce_slab,warped_planks,warped_slab|
+|beacon|cm||nether_star|
+|beehive|cm||honeycomb|
+|beetroot_soup|cm||beetroot|
+|birch_button|cr|wooden_button|birch_planks|
+|birch_door|cr|wooden_door|birch_planks|
+|birch_fence|cm|wooden_fence|birch_planks|
+|birch_fence_gate|cr|wooden_fence_gate|birch_planks|
+|birch_hanging_sign|cm|wooden_hanging_sign|stripped_birch_log|
+|birch_planks|cb|planks|birch_log,birch_wood,stripped_birch_log,stripped_birch_wood|
+|birch_pressure_plate|cr|wooden_pressure_plate|birch_planks|
+|birch_sign|cm|wooden_sign|birch_planks|
+|birch_slab|cb|wooden_slab|birch_planks|
+|birch_stairs|cb|wooden_stairs|birch_planks|
+|birch_trapdoor|cr|wooden_trapdoor|birch_planks|
+|birch_wood|cb|bark|birch_log|
+|black_banner|cm|banner|black_wool|
+|black_bed|cm|bed|black_wool|=
+|black_candle|cm|dyed_candle|black_dye|
+|black_carpet|cm|woolen_carpet|black_wool|=
+|black_concrete_powder|cb|concrete_powder|gravel,sand|
+|black_concrete_slab|cb|concrete_slab|black_concrete|
+|black_concrete_stairs|cb|concrete_stairs|black_concrete|
+|black_dye|cm|black_dye|ink_sac|=
+black_dye_from_wither_rose|black_dye|cm|black_dye|wither_rose|=
+|black_glazed_terracotta|fk||black_terracotta|
+|black_shulker_box|cm|shulker_box_dye|@0|
+|black_stained_glass|cb|stained_glass|glass|
+|black_stained_glass_pane|cm|stained_glass_pane|black_stained_glass|=
+black_stained_glass_pane_from_glass_pane|black_stained_glass_pane|cm|stained_glass_pane|black_dye,glass_pane|=
+|black_terracotta|cb|stained_terracotta|terracotta|
+|black_wool_slab|cb|woolen_slab|black_wool|=
+|black_wool_stairs|cb|woolen_stairs|black_wool|=
+|blackstone_slab|cb||blackstone|
+|blackstone_stairs|cb||blackstone|
+|blackstone_wall|cm||blackstone|
+|blast_furnace|cm||smooth_stone|
+|blaze_powder|cm||blaze_rod|
+|blue_banner|cm|banner|blue_wool|
+|blue_bed|cm|bed|blue_wool|=
+|blue_candle|cm|dyed_candle|blue_dye|
+|blue_carpet|cm|woolen_carpet|blue_wool|=
+|blue_concrete_powder|cb|concrete_powder|gravel,sand|
+|blue_concrete_slab|cb|concrete_slab|blue_concrete|
+|blue_concrete_stairs|cb|concrete_stairs|blue_concrete|
+|blue_dye|cm|blue_dye|lapis_lazuli|=
+blue_dye_from_cornflower|blue_dye|cm|blue_dye|cornflower|=
+|blue_glazed_terracotta|fk||blue_terracotta|
+|blue_ice|cb||packed_ice|
+|blue_shulker_box|cm|shulker_box_dye|@0|
+|blue_stained_glass|cb|stained_glass|glass|
+|blue_stained_glass_pane|cm|stained_glass_pane|blue_stained_glass|=
+blue_stained_glass_pane_from_glass_pane|blue_stained_glass_pane|cm|stained_glass_pane|blue_dye,glass_pane|=
+|blue_terracotta|cb|stained_terracotta|terracotta|
+|blue_wool_slab|cb|woolen_slab|blue_wool|=
+|blue_wool_stairs|cb|woolen_stairs|blue_wool|=
+|bone_block|cb||bone_meal|
+|bone_meal|cm|bonemeal|bone|=
+bone_meal_from_bone_block|bone_meal|cm|bonemeal|bone_block|=
+|book|cm||paper|
+|bookshelf|cb||book|
+|bow|ce||string|
+|bowl|cm||brown_mushroom,mushroom_stew,red_mushroom|
+|bread|cm||wheat|
+|brewing_stand|cm||blaze_rod|
+|brick|fm||clay_ball|
+|brick_slab|cb||bricks|
+|brick_stairs|cb||bricks|
+|brick_wall|cm||bricks|
+|bricks|cb||brick|
+|brown_banner|cm|banner|brown_wool|
+|brown_bed|cm|bed|brown_wool|=
+|brown_candle|cm|dyed_candle|brown_dye|
+|brown_carpet|cm|woolen_carpet|brown_wool|=
+|brown_concrete_powder|cb|concrete_powder|gravel,sand|
+|brown_concrete_slab|cb|concrete_slab|brown_concrete|
+|brown_concrete_stairs|cb|concrete_stairs|brown_concrete|
+|brown_dye|cm|brown_dye|cocoa_beans|
+|brown_glazed_terracotta|fk||brown_terracotta|
+|brown_shulker_box|cm|shulker_box_dye|@0|
+|brown_stained_glass|cb|stained_glass|glass|
+|brown_stained_glass_pane|cm|stained_glass_pane|brown_stained_glass|=
+brown_stained_glass_pane_from_glass_pane|brown_stained_glass_pane|cm|stained_glass_pane|brown_dye,glass_pane|=
+|brown_terracotta|cb|stained_terracotta|terracotta|
+|brown_wool_slab|cb|woolen_slab|brown_wool|=
+|brown_wool_stairs|cb|woolen_stairs|brown_wool|=
+|brush|ce||copper_ingot|
+|bucket|cm||iron_ingot|
+|cake|cm||egg|
+|calibrated_sculk_sensor|cr||amethyst_shard|
+|campfire|cm||charcoal,coal,stick|
+|cartography_table|cm||paper|
+|cauldron|cm||water_bucket|
+|charcoal|fm||acacia_log,acacia_wood,birch_log,birch_wood,cherry_log,cherry_wood,dark_oak_log,dark_oak_wood,jungle_log,jungle_wood,mangrove_log,mangrove_wood,oak_log,oak_wood,pale_oak_log,pale_oak_wood,spruce_log,spruce_wood,stripped_acacia_log,stripped_acacia_wood,stripped_birch_log,stripped_birch_wood,stripped_cherry_log,stripped_cherry_wood,stripped_dark_oak_log,stripped_dark_oak_wood,stripped_jungle_log,stripped_jungle_wood,stripped_mangrove_log,stripped_mangrove_wood,stripped_oak_log,stripped_oak_wood,stripped_pale_oak_log,stripped_pale_oak_wood,stripped_spruce_log,stripped_spruce_wood|
+|cherry_button|cr|wooden_button|cherry_planks|
+|cherry_door|cr|wooden_door|cherry_planks|
+|cherry_fence|cm|wooden_fence|cherry_planks|
+|cherry_fence_gate|cr|wooden_fence_gate|cherry_planks|
+|cherry_hanging_sign|cm|wooden_hanging_sign|stripped_cherry_log|
+|cherry_planks|cb|planks|cherry_log,cherry_wood,stripped_cherry_log,stripped_cherry_wood|
+|cherry_pressure_plate|cr|wooden_pressure_plate|cherry_planks|
+|cherry_sign|cm|wooden_sign|cherry_planks|
+|cherry_slab|cb|wooden_slab|cherry_planks|
+|cherry_stairs|cb|wooden_stairs|cherry_planks|
+|cherry_trapdoor|cr|wooden_trapdoor|cherry_planks|
+|cherry_wood|cb|bark|cherry_log|
+|chest|cm|||
+|chiseled_deepslate|cb||cobbled_deepslate_slab|
+|chiseled_nether_bricks|cb||nether_brick_slab|
+|chiseled_packed_ice|cb||packed_ice_brick_slab|
+|chiseled_polished_blackstone|cb||polished_blackstone_slab|
+|chiseled_quartz_block|cb||chiseled_quartz_block,quartz_block,quartz_pillar|
+|chiseled_red_sandstone|cb||chiseled_red_sandstone,cut_red_sandstone,red_sandstone|
+|chiseled_resin_bricks|cb||resin_brick_slab|
+|chiseled_sandstone|cb||sandstone_slab|
+|chiseled_stone_bricks|cb||@1|
+|clay|cb||clay_ball|
+|clock|ce||redstone|
+|coal|cm||coal_block|
+|coal_block|cb||coal|
+coal_from_blasting_coal_ore|coal|bm|coal|coal_ore|=
+coal_from_blasting_deepslate_coal_ore|coal|bm|coal|deepslate_coal_ore|=
+coal_from_smelting_coal_ore|coal|fm|coal|coal_ore|=
+coal_from_smelting_deepslate_coal_ore|coal|fm|coal|deepslate_coal_ore|=
+|coarse_dirt|cb||gravel|
+|cobbled_deepslate_slab|cb||cobbled_deepslate|
+|cobbled_deepslate_stairs|cb||cobbled_deepslate|
+|cobbled_deepslate_wall|cm||cobbled_deepslate|
+|cobblestone_slab|cb||cobblestone|
+|cobblestone_stairs|cb||cobblestone|
+|cobblestone_wall|cm||cobblestone|
+|comparator|cr||quartz|
+|compass|ce||redstone|
+|composter|cm||acacia_slab,bamboo_slab,birch_slab,cherry_slab,crimson_slab,dark_oak_slab,jungle_slab,mangrove_slab,oak_slab,pale_oak_slab,spruce_slab,warped_slab|
+|cooked_beef|ff||beef|=
+cooked_beef_from_smoking|cooked_beef|sf||beef|=
+|cooked_chicken|ff||chicken|=
+cooked_chicken_from_smoking|cooked_chicken|sf||chicken|=
+|cooked_cod|ff||cod|=
+cooked_cod_from_smoking|cooked_cod|sf||cod|=
+|cooked_mutton|ff||mutton|=
+cooked_mutton_from_smoking|cooked_mutton|sf||mutton|=
+|cooked_porkchop|ff||porkchop|=
+cooked_porkchop_from_smoking|cooked_porkchop|sf||porkchop|=
+|cooked_rabbit|ff||rabbit|=
+cooked_rabbit_from_smoking|cooked_rabbit|sf||rabbit|=
+|cooked_salmon|ff||salmon|=
+cooked_salmon_from_smoking|cooked_salmon|sf||salmon|=
+|cookie|cm||cocoa_beans|
+|copper_bars|cm||copper_ingot|
+|copper_block|cb||copper_ingot|
+|copper_chain|cm||copper_ingot,copper_nugget|
+|copper_door|cr||copper_ingot|
+|copper_ingot|cm|copper_ingot|copper_block|=
+copper_ingot_from_blasting_copper_ore|copper_ingot|bm|copper_ingot|copper_ore|=
+copper_ingot_from_blasting_deepslate_copper_ore|copper_ingot|bm|copper_ingot|deepslate_copper_ore|=
+copper_ingot_from_blasting_raw_copper|copper_ingot|bm|copper_ingot|raw_copper|=
+copper_ingot_from_nuggets|copper_ingot|cm|copper_ingot|copper_nugget|=
+copper_ingot_from_smelting_copper_ore|copper_ingot|fm|copper_ingot|copper_ore|=
+copper_ingot_from_smelting_deepslate_copper_ore|copper_ingot|fm|copper_ingot|deepslate_copper_ore|=
+copper_ingot_from_smelting_raw_copper|copper_ingot|fm|copper_ingot|raw_copper|=
+copper_ingot_from_waxed_copper_block|copper_ingot|cm|copper_ingot|waxed_copper_block|=
+|copper_lantern|cm||copper_torch|
+|copper_nugget|cm||copper_ingot|
+copper_nugget_from_blasting|copper_nugget|bm|||=
+copper_nugget_from_smelting|copper_nugget|fm|||=
+|copper_torch|cm||copper_nugget|
+|copper_trapdoor|cr||copper_ingot|
+|cracked_deepslate_bricks|fk||deepslate_bricks|
+|cracked_deepslate_tiles|fk||deepslate_tiles|
+|cracked_nether_bricks|fk||nether_bricks|
+|cracked_polished_blackstone_bricks|fk||polished_blackstone_bricks|
+|cracked_stone_bricks|fk||stone_bricks|
+|crafting_table|cm|||
+|crimson_button|cr|wooden_button|crimson_planks|
+|crimson_door|cr|wooden_door|crimson_planks|
+|crimson_fence|cm|wooden_fence|crimson_planks|
+|crimson_fence_gate|cr|wooden_fence_gate|crimson_planks|
+|crimson_hanging_sign|cm|wooden_hanging_sign|stripped_crimson_stem|
+|crimson_hyphae|cb|bark|crimson_stem|
+|crimson_planks|cb|planks|crimson_hyphae,crimson_stem,stripped_crimson_hyphae,stripped_crimson_stem|
+|crimson_pressure_plate|cr|wooden_pressure_plate|crimson_planks|
+|crimson_sign|cm|wooden_sign|crimson_planks|
+|crimson_slab|cb|wooden_slab|crimson_planks|
+|crimson_stairs|cb|wooden_stairs|crimson_planks|
+|crimson_trapdoor|cr|wooden_trapdoor|crimson_planks|
+|crossbow|ce||iron_ingot,string,tripwire_hook|
+|cut_copper|cb||copper_block|
+|cut_copper_stairs|cb||cut_copper|
+|cut_red_sandstone|cb||red_sandstone|
+|cut_red_sandstone_slab|cb||cut_red_sandstone|
+|cut_sandstone|cb||sandstone|
+|cut_sandstone_slab|cb||cut_sandstone|
+|cyan_banner|cm|banner|cyan_wool|
+|cyan_bed|cm|bed|cyan_wool|=
+|cyan_candle|cm|dyed_candle|cyan_dye|
+|cyan_carpet|cm|woolen_carpet|cyan_wool|=
+|cyan_concrete_powder|cb|concrete_powder|gravel,sand|
+|cyan_concrete_slab|cb|concrete_slab|cyan_concrete|
+|cyan_concrete_stairs|cb|concrete_stairs|cyan_concrete|
+|cyan_dye|cm|cyan_dye|blue_dye,green_dye|=
+cyan_dye_from_pitcher_plant|cyan_dye|cm|cyan_dye|pitcher_plant|=
+|cyan_glazed_terracotta|fk||cyan_terracotta|
+|cyan_shulker_box|cm|shulker_box_dye|@0|
+|cyan_stained_glass|cb|stained_glass|glass|
+|cyan_stained_glass_pane|cm|stained_glass_pane|cyan_stained_glass|=
+cyan_stained_glass_pane_from_glass_pane|cyan_stained_glass_pane|cm|stained_glass_pane|cyan_dye,glass_pane|=
+|cyan_terracotta|cb|stained_terracotta|terracotta|
+|cyan_wool_slab|cb|woolen_slab|cyan_wool|=
+|cyan_wool_stairs|cb|woolen_stairs|cyan_wool|=
+|dark_oak_button|cr|wooden_button|dark_oak_planks|
+|dark_oak_door|cr|wooden_door|dark_oak_planks|
+|dark_oak_fence|cm|wooden_fence|dark_oak_planks|
+|dark_oak_fence_gate|cr|wooden_fence_gate|dark_oak_planks|
+|dark_oak_hanging_sign|cm|wooden_hanging_sign|stripped_dark_oak_log|
+|dark_oak_planks|cb|planks|dark_oak_log,dark_oak_wood,stripped_dark_oak_log,stripped_dark_oak_wood|
+|dark_oak_pressure_plate|cr|wooden_pressure_plate|dark_oak_planks|
+|dark_oak_sign|cm|wooden_sign|dark_oak_planks|
+|dark_oak_slab|cb|wooden_slab|dark_oak_planks|
+|dark_oak_stairs|cb|wooden_stairs|dark_oak_planks|
+|dark_oak_trapdoor|cr|wooden_trapdoor|dark_oak_planks|
+|dark_oak_wood|cb|bark|dark_oak_log|
+|dark_prismarine|cb|||
+|dark_prismarine_slab|cb||dark_prismarine|
+|dark_prismarine_stairs|cb||dark_prismarine|
+|daylight_detector|cr||quartz|
+|deepslate|fk||cobbled_deepslate|
+|deepslate_brick_slab|cb||deepslate_bricks|
+|deepslate_brick_stairs|cb||deepslate_bricks|
+|deepslate_brick_wall|cm||deepslate_bricks|
+|deepslate_bricks|cb||polished_deepslate|
+|deepslate_tile_slab|cb||deepslate_tiles|
+|deepslate_tile_stairs|cb||deepslate_tiles|
+|deepslate_tile_wall|cm||deepslate_tiles|
+|deepslate_tiles|cb||deepslate_bricks|
+|detector_rail|cm||rail|
+|diamond|cm||diamond_block|
+|diamond_axe|ce||diamond|
+|diamond_block|cb||diamond|
+|diamond_boots|ce||diamond|
+|diamond_chestplate|ce||diamond|
+diamond_from_blasting_deepslate_diamond_ore|diamond|bm|diamond|deepslate_diamond_ore|=
+diamond_from_blasting_diamond_ore|diamond|bm|diamond|diamond_ore|=
+diamond_from_smelting_deepslate_diamond_ore|diamond|fm|diamond|deepslate_diamond_ore|=
+diamond_from_smelting_diamond_ore|diamond|fm|diamond|diamond_ore|=
+|diamond_helmet|ce||diamond|
+|diamond_hoe|ce||diamond|
+|diamond_leggings|ce||diamond|
+|diamond_pickaxe|ce||diamond|
+|diamond_shovel|ce||diamond|
+|diamond_sword|ce||diamond|
+|diorite|cb||quartz|
+|diorite_slab|cb||diorite|
+|diorite_stairs|cb||diorite|
+|diorite_wall|cm||diorite|
+|dried_kelp|cm||dried_kelp_block|
+|dried_kelp_block|cb||dried_kelp|
+dried_kelp_from_smelting|dried_kelp|ff|||=
+dried_kelp_from_smoking|dried_kelp|sf|||=
+|dripstone_block|cb||pointed_dripstone|
+|dropper|cr||redstone|
+dye_black_bed|black_bed|cm|bed_dye|black_dye|=
+dye_black_carpet|black_carpet|cm|carpet_dye|black_dye|=
+dye_black_wool|black_wool|cb|wool|black_dye|
+dye_black_wool_slab|black_wool_slab|cb|wool_slabs|black_dye|=
+dye_black_wool_stairs|black_wool_stairs|cb|wool_stairs|black_dye|=
+dye_blue_bed|blue_bed|cm|bed_dye|blue_dye|=
+dye_blue_carpet|blue_carpet|cm|carpet_dye|blue_dye|=
+dye_blue_wool|blue_wool|cb|wool|blue_dye|
+dye_blue_wool_slab|blue_wool_slab|cb|wool_slabs|blue_dye|=
+dye_blue_wool_stairs|blue_wool_stairs|cb|wool_stairs|blue_dye|=
+dye_brown_bed|brown_bed|cm|bed_dye|brown_dye|=
+dye_brown_carpet|brown_carpet|cm|carpet_dye|brown_dye|=
+dye_brown_wool|brown_wool|cb|wool|brown_dye|
+dye_brown_wool_slab|brown_wool_slab|cb|wool_slabs|brown_dye|=
+dye_brown_wool_stairs|brown_wool_stairs|cb|wool_stairs|brown_dye|=
+dye_cyan_bed|cyan_bed|cm|bed_dye|cyan_dye|=
+dye_cyan_carpet|cyan_carpet|cm|carpet_dye|cyan_dye|=
+dye_cyan_wool|cyan_wool|cb|wool|cyan_dye|
+dye_cyan_wool_slab|cyan_wool_slab|cb|wool_slabs|cyan_dye|=
+dye_cyan_wool_stairs|cyan_wool_stairs|cb|wool_stairs|cyan_dye|=
+dye_gray_bed|gray_bed|cm|bed_dye|gray_dye|=
+dye_gray_carpet|gray_carpet|cm|carpet_dye|gray_dye|=
+dye_gray_wool|gray_wool|cb|wool|gray_dye|
+dye_gray_wool_slab|gray_wool_slab|cb|wool_slabs|gray_dye|=
+dye_gray_wool_stairs|gray_wool_stairs|cb|wool_stairs|gray_dye|=
+dye_green_bed|green_bed|cm|bed_dye|green_dye|=
+dye_green_carpet|green_carpet|cm|carpet_dye|green_dye|=
+dye_green_wool|green_wool|cb|wool|green_dye|
+dye_green_wool_slab|green_wool_slab|cb|wool_slabs|green_dye|=
+dye_green_wool_stairs|green_wool_stairs|cb|wool_stairs|green_dye|=
+dye_light_blue_bed|light_blue_bed|cm|bed_dye|light_blue_dye|=
+dye_light_blue_carpet|light_blue_carpet|cm|carpet_dye|light_blue_dye|=
+dye_light_blue_wool|light_blue_wool|cb|wool|light_blue_dye|
+dye_light_blue_wool_slab|light_blue_wool_slab|cb|wool_slabs|light_blue_dye|=
+dye_light_blue_wool_stairs|light_blue_wool_stairs|cb|wool_stairs|light_blue_dye|=
+dye_light_gray_bed|light_gray_bed|cm|bed_dye|light_gray_dye|=
+dye_light_gray_carpet|light_gray_carpet|cm|carpet_dye|light_gray_dye|=
+dye_light_gray_wool|light_gray_wool|cb|wool|light_gray_dye|
+dye_light_gray_wool_slab|light_gray_wool_slab|cb|wool_slabs|light_gray_dye|=
+dye_light_gray_wool_stairs|light_gray_wool_stairs|cb|wool_stairs|light_gray_dye|=
+dye_lime_bed|lime_bed|cm|bed_dye|lime_dye|=
+dye_lime_carpet|lime_carpet|cm|carpet_dye|lime_dye|=
+dye_lime_wool|lime_wool|cb|wool|lime_dye|
+dye_lime_wool_slab|lime_wool_slab|cb|wool_slabs|lime_dye|=
+dye_lime_wool_stairs|lime_wool_stairs|cb|wool_stairs|lime_dye|=
+dye_magenta_bed|magenta_bed|cm|bed_dye|magenta_dye|=
+dye_magenta_carpet|magenta_carpet|cm|carpet_dye|magenta_dye|=
+dye_magenta_wool|magenta_wool|cb|wool|magenta_dye|
+dye_magenta_wool_slab|magenta_wool_slab|cb|wool_slabs|magenta_dye|=
+dye_magenta_wool_stairs|magenta_wool_stairs|cb|wool_stairs|magenta_dye|=
+dye_orange_bed|orange_bed|cm|bed_dye|orange_dye|=
+dye_orange_carpet|orange_carpet|cm|carpet_dye|orange_dye|=
+dye_orange_wool|orange_wool|cb|wool|orange_dye|
+dye_orange_wool_slab|orange_wool_slab|cb|wool_slabs|orange_dye|=
+dye_orange_wool_stairs|orange_wool_stairs|cb|wool_stairs|orange_dye|=
+dye_pink_bed|pink_bed|cm|bed_dye|pink_dye|=
+dye_pink_carpet|pink_carpet|cm|carpet_dye|pink_dye|=
+dye_pink_wool|pink_wool|cb|wool|pink_dye|
+dye_pink_wool_slab|pink_wool_slab|cb|wool_slabs|pink_dye|=
+dye_pink_wool_stairs|pink_wool_stairs|cb|wool_stairs|pink_dye|=
+dye_purple_bed|purple_bed|cm|bed_dye|purple_dye|=
+dye_purple_carpet|purple_carpet|cm|carpet_dye|purple_dye|=
+dye_purple_wool|purple_wool|cb|wool|purple_dye|
+dye_purple_wool_slab|purple_wool_slab|cb|wool_slabs|purple_dye|=
+dye_purple_wool_stairs|purple_wool_stairs|cb|wool_stairs|purple_dye|=
+dye_red_bed|red_bed|cm|bed_dye|red_dye|=
+dye_red_carpet|red_carpet|cm|carpet_dye|red_dye|=
+dye_red_wool|red_wool|cb|wool|red_dye|
+dye_red_wool_slab|red_wool_slab|cb|wool_slabs|red_dye|=
+dye_red_wool_stairs|red_wool_stairs|cb|wool_stairs|red_dye|=
+dye_white_bed|white_bed|cm|bed_dye|white_dye|=
+dye_white_carpet|white_carpet|cm|carpet_dye|white_dye|=
+dye_white_wool|white_wool|cb|wool|white_dye|=
+dye_white_wool_slab|white_wool_slab|cb|wool_slabs|white_dye|=
+dye_white_wool_stairs|white_wool_stairs|cb|wool_stairs|white_dye|=
+dye_yellow_bed|yellow_bed|cm|bed_dye|yellow_dye|=
+dye_yellow_carpet|yellow_carpet|cm|carpet_dye|yellow_dye|=
+dye_yellow_wool|yellow_wool|cb|wool|yellow_dye|
+dye_yellow_wool_slab|yellow_wool_slab|cb|wool_slabs|yellow_dye|=
+dye_yellow_wool_stairs|yellow_wool_stairs|cb|wool_stairs|yellow_dye|=
+|emerald|cm||emerald_block|
+|emerald_block|cb||emerald|
+emerald_from_blasting_deepslate_emerald_ore|emerald|bm|emerald|deepslate_emerald_ore|=
+emerald_from_blasting_emerald_ore|emerald|bm|emerald|emerald_ore|=
+emerald_from_smelting_deepslate_emerald_ore|emerald|fm|emerald|deepslate_emerald_ore|=
+emerald_from_smelting_emerald_ore|emerald|fm|emerald|emerald_ore|=
+|enchanting_table|cm||obsidian|
+|end_rod|cm||popped_chorus_fruit|
+|end_stone_brick_slab|cb||end_stone_bricks|
+|end_stone_brick_stairs|cb||end_stone_bricks|
+|end_stone_brick_wall|cm||end_stone_bricks|
+|end_stone_bricks|cb||end_stone|
+|ender_chest|cm||ender_eye|
+|ender_eye|cm||blaze_powder|
+|exposed_chiseled_copper|cb||exposed_cut_copper_slab|
+|exposed_copper_grate|cb|exposed_copper_grate|exposed_copper|
+|exposed_cut_copper|cb||exposed_copper|
+|exposed_cut_copper_slab|cb||exposed_cut_copper|
+|exposed_cut_copper_stairs|cb||exposed_cut_copper|
+|fermented_spider_eye|cm||spider_eye|
+|fire_charge|cm||blaze_powder|
+|fishing_rod|ce||string|
+|fletching_table|cm||flint|
+|flint_and_steel|ce||flint,obsidian|
+|flower_pot|cm||brick|
+|furnace|cm||blackstone,cobbled_deepslate,cobblestone|
+|glass|fk||red_sand,sand|
+|glass_bottle|cm||glass|
+|glass_pane|cm||glass|
+|glistering_melon_slice|cm||melon_slice|
+|glowstone|cb||glowstone_dust|
+|gold_block|cb||gold_ingot|
+gold_ingot_from_blasting_deepslate_gold_ore|gold_ingot|bm|gold_ingot|deepslate_gold_ore|=
+gold_ingot_from_blasting_gold_ore|gold_ingot|bm|gold_ingot|gold_ore|=
+gold_ingot_from_blasting_nether_gold_ore|gold_ingot|bm|gold_ingot|nether_gold_ore|=
+gold_ingot_from_blasting_raw_gold|gold_ingot|bm|gold_ingot|raw_gold|=
+gold_ingot_from_gold_block|gold_ingot|cm|gold_ingot|gold_block|=
+gold_ingot_from_nuggets|gold_ingot|cm|gold_ingot|gold_nugget|=
+gold_ingot_from_smelting_deepslate_gold_ore|gold_ingot|fm|gold_ingot|deepslate_gold_ore|=
+gold_ingot_from_smelting_gold_ore|gold_ingot|fm|gold_ingot|gold_ore|=
+gold_ingot_from_smelting_nether_gold_ore|gold_ingot|fm|gold_ingot|nether_gold_ore|=
+gold_ingot_from_smelting_raw_gold|gold_ingot|fm|gold_ingot|raw_gold|=
+|gold_nugget|cm||gold_ingot|
+gold_nugget_from_blasting|gold_nugget|bm||@2|=
+gold_nugget_from_smelting|gold_nugget|fm||@2|=
+|golden_apple|cm||gold_ingot|
+|golden_axe|ce||gold_ingot|
+|golden_boots|ce||gold_ingot|
+|golden_carrot|cm||gold_nugget|
+|golden_chestplate|ce||gold_ingot|
+|golden_helmet|ce||gold_ingot|
+|golden_hoe|ce||gold_ingot|
+|golden_leggings|ce||gold_ingot|
+|golden_pickaxe|ce||gold_ingot|
+|golden_shovel|ce||gold_ingot|
+|golden_sword|ce||gold_ingot|
+|granite|cb||quartz|
+|granite_slab|cb||granite|
+|granite_stairs|cb||granite|
+|granite_wall|cm||granite|
+|gray_banner|cm|banner|gray_wool|
+|gray_bed|cm|bed|gray_wool|=
+|gray_candle|cm|dyed_candle|gray_dye|
+|gray_carpet|cm|woolen_carpet|gray_wool|=
+|gray_concrete_powder|cb|concrete_powder|gravel,sand|
+|gray_concrete_slab|cb|concrete_slab|gray_concrete|
+|gray_concrete_stairs|cb|concrete_stairs|gray_concrete|
+|gray_dye|cm|gray_dye|black_dye,white_dye|=
+gray_dye_from_closed_eyeblossom|gray_dye|cm|gray_dye|closed_eyeblossom|=
+|gray_glazed_terracotta|fk||gray_terracotta|
+|gray_shulker_box|cm|shulker_box_dye|@0|
+|gray_stained_glass|cb|stained_glass|glass|
+|gray_stained_glass_pane|cm|stained_glass_pane|gray_stained_glass|=
+gray_stained_glass_pane_from_glass_pane|gray_stained_glass_pane|cm|stained_glass_pane|glass_pane,gray_dye|=
+|gray_terracotta|cb|stained_terracotta|terracotta|
+|gray_wool_slab|cb|woolen_slab|gray_wool|=
+|gray_wool_stairs|cb|woolen_stairs|gray_wool|=
+|green_banner|cm|banner|green_wool|
+|green_bed|cm|bed|green_wool|=
+|green_candle|cm|dyed_candle|green_dye|
+|green_carpet|cm|woolen_carpet|green_wool|=
+|green_concrete_powder|cb|concrete_powder|gravel,sand|
+|green_concrete_slab|cb|concrete_slab|green_concrete|
+|green_concrete_stairs|cb|concrete_stairs|green_concrete|
+|green_dye|fm||cactus|
+|green_glazed_terracotta|fk||green_terracotta|
+|green_shulker_box|cm|shulker_box_dye|@0|
+|green_stained_glass|cb|stained_glass|glass|
+|green_stained_glass_pane|cm|stained_glass_pane|green_stained_glass|=
+green_stained_glass_pane_from_glass_pane|green_stained_glass_pane|cm|stained_glass_pane|glass_pane,green_dye|=
+|green_terracotta|cb|stained_terracotta|terracotta|
+|green_wool_slab|cb|woolen_slab|green_wool|=
+|green_wool_stairs|cb|woolen_stairs|green_wool|=
+|grindstone|cm||stone_slab|
+|hay_block|cb||wheat|
+|heavy_weighted_pressure_plate|cr||iron_ingot|
+|honey_block|cr||honey_bottle|
+|honeycomb_block|cm||honeycomb|
+|hopper|cr||iron_ingot|
+|iron_axe|ce||iron_ingot|
+|iron_bars|cm||iron_ingot|
+|iron_block|cb||iron_ingot|
+|iron_boots|ce||iron_ingot|
+|iron_chain|cm||iron_ingot,iron_nugget|
+|iron_chestplate|ce||iron_ingot|
+|iron_door|cr||iron_ingot|
+|iron_helmet|ce||iron_ingot|
+|iron_hoe|ce||iron_ingot|
+iron_ingot_from_blasting_deepslate_iron_ore|iron_ingot|bm|iron_ingot|deepslate_iron_ore|=
+iron_ingot_from_blasting_iron_ore|iron_ingot|bm|iron_ingot|iron_ore|=
+iron_ingot_from_blasting_raw_iron|iron_ingot|bm|iron_ingot|raw_iron|=
+iron_ingot_from_iron_block|iron_ingot|cm|iron_ingot|iron_block|=
+iron_ingot_from_nuggets|iron_ingot|cm|iron_ingot|iron_nugget|=
+iron_ingot_from_smelting_deepslate_iron_ore|iron_ingot|fm|iron_ingot|deepslate_iron_ore|=
+iron_ingot_from_smelting_iron_ore|iron_ingot|fm|iron_ingot|iron_ore|=
+iron_ingot_from_smelting_raw_iron|iron_ingot|fm|iron_ingot|raw_iron|=
+|iron_leggings|ce||iron_ingot|
+|iron_nugget|cm||iron_ingot|
+iron_nugget_from_blasting|iron_nugget|bm||@3|=
+iron_nugget_from_smelting|iron_nugget|fm||@3|=
+|iron_pickaxe|ce||iron_ingot|
+|iron_shovel|ce||iron_ingot|
+|iron_sword|ce||iron_ingot|
+|iron_trapdoor|cr||iron_ingot|
+|item_frame|cm||leather|
+|jack_o_lantern|cb||carved_pumpkin|
+|jukebox|cm||diamond|
+|jungle_button|cr|wooden_button|jungle_planks|
+|jungle_door|cr|wooden_door|jungle_planks|
+|jungle_fence|cm|wooden_fence|jungle_planks|
+|jungle_fence_gate|cr|wooden_fence_gate|jungle_planks|
+|jungle_hanging_sign|cm|wooden_hanging_sign|stripped_jungle_log|
+|jungle_planks|cb|planks|jungle_log,jungle_wood,stripped_jungle_log,stripped_jungle_wood|
+|jungle_pressure_plate|cr|wooden_pressure_plate|jungle_planks|
+|jungle_sign|cm|wooden_sign|jungle_planks|
+|jungle_slab|cb|wooden_slab|jungle_planks|
+|jungle_stairs|cb|wooden_stairs|jungle_planks|
+|jungle_trapdoor|cr|wooden_trapdoor|jungle_planks|
+|jungle_wood|cb|bark|jungle_log|
+|ladder|cm||stick|
+|lantern|cm||iron_ingot,iron_nugget|
+|lapis_block|cb||lapis_lazuli|
+|lapis_lazuli|cm||lapis_block|
+lapis_lazuli_from_blasting_deepslate_lapis_ore|lapis_lazuli|bm|lapis_lazuli|deepslate_lapis_ore|=
+lapis_lazuli_from_blasting_lapis_ore|lapis_lazuli|bm|lapis_lazuli|lapis_ore|=
+lapis_lazuli_from_smelting_deepslate_lapis_ore|lapis_lazuli|fm|lapis_lazuli|deepslate_lapis_ore|=
+lapis_lazuli_from_smelting_lapis_ore|lapis_lazuli|fm|lapis_lazuli|lapis_ore|=
+|lead|ce||string|
+|leather|cm||rabbit_hide|
+|leather_boots|ce||leather|
+|leather_chestplate|ce||leather|
+|leather_helmet|ce||leather|
+|leather_leggings|ce||leather|
+|lectern|cr||book|
+|lever|cr||cobblestone|
+|light_blue_banner|cm|banner|light_blue_wool|
+|light_blue_bed|cm|bed|light_blue_wool|=
+|light_blue_candle|cm|dyed_candle|light_blue_dye|
+|light_blue_carpet|cm|woolen_carpet|light_blue_wool|=
+|light_blue_concrete_powder|cb|concrete_powder|gravel,sand|
+|light_blue_concrete_slab|cb|concrete_slab|light_blue_concrete|
+|light_blue_concrete_stairs|cb|concrete_stairs|light_blue_concrete|
+light_blue_dye_from_blue_orchid|light_blue_dye|cm|light_blue_dye|blue_orchid|=
+light_blue_dye_from_blue_white_dye|light_blue_dye|cm|light_blue_dye|blue_dye,white_dye|=
+|light_blue_glazed_terracotta|fk||light_blue_terracotta|
+|light_blue_shulker_box|cm|shulker_box_dye|@0|
+|light_blue_stained_glass|cb|stained_glass|glass|
+|light_blue_stained_glass_pane|cm|stained_glass_pane|light_blue_stained_glass|=
+light_blue_stained_glass_pane_from_glass_pane|light_blue_stained_glass_pane|cm|stained_glass_pane|glass_pane,light_blue_dye|=
+|light_blue_terracotta|cb|stained_terracotta|terracotta|
+|light_blue_wool_slab|cb|woolen_slab|light_blue_wool|=
+|light_blue_wool_stairs|cb|woolen_stairs|light_blue_wool|=
+|light_gray_banner|cm|banner|light_gray_wool|
+|light_gray_bed|cm|bed|light_gray_wool|=
+|light_gray_candle|cm|dyed_candle|light_gray_dye|
+|light_gray_carpet|cm|woolen_carpet|light_gray_wool|=
+|light_gray_concrete_powder|cb|concrete_powder|gravel,sand|
+|light_gray_concrete_slab|cb|concrete_slab|light_gray_concrete|
+|light_gray_concrete_stairs|cb|concrete_stairs|light_gray_concrete|
+light_gray_dye_from_azure_bluet|light_gray_dye|cm|light_gray_dye|azure_bluet|=
+light_gray_dye_from_black_white_dye|light_gray_dye|cm|light_gray_dye|black_dye,white_dye|=
+light_gray_dye_from_gray_white_dye|light_gray_dye|cm|light_gray_dye|gray_dye,white_dye|=
+light_gray_dye_from_oxeye_daisy|light_gray_dye|cm|light_gray_dye|oxeye_daisy|=
+light_gray_dye_from_white_tulip|light_gray_dye|cm|light_gray_dye|white_tulip|=
+|light_gray_glazed_terracotta|fk||light_gray_terracotta|
+|light_gray_shulker_box|cm|shulker_box_dye|@0|
+|light_gray_stained_glass|cb|stained_glass|glass|
+|light_gray_stained_glass_pane|cm|stained_glass_pane|light_gray_stained_glass|=
+light_gray_stained_glass_pane_from_glass_pane|light_gray_stained_glass_pane|cm|stained_glass_pane|glass_pane,light_gray_dye|=
+|light_gray_terracotta|cb|stained_terracotta|terracotta|
+|light_gray_wool_slab|cb|woolen_slab|light_gray_wool|=
+|light_gray_wool_stairs|cb|woolen_stairs|light_gray_wool|=
+|light_weighted_pressure_plate|cr||gold_ingot|
+|lightning_rod|cr||copper_ingot|
+|lime_banner|cm|banner|lime_wool|
+|lime_bed|cm|bed|lime_wool|=
+|lime_candle|cm|dyed_candle|lime_dye|
+|lime_carpet|cm|woolen_carpet|lime_wool|=
+|lime_concrete_powder|cb|concrete_powder|gravel,sand|
+|lime_concrete_slab|cb|concrete_slab|lime_concrete|
+|lime_concrete_stairs|cb|concrete_stairs|lime_concrete|
+|lime_dye|cm||green_dye,white_dye|
+lime_dye_from_smelting|lime_dye|fm|||
+|lime_glazed_terracotta|fk||lime_terracotta|
+|lime_shulker_box|cm|shulker_box_dye|@0|
+|lime_stained_glass|cb|stained_glass|glass|
+|lime_stained_glass_pane|cm|stained_glass_pane|lime_stained_glass|=
+lime_stained_glass_pane_from_glass_pane|lime_stained_glass_pane|cm|stained_glass_pane|glass_pane,lime_dye|=
+|lime_terracotta|cb|stained_terracotta|terracotta|
+|lime_wool_slab|cb|woolen_slab|lime_wool|=
+|lime_wool_stairs|cb|woolen_stairs|lime_wool|=
+|lodestone|cm||iron_ingot,lodestone|
+|loom|cm||string|
+|mace|ce||breeze_rod,heavy_core|
+|magenta_banner|cm|banner|magenta_wool|
+|magenta_bed|cm|bed|magenta_wool|=
+|magenta_candle|cm|dyed_candle|magenta_dye|
+|magenta_carpet|cm|woolen_carpet|magenta_wool|=
+|magenta_concrete_powder|cb|concrete_powder|gravel,sand|
+|magenta_concrete_slab|cb|concrete_slab|magenta_concrete|
+|magenta_concrete_stairs|cb|concrete_stairs|magenta_concrete|
+magenta_dye_from_allium|magenta_dye|cm|magenta_dye|allium|=
+magenta_dye_from_blue_red_pink|magenta_dye|cm|magenta_dye|blue_dye,pink_dye,red_dye|=
+magenta_dye_from_blue_red_white_dye|magenta_dye|cm|magenta_dye|blue_dye,red_dye,white_dye|=
+magenta_dye_from_lilac|magenta_dye|cm|magenta_dye|lilac|=
+magenta_dye_from_purple_and_pink|magenta_dye|cm|magenta_dye|pink_dye,purple_dye|=
+|magenta_glazed_terracotta|fk||magenta_terracotta|
+|magenta_shulker_box|cm|shulker_box_dye|@0|
+|magenta_stained_glass|cb|stained_glass|glass|
+|magenta_stained_glass_pane|cm|stained_glass_pane|magenta_stained_glass|=
+magenta_stained_glass_pane_from_glass_pane|magenta_stained_glass_pane|cm|stained_glass_pane|glass_pane,magenta_dye|=
+|magenta_terracotta|cb|stained_terracotta|terracotta|
+|magenta_wool_slab|cb|woolen_slab|magenta_wool|=
+|magenta_wool_stairs|cb|woolen_stairs|magenta_wool|=
+|mangrove_button|cr|wooden_button|mangrove_planks|
+|mangrove_door|cr|wooden_door|mangrove_planks|
+|mangrove_fence|cm|wooden_fence|mangrove_planks|
+|mangrove_fence_gate|cr|wooden_fence_gate|mangrove_planks|
+|mangrove_hanging_sign|cm|wooden_hanging_sign|stripped_mangrove_log|
+|mangrove_planks|cb|planks|mangrove_log,mangrove_wood,stripped_mangrove_log,stripped_mangrove_wood|
+|mangrove_pressure_plate|cr|wooden_pressure_plate|mangrove_planks|
+|mangrove_sign|cm|wooden_sign|mangrove_planks|
+|mangrove_slab|cb|wooden_slab|mangrove_planks|
+|mangrove_stairs|cb|wooden_stairs|mangrove_planks|
+|mangrove_trapdoor|cr|wooden_trapdoor|mangrove_planks|
+|mangrove_wood|cb|bark|mangrove_log|
+|map|cm||compass|
+|melon|cb||melon_slice|
+|melon_seeds|cm||melon_slice|
+|moss_carpet|cm|carpet|moss_block|
+mossy_cobblestone_from_moss_block|mossy_cobblestone|cb|mossy_cobblestone|moss_block|cobblestone,moss_block
+mossy_cobblestone_from_vine|mossy_cobblestone|cb|mossy_cobblestone|vine|cobblestone,vine
+|mossy_cobblestone_slab|cb||mossy_cobblestone|
+|mossy_cobblestone_stairs|cb||mossy_cobblestone|
+|mossy_cobblestone_wall|cm||mossy_cobblestone|
+|mossy_stone_brick_slab|cb||mossy_stone_bricks|
+|mossy_stone_brick_stairs|cb||mossy_stone_bricks|
+|mossy_stone_brick_wall|cm||mossy_stone_bricks|
+mossy_stone_bricks_from_moss_block|mossy_stone_bricks|cb|mossy_stone_bricks|moss_block|moss_block,stone_bricks
+mossy_stone_bricks_from_vine|mossy_stone_bricks|cb|mossy_stone_bricks|vine|stone_bricks,vine
+|mud_brick_slab|cb||mud_bricks|
+|mud_brick_stairs|cb||mud_bricks|
+|mud_brick_wall|cm||mud_bricks|
+|mud_bricks|cb||packed_mud|
+|mushroom_stew|cm|mushroom_stew|bowl,brown_mushroom,mushroom_stew,red_mushroom|
+|music_disc_5|cm||disc_fragment_5|
+|nether_brick|fm||netherrack|
+|nether_brick_fence|cm||nether_bricks|
+|nether_brick_slab|cb||nether_bricks|
+|nether_brick_stairs|cb||nether_bricks|
+|nether_brick_wall|cm||nether_bricks|
+|nether_bricks|cb||nether_brick|
+|nether_wart_block|cb||nether_wart|
+|netherite_block|cb||netherite_ingot|
+|netherite_ingot|cm|netherite_ingot|netherite_scrap|gold_ingot,netherite_scrap
+netherite_ingot_from_netherite_block|netherite_ingot|cm|netherite_ingot|netherite_block|=
+|netherite_scrap|fm||ancient_debris|=
+netherite_scrap_from_blasting|netherite_scrap|bm||ancient_debris|=
+|note_block|cr||redstone|
+|oak_boat|cm|boat||
+|oak_button|cr|wooden_button|oak_planks|
+|oak_door|cr|wooden_door|oak_planks|
+|oak_fence|cm|wooden_fence|oak_planks|
+|oak_fence_gate|cr|wooden_fence_gate|oak_planks|
+|oak_hanging_sign|cm|wooden_hanging_sign|stripped_oak_log|
+|oak_planks|cb|planks|oak_log,oak_wood,stripped_oak_log,stripped_oak_wood|
+|oak_pressure_plate|cr|wooden_pressure_plate|oak_planks|
+|oak_sign|cm|wooden_sign|oak_planks|
+|oak_slab|cb|wooden_slab|oak_planks|
+|oak_stairs|cb|wooden_stairs|oak_planks|
+|oak_trapdoor|cr|wooden_trapdoor|oak_planks|
+|oak_wood|cb|bark|oak_log|
+|observer|cr||quartz|
+|orange_banner|cm|banner|orange_wool|
+|orange_bed|cm|bed|orange_wool|=
+|orange_candle|cm|dyed_candle|orange_dye|
+|orange_carpet|cm|woolen_carpet|orange_wool|=
+|orange_concrete_powder|cb|concrete_powder|gravel,sand|
+|orange_concrete_slab|cb|concrete_slab|orange_concrete|
+|orange_concrete_stairs|cb|concrete_stairs|orange_concrete|
+orange_dye_from_open_eyeblossom|orange_dye|cm|orange_dye|open_eyeblossom|=
+orange_dye_from_orange_tulip|orange_dye|cm|orange_dye|orange_tulip|=
+orange_dye_from_red_yellow|orange_dye|cm|orange_dye|red_dye,yellow_dye|=
+orange_dye_from_torchflower|orange_dye|cm|orange_dye|torchflower|=
+|orange_glazed_terracotta|fk||orange_terracotta|
+|orange_shulker_box|cm|shulker_box_dye|@0|
+|orange_stained_glass|cb|stained_glass|glass|
+|orange_stained_glass_pane|cm|stained_glass_pane|orange_stained_glass|=
+orange_stained_glass_pane_from_glass_pane|orange_stained_glass_pane|cm|stained_glass_pane|glass_pane,orange_dye|=
+|orange_terracotta|cb|stained_terracotta|terracotta|
+|orange_wool_slab|cb|woolen_slab|orange_wool|=
+|orange_wool_stairs|cb|woolen_stairs|orange_wool|=
+|oxidized_copper_grate|cb|oxidized_copper_grate|oxidized_copper|
+|packed_ice|cb||ice|
+|packed_ice_brick_slab|cb||packed_ice_bricks|
+|packed_ice_brick_stairs|cb||packed_ice_bricks|
+|packed_ice_brick_wall|cm||packed_ice_bricks|
+|packed_ice_bricks|cb||packed_ice|
+|packed_mud|cb||mud|
+|painting|cm||black_wool,blue_wool,brown_wool,cyan_wool,gray_wool,green_wool,light_blue_wool,light_gray_wool,lime_wool,magenta_wool,orange_wool,pink_wool,purple_wool,red_wool,white_wool,yellow_wool|
+|pale_oak_button|cr|wooden_button|pale_oak_planks|
+|pale_oak_door|cr|wooden_door|pale_oak_planks|
+|pale_oak_fence|cm|wooden_fence|pale_oak_planks|
+|pale_oak_fence_gate|cr|wooden_fence_gate|pale_oak_planks|
+|pale_oak_hanging_sign|cm|wooden_hanging_sign|stripped_pale_oak_log|
+|pale_oak_planks|cb|planks|pale_oak_log,pale_oak_wood,stripped_pale_oak_log,stripped_pale_oak_wood|
+|pale_oak_pressure_plate|cr|wooden_pressure_plate|pale_oak_planks|
+|pale_oak_sign|cm|wooden_sign|pale_oak_planks|
+|pale_oak_slab|cb|wooden_slab|pale_oak_planks|
+|pale_oak_stairs|cb|wooden_stairs|pale_oak_planks|
+|pale_oak_trapdoor|cr|wooden_trapdoor|pale_oak_planks|
+|pale_oak_wood|cb|bark|pale_oak_log|
+|paper|cm||sugar_cane|
+|pink_banner|cm|banner|pink_wool|
+|pink_bed|cm|bed|pink_wool|=
+|pink_candle|cm|dyed_candle|pink_dye|
+|pink_carpet|cm|woolen_carpet|pink_wool|=
+|pink_concrete_powder|cb|concrete_powder|gravel,sand|
+|pink_concrete_slab|cb|concrete_slab|pink_concrete|
+|pink_concrete_stairs|cb|concrete_stairs|pink_concrete|
+pink_dye_from_cactus_flower|pink_dye|cm|pink_dye|cactus_flower|=
+pink_dye_from_peony|pink_dye|cm|pink_dye|peony|=
+pink_dye_from_pink_petals|pink_dye|cm|pink_dye|pink_petals|=
+pink_dye_from_pink_tulip|pink_dye|cm|pink_dye|pink_tulip|=
+pink_dye_from_red_white_dye|pink_dye|cm|pink_dye|red_dye,white_dye|=
+|pink_glazed_terracotta|fk||pink_terracotta|
+|pink_shulker_box|cm|shulker_box_dye|@0|
+|pink_stained_glass|cb|stained_glass|glass|
+|pink_stained_glass_pane|cm|stained_glass_pane|pink_stained_glass|=
+pink_stained_glass_pane_from_glass_pane|pink_stained_glass_pane|cm|stained_glass_pane|glass_pane,pink_dye|=
+|pink_terracotta|cb|stained_terracotta|terracotta|
+|pink_wool_slab|cb|woolen_slab|pink_wool|=
+|pink_wool_stairs|cb|woolen_stairs|pink_wool|=
+|piston|cr||redstone|
+|polished_andesite|cb||andesite|
+|polished_andesite_slab|cb||polished_andesite|
+|polished_andesite_stairs|cb||polished_andesite|
+|polished_basalt|cb||basalt|
+|polished_blackstone|cb||blackstone|
+|polished_blackstone_brick_slab|cb||polished_blackstone_bricks|
+|polished_blackstone_brick_stairs|cb||polished_blackstone_bricks|
+|polished_blackstone_brick_wall|cm||polished_blackstone_bricks|
+|polished_blackstone_bricks|cb||polished_blackstone|
+|polished_blackstone_button|cr||polished_blackstone|
+|polished_blackstone_pressure_plate|cr||polished_blackstone|
+|polished_blackstone_slab|cb||polished_blackstone|
+|polished_blackstone_stairs|cb||polished_blackstone|
+|polished_blackstone_wall|cm||polished_blackstone|
+|polished_deepslate|cb||cobbled_deepslate|
+|polished_deepslate_slab|cb||polished_deepslate|
+|polished_deepslate_stairs|cb||polished_deepslate|
+|polished_deepslate_wall|cm||polished_deepslate|
+|polished_diorite|cb||diorite|
+|polished_diorite_slab|cb||polished_diorite|
+|polished_diorite_stairs|cb||polished_diorite|
+|polished_granite|cb||granite|
+|polished_granite_slab|cb||polished_granite|
+|polished_granite_stairs|cb||polished_granite|
+|polished_tuff_slab|cb||polished_tuff|
+|polished_tuff_stairs|cb||polished_tuff|
+|polished_tuff_wall|cm||polished_tuff|
+|popped_chorus_fruit|fm||chorus_fruit|
+|powered_rail|cm||rail|
+|prismarine_brick_slab|cb||prismarine_bricks|
+|prismarine_brick_stairs|cb||prismarine_bricks|
+|prismarine_bricks|cb|||
+|prismarine_slab|cb||prismarine|
+|prismarine_stairs|cb||prismarine|
+|prismarine_wall|cm||prismarine|
+|pumpkin_pie|cm||carved_pumpkin,pumpkin|
+|pumpkin_seeds|cm||pumpkin|
+|purple_banner|cm|banner|purple_wool|
+|purple_bed|cm|bed|purple_wool|=
+|purple_candle|cm|dyed_candle|purple_dye|
+|purple_carpet|cm|woolen_carpet|purple_wool|=
+|purple_concrete_powder|cb|concrete_powder|gravel,sand|
+|purple_concrete_slab|cb|concrete_slab|purple_concrete|
+|purple_concrete_stairs|cb|concrete_stairs|purple_concrete|
+|purple_dye|cm||blue_dye,red_dye|
+|purple_glazed_terracotta|fk||purple_terracotta|
+|purple_shulker_box|cm|shulker_box_dye|@0|
+|purple_stained_glass|cb|stained_glass|glass|
+|purple_stained_glass_pane|cm|stained_glass_pane|purple_stained_glass|=
+purple_stained_glass_pane_from_glass_pane|purple_stained_glass_pane|cm|stained_glass_pane|glass_pane,purple_dye|=
+|purple_terracotta|cb|stained_terracotta|terracotta|
+|purple_wool_slab|cb|woolen_slab|purple_wool|=
+|purple_wool_stairs|cb|woolen_stairs|purple_wool|=
+|purpur_block|cb||popped_chorus_fruit|
+|purpur_pillar|cb||purpur_block|
+|purpur_slab|cb||purpur_block|
+|purpur_stairs|cb||purpur_block|
+|quartz|fm||nether_quartz_ore|=
+|quartz_block|cb||quartz|
+|quartz_bricks|cb||quartz_block|
+quartz_from_blasting|quartz|bm||nether_quartz_ore|=
+|quartz_pillar|cb||chiseled_quartz_block,quartz_block,quartz_pillar|
+|quartz_slab|cb||chiseled_quartz_block,quartz_block,quartz_pillar|
+|quartz_stairs|cb||chiseled_quartz_block,quartz_block,quartz_pillar|
+rabbit_stew_from_brown_mushroom|rabbit_stew|cm|rabbit_stew|cooked_rabbit|baked_potato,bowl,brown_mushroom,carrot,cooked_rabbit
+rabbit_stew_from_red_mushroom|rabbit_stew|cm|rabbit_stew|cooked_rabbit|baked_potato,bowl,carrot,cooked_rabbit,red_mushroom
+rabbit_stew_from_shelf_mushroom|rabbit_stew|cm|rabbit_stew|cooked_rabbit|baked_potato,bowl,carrot,cooked_rabbit
+|rail|cm|||
+|raw_copper|cm||raw_copper_block|
+|raw_copper_block|cb||raw_copper|
+|raw_gold|cm||raw_gold_block|
+|raw_gold_block|cb||raw_gold|
+|raw_iron|cm||raw_iron_block|
+|raw_iron_block|cb||raw_iron|
+|recovery_compass|ce||echo_shard|
+|red_banner|cm|banner|red_wool|
+|red_bed|cm|bed|red_wool|=
+|red_candle|cm|dyed_candle|red_dye|
+|red_carpet|cm|woolen_carpet|red_wool|=
+|red_concrete_powder|cb|concrete_powder|gravel,sand|
+|red_concrete_slab|cb|concrete_slab|red_concrete|
+|red_concrete_stairs|cb|concrete_stairs|red_concrete|
+red_dye_from_beetroot|red_dye|cm|red_dye|beetroot|=
+red_dye_from_poppy|red_dye|cm|red_dye|poppy|=
+red_dye_from_rose_bush|red_dye|cm|red_dye|rose_bush|=
+red_dye_from_tulip|red_dye|cm|red_dye|red_tulip|=
+|red_glazed_terracotta|fk||red_terracotta|
+|red_nether_brick_slab|cb||red_nether_bricks|
+|red_nether_brick_stairs|cb||red_nether_bricks|
+|red_nether_brick_wall|cm||red_nether_bricks|
+|red_nether_bricks|cb||nether_wart|
+|red_sandstone|cb||red_sand|
+|red_sandstone_slab|cb||chiseled_red_sandstone,red_sandstone|
+|red_sandstone_stairs|cb||chiseled_red_sandstone,cut_red_sandstone,red_sandstone|
+|red_sandstone_wall|cm||red_sandstone|
+|red_shulker_box|cm|shulker_box_dye|@0|
+|red_stained_glass|cb|stained_glass|glass|
+|red_stained_glass_pane|cm|stained_glass_pane|red_stained_glass|=
+red_stained_glass_pane_from_glass_pane|red_stained_glass_pane|cm|stained_glass_pane|glass_pane,red_dye|=
+|red_terracotta|cb|stained_terracotta|terracotta|
+|red_wool_slab|cb|woolen_slab|red_wool|=
+|red_wool_stairs|cb|woolen_stairs|red_wool|=
+|redstone|cr||redstone_block|
+|redstone_block|cr||redstone|
+redstone_from_blasting_deepslate_redstone_ore|redstone|bk|redstone|deepslate_redstone_ore|=
+redstone_from_blasting_redstone_ore|redstone|bk|redstone|redstone_ore|=
+redstone_from_smelting_deepslate_redstone_ore|redstone|fk|redstone|deepslate_redstone_ore|=
+redstone_from_smelting_redstone_ore|redstone|fk|redstone|redstone_ore|=
+|redstone_lamp|cr||glowstone|
+|redstone_torch|cr||redstone|
+|repeater|cr||redstone_torch|
+|resin_block|cb||resin_clump|
+|resin_brick|fm||resin_clump|
+|resin_brick_slab|cb||resin_bricks|
+|resin_brick_stairs|cb||resin_bricks|
+|resin_brick_wall|cm||resin_bricks|
+|resin_bricks|cb||resin_brick|
+|resin_clump|cm||resin_block|
+|respawn_anchor|cm||crying_obsidian|
+|sandstone|cb||sand|
+|sandstone_slab|cb||chiseled_sandstone,sandstone|
+|sandstone_stairs|cb||chiseled_sandstone,cut_sandstone,sandstone|
+|sandstone_wall|cm||sandstone|
+|scaffolding|cm||bamboo|
+|sea_lantern|cb|||
+|shears|ce||iron_ingot|
+|shield|ce||iron_ingot|
+|shulker_box|cm||shulker_shell|
+|slime_ball|cm||slime_block|
+|slime_block|cr||slime_ball|
+|smithing_table|cm||iron_ingot|
+|smoker|cm||furnace|
+|smooth_basalt|fk||basalt|
+|smooth_quartz|fk||quartz_block|
+|smooth_quartz_slab|cb||smooth_quartz|
+|smooth_quartz_stairs|cb||smooth_quartz|
+|smooth_red_sandstone|fk||red_sandstone|
+|smooth_red_sandstone_slab|cb||smooth_red_sandstone|
+|smooth_red_sandstone_stairs|cb||smooth_red_sandstone|
+|smooth_sandstone|fk||sandstone|
+|smooth_sandstone_slab|cb||smooth_sandstone|
+|smooth_sandstone_stairs|cb||smooth_sandstone|
+|smooth_stone|fk||stone|
+|smooth_stone_slab|cb||smooth_stone|
+|snow|cm||snowball|
+|snow_block|cb||snowball|
+|snow_brick_slab|cb||snow_bricks|
+|snow_brick_stairs|cb||snow_bricks|
+|snow_brick_wall|cm||snow_bricks|
+|snow_bricks|cb||snow_block|
+|soul_campfire|cm||soul_sand,soul_soil|
+|soul_lantern|cm||soul_torch|
+|soul_torch|cm||soul_sand,soul_soil|
+|sponge|fk||wet_sponge|
+|spruce_button|cr|wooden_button|spruce_planks|
+|spruce_door|cr|wooden_door|spruce_planks|
+|spruce_fence|cm|wooden_fence|spruce_planks|
+|spruce_fence_gate|cr|wooden_fence_gate|spruce_planks|
+|spruce_hanging_sign|cm|wooden_hanging_sign|stripped_spruce_log|
+|spruce_planks|cb|planks|spruce_log,spruce_wood,stripped_spruce_log,stripped_spruce_wood|
+|spruce_pressure_plate|cr|wooden_pressure_plate|spruce_planks|
+|spruce_sign|cm|wooden_sign|spruce_planks|
+|spruce_slab|cb|wooden_slab|spruce_planks|
+|spruce_stairs|cb|wooden_stairs|spruce_planks|
+|spruce_trapdoor|cr|wooden_trapdoor|spruce_planks|
+|spruce_wood|cb|bark|spruce_log|
+|stick|cm|sticks|acacia_planks,bamboo_planks,birch_planks,cherry_planks,crimson_planks,dark_oak_planks,jungle_planks,mangrove_planks,oak_planks,pale_oak_planks,spruce_planks,warped_planks|=
+stick_from_bamboo_item|stick|cm|sticks|bamboo|=
+|sticky_piston|cr||slime_ball|
+|stone|fk||cobblestone|
+|stone_axe|ce||blackstone,cobbled_deepslate,cobblestone|
+|stone_brick_slab|cb||@1|
+|stone_brick_stairs|cb||@1|
+|stone_brick_wall|cm||stone_bricks|
+|stone_bricks|cb||stone|
+|stone_button|cr||stone|
+|stone_hoe|ce||blackstone,cobbled_deepslate,cobblestone|
+|stone_pickaxe|ce||blackstone,cobbled_deepslate,cobblestone|
+|stone_pressure_plate|cr||stone|
+|stone_shovel|ce||blackstone,cobbled_deepslate,cobblestone|
+|stone_slab|cb||stone|
+|stone_stairs|cb||stone|
+|stone_sword|ce||blackstone,cobbled_deepslate,cobblestone|
+|stonecutter|cm||stone|
+|stripped_acacia_wood|cb|bark|stripped_acacia_log|
+|stripped_birch_wood|cb|bark|stripped_birch_log|
+|stripped_cherry_wood|cb|bark|stripped_cherry_log|
+|stripped_crimson_hyphae|cb|bark|stripped_crimson_stem|
+|stripped_dark_oak_wood|cb|bark|stripped_dark_oak_log|
+|stripped_jungle_wood|cb|bark|stripped_jungle_log|
+|stripped_mangrove_wood|cb|bark|stripped_mangrove_log|
+|stripped_oak_wood|cb|bark|stripped_oak_log|
+|stripped_pale_oak_wood|cb|bark|stripped_pale_oak_log|
+|stripped_spruce_wood|cb|bark|stripped_spruce_log|
+|stripped_warped_hyphae|cb|bark|stripped_warped_stem|
+sugar_from_honey_bottle|sugar|cm|sugar|honey_bottle|=
+sugar_from_sugar_cane|sugar|cm|sugar|sugar_cane|=
+|target|cr||hay_block,redstone|
+|terracotta|fk||clay|
+|tinted_glass|cb||amethyst_shard|
+|tnt|cr||gunpowder|
+|torch|cm||stone_pickaxe|
+|trapped_chest|cr||tripwire_hook|
+|tripwire_hook|cr||string|
+|tuff_brick_slab|cb||tuff_bricks|
+|tuff_brick_stairs|cb||tuff_bricks|
+|tuff_brick_wall|cm||tuff_bricks|
+|tuff_slab|cb||tuff|
+|tuff_stairs|cb||tuff|
+|tuff_wall|cm||tuff|
+|turtle_helmet|ce||turtle_scute|
+|warped_button|cr|wooden_button|warped_planks|
+|warped_door|cr|wooden_door|warped_planks|
+|warped_fence|cm|wooden_fence|warped_planks|
+|warped_fence_gate|cr|wooden_fence_gate|warped_planks|
+|warped_hanging_sign|cm|wooden_hanging_sign|stripped_warped_stem|
+|warped_hyphae|cb|bark|warped_stem|
+|warped_planks|cb|planks|stripped_warped_hyphae,stripped_warped_stem,warped_hyphae,warped_stem|
+|warped_pressure_plate|cr|wooden_pressure_plate|warped_planks|
+|warped_sign|cm|wooden_sign|warped_planks|
+|warped_slab|cb|wooden_slab|warped_planks|
+|warped_stairs|cb|wooden_stairs|warped_planks|
+|warped_trapdoor|cr|wooden_trapdoor|warped_planks|
+|waxed_chiseled_copper|cb|waxed_chiseled_copper|waxed_cut_copper_slab|=
+waxed_chiseled_copper_from_honeycomb|waxed_chiseled_copper|cb|waxed_chiseled_copper|chiseled_copper|chiseled_copper,honeycomb
+waxed_copper_bars_from_honeycomb|waxed_copper_bars|cb|waxed_copper_bar|copper_bars|
+waxed_copper_block_from_honeycomb|waxed_copper_block|cb|waxed_copper_block|copper_block|
+|waxed_copper_bulb|cr|waxed_copper_bulb|waxed_copper_block|blaze_rod,redstone,waxed_copper_block
+waxed_copper_bulb_from_honeycomb|waxed_copper_bulb|cr|waxed_copper_bulb|copper_bulb|copper_bulb,honeycomb
+waxed_copper_chain_from_honeycomb|waxed_copper_chain|cb|waxed_copper_chain|copper_chain|
+waxed_copper_door_from_honeycomb|waxed_copper_door|cr|waxed_copper_door|copper_door|
+|waxed_copper_grate|cb|waxed_copper_grate|waxed_copper_block|=
+waxed_copper_grate_from_honeycomb|waxed_copper_grate|cb|waxed_copper_grate|copper_grate|copper_grate,honeycomb
+waxed_copper_lantern_from_honeycomb|waxed_copper_lantern|cb|waxed_copper_lantern|copper_lantern|
+waxed_copper_trapdoor_from_honeycomb|waxed_copper_trapdoor|cr|waxed_copper_trapdoor|copper_trapdoor|
+|waxed_cut_copper|cb|waxed_cut_copper|waxed_copper_block|=
+waxed_cut_copper_from_honeycomb|waxed_cut_copper|cb|waxed_cut_copper|cut_copper|cut_copper,honeycomb
+|waxed_cut_copper_slab|cb|waxed_cut_copper_slab|waxed_cut_copper|=
+waxed_cut_copper_slab_from_honeycomb|waxed_cut_copper_slab|cb|waxed_cut_copper_slab|cut_copper_slab|cut_copper_slab,honeycomb
+|waxed_cut_copper_stairs|cb|waxed_cut_copper_stairs|waxed_cut_copper|=
+waxed_cut_copper_stairs_from_honeycomb|waxed_cut_copper_stairs|cb|waxed_cut_copper_stairs|cut_copper_stairs|cut_copper_stairs,honeycomb
+|waxed_exposed_chiseled_copper|cb|waxed_exposed_chiseled_copper|waxed_exposed_cut_copper_slab|=
+waxed_exposed_chiseled_copper_from_honeycomb|waxed_exposed_chiseled_copper|cb|waxed_exposed_chiseled_copper|exposed_chiseled_copper|exposed_chiseled_copper,honeycomb
+waxed_exposed_copper_bars_from_honeycomb|waxed_exposed_copper_bars|cb|waxed_copper_bar|exposed_copper_bars|
+|waxed_exposed_copper_bulb|cr|waxed_exposed_copper_bulb|waxed_exposed_copper|blaze_rod,redstone,waxed_exposed_copper
+waxed_exposed_copper_bulb_from_honeycomb|waxed_exposed_copper_bulb|cr|waxed_exposed_copper_bulb|exposed_copper_bulb|exposed_copper_bulb,honeycomb
+waxed_exposed_copper_chain_from_honeycomb|waxed_exposed_copper_chain|cb|waxed_copper_chain|exposed_copper_chain|
+waxed_exposed_copper_door_from_honeycomb|waxed_exposed_copper_door|cr|waxed_copper_door|exposed_copper_door|
+waxed_exposed_copper_from_honeycomb|waxed_exposed_copper|cb|waxed_copper_block|exposed_copper|
+|waxed_exposed_copper_grate|cb|waxed_exposed_copper_grate|waxed_exposed_copper|=
+waxed_exposed_copper_grate_from_honeycomb|waxed_exposed_copper_grate|cb|waxed_exposed_copper_grate|exposed_copper_grate|exposed_copper_grate,honeycomb
+waxed_exposed_copper_lantern_from_honeycomb|waxed_exposed_copper_lantern|cb|waxed_copper_lantern|exposed_copper_lantern|
+waxed_exposed_copper_trapdoor_from_honeycomb|waxed_exposed_copper_trapdoor|cr|waxed_copper_trapdoor|exposed_copper_trapdoor|
+|waxed_exposed_cut_copper|cb|waxed_exposed_cut_copper|waxed_exposed_copper|=
+waxed_exposed_cut_copper_from_honeycomb|waxed_exposed_cut_copper|cb|waxed_exposed_cut_copper|exposed_cut_copper|exposed_cut_copper,honeycomb
+|waxed_exposed_cut_copper_slab|cb|waxed_exposed_cut_copper_slab|waxed_exposed_cut_copper|=
+waxed_exposed_cut_copper_slab_from_honeycomb|waxed_exposed_cut_copper_slab|cb|waxed_exposed_cut_copper_slab|exposed_cut_copper_slab|exposed_cut_copper_slab,honeycomb
+|waxed_exposed_cut_copper_stairs|cb|waxed_exposed_cut_copper_stairs|waxed_exposed_cut_copper|=
+waxed_exposed_cut_copper_stairs_from_honeycomb|waxed_exposed_cut_copper_stairs|cb|waxed_exposed_cut_copper_stairs|exposed_cut_copper_stairs|exposed_cut_copper_stairs,honeycomb
+waxed_exposed_lightning_rod_from_honeycomb|waxed_exposed_lightning_rod|cb|waxed_lightning_rod|exposed_lightning_rod|
+waxed_lightning_rod_from_honeycomb|waxed_lightning_rod|cb|waxed_lightning_rod|lightning_rod|
+|waxed_oxidized_chiseled_copper|cb|waxed_oxidized_chiseled_copper|waxed_oxidized_cut_copper_slab|=
+waxed_oxidized_chiseled_copper_from_honeycomb|waxed_oxidized_chiseled_copper|cb|waxed_oxidized_chiseled_copper|oxidized_chiseled_copper|honeycomb,oxidized_chiseled_copper
+waxed_oxidized_copper_bars_from_honeycomb|waxed_oxidized_copper_bars|cb|waxed_copper_bar|oxidized_copper_bars|
+|waxed_oxidized_copper_bulb|cr|waxed_oxidized_copper_bulb|waxed_oxidized_copper|blaze_rod,redstone,waxed_oxidized_copper
+waxed_oxidized_copper_bulb_from_honeycomb|waxed_oxidized_copper_bulb|cr|waxed_oxidized_copper_bulb|oxidized_copper_bulb|honeycomb,oxidized_copper_bulb
+waxed_oxidized_copper_chain_from_honeycomb|waxed_oxidized_copper_chain|cb|waxed_copper_chain|oxidized_copper_chain|
+waxed_oxidized_copper_door_from_honeycomb|waxed_oxidized_copper_door|cr|waxed_copper_door|oxidized_copper_door|
+waxed_oxidized_copper_from_honeycomb|waxed_oxidized_copper|cb|waxed_copper_block|oxidized_copper|
+|waxed_oxidized_copper_grate|cb|waxed_oxidized_copper_grate|waxed_oxidized_copper|=
+waxed_oxidized_copper_grate_from_honeycomb|waxed_oxidized_copper_grate|cb|waxed_oxidized_copper_grate|oxidized_copper_grate|honeycomb,oxidized_copper_grate
+waxed_oxidized_copper_lantern_from_honeycomb|waxed_oxidized_copper_lantern|cb|waxed_copper_lantern|oxidized_copper_lantern|
+waxed_oxidized_copper_trapdoor_from_honeycomb|waxed_oxidized_copper_trapdoor|cr|waxed_copper_trapdoor|oxidized_copper_trapdoor|
+|waxed_oxidized_cut_copper|cb|waxed_oxidized_cut_copper|waxed_oxidized_copper|=
+waxed_oxidized_cut_copper_from_honeycomb|waxed_oxidized_cut_copper|cb|waxed_oxidized_cut_copper|oxidized_cut_copper|honeycomb,oxidized_cut_copper
+|waxed_oxidized_cut_copper_slab|cb|waxed_oxidized_cut_copper_slab|waxed_oxidized_cut_copper|=
+waxed_oxidized_cut_copper_slab_from_honeycomb|waxed_oxidized_cut_copper_slab|cb|waxed_oxidized_cut_copper_slab|oxidized_cut_copper_slab|honeycomb,oxidized_cut_copper_slab
+|waxed_oxidized_cut_copper_stairs|cb|waxed_oxidized_cut_copper_stairs|waxed_oxidized_cut_copper|=
+waxed_oxidized_cut_copper_stairs_from_honeycomb|waxed_oxidized_cut_copper_stairs|cb|waxed_oxidized_cut_copper_stairs|oxidized_cut_copper_stairs|honeycomb,oxidized_cut_copper_stairs
+waxed_oxidized_lightning_rod_from_honeycomb|waxed_oxidized_lightning_rod|cb|waxed_lightning_rod|oxidized_lightning_rod|
+|waxed_weathered_chiseled_copper|cb|waxed_weathered_chiseled_copper|waxed_weathered_cut_copper_slab|=
+waxed_weathered_chiseled_copper_from_honeycomb|waxed_weathered_chiseled_copper|cb|waxed_weathered_chiseled_copper|weathered_chiseled_copper|honeycomb,weathered_chiseled_copper
+waxed_weathered_copper_bars_from_honeycomb|waxed_weathered_copper_bars|cb|waxed_copper_bar|weathered_copper_bars|
+|waxed_weathered_copper_bulb|cr|waxed_weathered_copper_bulb|waxed_weathered_copper|blaze_rod,redstone,waxed_weathered_copper
+waxed_weathered_copper_bulb_from_honeycomb|waxed_weathered_copper_bulb|cr|waxed_weathered_copper_bulb|weathered_copper_bulb|honeycomb,weathered_copper_bulb
+waxed_weathered_copper_chain_from_honeycomb|waxed_weathered_copper_chain|cb|waxed_copper_chain|weathered_copper_chain|
+waxed_weathered_copper_door_from_honeycomb|waxed_weathered_copper_door|cr|waxed_copper_door|weathered_copper_door|
+waxed_weathered_copper_from_honeycomb|waxed_weathered_copper|cb|waxed_copper_block|weathered_copper|
+|waxed_weathered_copper_grate|cb|waxed_weathered_copper_grate|waxed_weathered_copper|=
+waxed_weathered_copper_grate_from_honeycomb|waxed_weathered_copper_grate|cb|waxed_weathered_copper_grate|weathered_copper_grate|honeycomb,weathered_copper_grate
+waxed_weathered_copper_lantern_from_honeycomb|waxed_weathered_copper_lantern|cb|waxed_copper_lantern|weathered_copper_lantern|
+waxed_weathered_copper_trapdoor_from_honeycomb|waxed_weathered_copper_trapdoor|cr|waxed_copper_trapdoor|weathered_copper_trapdoor|
+|waxed_weathered_cut_copper|cb|waxed_weathered_cut_copper|waxed_weathered_copper|=
+waxed_weathered_cut_copper_from_honeycomb|waxed_weathered_cut_copper|cb|waxed_weathered_cut_copper|weathered_cut_copper|honeycomb,weathered_cut_copper
+|waxed_weathered_cut_copper_slab|cb|waxed_weathered_cut_copper_slab|waxed_weathered_cut_copper|=
+waxed_weathered_cut_copper_slab_from_honeycomb|waxed_weathered_cut_copper_slab|cb|waxed_weathered_cut_copper_slab|weathered_cut_copper_slab|honeycomb,weathered_cut_copper_slab
+|waxed_weathered_cut_copper_stairs|cb|waxed_weathered_cut_copper_stairs|waxed_weathered_cut_copper|=
+waxed_weathered_cut_copper_stairs_from_honeycomb|waxed_weathered_cut_copper_stairs|cb|waxed_weathered_cut_copper_stairs|weathered_cut_copper_stairs|honeycomb,weathered_cut_copper_stairs
+waxed_weathered_lightning_rod_from_honeycomb|waxed_weathered_lightning_rod|cb|waxed_lightning_rod|weathered_lightning_rod|
+|weathered_chiseled_copper|cb||weathered_cut_copper_slab|
+|weathered_copper_grate|cb|weathered_copper_grate|weathered_copper|
+|weathered_cut_copper|cb||weathered_copper|
+|weathered_cut_copper_slab|cb||weathered_cut_copper|
+|weathered_cut_copper_stairs|cb||weathered_cut_copper|
+|wheat|cm||hay_block|
+|white_banner|cm|banner|white_wool|
+|white_bed|cm|bed|white_wool|=
+|white_candle|cm|dyed_candle|white_dye|
+|white_carpet|cm|woolen_carpet|white_wool|=
+|white_concrete_powder|cb|concrete_powder|gravel,sand|
+|white_concrete_slab|cb|concrete_slab|white_concrete|
+|white_concrete_stairs|cb|concrete_stairs|white_concrete|
+|white_dye|cm|white_dye|bone_meal|=
+white_dye_from_lily_of_the_valley|white_dye|cm|white_dye|lily_of_the_valley|=
+|white_glazed_terracotta|fk||white_terracotta|
+|white_shulker_box|cm|shulker_box_dye|@0|
+|white_stained_glass|cb|stained_glass|glass|
+|white_stained_glass_pane|cm|stained_glass_pane|white_stained_glass|=
+white_stained_glass_pane_from_glass_pane|white_stained_glass_pane|cm|stained_glass_pane|glass_pane,white_dye|=
+|white_terracotta|cb|stained_terracotta|terracotta|
+white_wool_from_string|white_wool|cb||string|=
+|white_wool_slab|cb|woolen_slab|white_wool|=
+|white_wool_stairs|cb|woolen_stairs|white_wool|=
+|wind_charge|cm||breeze_rod|
+|wooden_axe|ce||stick|
+|wooden_hoe|ce||stick|
+|wooden_pickaxe|ce||stick|
+|wooden_shovel|ce||stick|
+|wooden_sword|ce||stick|
+|writable_book|cm||book|
+|yellow_banner|cm|banner|yellow_wool|
+|yellow_bed|cm|bed|yellow_wool|=
+|yellow_candle|cm|dyed_candle|yellow_dye|
+|yellow_carpet|cm|woolen_carpet|yellow_wool|=
+|yellow_concrete_powder|cb|concrete_powder|gravel,sand|
+|yellow_concrete_slab|cb|concrete_slab|yellow_concrete|
+|yellow_concrete_stairs|cb|concrete_stairs|yellow_concrete|
+yellow_dye_from_dandelion|yellow_dye|cm|yellow_dye|dandelion|=
+yellow_dye_from_golden_dandelion|yellow_dye|cm|yellow_dye|golden_dandelion|=
+yellow_dye_from_sunflower|yellow_dye|cm|yellow_dye|sunflower|=
+yellow_dye_from_wildflowers|yellow_dye|cm|yellow_dye|wildflowers|=
+|yellow_glazed_terracotta|fk||yellow_terracotta|
+|yellow_shulker_box|cm|shulker_box_dye|@0|
+|yellow_stained_glass|cb|stained_glass|glass|
+|yellow_stained_glass_pane|cm|stained_glass_pane|yellow_stained_glass|=
+yellow_stained_glass_pane_from_glass_pane|yellow_stained_glass_pane|cm|stained_glass_pane|glass_pane,yellow_dye|=
+|yellow_terracotta|cb|stained_terracotta|terracotta|
+|yellow_wool_slab|cb|woolen_slab|yellow_wool|=
+|yellow_wool_stairs|cb|woolen_stairs|yellow_wool|=`;
+const RB={E:[],built:-1,byR:new Map(),byRid:new Map(),trig:new Map(),cc:{},seen:new Set(),sds:null,ds:null,klen:-1,K:null,kdirty:0,
+  tab:{c:0,f:0,b:0,s:0},page:0,q:'',over:null,ghost:null,cyc:0,acc:0,fk:'f',list:[],toast:null,bn:new Map(),tb:{},fuels:null};
+for(const [a,b] of [['검색...','Search...'],['제작 가능한 아이템 표시 중','Showing Craftable'],['모두 표시 중','Showing All'],['제련 가능한 아이템 표시 중','Showing Smeltable'],
+  ['용광 가능한 아이템 표시 중','Showing Blastable'],['훈연 가능한 아이템 표시 중','Showing Smokable'],['우클릭하여 더 보기','Right-Click for More'],['새로운 제작법 잠금 해제!','New Recipe(s) Unlocked!'],
+  ['제작법 책을 확인해 보세요','Check your recipe book'],['제작법 책','Recipe Book'],['훈연기','Smoker'],['용광로','Blast Furnace'],['다음 페이지','Next Page'],['이전 페이지','Previous Page']])i18nAdd(a,b);
+const rbMC=id=>{const m=typeof MCID!=='undefined'&&MCID[id];return m?mcS(m).replace(/\[.*$/,''):null};
+function rbV(){if(RB.V)return RB.V;const byRes={};for(const ln of RB_VTXT.split('\n')){const f=ln.split('|');if(f.length<6)continue;const L=s=>s?(s[0]==='@'?RB_VL[+s.slice(1)]:s).split(','):[];
+    const v={name:f[0]||f[1],res:f[1],k:f[2][0],cat:f[2][1],grp:f[3],tr:L(f[4]),ing:f[5]==='='?null:f[5]?L(f[5]):null};if(f[5]==='=')v.ing=v.tr;const key=(v.k==='c'?'c':'s')+v.res;(byRes[key]||(byRes[key]=[])).push(v)}
+  return RB.V=byRes}
+// 분류를 모르면 (바닐라에 없는 조합법): 도구 · 갑옷 = 장비, 블록 = 건축, 나머지 = 기타 / 화로: 음식 · 블록 · 기타
+function rbGuess(out,k){const it=ITEM[out]||{};if(k==='c')return it.tool||it.armor?'e':it.block?'b':'m';return it.food?'f':it.block?'k':'m'}
+function rbBuild(){if(RB.built===RECIPES.length&&RB.E.length)return;const byRes=rbV(),E=[],used=new Set(),byR=new Map(),byRid=new Map(),trig=new Map();RB.built=RECIPES.length;RB.cc={};
+  const ids=L=>[...new Set(L.map(n=>idOfMC('minecraft:'+n)).filter(i=>i>=0&&ITEM[i]))];
+  const add=e=>{let rid=e.rid;if(byRid.has(rid)){let k=2;while(byRid.has(rid+'_'+k))k++;rid+='_'+k}e.rid=rid;byRid.set(rid,e);E.push(e);for(const t of e.tr){let a=trig.get(t);if(!a)trig.set(t,a=[]);a.push(e)}};
+  // 우리 조합법 ↔ 바닐라 조합법: 결과가 같은 것 중에서 재료가 가장 많이 겹치는 것 (아직 안 쓴 것 먼저)
+  const pick=(C,ingN)=>{let best=null,bs=-9;for(const v of C){const I=v.ing||v.tr,o=I.filter(x=>ingN.has(x)).length,u=I.length+ingN.size-o,s=(u?o/u:0)-(used.has(v)?1:0);if(s>bs){bs=s;best=v}}return best};
+  // 바닐라 조합법 하나에 우리 조합법이 여럿이면 (예: 참나무 판자 ← 원목 · 나무 · 껍질 벗긴 원목 = 바닐라는 #oak_logs 하나) 한 제작법으로 합쳐요
+  const byV=new Map();
+  RECIPES.forEach((r,ord)=>{if(!r||!r.out||!ITEM[r.out.id]||!r.shapeless&&!(r.pat&&r.key))return;const out=r.out.id,on=rbMC(out)||('blockcraft_'+out);
+    const ingI=[...new Set(r.shapeless?r.shapeless:Object.values(r.key).flat())].filter(i=>i!=null&&ITEM[i]),ingN=new Set(ingI.map(rbMC).filter(Boolean));
+    const v=pick(byRes['c'+on]||[],ingN);if(v&&byV.has(v)){const e0=byV.get(v);if(e0.n===(r.out.n||1)){e0.rs.push(r);byR.set(r,e0);return}}if(v)used.add(v);let tr=v?ids(v.tr):[];if(!tr.length)tr=ingI;
+    const e={rid:v?v.name:on,k:'c',cat:v?v.cat:rbGuess(out,'c'),grp:v?v.grp:'',out,n:r.out.n||1,rs:[r],ord,tr};if(v&&!byV.has(v))byV.set(v,e);byR.set(r,e);add(e)});
+  // 화로 · 용광로 · 훈연기: 우리 굽기 표 (ITEM.smelt) 를 바닐라 smelting / blasting / smoking 에 맞춰요 (용광로 · 훈연기는 바닐라에 있는 것만)
+  const ks=Object.keys(ITEM).map(Number).filter(k=>ITEM[k].smelt&&ITEM[ITEM[k].smelt]).sort((a,b)=>a-b);
+  for(const kind of ['f','b','s'])for(const inp of ks){const out=ITEM[inp].smelt,on=rbMC(out),inN=rbMC(inp);if(!on||!inN)continue;
+    const C=(byRes['s'+on]||[]).filter(v=>v.k===kind&&(!v.ing||v.ing.includes(inN)||v.tr.includes(inN)));const v=C.find(q=>!used.has(q))||C[0];if(!v&&kind!=='f')continue;if(v&&byV.has(v)){const e0=byV.get(v);e0.inps.push(inp);if(!e0.tr.includes(inp)&&!ids(v.tr).length){e0.tr.push(inp);let a=trig.get(inp);if(!a)trig.set(inp,a=[]);a.push(e0)}continue}if(v)used.add(v);
+    let tr=v?ids(v.tr):[];if(!tr.length)tr=[inp];const e={rid:v?v.name:on+'_from_'+{f:'smelting',b:'blasting',s:'smoking'}[kind]+'_'+inN,k:kind,cat:v?v.cat:rbGuess(out,'f'),grp:v?v.grp:'',out,n:1,inps:[inp],ord:100000+inp,tr};if(v)byV.set(v,e);add(e)}
+  RB.E=E;RB.byR=byR;RB.byRid=byRid;RB.trig=trig}
+function rbIds(){rbBuild();return [...RB.byRid.keys()].sort()}
+// 아는 제작법 (세계마다)
+function rbK(){const A=RECD();if(RB.ds!==dimState||RB.klen!==A.length||!RB.K||RB.kdirty){RB.ds=dimState;RB.klen=A.length;RB.K=new Set(A);RB.kdirty=0}return RB.K}
+const rbKnown=e=>rbK().has(e.rid);
+function rbUnlock(L,silent){const A=RECD(),K=rbK(),T=dimState.recT,nw=[];for(const e of L){if(!e||K.has(e.rid))continue;K.add(e.rid);A.push(e.rid);nw.push(e);if(T){const i=T.indexOf(e.rid);if(i>=0)T.splice(i,1)}}
+  RB.klen=A.length;if(!nw.length)return nw;const N=dimState.recNew||(dimState.recNew=[]);for(const e of nw)N.push(e.rid);if(N.length>4000)N.splice(0,N.length-4000);
+  const t=performance.now()+750;for(const e of nw)RB.tb[e.k+e.cat]=t;if(!silent)rbToast(nw);if(screenOpen&&bookOpen)rbRender();return nw}
+// /recipe give · take 이 부르는 곳
+function rbRecCmd(give,L,nw){RB.kdirty=1;rbBuild();const T=dimState.recT||(dimState.recT=[]);
+  if(give){for(const id of L){const i=T.indexOf(id);if(i>=0)T.splice(i,1)}const es=nw.map(id=>RB.byRid.get(id)).filter(Boolean);const N=dimState.recNew||(dimState.recNew=[]);N.push(...es.map(e=>e.rid));if(N.length>4000)N.splice(0,N.length-4000);rbToast(es)}
+  else for(const id of nw)if(!T.includes(id))T.push(id);
+  if(screenOpen&&bookOpen)rbRender()}
+// 인벤토리가 바뀌면 (바닐라 inventory_changed): 새로 들어온 아이템마다 그 아이템으로 열리는 제작법을 모두 열어요
+function rbScan(){if(!started||!dimState||typeof inv==='undefined')return;if(RB.sds!==dimState){RB.sds=dimState;RB.seen=new Set()}rbBuild();const T=dimState.recT,L=[];
+  const chk=st=>{if(!st||RB.seen.has(st.id))return;RB.seen.add(st.id);const es=RB.trig.get(st.id);if(es)for(const e of es)if(!rbKnown(e)&&!(T&&T.includes(e.rid)))L.push(e)};
+  for(let i=0;i<36;i++)chk(inv[i]);if(typeof armor!=='undefined')for(const s of armor)chk(s);if(typeof offh!=='undefined'&&offh)chk(offh[0]);
+  if(L.length)rbUnlock([...new Set(L)])}
+// 직접 만들어도 그 제작법을 배워요 (ResultSlot.awardUsedRecipes)
+function rbCrafted(r){if(!r)return;rbBuild();const e=RB.byR.get(r);if(e&&!rbKnown(e))rbUnlock([e])}
+
+/* ── 그림 (모두 코드로 직접 그려요) */
+const RB_IMG={};const rbI=(k,w,h,f)=>RB_IMG[k]||(RB_IMG[k]=gURL(w,h,f));
+const rbBG=()=>rbI('bg',147,166,g=>{guiPanel(g,0,0,147,166);guiInset(g,8,8,133,152,'#373737','#000000')});
+function rbBox(g,w,h,A,B,D,E,C){gRect(g,0,0,w-1,1,A);gRect(g,0,0,1,h-1,A);gRect(g,w-2,1,1,h-2,A);gRect(g,1,h-2,w-2,1,A);gRect(g,1,1,w-3,1,B);gRect(g,1,1,1,h-3,B);gRect(g,2,2,w-4,h-4,D);gRect(g,w-3,2,1,h-4,E);gRect(g,2,h-3,w-4,1,E);if(C){gRect(g,w-1,1,1,h-1,C);gRect(g,1,h-1,w-1,1,C)}}
+const rbSlotURL=k=>rbI('s'+k,25,25,g=>k==='no'?rbBox(g,25,25,'#8a2222','#501b1b','#6a6a6a','#c24f4f','#000'):(rbBox(g,25,25,'#cccccc','#373737','#8b8b8b','#ffffff','#000'),k==='many'&&gRect(g,24,0,1,1,'#000')));
+function rbTabURL(sel){return rbI('t'+sel,35,27,g=>{const w=sel?35:30,f=sel?'#c6c6c6':'#8b8b8b';gRect(g,2,0,w-2,1,'#000');gRect(g,1,1,1,1,'#000');gRect(g,0,2,1,22,'#000');gRect(g,1,24,1,1,'#000');gRect(g,2,25,w-2,1,'#000');
+  gRect(g,2,1,w-2,1,'#fff');gRect(g,1,2,2,22,'#fff');gRect(g,3,2,w-3,22,f);gRect(g,3,2,1,1,'#fff');gRect(g,2,24,w-2,1,'#555');gRect(g,2,24,1,1,f);if(sel)gRect(g,33,0,2,1,'#fff')})}
+function rbArrowURL(hl){return rbI('a'+hl,12,17,g=>{const ins=(x,y)=>y>=0&&y<17&&x>=0&&x<1+Math.min(y,16-y);for(let y=0;y<17;y++)for(let x=0;x<12;x++){if(!ins(x,y))continue;
+    const edge=!ins(x-1,y)||!ins(x+1,y)||!ins(x,y-1)||!ins(x,y+1);gRect(g,x,y,1,1,edge?'#000':(y<9&&!ins(x+1,y-1))||x===1?'#fff':(y>7&&!ins(x+1,y+1))||!ins(x+2,y)&&y>7?'#373737':hl?'#c6c6c6':'#8b8b8b')}})}
+function rbBtnURL(hl){return rbI('b'+hl,20,18,g=>{rbBox(g,20,18,'#000','#fff',hl?'#e0e0e0':'#c6c6c6','#555');  // 초록 책: 표지 · 등 · 종이
+  gRect(g,5,3,10,12,'#1b361b');gRect(g,6,4,8,10,'#3d7a3d');gRect(g,7,4,7,2,'#56ad56');gRect(g,6,4,1,10,'#2a592a');gRect(g,8,7,5,1,'#b7d8a0');gRect(g,8,9,4,1,'#b7d8a0');gRect(g,5,14,10,2,'#d6d6d6');gRect(g,5,15,10,1,'#999');gRect(g,14,4,1,11,'#d6d6d6');
+  if(hl){gRect(g,1,0,18,1,'#fff');gRect(g,0,1,1,16,'#fff');gRect(g,19,1,1,16,'#fff');gRect(g,1,17,18,1,'#fff')}})}
+function rbFilterURL(on){return rbI('f'+on,26,16,g=>{if(on){rbBox(g,26,16,'#aec57a','#aec57a','#218756','#0e2725','#0e2725');[[3,7],[4,8],[5,9],[6,8],[7,7],[8,6],[9,5]].forEach(([x,y])=>gRect(g,x,y,1,2,'#80b847'))}
+  else{rbBox(g,26,16,'#c6c6c6','#c6c6c6','#8b8b8b','#373737','#373737');for(let d=0;d<6;d++){gRect(g,3+d,5+d,1,1,'#b3312c');gRect(g,8-d,5+d,1,1,'#b3312c')}}})}
+const rbMagURL=()=>rbI('m',11,11,g=>{const L='#20bad5',D='#1f82a7',R='#c6c6c6';gRect(g,4,0,4,1,R);gRect(g,3,1,6,1,R);gRect(g,3,1,1,5,R);gRect(g,8,1,1,5,R);gRect(g,4,6,4,1,R);gRect(g,4,1,4,5,L);gRect(g,4,4,4,2,D);gRect(g,5,2,2,1,'#fff');
+  gRect(g,2,6,2,1,'#8b8b8b');gRect(g,1,7,2,1,'#9e5a33');gRect(g,0,8,2,1,'#af7246');gRect(g,0,9,1,1,'#543823')});
+const rbOverBtnURL=(k,no)=>rbI('o'+k+no,24,24,g=>{const f=no?'#6a6a6a':'#8b8b8b',l=no?'#501b1b':'#373737';rbBox(g,24,24,'#000',no?'#c24f4f':'#fff',f,'#555','#000');if(k==='c'){gRect(g,8,2,1,20,l);gRect(g,15,2,1,20,l);gRect(g,2,8,20,1,l);gRect(g,2,15,20,1,l)}});
+const RB_WS=()=>({c:TABLE,f:FURNACE,b:BLAST_FURNACE,s:SMOKER});
+function rbTabs(k){const P=typeof PORK!=='undefined'?PORK:APPLE;return {c:[['*',[COMPASS]],['e',[toolId(2,1),toolId(4,3)]],['b',[BRICKS]],['m',[LAVA_BUCKET,APPLE]],['r',[REDSTONE]]],
+  f:[['*',[COMPASS]],['f',[P]],['k',[STONE]],['m',[LAVA_BUCKET,EMERALD]]],b:[['*',[COMPASS]],['k',[REDSTONE_ORE]],['m',[toolId(2,2),ARMOR_ID(1,2)]]],s:[['*',[COMPASS]],['f',[P]]]}[k]}
+
+/* ── 책 상태 */
+const rbKind=()=>screenOpen==='inv'||screenOpen==='craft'?'c':screenOpen==='furnace'?RB.fk:null;
+function rbSt(k){const S=dimState.rbook||(dimState.rbook={});return S[k]||(S[k]=[0,0])}
+function rbColls(k){rbBuild();if(RB.cc[k])return RB.cc[k];const M=new Map(),L=[];for(const e of RB.E){if(e.k!==k)continue;const key=e.grp?e.cat+'|'+e.grp:'#'+e.rid;let c=M.get(key);if(!c){M.set(key,c={cat:e.cat,E:[]});L.push(c)}c.E.push(e)}return RB.cc[k]=L}
+// 가진 재료 (인벤토리 36칸 + 제작 칸 / 화로 재료 칸): 닳았거나 마법 부여 · 이름 붙인 건 빼요 (바닐라 StackedContents)
+function rbPool(){const P=new Map(),add=s=>{if(s&&!(s.d>0)&&!s.e&&!s.name)P.set(s.id,(P.get(s.id)||0)+s.n)};for(let i=0;i<36;i++)add(inv[i]);const k=rbKind();
+  if(k==='c'){const [g]=grid();g.forEach(add)}else if(k&&screenTile&&screenTile.s)add(screenTile.s[0]);return P}
+const RB_CW={2:new WeakMap(),3:new WeakMap()};
+const rbFitR=(r,n)=>r.shapeless?r.shapeless.length<=n*n:r.pat[0].length<=n&&r.pat.length<=n;
+function rbCellsR(r,n){const W=RB_CW[n]||(RB_CW[n]=new WeakMap());let out=W.get(r);if(out)return out;out=[];if(r.shapeless)r.shapeless.forEach((id,i)=>out.push([i,[id]]));else r.pat.forEach((row,y)=>{for(let x=0;x<row.length;x++)if(row[x]!==' ')out.push([y*n+x,r.key[row[x]]])});W.set(r,out);return out}
+// 보여 줄 칸 (유령 · 목록): 들어가는 첫 조합법 + 칸 자리가 같은 다른 조합법의 재료를 합쳐요 (바닐라 태그 재료처럼 번갈아 보여요)
+function rbCells(e,n){const ck='_c'+n;if(e[ck])return e[ck];const F=e.rs.filter(r=>rbFitR(r,n));if(!F.length)return e[ck]=[];const base=rbCellsR(F[0],n),key=c=>c.map(x=>x[0]).join(',');
+  const out=base.map(([i,o])=>[i,o.slice()]);for(const r of F.slice(1)){const c=rbCellsR(r,n);if(key(c)!==key(base))continue;c.forEach(([,o],j)=>{for(const x of o)if(!out[j][1].includes(x))out[j][1].push(x)})}return e[ck]=out}
+// t 벌을 채울 수 있으면 [[칸, 아이템]] — 같은 재료 칸은 되도록 한 가지 아이템으로 (안 되면 칸마다 섞어서)
+function rbPlan(r,P,t,n){const cells=rbCellsR(r,n),G=new Map();for(const [i,o] of cells){let a=G.get(o);if(!a)G.set(o,a=[]);a.push(i)}const pool=new Map(P),plan=[];
+  for(const [opts,cs] of [...G].sort((a,b)=>a[0].length-b[0].length)){const need=cs.length*t;let best=-1,bn=0;for(const o of opts){const c=pool.get(o)||0;if(c>=need&&c>bn&&maxStack(o)>=t){best=o;bn=c}}
+    if(best>=0){pool.set(best,bn-need);for(const i of cs)plan.push([i,best]);continue}
+    for(const i of cs){let b2=-1,c2=0;for(const o of opts){const c=pool.get(o)||0;if(c>=t&&c>c2&&maxStack(o)>=t){b2=o;c2=c}}if(b2<0)return null;pool.set(b2,c2-t);plan.push([i,b2])}}
+  return plan}
+const rbCan=(e,P,n)=>e.k==='c'?e.rs.some(r=>rbFitR(r,n||3)&&rbPlan(r,P,1,n||3)):e.inps.some(i=>(P.get(i)||0)>0);
+const rbFit=(e,n)=>e.k!=='c'||e.rs.some(r=>rbFitR(r,n));
+function rbMatch(e,q){const it=ITEM[e.out];if(!it)return false;const n=String(it.n||'');return n.toLowerCase().includes(q)||String(TR(n)).toLowerCase().includes(q)||(rbMC(e.out)||'').replace(/_/g,' ').includes(q)||(rbMC(e.out)||'').includes(q)}
+
+/* ── 채우기 (바닐라 ServerPlaceRecipe): 제작 칸을 비우고 (인벤토리에 안 들어가면 아무것도 안 해요) 재료를 놓아요 · 같은 제작법이 이미 있으면 한 벌 더 · 쉬프트 = 최대한 */
+function rbFits(L){const v=inv.slice(0,36).map(s=>s&&Object.assign({},s));for(const s0 of L){const s=Object.assign({},s0);toRange(s,v,rng(0,36));if(s.n>0)return false}return true}
+function rbClear(arr,idx){const L=idx.map(i=>arr[i]).filter(Boolean);if(!L.length)return true;if(!rbFits(L))return false;for(const i of idx){const s=arr[i];if(!s)continue;arr[i]=null;toRange(s,inv,rng(0,36));if(s.n>0)giveOrDrop(s)}return true}
+function rbTake(id,t){let got=0;for(let i=0;i<36&&got<t;i++){const s=inv[i];if(!s||s.id!==id||s.d>0||s.e||s.name)continue;const k=Math.min(s.n,t-got);s.n-=k;got+=k;if(!s.n)inv[i]=null}return got}
+function rbPlace(e,max){const k=rbKind();if(!k)return;RB.ghost=null;if($('screen').classList.contains('rbNarrow')){rbSt(k)[0]=0;bookOpen=false;RB.over=null;rbMount()}
+  if(e.k==='c'){if(k!=='c')return;const [g,n]=grid();self.__rbLast=null;craftOut();const lr=self.__rbLast,same=e.rs.includes(lr),P=rbPool(),cur=same?Math.min(...g.filter(Boolean).map(s=>s.n)):0,lim=max?64:same?cur+1:1;
+    let best=null,bt=0;for(const r of (same?[lr]:[]).concat(e.rs.filter(r=>r!==lr&&rbFitR(r,n))))for(let t=bt+1;t<=lim;t++){const p=rbPlan(r,P,t,n);if(!p)break;best=p;bt=t}
+    if(!best){if(rbClear(g,rng(0,g.length)))RB.ghost={e};drawScreen();return}
+    if(same&&bt<=cur){drawScreen();return}
+    if(!rbClear(g,rng(0,g.length))){drawScreen();return}
+    for(const [i,id] of best){const got=rbTake(id,bt);if(got)g[i]={id,n:got,d:0}}drawScreen();return}
+  if(!screenTile||!screenTile.s)return;const s=screenTile.s,P=rbPool(),same=!!(s[0]&&e.inps.includes(s[0].id)),inp=same?s[0].id:e.inps.reduce((a,b)=>(P.get(b)||0)>(P.get(a)||0)?b:a,e.inps[0]),have=P.get(inp)||0,cur=same?s[0].n:0;
+  if(!have){if(rbClear(s,[0]))RB.ghost={e};drawScreen();return}
+  const want=Math.min(have,maxStack(inp),max?64:cur+1);if(same&&want<=cur){drawScreen();return}
+  if(!rbClear(s,[0])){drawScreen();return}const got=rbTake(inp,want);if(got)s[0]={id:inp,n:got,d:0};drawScreen()}
+
+/* ── 유령 조합법 (GhostSlots): 빈 칸에 반투명 재료 + 붉은 바탕 · 여러 가지 되는 재료는 1.5초마다 바뀌어요 · 화로는 연료 칸도 */
+function rbFuels(){return RB.fuels||(RB.fuels=Object.keys(ITEM).map(Number).filter(i=>ITEM[i].fuel&&!ITEM[i].hidden).sort((a,b)=>a-b))}
+function rbPaintGhost(){document.querySelectorAll('#panel .slot.rbGs').forEach(el=>el.classList.remove('rbGs'));const G=RB.ghost,k=rbKind();if(!G||!k)return;const cy=RB.cyc,pick=o=>o[cy%o.length];
+  const put=(c,i,id,n)=>{const el=document.querySelector(`#panel .slot[data-c="${c}"][data-i="${i}"]`);if(!el||el.querySelector('img')||id==null||!ITEM[id])return;el.classList.add('rbGs');el.innerHTML='<i class="rbGh"></i>'+slotHTML({id,n:n||1,d:0})};
+  const e=G.e;if(e.k==='c'){if(k!=='c')return;const [g,n]=grid(),gk=screenOpen==='craft'?'c3':'c2';for(const [i,o] of rbCells(e,n))if(!g[i])put(gk,i,pick(o.filter(x=>ITEM[x])));put('res',0,e.out,e.n)}
+  else if(screenTile&&screenTile.s){const s=screenTile.s;if(!s[0])put('fur',0,pick(e.inps));if(!s[1]&&rbFuels().length)put('fur',1,pick(rbFuels()));if(!s[2])put('fur',2,e.out)}}
+
+/* ── 책 그리기 */
+const rp=v=>`calc(${v}px * var(--s))`,rpos=(x,y)=>`left:${rp(x)};top:${rp(y)}`;
+function rbMount(){const B2=$('rbook'),k=rbKind(),scr=$('screen');if(!k||!bookOpen){B2.classList.add('hide');B2.classList.remove('rb8');B2.innerHTML='';scr.classList.remove('rbOpen','rbNarrow');return}
+  const nar=gW()<379;B2.className='panel rbook rb8'+(nar?' narrow':'');scr.classList.add('rbOpen');scr.classList.toggle('rbNarrow',nar);B2.style.background=`url(${rbBG()}) 0 0/100% 100%`;
+  B2.innerHTML=`<div class="rbTabs"></div><img class="px rbMag" src="${rbMagURL()}"><input id="rbQ" class="rbQ" maxlength="50" autocomplete="off" spellcheck="false" translate="no"><button class="rbF" id="rbF"><img class="px"></button><div class="rbP"></div>`+
+    `<button class="rbPg rbPrev" id="rbPrev" aria-label="이전 페이지"></button><button class="rbPg rbNext" id="rbNext" aria-label="다음 페이지"></button><div class="rbPn" id="rbPn"></div><div class="rbO hide" id="rbO"></div>`;
+  const q=$('rbQ');q.value=RB.q;q.placeholder=TR('검색...');q.oninput=()=>{RB.q=q.value;RB.page=0;RB.over=null;rbRender()};q.onkeydown=e=>{if(e.key!=='Escape')e.stopPropagation()};q.onkeyup=e=>e.stopPropagation();
+  B2.onpointerdown=rbDown;B2.onpointerover=rbOverTip;B2.onpointerout=e=>{if(!e.relatedTarget||!B2.contains(e.relatedTarget))hideTip()};B2.oncontextmenu=e=>e.preventDefault();
+  B2.classList.remove('hide');rbRender()}
+function rbRender(){const B2=$('rbook');if(!B2||!B2.classList.contains('rb8'))return;const k=rbKind();if(!k)return;rbBuild();
+  const st=rbSt(k),filt=!!st[1],n=k==='c'?grid()[1]:3,P=rbPool(),K=rbK(),q=RB.q.trim().toLowerCase(),TB=rbTabs(k),colls=rbColls(k),now=performance.now();
+  const vis=c=>c.E.filter(e=>K.has(e.rid)&&rbFit(e,n));
+  // 탭: 아는 제작법이 있는 분류만 · 빈자리 없이 위에서부터
+  const tv=TB.map(([cat],i)=>!i||colls.some(c=>(cat==='*'||c.cat===cat)&&vis(c).length));let ti=RB.tab[k]||0;if(!tv[ti])ti=0;RB.tab[k]=ti;let ty=0;
+  B2.querySelector('.rbTabs').innerHTML=TB.map(([cat,ic],i)=>{if(!tv[i])return'';const sel=i===ti,x=sel?-32:-30,y=3+27*ty++,bn=cat!=='*'&&RB.tb[k+cat]>now?' rbBn':'';
+    return `<div class="rbTab${sel?' on':''}${bn}" data-t="${i}" style="${rpos(x,y)};background-image:url(${rbTabURL(sel?1:0)})">`+(ic.length>1?`<img class="px" src="${iconURL(ic[0])}" style="left:${rp(3)}"><img class="px" src="${iconURL(ic[1])}" style="left:${rp(14)}">`:`<img class="px" src="${iconURL(ic[0])}" style="left:${rp(9)}">`)+'</div>'}).join('');
+  const cat=TB[ti][0],L=[];
+  for(const c of colls){if(cat!=='*'&&c.cat!==cat)continue;const es=vis(c);if(!es.length)continue;if(q&&!es.some(e=>rbMatch(e,q)))continue;const ok=es.filter(e=>rbCan(e,P,n));if(filt&&!ok.length)continue;
+    L.push({c,es:filt?ok:ok.concat(es.filter(e=>!ok.includes(e))),can:ok.length>0})}
+  const pages=Math.max(1,Math.ceil(L.length/20));RB.page=Math.max(0,Math.min(RB.page,pages-1));RB.list=L;const N=dimState.recNew;const NS=N&&N.length?new Set(N):null;
+  B2.querySelector('.rbP').innerHTML=L.slice(RB.page*20,RB.page*20+20).map((o,j)=>{const e=o.es[RB.cyc%o.es.length],many=o.es.length>1,u=iconURL(e.out);
+    if(NS&&o.es.some(x=>NS.has(x.rid))){RB.bn.set(o.c,now+750);for(const x of o.es){const i=N.indexOf(x.rid);if(i>=0)N.splice(i,1)}}
+    const bt=RB.bn.get(o.c),bn=bt>now?` rbBn" style="animation-delay:-${Math.round(750-(bt-now))}ms;`:'" style="';
+    return `<div class="rbB${o.can?'':' no'}${many?' many':''}${bn}${rpos(11+25*(j%5),31+25*Math.floor(j/5))};background-image:url(${rbSlotURL(o.can?many?'many':'ok':'no')})" data-j="${j}">`+
+      (many?`<img class="px" src="${u}" style="${rpos(5,5)}"><img class="px" src="${u}" style="${rpos(3,3)}">`:`<img class="px" src="${u}">`)+(e.n>1?`<img class="cnt" src="${cntURL(e.n)}" style="width:${rp(String(e.n).length*6+1)}">`:'')+'</div>'}).join('');
+  const pv=$('rbPrev'),nx=$('rbNext');pv.style.display=pages>1&&RB.page>0?'':'none';nx.style.display=pages>1&&RB.page<pages-1?'':'none';
+  pv.style.backgroundImage=nx.style.backgroundImage=`url(${rbArrowURL(0)})`;$('rbPn').textContent=pages>1?`${RB.page+1}/${pages}`:'';
+  const F=$('rbF');F.style.backgroundImage=`url(${rbFilterURL(filt?1:0)})`;F.firstChild.src=iconURL(RB_WS()[k]);
+  rbRenderOver(P,n)}
+function rbRenderOver(P,n){const O=$('rbO');if(!O)return;const o=RB.over&&RB.list.find(x=>x.c===RB.over.c);if(!o){RB.over=null;O.classList.add('hide');O.innerHTML='';return}
+  const es=o.es,cnt=es.length,cols=cnt<=16?4:5,rows=Math.ceil(cnt/cols),w=Math.min(cnt,cols)*25+8,h=rows*25+8;let x=RB.over.x,y=RB.over.y;if(x+w>147+50)x-=Math.ceil((x+w-197)/25)*25;if(y+h>166+50)y-=Math.ceil((y+h-216)/25)*25;
+  O.style.cssText=`${rpos(x,y)};width:${rp(w)};height:${rp(h)};background:url(${panelURL(w,h)}) 0 0/100% 100%`;O.classList.remove('hide');const ck=es[0].k==='c'?'c':'f';
+  O.innerHTML=es.map((e,i)=>{const can=rbCan(e,P,n);let h2='';if(e.k==='c'){for(const [c,op] of rbCells(e,3)){const ok=op.filter(v=>ITEM[v]);if(!ok.length)continue;h2+=`<img class="px" src="${iconURL(ok[RB.cyc%ok.length])}" style="${rpos(2+(c%3)*7,2+Math.floor(c/3)*7)};width:${rp(6)};height:${rp(6)}">`}}
+      else h2=`<img class="px" src="${iconURL(e.inps[RB.cyc%e.inps.length])}" style="${rpos(4,4)}">`;
+    return `<div class="rbOB" data-i="${i}" style="${rpos(4+25*(i%cols),5+25*Math.floor(i/cols))};background-image:url(${rbOverBtnURL(ck,can?0:1)})">${h2}</div>`}).join('')}
+function rbDown(ev){const t=ev.target;if(t.id==='rbQ')return;ev.preventDefault();ev.stopPropagation();const q=$('rbQ');if(q&&document.activeElement===q)q.blur();const k=rbKind();if(!k)return;const st=rbSt(k);
+  if(RB.over){const b=t.closest('.rbOB');const o=RB.list.find(x=>x.c===RB.over.c);RB.over=null;if(b&&o&&ev.button===0){const e=o.es[+b.dataset.i];if(e){sfx('click');rbPlace(e,ev.shiftKey)}}rbRender();return}
+  const tab=t.closest('.rbTab');if(tab){const i=+tab.dataset.t;if(i!==RB.tab[k]){RB.tab[k]=i;RB.page=0;sfx('click');rbRender()}return}
+  if(t.closest('#rbF')){st[1]=st[1]?0:1;RB.page=0;sfx('click');rbRender();hideTip();return}
+  if(t.closest('#rbPrev')){RB.page--;sfx('click');rbRender();return}if(t.closest('#rbNext')){RB.page++;sfx('click');rbRender();return}
+  const b=t.closest('.rbB');if(!b)return;const o=RB.list[RB.page*20+(+b.dataset.j)];if(!o)return;
+  if(ev.button===2){if(o.es.length>1){RB.over={c:o.c,x:11+25*((+b.dataset.j)%5),y:31+25*Math.floor((+b.dataset.j)/5)};hideTip();rbRender()}return}
+  if(ev.button!==0)return;
+  // 터치: 꾹 누르면 (0.4초) 다른 조합법 목록 · 짧게 누르면 채우기
+  if(ev.pointerType!=='mouse'&&o.es.length>1){clearTimeout(RB.lp);let fired=false;const j=+b.dataset.j;RB.lp=setTimeout(()=>{fired=true;RB.over={c:o.c,x:11+25*(j%5),y:31+25*Math.floor(j/5)};rbRender()},400);
+    addEventListener('pointerup',()=>{if(!fired){clearTimeout(RB.lp);sfx('click');rbPlace(o.es[RB.cyc%o.es.length],false)}},{once:true});return}
+  sfx('click');hideTip();rbPlace(o.es[RB.cyc%o.es.length],ev.shiftKey)}
+function rbOverTip(ev){ev.stopPropagation();const t=ev.target,k=rbKind();if(!k)return;
+  if(t.closest('#rbF')){const s=rbSt(k)[1];showTip([[TR(s?{c:'제작 가능한 아이템 표시 중',f:'제련 가능한 아이템 표시 중',b:'용광 가능한 아이템 표시 중',s:'훈연 가능한 아이템 표시 중'}[k]:'모두 표시 중'),'#ffffff']],ev.clientX,ev.clientY);return}
+  const b=!RB.over&&t.closest('.rbB');if(b){const o=RB.list[RB.page*20+(+b.dataset.j)];if(o){const e=o.es[RB.cyc%o.es.length],L=tipLines({id:e.out,n:e.n,d:0}).map(l=>[TR(l[0]),l[1],l[2]]);if(o.es.length>1)L.push([TR('우클릭하여 더 보기'),'#ffffff']);showTip(L,ev.clientX,ev.clientY);return}}
+  hideTip()}
+function rbToggle(){const k=rbKind();if(!k)return;const st=rbSt(k);st[0]=st[0]?0:1;bookOpen=!!st[0];RB.over=null;sfx('click');rbMount();drawScreen()}
+
+/* ── 알림 (마크 RecipeToast 160×32: 밝은 판 · 제목 보라 (30,7) · "제작법 책을 확인해 보세요" 검정 (30,18) · 작업대 아이콘 0.6배 (3,3) · 결과 (8,8) · 5초 동안 차례로 · 떠 있는 동안 새로 배우면 거기에 더하고 다시 5초) */
+function rbToast(nw){if(!nw||!nw.length||typeof document==='undefined')return;let box=$('advToasts');if(!box){box=document.createElement('div');box.id='advToasts';document.body.appendChild(box)}let T=RB.toast;const now=Date.now();
+  if(T&&T.el.isConnected&&!T.out){T.L.push(...nw);T.t0=now}
+  else{const el=document.createElement('div');el.className='advT rbT';el.innerHTML=`<img class="px rbTw"><img class="px rbTi"><b>${esc(TR('새로운 제작법 잠금 해제!'))}</b><span>${esc(TR('제작법 책을 확인해 보세요'))}</span>`;
+    box.appendChild(el);while(box.children.length>5)box.firstChild.remove();T=RB.toast={el,L:nw.slice(),t0:now};requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));try{snd('toast.in','master',1,1)}catch(e){}
+    const iv=setInterval(()=>{if(!rbToastUpd())clearInterval(iv)},100)}
+  rbToastUpd()}
+function rbToastUpd(){const T=RB.toast;if(!T||!T.el.isConnected||T.out)return false;const dur=5000*((typeof optGet==='function'?optGet('notifT',100):100)/100),dt=Date.now()-T.t0,el=T.el;
+  if(dt>=dur){T.out=1;el.classList.remove('in');try{snd('toast.out','master',1,1)}catch(e){}setTimeout(()=>el.remove(),700);RB.toast=null;return false}
+  const e=T.L[Math.floor(dt/Math.max(1,dur/T.L.length))%T.L.length];if(T.cur!==e){T.cur=e;el.querySelector('.rbTw').src=iconURL(RB_WS()[e.k]);el.querySelector('.rbTi').src=iconURL(e.out)}return true}
+
+/* ── 이어 붙이기 */
+{const _mc=matchCraft;matchCraft=function(){self.__rbLast=null;return _mc.apply(this,arguments)}}
+// limited_crafting (doLimitedCrafting): 켜면 배운 제작법으로만 만들 수 있어요
+{const _co=craftOut;craftOut=function(){self.__rbLast=null;const o=_co.apply(this,arguments);if(o&&typeof gameRule==='function'&&gameRule('limited_crafting')){const r=self.__rbLast;if(r){rbBuild();const e=RB.byR.get(r);if(e&&!rbKnown(e))return null}}return o}}
+{const _tr=takeResult;takeResult=function(){craftOut();const r=self.__rbLast,ok=_tr.apply(this,arguments);if(ok&&r)rbCrafted(r);return ok}}
+{const _qm=quickMove;quickMove=function(c,i){if(c!=='res')return _qm.apply(this,arguments);craftOut();const r=self.__rbLast,o=craftOut(),res=_qm.apply(this,arguments);if(r&&o)rbCrafted(r);return res}}
+{const _cs=clickSlot;clickSlot=function(){RB.ghost=null;RB.over=null;return _cs.apply(this,arguments)}}
+renderBook=function(){};
+{const _ds=drawScreen;drawScreen=function(){const r=_ds.apply(this,arguments);if(screenOpen){if(bookOpen&&rbKind())rbRender();rbPaintGhost()}return r}}
+{const _os=openScreen;openScreen=function(type,tgt){RB.ghost=null;RB.over=null;RB.q='';RB.page=0;
+  if(type==='furnace'){let id=-1;try{if(tgt)id=getB(tgt.x,tgt.y,tgt.z)}catch(e){}RB.fk=id===SMOKER?'s':id===BLAST_FURNACE?'b':(B[id]&&/훈연기/.test(B[id].n||''))?'s':(B[id]&&/용광로/.test(B[id].n||''))?'b':'f'}
+  const r=_os.apply(this,arguments);if(!screenOpen)return r;const k=rbKind(),P=$('panel');
+  if(screenOpen==='furnace'){if(RB.fk!=='f'){const t=[...P.querySelectorAll('.pt')].find(x=>x.textContent==='화로'||x.textContent==='Furnace');if(t){const nm=RB.fk==='s'?'훈연기':'용광로';t.textContent=TR(nm);t.style.left=rp(Math.floor((176-gTextW(TR(nm)))/2))}}
+    if(!$('bookBtn'))P.insertAdjacentHTML('beforeend',pAt(20,34,'<button class="bookBtn" id="bookBtn"></button>'))}
+  const bb=$('bookBtn');if(bb&&k){bb.title='';bb.innerHTML=`<img class="px rbBb0" src="${rbBtnURL(0)}"><img class="px rbBb1" src="${rbBtnURL(1)}">`;bb.onclick=e=>{e.preventDefault();rbToggle()};
+    bb.onpointerover=e=>{e.stopPropagation();showTip([[TR('제작법 책'),'#ffffff']],e.clientX,e.clientY)};bb.onpointerout=()=>hideTip()}
+  bookOpen=k?!!rbSt(k)[0]:false;rbMount();if(bookOpen)drawScreen();return r}}
+{const _cl=closeScreen;closeScreen=function(){const r=_cl.apply(this,arguments);if(!screenOpen){RB.ghost=null;RB.over=null;const B2=$('rbook');B2.classList.remove('rb8');B2.innerHTML='';$('screen').classList.remove('rbOpen','rbNarrow');bookOpen=false}return r}}
+// 바깥을 누르면 검색 칸에서 빠져요 (E 가 다시 창을 닫게)
+$('screen').addEventListener('pointerdown',e=>{const q=$('rbQ');if(q&&e.target!==q&&document.activeElement===q)q.blur()},true);
+{const _ft=furnaceTick;furnaceTick=function(dt){const r=_ft.apply(this,arguments);try{rbScan();if(screenOpen&&(RB.ghost||bookOpen&&rbKind())){RB.acc+=dt;if(RB.acc>=1.5){RB.acc-=1.5;if(!physK.ControlLeft&&!physK.ControlRight){RB.cyc++;if(bookOpen&&rbKind())rbRender();rbPaintGhost()}}}}catch(e){console.warn(e)}return r}}
+document.head.appendChild(Object.assign(document.createElement('style'),{textContent:
+  '#screen.rbOpen{gap:calc(2px * var(--s))}#rbook.rb8{display:block;position:relative;width:calc(147px * var(--s));height:calc(166px * var(--s));max-height:none;padding:0;box-shadow:none;border-radius:0;align-self:center;flex:none;font-family:var(--mcf);image-rendering:pixelated}'+
+  '#rbook.rb8.narrow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3}#screen.rbNarrow #panel{visibility:hidden}#rbook.rb8>*{position:absolute}.rb8 .rbTabs,.rb8 .rbP{left:0;top:0;width:0;height:0}'+
+  '.rbTab{position:absolute;width:calc(35px * var(--s));height:calc(27px * var(--s));background-size:100% 100%;cursor:pointer;z-index:1}.rbTab img{position:absolute;top:calc(5px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s));pointer-events:none}'+
+  '.rbTab.rbBn,.rbB.rbBn{animation:rbBn .75s ease-in-out}@keyframes rbBn{50%{transform:scale(1.1)}}'+
+  '.rbMag{left:calc(12px * var(--s));top:calc(15px * var(--s));width:calc(11px * var(--s));height:calc(11px * var(--s))}'+
+  '.rbQ{left:calc(25px * var(--s));top:calc(13px * var(--s));width:calc(81px * var(--s));height:calc(14px * var(--s));box-sizing:border-box;background:#000;border:calc(1px * var(--s)) solid #a0a0a0;color:#fff;font:inherit;font-family:var(--mcf);font-size:calc(8px * var(--s));line-height:calc(12px * var(--s));padding:0 0 0 calc(3px * var(--s));margin:0;outline:none;border-radius:0}'+
+  '.rbQ:focus{border-color:#fff}.rbQ::placeholder{color:#aaa;font-style:italic;opacity:1}'+
+  '.rbF{left:calc(110px * var(--s));top:calc(12px * var(--s));width:calc(26px * var(--s));height:calc(16px * var(--s));border:0;padding:0;background-size:100% 100%;cursor:pointer}.rbF img{position:absolute;left:calc(13px * var(--s));top:calc(3px * var(--s));width:calc(10px * var(--s));height:calc(10px * var(--s));pointer-events:none}'+
+  '.rbB{position:absolute;width:calc(25px * var(--s));height:calc(25px * var(--s));background-size:100% 100%;cursor:pointer}.rbB img{position:absolute;left:calc(4px * var(--s));top:calc(4px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s));pointer-events:none}'+
+  '.rbB img.cnt{left:auto;top:auto;right:calc(4px * var(--s));bottom:calc(3px * var(--s));height:calc(8px * var(--s))}.rbB:hover{filter:brightness(1.12)}'+
+  '.rbPg{top:calc(137px * var(--s));width:calc(12px * var(--s));height:calc(17px * var(--s));border:0;padding:0;background:none 0 0/100% 100%;cursor:pointer}.rbPg:hover{filter:brightness(1.3)}.rbPrev{left:calc(38px * var(--s));transform:scaleX(-1)}.rbNext{left:calc(93px * var(--s))}'+
+  '.rbPn{left:calc(48px * var(--s));top:calc(141px * var(--s));width:calc(50px * var(--s));text-align:center;color:#fff;font-size:calc(8px * var(--s));line-height:calc(9px * var(--s));pointer-events:none}'+
+  '.rbO{z-index:5}.rbO.hide{display:none}.rbOB{position:absolute;width:calc(24px * var(--s));height:calc(24px * var(--s));background-size:100% 100%;cursor:pointer}.rbOB:hover{filter:brightness(1.2)}.rbOB img{position:absolute;width:calc(16px * var(--s));height:calc(16px * var(--s));pointer-events:none}'+
+  '.bookBtn img{position:absolute;left:0;top:0;width:100%;height:100%}.bookBtn .rbBb1,.bookBtn:hover .rbBb0{display:none}.bookBtn:hover .rbBb1{display:block}.panel.mcfix .bookBtn{position:relative}'+
+  '.slot .rbGh{position:absolute;left:calc(1px * var(--s));top:calc(1px * var(--s));width:calc(16px * var(--s));height:calc(16px * var(--s));background:rgba(255,0,0,.19)}.slot.big .rbGh{width:calc(24px * var(--s));height:calc(24px * var(--s))}'+
+  '.slot.rbGs img{opacity:.55}.slot.rbGs img.cnt{opacity:.8}'+
+  '.advT.rbT{background:#dedede;box-shadow:inset 0 0 0 calc(1px * var(--s)) #000,inset 0 0 0 calc(3px * var(--s)) #aaa}.advT.rbT b{color:#500050;text-shadow:none}.advT.rbT span{color:#000;text-shadow:none}'+
+  '.advT.rbT img.rbTw{left:calc(2px * var(--s));top:calc(2px * var(--s));width:calc(10px * var(--s));height:calc(10px * var(--s));z-index:1}'}));
+
 </script>
 </body>
 </html>
