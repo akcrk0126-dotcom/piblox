@@ -2565,7 +2565,7 @@ const DUR=[59,131,250,1561],TSPEED=[2,4,6,8],DMG={0:[2,3,4,5],1:[3,4,5,6],2:[1.5
 const MATN=['나무','돌','철','다이아몬드'],TOOLN=['곡괭이','도끼','삽','검'];
 for(let m=0;m<4;m++)for(let t=0;t<4;t++)item(toolId(m,t),MATN[m]+' '+TOOLN[t],toolSpr(m,t),{stack:1,tool:{type:TOOLS[t],tier:m+1,speed:TSPEED[m],dur:DUR[m],dmg:DMG[t][m]},fuel:m===0?10:0});
 function hoeSpr(m){return spr(130+m,P=>{const [a,b,c]=MATC[m];handle(P);line(P,8,3,12,3,a);line(P,8,4,11,4,b);P.set(12,4,c);P.set(7,3,c)})}
-for(let m=0;m<4;m++)item(toolId(m,4),MATN[m]+' 괭이',hoeSpr(m),{stack:1,tool:{type:'hoe',tier:m+1,speed:1,dur:DUR[m],dmg:1},fuel:m===0?10:0});
+for(let m=0;m<4;m++)item(toolId(m,4),MATN[m]+' 괭이',hoeSpr(m),{stack:1,tool:{type:'hoe',tier:m+1,speed:TSPEED[m],dur:DUR[m],dmg:1},fuel:m===0?10:0});
 item(BEEF,'익히지 않은 소고기',meat(211,'#d8484a','#b8333a','#7a1f24'),{food:[3,1.8],smelt:STEAK});
 item(STEAK,'스테이크',meat(212,'#9a5a32','#7a4222','#4a2410'),{food:[8,12.8]});
 item(MUTTON,'익히지 않은 양고기',meat(213,'#e0585a','#c44448','#82282c'),{food:[2,1.2],smelt:COOKED_MUTTON});
@@ -4187,7 +4187,9 @@ function leafDrops(x,y,z,lid){if(Math.random()<1/16)spawnItem({id:B[lid]&&B[lid]
 let saplings=[],crops=[];
 function cropTick(){for(let k=crops.length-1;k>=0;k--){const c=crops[k];if((c.d||'over')!==DIM)continue;if(nowT()<c.t)continue;if(!chunks.has(ck(c.x>>4,c.z>>4)))continue;const id=getB(c.x,c.y,c.z);if(c.cane){if(id!==SUGAR_CANE){crops.splice(k,1);continue}let h=1;while(getB(c.x,c.y-h,c.z)===SUGAR_CANE)h++;let top=c.y;while(getB(c.x,top+1,c.z)===SUGAR_CANE)top++;if(h+top-c.y<3&&getB(c.x,top+1,c.z)===AIR)setBlock(c.x,top+1,c.z,SUGAR_CANE,true);c.t=nowT()+150+Math.random()*120;continue}if(!B[id]||B[id].crop==null||B[id].crop>=3){crops.splice(k,1);continue}setBlock(c.x,c.y,c.z,id+1,true);c.t=nowT()+50+Math.random()*60}}
 let sleeping=0;
-function sleepIn(t){if(DIM==='time'){restInChamber();return}if(DIM!=='over'){setBlock(t.x,t.y,t.z,AIR);explode(t.x+.5,t.y+.5,t.z+.5,4);return}player.spawn={x:t.x+.5,y:t.y+1.01,z:t.z+.5,bed:1};if(daylight>.45){toast('리스폰 지점을 설정했어요. 밤에만 잘 수 있어요');return}
+// (P4-FIX) 마크 Level.isDay: skyDarken (cos 곡선 · 비 −5/16 · 뇌우 −5/16) < 4 면 낮 → 맑으면 12542~23459틱 · 비 12010~23991 · 뇌우는 언제나
+function mcNight(){const f=celestial(worldTime/DAYLEN),rl=rainL(1),tl=thunL(1);let h=1-clamp(Math.cos(f*Math.PI*2)*2+.5,0,1);h=1-h;h*=1-rl*5/16;h*=1-tl*5/16;h=1-h;return Math.floor(h*11)>=4}
+function sleepIn(t){if(DIM==='time'){restInChamber();return}if(DIM!=='over'){setBlock(t.x,t.y,t.z,AIR);explode(t.x+.5,t.y+.5,t.z+.5,4);return}player.spawn={x:t.x+.5,y:t.y+1.01,z:t.z+.5,bed:1};if(!mcNight()){toast('리스폰 지점을 설정했어요. 밤에만 잘 수 있어요');return}
   if(mobs.some(m=>m.D.hostile&&!m.dead&&m.pos.distanceTo(player.pos)<8)){toast('근처에 몬스터가 있어서 잘 수 없어요');return}
   const f=$('sleepFade');f.style.opacity=1;sleeping=1;setTimeout(()=>{worldTime=Math.ceil(worldTime/DAYLEN)*DAYLEN+DAYLEN*.01;player.lastRest=worldTime;for(const m of mobs)if(m.type==='phantom'){m.dead=true;m.deadT=1}mpSetTime(worldTime);f.style.opacity=0;sleeping=0;toast('좋은 아침이에요! 리스폰 지점을 설정했어요')},1800)}
 function saplingTick(){for(let k=saplings.length-1;k>=0;k--){const s=saplings[k];if((s.d||'over')!==DIM)continue;if(nowT()<s.t)continue;if(!chunks.has(ck(s.x>>4,s.z>>4)))continue;saplings.splice(k,1);
@@ -4985,10 +4987,10 @@ function hurtPlayer(d,src,why,o){const p=player;if(creative()&&why!=='void'||poe
   if(p.hp<=0){p.hp=0;die(why)}updateStats()}
 let camKick=0,eyeS=1.62;
 function die(why){const p=player;p.dead=true;mouseL=mouseR=false;for(let i=0;i<36;i++)if(inv[i]&&inv[i].e&&inv[i].e.vanish)inv[i]=null;for(let i=0;i<4;i++)if(armor[i]&&armor[i].e&&armor[i].e.vanish)armor[i]=null;
-  for(let i=0;i<36;i++)if(inv[i]){spawnItem(inv[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));inv[i]=null}for(let i=0;i<4;i++)if(armor[i]){spawnItem(armor[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));armor[i]=null}p.xp=Math.floor((p.xp||0)*.3);
+  for(let i=0;i<36;i++)if(inv[i]){spawnItem(inv[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));inv[i]=null}for(let i=0;i<4;i++)if(armor[i]){spawnItem(armor[i],p.pos.x,p.pos.y+1,p.pos.z,new V3((Math.random()-.5)*5,4,(Math.random()-.5)*5));armor[i]=null}{p.__score=p.xp||0;const lv=xpLevel(p.xp||0)[0];if(!(typeof gameRule==='function'&&gameRule('keep_inventory'))&&typeof dropXP==='function')dropXP(p.pos.x,p.pos.y+.5,p.pos.z,Math.min(lv*7,100));p.xp=0}   /* (P4-FIX) 마크: 경험치는 다 잃고 레벨×7 (최대 100) 만 구슬로 떨어져요 */
   if(cursor){spawnItem(cursor,p.pos.x,p.pos.y+1,p.pos.z);cursor=null}closeScreen();
   $('deadMsg').textContent=({fall:'높은 곳에서 떨어졌습니다',drown:'익사했습니다',starve:'굶어 죽었습니다',zombie:'좀비에게 당했습니다',void:'세상 밖으로 떨어졌습니다',skeleton:'스켈레톤의 화살에 맞았습니다',creeper:'크리퍼가 폭발했습니다',spider:'거미에게 당했습니다',cactus:'선인장에 찔려 죽었습니다',fire:'불에 타 죽었습니다',creaking:'삐걱이에게 당했습니다',dragon:'엔더 드래곤에게 당했습니다',zpiglin:'좀비 피글린에게 당했습니다',wskel:'위더 스켈레톤에게 당했습니다',magma:'마그마 큐브에게 당했습니다',enderman:'엔더맨에게 당했습니다',lava:'용암에 빠졌습니다',breeze:'브리즈의 돌풍에 맞았습니다',shadow:'그림자 분신에게 당했습니다',wall:'벽 속에서 질식했습니다',sonic:'음파 비명에 맞아 사라졌습니다'})[why]||(MOBDEF[why]&&MOBDEF[why].n?MOBDEF[why].n+'에게 당했습니다':'죽었습니다!');if(why==='pvp'){$('deadMsg').textContent=(player.pvpBy||'플레이어')+'에게 당했습니다';if(MPS)mpChat('☠ '+(player.pvpBy||'플레이어')+' 님에게 쓰러졌어요')}
-  $('deadScore').innerHTML='점수: <b>'+(player.xp||0)+'</b>';$('dead').classList.remove('hide');['respawn','deadTitle'].forEach(k=>{$(k).disabled=true;setTimeout(()=>$(k).disabled=false,1000)});if(document.pointerLockElement)document.exitPointerLock();renderHotbar();save()}
+  $('deadScore').innerHTML='점수: <b>'+(player.__score??player.xp??0)+'</b>';$('dead').classList.remove('hide');['respawn','deadTitle'].forEach(k=>{$(k).disabled=true;setTimeout(()=>$(k).disabled=false,1000)});if(document.pointerLockElement)document.exitPointerLock();renderHotbar();save()}
 function respawn(){if(typeof nvRespawn==='function'&&nvRespawn())return;const p=player;let s=p.spawn;if(!s){const w=worldSpawnXZ();s=p.spawn={x:w.x,y:w.y,z:w.z}}   /* 스폰이 비어 있으면 세계 스폰으로 (예전엔 다시 살 때 오류로 멈췄어요) */if(s&&s.bed&&bedGone(s)){const w=worldSpawnXZ();s=p.spawn={x:w.x,y:w.y,z:w.z};p.tpHold=8;p.tpSurface=true;chatLine('집 침대가 없거나 막혀 있어요','#ff5555')}p.lastRest=worldTime;p.hurtTime=0;p.deathTime=0;p.fallDist=0;p.prev.copy(p.pos);if(DIM!=='over'&&s){$('dead').classList.add('hide');p.dead=false;p.hp=20;p.food=20;p.sat=5;p.air=15;switchDim('over',s.x,s.y,s.z,()=>{updateStats()});return}p.pos.set(s.x,s.y,s.z);p.vel.set(0,0,0);p.hp=20;p.food=20;p.sat=5;p.exh=0;p.air=15;p.dead=false;p.fallStart=null;$('dead').classList.add('hide');updateStats();lockPointer()}
 
 /* ── 레이캐스트 ── */
@@ -5025,9 +5027,14 @@ function updateTarget(){const o=camera.position,d=new V3(0,0,-1).applyQuaternion
 
 /* ── 부수기 · 놓기 · 먹기 ── */
 let breaking=null,breakCD=0,useCD=0,eatT=0,swingT=1;
-function breakTime(id){const b=B[id];if(creative())return 0;if(!b||b.h===Infinity)return Infinity;if(b.h===0)return 0;const tool=toolOf(inv[sel]);const right=tool&&tool.type===b.tool;const can=!b.tier||(right&&tool.tier>=b.tier);
-  let speed=right?tool.speed:1;const ee=inv[sel]&&inv[sel].e;if(right)speed+=attrVal(player,'mining_efficiency');speed*=effDig(player);if(player.inWater&&underWater)speed*=attrVal(player,'submerged_mining_speed');if(!player.onGround&&!player.inWater)speed/=5;return b.h*(can?1.5:5)/speed}
-function canHarvest(id){const b=B[id];if(!b.tier)return true;const t=toolOf(inv[sel]);return !!(t&&t.type===b.tool&&t.tier>=b.tier)}
+// (P4-FIX) 마크 Tool 규칙: 가위 (거미줄 · 잎 15 · 양털 5 · 덩굴 2) · 검 (거미줄 15 · 대나무 즉시 · 잎 · 호박 · 수박 1.5) · 거미줄은 가위/검이 있어야 떨어져요 (맨손 20초)
+let TRULE=null;function toolRule(tool,id){if(!TRULE){TRULE={shears:new Map(),sword:new Map(),web:-1};const put=(m,re,v)=>{for(const k in MC_ITEM){const n=k.replace('minecraft:','');if(re.test(n))m.set(MC_ITEM[k],v)}};
+    put(TRULE.shears,/^cobweb$/,{s:15,c:true});put(TRULE.shears,/_leaves$/,{s:15});put(TRULE.shears,/_wool$/,{s:5});put(TRULE.shears,/^(vine|glow_lichen)$/,{s:2});
+    put(TRULE.sword,/^cobweb$/,{s:15,c:true});put(TRULE.sword,/^(bamboo|bamboo_sapling)$/,{s:1e6});put(TRULE.sword,/_leaves$|^(pumpkin|carved_pumpkin|jack_o_lantern|melon|vine|glow_lichen|cocoa)$/,{s:1.5});TRULE.web=idOfMC('minecraft:cobweb')}
+  const t=tool&&tool.type;if(t==='shears'||t==='sword'){const q=TRULE[t].get(id);if(q)return q}if(id===TRULE.web)return{s:1,c:false};return null}
+function breakTime(id){const b=B[id];if(creative())return 0;if(!b||b.h===Infinity)return Infinity;if(b.h===0)return 0;const tool=toolOf(inv[sel]);let right=tool&&tool.type===b.tool;let can=!b.tier||(right&&tool.tier>=b.tier);
+  let speed=right?tool.speed:1;{const q=toolRule(tool,id);if(q){if(q.s>=1e5)return 0;speed=q.s;right=true;if(q.c)can=true;else if(q.c===false)can=false}}const ee=inv[sel]&&inv[sel].e;if(right)speed+=attrVal(player,'mining_efficiency');speed*=effDig(player);if(player.inWater&&underWater)speed*=attrVal(player,'submerged_mining_speed');if(!player.onGround&&!player.inWater)speed/=5;return b.h*(can?1.5:5)/speed}
+function canHarvest(id){const b=B[id];{const q=toolRule(toolOf(inv[sel]),id);if(q&&q.c!=null)return q.c}if(!b.tier)return true;const t=toolOf(inv[sel]);return !!(t&&t.type===b.tool&&t.tier>=b.tier)}
 function updateBreaking(dt){if(breakCD>0)breakCD-=dt;
   if(!mouseL||!target||screenOpen||player.dead){breaking=null;crackM.visible=false;return}
   if(!breaking||breaking.x!==target.x||breaking.y!==target.y||breaking.z!==target.z){breaking={x:target.x,y:target.y,z:target.z,id:target.id,t:0,snd:0}}
@@ -5268,7 +5275,7 @@ function itemMesh(id,size){let m;if(isCube(id)){const b=B[id],tx=b.tex.slice(),t
     m=new THREE.Mesh(g,tx.map(t=>new THREE.MeshLambertMaterial({map:tileTex(t,tc),alphaTest:.5})))}
   else m=new THREE.Mesh(new THREE.PlaneGeometry(size*1.6,size*1.6),new THREE.MeshLambertMaterial({map:iconTex(id),alphaTest:.5,side:THREE.DoubleSide}));return m}
 function spawnItem(stack,x,y,z,vel,pick,net){const m=groundItemMesh(stack.id);scene.add(m);const st={id:stack.id,n:stack.n,d:stack.d||0};if(stack.e)st.e=JSON.parse(JSON.stringify(stack.e));
-  const e={stack:st,pos:new V3(x,y,z),vel:vel||new V3((Math.random()-.5)*2.5,3.5,(Math.random()-.5)*2.5),age:0,pick:pick||.4,m,onGround:false,spin:Math.random()*6,bobOffs:Math.random()*Math.PI*2};if(net)e.net=net;ents.push(e);if(!net&&typeof MPS!=='undefined'&&MPS)mpDropAdd(e);return e}
+  const e={stack:st,pos:new V3(x,y,z),vel:vel||new V3((Math.random()-.5)*2.5,3.5,(Math.random()-.5)*2.5),age:0,pick:pick||.5,m,onGround:false,spin:Math.random()*6,bobOffs:Math.random()*Math.PI*2};if(net)e.net=net;ents.push(e);if(!net&&typeof MPS!=='undefined'&&MPS)mpDropAdd(e);return e}
 // 주울 때: 아이템이 플레이어 쪽으로 쏙 빨려 들어가요 (마크처럼)
 const pickFly=[];
 function flyPickup(e,to){pickFly.push({m:e.m,from:e.m.position.clone(),to,t:0,s0:e.m.scale.x||1})}
@@ -5345,7 +5352,7 @@ function hurtMob(m,d,src){if(m.D.invuln){if(!m.dead&&m.hurtT<=0){m.hurtT=.4;sfx(
   if(m.D.neutral&&!m.tamed){m.angry=30;if(typeof nvAnger==='function')nvAnger(m,src)}
   if(m.D.ender&&m.hp>0)enderTP(m);if(m.D.blink&&m.hp>0&&Math.random()<.35)shadowBlink(m);
   if(m.D.villager&&src&&Math.hypot(src.x-player.pos.x,src.z-player.pos.z)<6)golemAngry=40;
-  if(m.hp<=0){m.dead=true;m.deadT=0;sndMob(m,'d');if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y+.5,m.pos.z);if(m.type==='dragon')dragonDied(m);else dropXP(m.pos.x,m.pos.y+.5,m.pos.z,m.D.xp||(m.D.hostile?5:1+Math.floor(Math.random()*3)))}}}
+  if(m.hp<=0){m.dead=true;m.deadT=0;sndMob(m,'d');if(m.vill&&m.vill.key&&VSTATE[m.vill.key])VSTATE[m.vill.key].dead=true;if(!m.baby){const r=Math.random(),lb=m.byPlayer||0;for(const [id,n] of m.D.drops(r))if(n>0)spawnItem({id,n:n+(lb?Math.floor(Math.random()*(lb+1)):0)},m.pos.x,m.pos.y+.5,m.pos.z);if(m.type==='dragon')dragonDied(m);else if(m.byPlayer!==undefined&&!MOB_NOXP.has(m.type))dropXP(m.pos.x,m.pos.y+.5,m.pos.z,m.D.xp??(m.D.hostile?5:1+Math.floor(Math.random()*3)))}}}   // (P4-FIX) 마크: 플레이어가 잡았을 때만 경험치 · 주민 · 골렘 · 박쥐는 0
 function tamedAI(m,dt,dx,dz,dist){let foe=null,fd=12;for(const o of mobs)if(o!==m&&!o.dead&&o.D.hostile&&!o.tamed&&!o.D.neutral&&!o.D.boss){const d=o.pos.distanceTo(m.pos);if(d<fd){fd=d;foe=o}}
   if(foe){m.ai.dir=Math.atan2(foe.pos.x-m.pos.x,foe.pos.z-m.pos.z);m.ai.sp=m.D.sp*1.3;if(fd<1.6&&m.atk<=0){m.atk=1;hurtMob(foe,4,m.pos)}return true}
   if(dist>18){m.pos.set(player.pos.x+(Math.random()-.5)*2,player.pos.y,player.pos.z+(Math.random()-.5)*2);return false}if(dist>4){m.ai.dir=Math.atan2(dx,dz);m.ai.sp=m.D.sp;return true}return false}
@@ -6477,7 +6484,7 @@ const ENCH_N={eff:'효율',sharp:'날카로움',unb:'내구성',prot:'보호',po
 const ORE_XP={[COAL_ORE]:[0,2],[D_COAL]:[0,2],[DIAMOND_ORE]:[3,7],[D_DIAMOND]:[3,7],[EMERALD_ORE]:[3,7],[D_EMERALD]:[3,7],[LAPIS_ORE]:[2,5],[D_LAPIS]:[2,5],[REDSTONE_ORE]:[1,5],[D_REDSTONE]:[1,5]};
 function enchCands(st){const t=toolOf(st),a=ITEM[st.id].armor;if(a&&!ITEM[st.id].elytra)return a.slot===3?['prot','unb','fall','depth','thorns']:a.slot===0?['prot','unb','resp','thorns']:['prot','unb','thorns'];if(!t)return[];if(t.type==='sword')return['sharp','smite','bane','knock','fire','loot','unb'];if(t.type==='bow')return['power','punch','flame','infin','unb'];if(t.type==='shears'||t.type==='flint')return['unb','eff'];return['eff','unb','fortune','silk']}
 const enchClash=(e,k)=>ENCH_EXCL.some(g=>g.includes(k)&&g.some(o=>o!==k&&e[o]));
-function shelfCount(tx,ty,tz){let n=0;for(let dy=0;dy<=1;dy++)for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){if(Math.max(Math.abs(dx),Math.abs(dz))!==2)continue;if(getB(tx+dx,ty+dy,tz+dz)===BOOKSHELF)n++}return Math.min(15,n)}
+function shelfCount(tx,ty,tz){let n=0;for(let dy=0;dy<=1;dy++)for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){if(Math.max(Math.abs(dx),Math.abs(dz))!==2)continue;if(getB(tx+dx,ty+dy,tz+dz)===BOOKSHELF){const m=getB(tx+Math.trunc(dx/2),ty+dy,tz+Math.trunc(dz/2));if(m===AIR||m===WATER||m===LAVA||B[m]&&B[m].cross&&!B[m].crop)n++}}return Math.min(15,n)}   // (P4-FIX) 마크: 책장과 마법부여대 사이 칸이 비어 있어야 (enchantment_power_transmitter)
 function rollEnch(st,lv,seed){const c=enchCands(st);if(!c.length)return null;const r=mulberry(seed),e={},main=c[Math.floor(r()*c.length)];e[main]=clamp(Math.round(lv/30*ENCH_MAX[main]+r()*.8),1,ENCH_MAX[main]);
   for(let k=0;k<2;k++)if(lv>8+k*12&&r()<.55){const o=c[Math.floor(r()*c.length)];if(!e[o]&&!enchClash(e,o))e[o]=clamp(Math.round(lv/40*ENCH_MAX[o]+r()*.5),1,ENCH_MAX[o])}return e}
 const enchText=e=>Object.keys(e).map(k=>ENCH_N[k]+' '+ROMAN[e[k]]).join(', ');
@@ -7969,10 +7976,15 @@ function matchCraft(g,size){let x0=size,y0=size,x1=-1,y1=-1,cnt=0;for(let y=0;y<
     if(r.pat.length!==h||r.pat[0].length!==w)continue;
     for(const mir of [false,true]){let ok=true;for(let y=0;y<h&&ok;y++)for(let x=0;x<w&&ok;x++){const c=r.pat[y][mir?w-1-x:x],id=at(x,y);if(c===' '){if(id)ok=false}else if(!id||!r.key[c].includes(id))ok=false}if(ok)return r.out}}
   return null}
+// (P4-FIX) 굽기 경험치 (바닐라 레시피 experience)
+const SMELT_XPN={iron_ingot:.7,gold_ingot:1,copper_ingot:.7,diamond:1,emerald:1,lapis_lazuli:.2,redstone:.7,coal:.1,quartz:.2,netherite_scrap:2,glass:.1,stone:.1,smooth_stone:.1,charcoal:.15,brick:.3,nether_brick:.1,terracotta:.35,green_dye:1,lime_dye:.1,dried_kelp:.1,sponge:.15,popped_chorus_fruit:.1,
+  cooked_beef:.35,cooked_porkchop:.35,cooked_chicken:.35,cooked_mutton:.35,cooked_rabbit:.35,cooked_cod:.35,cooked_salmon:.35,baked_potato:.35,iron_nugget:.1,gold_nugget:.1,cracked_stone_bricks:.1,deepslate:.1,smooth_sandstone:.1,smooth_red_sandstone:.1,smooth_quartz:.1,smooth_basalt:.1};
+function smeltXP(inId,outId){let n='';for(const k in MC_ITEM)if(MC_ITEM[k]===outId){n=k.replace('minecraft:','');break}if(SMELT_XPN[n]!=null)return SMELT_XPN[n];if(/_glazed_terracotta$/.test(n))return .1;return .1}
 function furnaceTick(dt){for(const [k,te] of tiles){if(te.t!=='furnace')continue;const s=te.s,res=s[0]&&ITEM[s[0].id].smelt,canOut=res&&(!s[2]||(s[2].id===res&&s[2].n<maxStack(res)));let ch=false;
   if(te.burn>0)te.burn-=dt;
   if(te.burn<=0&&canOut&&s[1]&&ITEM[s[1].id].fuel){te.burnMax=te.burn=ITEM[s[1].id].fuel;s[1].n--;if(s[1].n<=0)s[1]=null;ch=true}
-  const fk=te.fast||0;if(te.burn>0&&canOut){te.cook+=dt*(fk?2:1);if(te.cook>=10){te.cook=0;s[0].n--;if(s[0].n<=0)s[0]=null;if(s[2])s[2].n++;else s[2]={id:res,n:1};ch=true}}else te.cook=Math.max(0,te.cook-dt*2);
+  const fk=te.fast||0;if(te.burn>0&&canOut){te.cook+=dt*(fk?2:1);if(te.cook>=10){te.cook=0;te.xp=(te.xp||0)+smeltXP(s[0].id,res);s[0].n--;if(s[0].n<=0)s[0]=null;if(s[2])s[2].n++;else s[2]={id:res,n:1};ch=true}}else te.cook=Math.max(0,te.cook-dt*2);
+  {const n2=s[2]?s[2].n:0;if(screenTile===te&&n2<(te.lastOut||0)&&te.xp>0){let v=Math.floor(te.xp);if(Math.random()<te.xp-v)v++;te.xp=0;if(v>0)dropXP(player.pos.x,player.pos.y+.5,player.pos.z,v)}te.lastOut=n2}   // (P4-FIX) 마크: 구운 경험치는 화로에 모였다가 꺼낼 때 받아요
   if(te.burn<0)te.burn=0;const lit=te.burn>0,[x,y,z]=k.split(',').map(Number),cur=getB(x,y,z);
   if(chunks.has(ck(x>>4,z>>4))&&(cur===FURNACE||cur===FURNACE_LIT)&&(cur===FURNACE_LIT)!==lit)setBlock(x,y,z,lit?FURNACE_LIT:FURNACE);if(te.fast===undefined&&chunks.has(ck(x>>4,z>>4)))te.fast=(cur===SMOKER||cur===BLAST_FURNACE)?1:0;
   if(screenTile===te){$('fFlame')&&($('fFlame').style.height=(te.burnMax?te.burn/te.burnMax*100:0)+'%');$('fArrow')&&($('fArrow').style.width=(te.cook/10*100)+'%');if(ch)drawScreen()}}}
@@ -8370,7 +8382,7 @@ const physK={};addEventListener('keydown',e=>{physK[e.code]=true},true);addEvent
 function keysRelease(){for(const k in keys)keys[k]=false}
 function keysRestore(){for(const k of ['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft'])if(physK[k])keys[k]=true}
 function giveOrDrop(st){const left=addItem(st);if(left>0)throwItem({id:st.id,n:left,d:st.d})}
-function throwItem(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);spawnItem(st,camera.position.x+d.x*.3,camera.position.y-.3,camera.position.z+d.z*.3,new V3(d.x*5,d.y*5+2,d.z*5),1.5)}
+function throwItem(st){const d=new V3(0,0,-1).applyQuaternion(camera.quaternion);spawnItem(st,camera.position.x+d.x*.3,camera.position.y-.3,camera.position.z+d.z*.3,new V3(d.x*5,d.y*5+2,d.z*5),2)}   // 마크: 던진 아이템 40틱 · 블록 드롭 10틱 뒤에 주워요
 function arrOf(c){return c==='cr'?crView:c==='trash'?[null]:c==='inv'?inv:c==='c2'?craft2:c==='c3'?craft3:c==='chest'?screenTile&&screenTile.items:c==='fur'?screenTile&&screenTile.s:c==='arm'?armor:c==='ench'?enchSlots:c==='tin'?tradeIn:c==='anv'?anvilIn:c==='smi'?smithIn:null}
 const grid=()=>screenOpen==='craft'?[craft3,3]:[craft2,2];
 function craftOut(){const [g,n]=grid();return matchCraft(g,n)}
@@ -16322,6 +16334,40 @@ i18nAdd('PlayHub 에서 차단됐어요.','You are banned from PlayHub.');
 addEventListener('beforeunload',e=>{try{if(typeof started==='undefined'||!started||typeof phase!=='undefined'&&phase!=='play')return;try{if(typeof save==='function')save()}catch(x){}e.preventDefault();e.returnValue=''}catch(x){}});
 document.addEventListener('fullscreenchange',()=>{try{const k=navigator.keyboard;if(!k||!k.lock)return;if(document.fullscreenElement)k.lock().catch(()=>{});else k.unlock()}catch(e){}});
 addEventListener('keydown',e=>{if(e.ctrlKey&&!e.altKey&&/^Key[WTNQRDS]$/.test(e.code)&&typeof started!=='undefined'&&started&&!(typeof chatOpen!=='undefined'&&chatOpen)&&document.pointerLockElement)e.preventDefault()},true);
+
+/* ═════════════ (P4-FIX 라운드 3) 마크 1.21 값 맞추기 — 블록 도구/등급/단단함 (mcmeta mineable · needs_*_tool 태그), 침대 쌓기, 연료 틱 (AbstractFurnaceBlockEntity.getFuel) ═════════════
+   블록을 새로 만들지 않고 있는 블록의 값만 고쳐요 (P4-BLOCK 이 나중에 더한 블록도 이름 규칙으로 같이 맞춰요) */
+{const I=n=>{const i=idOfMC('minecraft:'+n);return i>=0?i:-1},each=(re,f)=>{for(const k in MC_ITEM){const n=k.replace('minecraft:','');if(re.test(n)){const i=MC_ITEM[k];if(i>=0)f(i,n)}}};
+  const setB=(n,o)=>{const i=I(n);if(i>=0&&B[i])Object.assign(B[i],o)};
+  // 도구 종류 (바닐라 mineable 태그)
+  for(const n of ['ice','packed_ice','blue_ice','piston','sticky_piston','infested_stone','infested_cobblestone','infested_stone_bricks','infested_mossy_stone_bricks','infested_cracked_stone_bricks','infested_chiseled_stone_bricks','infested_deepslate'])setB(n,{tool:'pickaxe'});
+  each(/^(stone|polished_blackstone)_(button|pressure_plate)$|^(light|heavy)_weighted_pressure_plate$/,i=>{if(B[i])B[i].tool='pickaxe'});
+  for(const n of 'acacia_leaves azalea_leaves birch_leaves calibrated_sculk_sensor cherry_leaves dark_oak_leaves dried_kelp_block flowering_azalea_leaves hay_block jungle_leaves mangrove_leaves moss_block moss_carpet nether_wart_block oak_leaves pale_moss_block pale_moss_carpet pale_oak_leaves sculk sculk_catalyst sculk_sensor sculk_shrieker sculk_vein shroomlight sponge spruce_leaves target warped_wart_block wet_sponge'.split(' ')){const i=I(n);if(i>=0&&B[i]&&!B[i].tool)B[i].tool='hoe'}
+  setB('moss_block',{tool:'hoe'});setB('vine',{tool:'axe'});setB('glow_lichen',{tool:'axe'});setB('trial_spawner',{tool:null,tier:0});setB('vault',{tool:null,tier:0});
+  // 단단함
+  for(const [n,h] of [['gold_block',3],['lapis_block',3],['piston',1.5],['sticky_piston',1.5],['lever',.5]])setB(n,{h});
+  each(/^(waxed_)?(exposed_|weathered_|oxidized_)?copper_block$/,i=>{if(B[i])B[i].h=3});each(/_button$/,i=>{if(B[i])B[i].h=.5});
+  // 맞는 도구가 있어야 떨어지는 블록 (requiresCorrectToolForDrops) · 나무 · 괭이 블록은 맨손으로도 떨어져요
+  for(const n of ['snow_block','snow','anvil','chipped_anvil','damaged_anvil','bell','iron_bars','cauldron','brewing_stand','stonecutter','grindstone'])setB(n,{tier:1});
+  for(const n of ['pointed_dripstone'])setB(n,{tier:0});
+  each(/_copper_door$|^copper_door$/,i=>{if(B[i]&&B[i].tier>=2)B[i].tier=1});
+  for(let i=0;i<NB;i++){const b=B[i];if(b&&(b.tool==='axe'||b.tool==='hoe')&&b.tier>0)b.tier=0}
+  // 침대는 1개씩
+  each(/_bed$/,i=>{if(ITEM[i])ITEM[i].stack=1});if(typeof BED!=='undefined'&&ITEM[BED])ITEM[BED].stack=1;
+  // 연료 (초 = 틱/20) · 진홍빛 · 뒤틀린 나무는 안 타요
+  const W='(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|bamboo)',F=(re,t)=>each(re,(i,n)=>{if(ITEM[i]&&!/crimson|warped/.test(n))ITEM[i].fuel=t/20});
+  F(new RegExp('^'+W+'_slab$'),150);F(new RegExp('^'+W+'_(door|sign)$'),200);F(new RegExp('^'+W+'_hanging_sign$'),800);F(new RegExp('^'+W+'_button$'),100);
+  F(new RegExp('^'+W+'_(pressure_plate|trapdoor|fence|fence_gate|stairs|planks)$'),300);F(new RegExp('^'+W+'_(chest_)?boat$|^bamboo_(chest_)?raft$'),1200);
+  F(/_carpet$/,67);F(/_wool$/,100);F(/_banner$/,300);F(/^(ladder|bow|fishing_rod|crossbow|mangrove_roots|bamboo_block|stripped_bamboo_block|bamboo_mosaic)$/,300);
+  F(/^(bamboo|scaffolding)$/,50);F(/^(azalea|flowering_azalea|dead_bush|bowl|stick)$/,100);F(/^dried_kelp_block$/,4001);
+  if(typeof BOAT!=='undefined'&&ITEM[BOAT])ITEM[BOAT].fuel=60}
+// (P4-FIX) 바닐라 전리품표 (loot_table/entities) 와 다른 것 · 중립 동물 경험치 1~3 (Animal)
+try{const M=MOBDEF;if(M.pillager)M.pillager.drops=()=>[];   // 약탈자: 평소엔 아무것도 (석궁 장비만)
+  if(M.ghast)M.ghast.drops=r=>[[GHAST_TEAR,Math.random()<.5?1:0],[GUNPOWDER,Math.floor(Math.random()*3)]];
+  if(M.polar_bear&&typeof COD!=='undefined'&&typeof SALMON!=='undefined')M.polar_bear.drops=r=>r<.75?[[COD,Math.floor(Math.random()*3)]]:[[SALMON,Math.floor(Math.random()*3)]];
+  if(M.cat&&typeof STRING!=='undefined')M.cat.drops=r=>[[STRING,Math.floor(Math.random()*3)]];
+  for(const t of ['wolf','polar_bear','goat','llama','trader_llama','panda'])if(M[t])Object.defineProperty(M[t],'xp',{get:()=>1+Math.floor(Math.random()*3),configurable:true})}catch(e){}
+const MOB_NOXP=new Set(['villager','wandering_trader','iron_golem','snow_golem','bat','allay']);   // (P4-FIX) 바닐라 xpReward 0
 </script>
 </body>
 </html>
