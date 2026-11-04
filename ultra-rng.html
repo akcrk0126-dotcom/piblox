@@ -684,13 +684,13 @@ if (postOK){
   const rt = renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget && !isTouch ? Object.assign(new THREE.WebGLMultisampleRenderTarget(innerWidth, innerHeight, rtOpt), { samples:4 }) : new THREE.WebGLRenderTarget(innerWidth, innerHeight, rtOpt);
   composer = new THREE.EffectComposer(renderer, rt);
   composer.addPass(new THREE.RenderPass(scene, camera));
-  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(512, 512), .65, .45, .86); composer.addPass(bloomPass);
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(512, 512), .85, .5, .82); composer.addPass(bloomPass);
   gradePass = new THREE.ShaderPass({ uniforms:{ tDiffuse:{ value:null }, uSat:{ value:1 }, uVig:{ value:0 }, uTint:{ value:new THREE.Color(0, 0, 0) }, uTime:{ value:0 }, uP:{ value:new THREE.Vector2(.5, .5) }, uHaze:{ value:0 }, uAsp:{ value:1 }, uCA:{ value:0 }, uZoom:{ value:0 } },
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:'uniform sampler2D tDiffuse;uniform float uSat,uVig,uTime,uHaze,uAsp,uCA,uZoom;uniform vec2 uP;uniform vec3 uTint;varying vec2 vUv;vec3 aces(vec3 x){x*=1.15;return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}'+
       'void main(){vec2 uv=vUv;vec2 d=uv-uP;float m=smoothstep(.22,.0,length(d*vec2(uAsp,1.)))*uHaze;uv+=vec2(sin(uv.y*90.+uTime*7.),cos(uv.x*80.+uTime*6.))*.0022*m;'+
       'vec2 dir=uv-uP;vec3 raw=vec3(0.);for(int i=0;i<6;i++){float s=1.-uZoom*float(i)*.012;vec2 q=uP+dir*s;raw+=vec3(texture2D(tDiffuse,q+dir*uCA).r,texture2D(tDiffuse,q).g,texture2D(tDiffuse,q-dir*uCA).b);}raw/=6.;'+
-      'raw=max(raw,0.);float mx=max(max(raw.r,raw.g),max(raw.b,1e-4));vec3 c=raw*(aces(vec3(mx)).r/mx);c=mix(c,aces(raw),.2);c=mix(c,vec3(1.),smoothstep(1.4,5.,mx)*.55);float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,uSat);float v=smoothstep(.35,1.05,length(vUv-.5)*1.5);c=mix(c,c*.25+uTint*.25,v*uVig);gl_FragColor=vec4(c,1.);}' });
+      'vec3 c=aces(max(raw,0.));float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,uSat);float v=smoothstep(.35,1.05,length(vUv-.5)*1.5);c=mix(c,c*.25+uTint*.25,v*uVig);gl_FragColor=vec4(c,1.);}' });
   composer.addPass(gradePass);
 }
 function resize(){ renderer.setSize(innerWidth, innerHeight); if (composer) composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
@@ -1603,7 +1603,8 @@ const MODS = {
     for (let i=0;i<(o.n || 16);i++){ const s = .2 + Math.random()*.45, r = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), rm); r.castShadow = true;
       r.userData = { a:Math.random()*6.28, r:3.2 + Math.random()*2.5, y:Math.random()*6, v:.4 + Math.random()*.8, sx:Math.random(), sy:Math.random() }; A.group.add(r); list.push(r); }
     A.up(dt=>{ for (const r of list){ const u = r.userData; u.a += dt*.6; u.y += u.v*dt; if (u.y > 8) u.y = 0; r.position.set(Math.cos(u.a)*u.r, u.y, Math.sin(u.a)*u.r); r.rotation.x += u.sx*dt*2; r.rotation.y += u.sy*dt*2; } }); },
-  wings(A, o){ const pairs = o.pairs || 1, pivot = new THREE.Group(), base = new THREE.Group(); base.position.set(0, 3.7, -.55); pivot.add(base); A.group.add(pivot); A.facing.push(pivot); const ws = [];
+  wings(A, o){ return;   // 날개는 전부 뺌
+     const pairs = o.pairs || 1, pivot = new THREE.Group(), base = new THREE.Group(); base.position.set(0, 3.7, -.55); pivot.add(base); A.group.add(pivot); A.facing.push(pivot); const ws = [];
     const col = o.fire ? new THREE.Color('#ff6d00') : A.col.c2;
     for (let p=0;p<pairs;p++){ const size = 1 - p*.18, y = pairs === 1 ? 0 : (1 - p)*.85, tilt = pairs === 1 ? .15 : [.55, .05, -.45][p];
       for (const side of [1, -1]){ const geo = new THREE.PlaneGeometry(6*size, 3*size); geo.translate(2.88*size, -.68*size, 0);
@@ -1948,15 +1949,9 @@ class Aura {
   constructor(it, lite){
     this.it = it; this.t = it.tier; this.k = it.tier/MAXT; this.lite = !!lite; this.lc = lite ? .5 : 1;
     this.col = auraColors(it); this.gs = AURA_SCALE*(1 + clamp((Math.log10(it.odds || 1) - 3.5)/5.5, 0, 1)*1.15); this.group = new THREE.Group(); this.group.scale.setScalar(this.gs);
-    this.mats = []; this.texs = []; this.ups = []; this.facing = []; this.boost = 1; this.top = 6.2; this.I = .45 + this.k*.22;
-    const base = [], od = it.odds || 1, lg = Math.log10(od); if (this.t >= 2 && od < 300 && !it.mods.some(m=>m[0] === 'floor')) base.push(['pool', {}]);
-    if (od >= 300) base.push(['sigil', { r:4.5 + Math.min(4, lg - 2.5) }]); if (od >= 1000) base.push(['gyro', { n:Math.min(6, Math.floor(lg - 1)) }], ['glint', { n:6 + Math.floor(lg)*2 }]); if (od >= 1e5) base.push(['comets', { n:Math.min(12, 4 + Math.floor(lg - 5)*2) }]); if (this.t >= 9) base.push(['streaks', {}]);
-    if (od >= 300) base.push(['flux', { n:Math.min(22, 4 + Math.floor((lg - 2.5)*3)), r:2 + Math.min(1.6, (lg - 2.5)*.25), sp:1 + Math.min(.6, (lg - 3)*.1), len:1.4 + Math.min(1.4, (lg - 2.5)*.2) }]); 
-    const has = n=>it.mods.some(m=>m[0] === n);
-    if (!(it.dom || it.sig) && this.t >= 22) base.push(['ribbons', { n:this.t >= 40 ? 5 : this.t >= 30 ? 4 : 3 }]);
-    if (!(it.dom || it.sig) && this.t >= 26 && !has('glyphs')) base.push(['glyphs', { n:this.t >= 40 ? 3 : 2 }]);
-    if (!(it.dom || it.sig) && this.t >= 30) base.push(['aurora', {}]);
-    if (!(it.dom || it.sig) && this.t >= 34 && !has('rocks')) base.push(['shardRing', { n:this.t >= NEW_FROM ? 18 : 12 }]);
+    this.mats = []; this.texs = []; this.ups = []; this.facing = []; this.boost = 1; this.top = 6.2; this.I = .62 + this.k*.38;
+    const base = [], od = it.odds || 1, lg = Math.log10(od); if (this.t >= 2 && od < 300 && !it.mods.some(m=>m[0] === 'floor')) base.push(['pool', {}]); if (this.t >= 9) base.push(['streaks', {}]);
+    if (od >= 1000) base.push(['glint', { n:4 + Math.floor(lg) }]);   // 덧씌우는 레이어는 작은 별빛만 — 깔끔하게
     for (const [name, o] of base.concat(it.mods)){ try { MODS[name](this, o || {}); } catch(e){ console.warn('[aura]', name, e); } }
     if (!lite){ this.light = new THREE.PointLight(this.col.dark ? this.col.c2 : this.col.c1, 1 + this.k*2.5, 10 + this.k*8, 2); this.light.position.y = 3; this.group.add(this.light); }
     this.label = makeLabel(it, lite); this.label.position.y = this.top + .9; this.group.add(this.label);
@@ -3441,7 +3436,7 @@ function loop(){ requestAnimationFrame(loop); const dt = Math.min(clock.getDelta
     [cineFx.ground, cineFx.sky].forEach(m=>{ if (!m.visible) return; const u = m.material.uniforms; u.uInt.value = Math.max(0, u.uInt.value - dt*1.5); if (u.uInt.value <= 0) m.visible = false; }); }
   cineFx.u.uTime.value = T; cineFx.ground.material.uniforms.uTime.value = T*.6; cineFx.sky.material.uniforms.uTime.value = T*.25;
   if (shakeT > 0){ shakeT -= dt; const s = shakeT*.8; camera.position.x += (Math.random() - .5)*s; camera.position.y += (Math.random() - .5)*s; }
-  if (bloomPass) bloomPass.strength = lerp(bloomPass.strength, cine && cine.impact ? .5 : .65, Math.min(1, dt*3));
+  if (bloomPass) bloomPass.strength = lerp(bloomPass.strength, cine && cine.impact ? .6 : .85, Math.min(1, dt*3));
   if (gradePass){ const u = gradePass.uniforms, early = cine && !cine.impact; u.uVig.value = lerp(u.uVig.value, cine ? .7 : 0, Math.min(1, dt*3)); u.uSat.value = lerp(u.uSat.value, early ? .45 : 1, Math.min(1, dt*(early ? 3 : 6)));
     if (cine) u.uTint.value.set(mainCol(POOL[cine.tier]));
     u.uTime.value = T; u.uAsp.value = camera.aspect; tmpW.set(me.x, me.y + 2, me.z).project(camera); u.uP.value.set(tmpW.x*.5 + .5, tmpW.y*.5 + .5);
