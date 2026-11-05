@@ -106,8 +106,8 @@ function scarpH(s, x, z){ const q = scarpInfo(s, x, z); if (!q) return 0; const 
 // 세 가지 크기. 큰 언덕은 지역마다 몇 개, 중간 언덕은 두 볼거리 사이(가운데쯤)에 세워 한쪽에서 다른 쪽이 바로 안 보이게,
 // 작은 언덕은 들판 곳곳에. 길 · 물 · 랜드마크 · 사냥터 · 정착지 · 이야기 물건(lore) 자리는 비켜요 (이미 검사한 좌표가 비탈이 되지 않게).
 const HILLS = [], clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const KEEPP = [];   // 지형을 크게 바꾸면 안 되는 곳 [x, z, 반경] — 언덕 · 바위 능선 · 협곡이 비켜요
 { const RG = W.regions, regOf = (x, z) => { let b = null, bk = 1e9; for (const r of RG){ const q = Math.hypot(x - r.c[0], z - r.c[1]) / r.r; if (q < bk){ bk = q; b = r; } } return b; };
-  const KEEPP = [];   // [x, z, 반경]
   for (const l of W.landmarks) KEEPP.push([l.c[0], l.c[1], l.r + 12]);
   for (const c of W.camps) KEEPP.push([c.c[0], c.c[1], c.r * 0.9 + 6]);
   for (const t of W.settlements || []) KEEPP.push([t.c[0], t.c[1], t.r + 12]);
@@ -120,6 +120,7 @@ const HILLS = [], clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   for (const b of W.bridges) KEEPP.push([b.c[0], b.c[1], b.len + 8]);
   for (const l of W.lifts) KEEPP.push([l.from[0], l.from[1], 14], [l.to[0], l.to[1], 14]);
   for (const b of W.bluffs) KEEPP.push([b.c[0], b.c[1], b.r + 16]);
+  for (const gz of W.gorges || []) for (let i = 0; i < gz.pts.length - 1; i++) for (let t = 0; t <= 1; t += 0.25) KEEPP.push([lerp(gz.pts[i][0], gz.pts[i + 1][0], t), lerp(gz.pts[i][1], gz.pts[i + 1][1], t), gz.w / 2 + (gz.bank || 6) + 6, 1]);
   for (const L of LORE){ const S0 = L.settlement || {}; for (const r of S0.residents || []){ KEEPP.push([r.c[0], r.c[1], 3]); if (r.home) KEEPP.push([r.home[0], r.home[1], 3]); }
     for (const o of [...(L.readables || []), ...(L.setpieces || []), ...(L.bosses || []), ...(L.keystone ? [L.keystone] : [])]) KEEPP.push([o.c[0], o.c[1], 4]);
     for (const q of L.quests || []) for (const o of q.o || []) if (o.t === 'reach' && o.c) KEEPP.push([o.c[0], o.c[1], (o.r || 6) + 2]); }
@@ -175,7 +176,7 @@ function hillAt(hl, x, z){ const dx = x - hl.x, dz = z - hl.z, u = (dx * hl.ca +
 F.hills = HILLS;
 
 // ───────────────────────── 높이장 만들기 ─────────────────────────
-const AMP1 = [1.2, 16, 13, 4.5, 1.8, 7, 6, 9, 16], AMP2 = [0.35, 3.2, 3.2, 1.2, 1.5, 2.2, 2.2, 3.4, 5];
+const AMP1 = [1.2, 21, 17, 5.5, 1.8, 8, 10, 12, 21], AMP2 = [0.35, 4.2, 4.2, 1.4, 1.5, 2.6, 3.0, 4.2, 6];
 async function buildHeights(){
   // 0) 기본 높이: 조절점 역거리 가중 (5m 격자)
   const NC = 321, CC = 5, CG = new Float32Array(NC * NC), EL = W.elev;
@@ -254,6 +255,38 @@ async function buildHeights(){
   await idle();
   // 3½) 삼각형 언덕 (젤다 BotW 의 「삼각형 법칙」) — 큰 것 = 멀리서 보이는 표지(인력), 중간 = 너머를 가려 「저 뒤엔 뭐가 있지?」, 작은 것 = 걷는 리듬
   for (const hl of HILLS){ const R = Math.max(hl.ax, hl.az) + 2; box(hl.x - R, hl.z - R, hl.x + R, hl.z + R, (k, x, z) => { const v = hillAt(hl, x, z); if (v > 0) HG[k] += v; }); }
+  await idle();
+  // 3¾) 바위 능선 (젤다처럼 요란한 땅): 길 · 볼거리 · 물에서 먼 「야생」 땅에만, 능선 노이즈로 날카로운 산등성이를 세워요.
+  //     고원 · 협곡 · 침식지는 층층 절벽(계단)으로, 설원은 높게. 마스크 WM = 1 이면 완전한 야생.
+  if (!globalThis.__NOCRAG){ const WM = new Float32Array(NN).fill(1);
+    for (let k = 0; k < NN; k++){ WM[k] = sst(10, 48, RDD[k]) * sst(12, 45, RVD[k]); }
+    for (const [px, pz, pr] of KEEPP){ const R = pr + 48; box(px - R, pz - R, px + R, pz + R, (k, x, z) => { const d = Math.hypot(x - px, z - pz); if (d < R) WM[k] = Math.min(WM[k], sst(pr + 6, R, d)); }); }
+    for (const L of W.lakes){ const ex = L.rx * 1.6 + 40, ez = L.rz * 1.6 + 40; box(L.c[0] - ex, L.c[1] - ez, L.c[0] + ex, L.c[1] + ez, (k, x, z) => { const q = Math.hypot((x - L.c[0]) / L.rx, (z - L.c[1]) / L.rz); WM[k] *= sst(1.1, 1.6, q); }); }
+    for (const s0 of W.islands){ const R = s0.r * 3; box(s0.c[0] - R, s0.c[1] - R, s0.c[0] + R, s0.c[1] + R, (k, x, z) => { WM[k] *= sst(s0.r * 2, R, Math.hypot(x - s0.c[0], z - s0.c[1])); }); }
+    for (const p of W.plateaus){ box(p.c[0] - p.r - 40, p.c[1] - p.r - 40, p.c[0] + p.r + 40, p.c[1] + p.r + 40, (k, x, z) => { const d = Math.abs(Math.hypot(x - p.c[0], z - p.c[1]) - p.r); WM[k] *= sst(10, 40, d); }); }
+    for (const r0 of W.ramps){ const ex = r0.to[0] - r0.from[0], ez = r0.to[1] - r0.from[1], l2 = ex * ex + ez * ez; box(Math.min(r0.from[0], r0.to[0]) - 60, Math.min(r0.from[1], r0.to[1]) - 60, Math.max(r0.from[0], r0.to[0]) + 60, Math.max(r0.from[1], r0.to[1]) + 60, (k, x, z) => { const t = c01(((x - r0.from[0]) * ex + (z - r0.from[1]) * ez) / l2); WM[k] *= sst(r0.w, r0.w + 45, Math.hypot(x - r0.from[0] - ex * t, z - r0.from[1] - ez * t)); }); }
+    for (const sc of W.scarps){ const ex = sc.b[0] - sc.a[0], ez = sc.b[1] - sc.a[1], l2 = ex * ex + ez * ez; box(Math.min(sc.a[0], sc.b[0]) - 50, Math.min(sc.a[1], sc.b[1]) - 50, Math.max(sc.a[0], sc.b[0]) + 50, Math.max(sc.a[1], sc.b[1]) + 50, (k, x, z) => { const t = c01(((x - sc.a[0]) * ex + (z - sc.a[1]) * ez) / l2); WM[k] *= sst(12, 45, Math.hypot(x - sc.a[0] - ex * t, z - sc.a[1] - ez * t)); }); }
+    // 바이옴별: [높이, 계단 높이(0 = 매끈), 날카로움]
+    const CR = [[0, 0, 1], [30, 0, 1.4], [32, 0, 1.3], [16, 0, 1.3], [6, 0, 1.1], [26, 4.5, 1.7], [34, 5.5, 1.5], [28, 3.5, 1.9], [46, 0, 1.5]];
+    for (let j = 0; j < N; j++){ const z = -HALF + j * CS; for (let i = 0; i < N; i++){ const k = j * N + i, m = WM[k]; if (m < 0.02) continue; const x = -HALF + i * CS;
+      const e = Math.max(Math.abs(x), Math.abs(z)); if (e > 700) continue;
+      regW(x, z); const A = CR[RBIO[rwA]], B = CR[RBIO[rwB]], t = rwT, amp = A[0] * t + B[0] * (1 - t); if (amp < 0.5) continue;
+      const wx = x + fbm(x * 0.004 + 3, z * 0.004 - 5, 2) * 55, wz = z + fbm(x * 0.004 - 9, z * 0.004 + 7, 2) * 55;   // 비틀어서 자연스럽게
+      const rg = ridged(wx * 0.0058 + 11.3, wz * 0.0058 - 4.1, 4), sharp = A[2] * t + B[2] * (1 - t);
+      let v = Math.pow(sst(0.34, 0.96, rg), sharp) * amp * sst(0, 0.7, m);
+      const st = A[1] * t + B[1] * (1 - t); if (st > 0.5 && v > 1){ const q = v / st, fq = q - Math.floor(q); v = lerp(v, (Math.floor(q) + sst(0.62, 0.92, fq)) * st, 0.82); }
+      HG[k] += v; }
+      if (j % 80 === 79) await idle(); }
+  }
+  // 3⅞) 이름 있는 협곡: 깊이 파인 골짜기 — 바닥은 걸을 수 있고 양쪽은 바위 절벽, 끝은 완만하게 올라와요
+  for (const gz of W.gorges || []){ const P = gz.pts, hw = gz.w / 2, bank = gz.bank || 6, D = gz.depth; let L = 0; const seg = [];
+    for (let i = 0; i < P.length - 1; i++){ const ex = P[i + 1][0] - P[i][0], ez = P[i + 1][1] - P[i][1], l = Math.hypot(ex, ez); seg.push({ a: P[i], ex, ez, l, s0: L }); L += l; }
+    let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const p of P){ x0 = Math.min(x0, p[0]); z0 = Math.min(z0, p[1]); x1 = Math.max(x1, p[0]); z1 = Math.max(z1, p[1]); }
+    const M = hw + bank + 4; box(x0 - M, z0 - M, x1 + M, z1 + M, (k, x, z) => { let bd = 1e9, bs = 0; for (const g of seg){ const t = c01(((x - g.a[0]) * g.ex + (z - g.a[1]) * g.ez) / (g.l * g.l)), d = Math.hypot(x - g.a[0] - g.ex * t, z - g.a[1] - g.ez * t); if (d < bd){ bd = d; bs = g.s0 + t * g.l; } }
+      const wob = hw * (1 + pn(bs * 0.04, 3.3) * 0.25), lat = 1 - sst(wob, wob + bank, bd), end = sst(0, 34, bs) * sst(L, L - 34, bs); if (lat <= 0 || end <= 0) return;
+      const ledge = sst(wob + bank * 0.45, wob + bank * 0.55, bd) * 0.35;   // 절벽 중간 턱
+      const fl = gz.stream ? WL - 0.7 : WL + 1.2, cut = HG[k] - D * end * (lat - ledge * lat * (1 - lat)) * (1 + pn(x * 0.05, z * 0.05) * 0.08);
+      HG[k] = Math.max(cut, Math.min(HG[k], fl)); }); }   // 바닥은 물 높이 아래로 안 내려가요 (stream = 발목 깊이 시냇물)
   await idle();
   // 4) 새싹 마을 평탄화 (≈ y 8) + 룬의 관문 앞
   const VL = byId('regions', 'village'), VY = 8;
@@ -1379,7 +1412,7 @@ const MW = X.mk('div', 'wwmap', `<canvas></canvas><div class="hd"><div class="a"
 const MC = MW.querySelector('canvas'), mctx = MC.getContext('2d'), mTip = MW.querySelector('.tip'), mCf = MW.querySelector('.cf'), mSide = MW.querySelector('.side');
 const MV2 = { cx: 0, cz: 0, s: 0.5, travel: false, sel: null, hov: null, open: false, t: 0, pend: null };
 const LMI = { village: '🏘', runegate: '⛩', windmill_hill: '🌬', giant_tree: '🌳', farm: '🐑', ponds: '💧', apiary: '🐝', overlook: '🦅', lighthouse: '🗼', island_ruin: '🏛', bridge: '🌉', giant_stump: '🪵', fairy_ring: '🍄', camp: '⛺', spring: '⛲', root_arch: '🌿', sunken_temple: '🏯', witch_hut: '🛖', boardwalk: '🪜', waterfall: '🌊', seep_cliff: '💧', spire_nest: '🪺', mine: '⛏', skeleton: '💀', mesa_mark: '🪨', stairs: '🪜', citadel_ruin: '🏰', colossus: '🗿', tower: '🔭', thorn_gate: '🥀', thorn_heart: '🖤', pass_shrine: '⛩', frozen_altar: '❄', summit: '🏔', ridge_mark: '⛰' };
-const NTI = { cliff: '🪨', ridge: '⛰', peak: '🗻', mesa: '🟫', river: '〰' };
+const NTI = { cliff: '🪨', ridge: '⛰', peak: '🗻', mesa: '🟫', river: '〰', gorge: '🏞' };
 const isDisc = id => F.discovered ? !!F.discovered(id) : !!(S.field.disc && S.field.disc[id]);
 let mDPR = 1;
 function mapResize(){ mDPR = Math.min(1.5, devicePixelRatio || 1); MC.width = Math.round(innerWidth * mDPR); MC.height = Math.round(innerHeight * mDPR); }
@@ -1498,7 +1531,7 @@ X.KEYH.push(code => {
 await drawRelief();
 
 // ───────────────────────── 이름 붙은 지형 (떠 있는 이름 · 처음 다가가면 알림) ─────────────────────────
-const TKIND = { cliff: '절벽', ridge: '능선', peak: '봉우리', mesa: '바위산', river: '물길' };
+const TKIND = { cliff: '절벽', ridge: '능선', peak: '봉우리', mesa: '바위산', river: '물길', gorge: '협곡' };
 const TERR = W.namedTerrain.map(n => { let top = -1e9; for (let a = 0; a < TAU; a += 0.5) for (const r of [0, 8, 16]) top = Math.max(top, terrainH(n.c[0] + Math.cos(a) * r, n.c[1] + Math.sin(a) * r));
   return { n, label: F.label({ pos: new V3(n.c[0], top + (n.kind === 'river' ? 3 : 9), n.c[1]), text: n.name, sub: TKIND[n.kind] || '', cls: 'place', max: n.kind === 'peak' ? 320 : n.kind === 'river' ? 70 : 150 }) }; });
 function terrTick(px, pz){ for (const t of TERR){ const n = t.n; if (S.field.terr[n.name]) continue; if (Math.hypot(px - n.c[0], pz - n.c[1]) < (n.kind === 'peak' || n.kind === 'ridge' ? 110 : 60)){ S.field.terr[n.name] = 1; X.save(); fogReveal(n.c[0], n.c[1], 60); F.note(`${NTI[n.kind] || '📍'} <b>${n.name}</b> · ${TKIND[n.kind] || '지형'}`, 4); } } }

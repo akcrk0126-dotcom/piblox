@@ -239,7 +239,7 @@ G.hooks.push((dt, rdt) => {
 // ── 기능 모듈 불러오기 ──
 // ?mods=world,rpg 로 일부만, ?nomods 로 코어만 띄울 수 있어요 (모듈별 테스트용)
 const qs = new URLSearchParams(location.search);
-const LIST = ['world', 'landmarks', 'towns', 'props', 'life', 'rpg', 'saga', 'raid', 'minigames'];
+const LIST = ['world', 'crags', 'landmarks', 'towns', 'props', 'life', 'rpg', 'saga', 'raid', 'minigames'];
 const want = qs.has('nomods') ? [] : qs.get('mods') ? qs.get('mods').split(',') : LIST;
 F.modules = {};
 for (const name of LIST){
