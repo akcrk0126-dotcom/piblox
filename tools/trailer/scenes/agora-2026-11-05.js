@@ -25,50 +25,58 @@ module.exports = {
       #trCap .k{background:linear-gradient(180deg,#fff2c9,#e2b964)!important;color:#20160a!important;font:700 15px 'Cinzel',serif!important;letter-spacing:3px}
       #trCap .t{font-weight:900;text-shadow:0 3px 14px rgba(0,0,0,.8),0 0 2px #000!important} #trCard h1{font-family:'Cinzel',serif!important;color:#fff3d6!important;text-shadow:0 4px 24px rgba(0,0,0,.8)!important}
       #trCard h1 b{color:#e9c87e!important} #trCard .s{color:#7ff3ff!important;text-shadow:0 0 12px rgba(127,243,255,.6)!important;letter-spacing:4px}
-      #trCard li::before{color:#e9c87e!important}`; document.head.appendChild(st); });
-    // 카메라를 날리기 전에 플레이어를 그 근처로 옮겨 둬요 (가까운 바위 칸 · 식생이 켜지게)
-    const near = async (x, z) => { await rec.eval(([x, z]) => { const F = window.__field, X = window.__story.X; X.cleanupBattle(); X.player.pos.set(x, F.groundFn(x, z) + 0.05, z); X.player.vy = 0; }, [x, z]); for (let i = 0; i < 20; i++) await rec.eval(() => __VT.step(1000 / 30)); };
-    // 카메라 경로: 지면 위 높이(dy)로 a → b, la → lb 를 바라봐요
-    const fly = (sec, a, b, la, lb) => rec.shoot(sec, (t, [a, b, la, lb, sec]) => { const k = t / sec, e = k * k * (3 - 2 * k), L = (u, v) => u + (v - u) * e, G = window.__agora.G, F = window.__field;
+      #trCard li::before{color:#e9c87e!important}`; document.head.appendChild(st); document.body.classList.add('cine'); });   // 경치 영상이라 HUD 는 숨겨요
+    const step = n => rec.eval(n => { for (let i = 0; i < n; i++) __VT.step(1000 / 30) }, n);
+    const camSet = (a, la) => rec.eval(([a, la]) => { const G = window.__agora.G, F = window.__field;
+      G.camOverride = { pos: new G.THREE.Vector3(a[0], F.groundFn(a[0], a[2]) + a[1], a[2]), look: new G.THREE.Vector3(la[0], F.groundFn(la[0], la[2]) + la[1], la[2]) }; }, [a, la]);
+    // 다음 장면 준비 (녹화 안 함): 플레이어를 근처로 옮기고 (가까운 바위 칸 · 식생이 켜지게) 카메라를 첫 자리에 미리 붙여 둬요
+    //   (카메라 덮어쓰기는 부드럽게 따라가서, 미리 붙여 두지 않으면 앞 장면 자리에서 지도를 가로질러 날아와요)
+    const go = async (x, z, a, la) => { await rec.eval(([x, z]) => { const F = window.__field, X = window.__story.X; X.cleanupBattle(); X.player.pos.set(x, F.groundFn(x, z) + 0.05, z); X.player.vy = 0; }, [x, z]);
+      await camSet(a, la); await step(75); };
+    // 카메라 경로: 지면 위 높이(dy)로 a → b, la → lb 를 바라봐요 (TRPREVIEW=1 이면 처음 · 끝 두 장만)
+    const PV = !!process.env.TRPREVIEW;
+    const fly = async (sec, a, b, la, lb) => { if (PV){ await rec.shoot(1 / 30, () => {}); await camSet(b, lb); await step(75); return rec.shoot(1 / 30, () => {}); }
+      return rec.shoot(sec, (t, [a, b, la, lb, sec]) => { const k = t / sec, e = k * k * (3 - 2 * k), L = (u, v) => u + (v - u) * e, G = window.__agora.G, F = window.__field;
       const x = L(a[0], b[0]), z = L(a[2], b[2]), lx = L(la[0], lb[0]), lz = L(la[2], lb[2]);
-      G.camOverride = { pos: new G.THREE.Vector3(x, F.groundFn(x, z) + L(a[1], b[1]), z), look: new G.THREE.Vector3(lx, F.groundFn(lx, lz) + L(la[1], lb[1]), lz) }; }, [a, b, la, lb, sec]);
+      G.camOverride = { pos: new G.THREE.Vector3(x, F.groundFn(x, z) + L(a[1], b[1]), z), look: new G.THREE.Vector3(lx, F.groundFn(lx, lz) + L(la[1], lb[1]), lz) }; }, [a, b, la, lb, sec]); };
     const tod = t => rec.eval(t => window.__field.setTimeOfDay && window.__field.setTimeOfDay(t), t);
 
     // 1) 타이틀 — 협곡의 층층 절벽과 후두
     await tod(0.36);
+    await go(330, -230, [300, 40, -170], [380, 20, -260]);
     await rec.card('<h1>RUNE <b>AGORA</b></h1><div class="s">「요란한 대지」 · 2026.11.05</div>', 5.2);
     await fly(7, [300, 40, -170], [330, 30, -205], [380, 20, -260], [380, 16, -280]);
 
     // 2) 날카로운 능선 · 층층 절벽
-    await near(-380, -300);
+    await go(-380, -300, [-300, 70, -240], [-420, 30, -330]);
     await rec.caption('TERRAIN', '깎아지른 능선', '지역마다 날카로운 능선과 층층이 쌓인 절벽 — 고원 · 협곡 · 설원은 계단처럼 깎였어요', 6.6);
     await fly(7.5, [-300, 70, -240], [-360, 60, -260], [-420, 30, -330], [-440, 26, -360]);
 
     // 3) 바위 아치
-    await near(257, -340);
+    await go(257, -340, [230, 18, -300], [257, 22, -360]);
     await rec.caption('ARCH', '바위 아치 9개', '말발굽 아치 · 하늘 문 · 여우 다리 — 아래로 걸어서 지나갈 수 있어요', 6.4);
     await fly(6.5, [230, 18, -300], [250, 12, -322], [257, 22, -360], [257, 24, -364]);
-    await near(-118, 290);
+    await go(-118, 290, [-150, 10, 250], [-118, 8, 271]);
     await fly(5, [-150, 10, 250], [-130, 7, 262], [-118, 8, 271], [-118, 8, 274]);
 
     // 4) 협곡 세 곳
-    await near(220, 492);
+    await go(220, 492, [176, 14, 590], [206, 2, 520]);
     await rec.caption('GORGE', '협곡 세 곳', '바람골 협곡 · 뿌리 골짜기 · 왕의 골짜기 — 바닥엔 개울이 흘러요', 6.4);
     await fly(7.5, [176, 14, 590], [230, 12, 470], [206, 2, 520], [262, 4, 410]);
 
     // 5) 바이옴마다 다른 바위
-    await near(10, -250);
-    await rec.caption('ROCKS', '바위 1만 개', '협곡 후두 · 균형 바위 · 고원 돌기둥 · 호숫가 바다 기둥 · 서리 얼음 첨탑 · 침식지 흑요석 파편', 7);
     await tod(0.8);
+    await go(10, -250, [-20, 24, -200], [30, 6, -290]);
+    await rec.caption('ROCKS', '바위 1만 개', '협곡 후두 · 균형 바위 · 고원 돌기둥 · 호숫가 바다 기둥 · 서리 얼음 첨탑 · 침식지 흑요석 파편', 7);
     await fly(5, [-20, 24, -200], [10, 18, -230], [30, 6, -290], [30, 6, -300]);
     await tod(0.4);
-    await near(-200, -510);
+    await go(-200, -510, [-160, 40, -480], [-200, 30, -527]);
     await fly(5.5, [-160, 40, -480], [-180, 34, -500], [-200, 30, -527], [-210, 30, -530]);
-    await near(40, 200);
+    await go(40, 200, [60, 16, 220], [0, 4, 150]);
     await fly(5, [60, 16, 220], [40, 12, 210], [0, 4, 150], [-10, 4, 140]);
 
     // 6) 마무리 — 높은 곳에서 내려다본 대지
-    await near(-330, -230);
+    await go(-330, -230, [-250, 90, -180], [-380, 20, -320]);
     await rec.card('<h1>RUNE <b>AGORA</b></h1><div class="s">땅이 이야기를 해요</div><ul><li>날카로운 능선 · 층층 절벽 · 계단 고원</li><li>협곡 3곳 · 바위 아치 9개 (이름 3곳)</li><li>후두 · 돌기둥 · 얼음 첨탑 · 흑요석 · 바다 기둥</li><li>언덕 꼭대기 바위 왕관 · 절벽 아래 너덜</li></ul>', 6.4);
     await fly(7, [-250, 90, -180], [-280, 110, -200], [-380, 20, -320], [-400, 20, -340]);
   },
