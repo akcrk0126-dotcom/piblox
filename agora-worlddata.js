@@ -97,6 +97,12 @@ export const WORLD = {
     { id: 'frosthorn', name: '서리 뿔', c: [250, -672], r: 62, h: 140 },
   ],
   // 지도 · 표지판에 이름이 붙는 절벽 · 지형 (설명용)
+  // 협곡 (깊게 파인 골짜기): 바닥은 걸어 다닐 수 있고 양쪽은 바위 절벽. 끝은 완만하게 올라와요. w = 바닥 폭, bank = 절벽 폭, depth = 깊이, stream = 바닥에 발목 깊이 시냇물
+  gorges: [
+    { id: 'windgorge', name: '바람골 협곡', pts: [[176, 590], [206, 520], [236, 460], [262, 410]], w: 14, bank: 7, depth: 18, stream: true },
+    { id: 'rootgorge', name: '뿌리 골짜기', pts: [[-600, 470], [-540, 500], [-470, 520], [-410, 562]], w: 12, bank: 6, depth: 16, stream: true },
+    { id: 'kinggorge', name: '왕의 골짜기', pts: [[-540, -410], [-480, -446], [-410, -458]], w: 13, bank: 7, depth: 15 },
+  ],
   namedTerrain: [
     { name: '그림자 낭떠러지', c: [-90, -168], kind: 'cliff' },
     { name: '거인의 벽', c: [-236, -250], kind: 'cliff' },
@@ -105,6 +111,9 @@ export const WORLD = {
     { name: '용의 등뼈 능선', c: [200, -528], kind: 'ridge' },
     { name: '하늘 끝 봉우리', c: [-200, -662], kind: 'peak' },
     { name: '서리 뿔', c: [250, -672], kind: 'peak' },
+    { name: '바람골 협곡', c: [220, 492], kind: 'gorge' },
+    { name: '뿌리 골짜기', c: [-505, 512], kind: 'gorge' },
+    { name: '왕의 골짜기', c: [-476, -448], kind: 'gorge' },
     { name: '붉은 탁자 바위', c: [360, -320], kind: 'mesa' },
     { name: '은빛 개울', c: [-48, -90], kind: 'river' },
     { name: '갈대 개울', c: [240, 166], kind: 'river' },

@@ -8,6 +8,7 @@
 | `agora-worlddata.js` | 대륙 설계도 `WORLD` (지역 · 랜드마크 · 길 · 강 · 사냥터 · NPC · 레이드 …). 모두가 읽기만 해요. |
 | `agora-field.js` | 코어: `F` 컨텍스트, 지역(area) 등록, 입장/퇴장, 충돌 · 상호작용 공간 격자, 이름표, 알림, 지역 배너, 모듈 로더 |
 | `agora-world.js` | 지형(높이장 · 메시 · 물 · 식생 · 바위) · 길 · 강 · 다리 · 룬 비석(빠른 이동) · 월드맵(M) · 미니맵 · 낮밤 · 글라이더 · 헤엄 · 바람 승강 룬 · 절벽 처리 |
+| `agora-crags.js` | 바위 지형: 언덕 · 능선 꼭대기의 바위 왕관 · 협곡 후두 · 균형 바위 · 고원 돌기둥 · 바다 기둥 · 얼음 첨탑 · 흑요석 파편 · 바위 아치(이름 3곳) · 절벽 층리 턱 · 너덜 · 떠돌이 바위 |
 | `agora-landmarks.js` | 새싹 마을 건물 · 37개 랜드마크 구조물 · 이정표 · 사냥터 표지판 · 길가 소품 · 발견(discover) 처리 |
 | `agora-rpg.js` | 아이템 · 드랍 · 인벤토리/장비(I) · 강화 · 물약(H) · 상점 · 채집 · 상자 · 룬 정령 · 퀘스트(메인/의뢰/일일) 추적 · 퀘스트 로그(L) · 칭호/업적 |
 | `agora-life.js` | 사냥터 몬스터 스폰/리스폰 · 새 몬스터(wolf · frostgolem · yeti · wraith) · 필드 보스 · NPC 피규어 · 봇 모험가(가짜 플레이어) · 채팅창 · 감정표현(T) |
@@ -18,7 +19,7 @@
 | `agora-props.js` | lore 셋피스(이야기 장면 소품) · 길가 소품 · 빈 땅을 채우는 작은 장면(모닥불 자리 · 폐허 · 돌무덤 …) · 셋피스 쪽 세상 변화 |
 | `agora-saga.js` | 장(chapter) 진행 · 장 시작/끝 연출 · 연대기 창(N) · 읽기 창 · 수호석 의식 · 줍기 · 이야기 보스 · 주민 장별 대사(`F.greet`) · 세상 변화 적용 |
 
-각 모듈은 `export async function init(G, X, F)` 하나를 내보내요. 불러오는 순서: world → landmarks → towns → props → life → rpg → saga → raid → minigames.
+각 모듈은 `export async function init(G, X, F)` 하나를 내보내요. 불러오는 순서: world → crags → landmarks → towns → props → life → rpg → saga → raid → minigames.
 `agora-field.js` 가 하나씩 `try/catch` 로 불러서, 한 모듈이 깨져도 나머지는 떠요.
 테스트할 때 `agora.html?mods=world,life` 처럼 일부만, `?nomods` 로 코어만 띄울 수 있어요.
 
@@ -96,6 +97,7 @@ F.modules[name]  — 각 모듈 init 의 반환값 (모듈 API). 다른 모듈�
 ### 모듈이 F 에 올리는 API (다른 모듈이 기대해요)
 
 - **world**: `F.H` 교체, `F.groundFn`, `F.bound`, `F.enemyBound`, `F.roadDist`, `F.discoverWaypoint(id)`, `F.openWorldMap()`, `F.unlockGlider()`, `F.timeOfDay` (0~1, 0.5 정오), `F.isNight()`, `F.gliding`, `F.swimming`, `F.hills` (삼각형 언덕 목록: x, z, r, h, sc 0 작음 · 1 중간 · 2 큼), `F.towers` · `F.wakeTower(id)` (룬 탑: 깨우면 둘레 320m 지도 공개 + 상승 기류, BUS 'tower' { id })
+- **crags**: `F.crags = { list, stats, names, at(x, z, pad) }` — `at` 은 그 자리를 덮는 바위 무리 `{ kind, x, z, r, y0, y1 }` 또는 null (무리 발자국으로 재요). 빈 땅에 물건을 놓는 모듈은 `F.crags && F.crags.at(x, z, 1.5)` 로 바위 속을 피해 주세요. fieldReady 때 나중 모듈이 놓은 충돌체 · 상호작용 · rpg 상자/채집물/정령을 덮는 바위 무리는 crags 가 스스로 지워요 (아치 다리는 빼고).
 - **landmarks**: `F.landmarkAt(x,z)`, `F.discovered(id)` (BUS 'discover' 도 쏴요)
 - **rpg**: `F.addItem(id, n)`, `F.hasItem(id, n)`, `F.takeItem(id, n)`, `F.giveLoot(tableId | level, pos)`, `F.questEvent(type, data)`, `F.openInventory()`, `F.openQuests()`, `F.gold(n)` (+/-), `F.title`, `F.ITEMS`
 - **life**: `F.npcs[id] = { fig, pos, label }` (label 은 F.label 핸들 — rpg 가 `label.set(name, title, '!')` 로 퀘스트 표시), `F.bots[]`, `F.chat(...)` 교체, `F.say(text)` (말풍선), `F.emote(name)`, `F.spawnCamp(id)`, `F.worldBoss`

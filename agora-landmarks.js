@@ -1868,7 +1868,7 @@ const VILLAGE = byId('regions', 'village');
 const inVillage = (x, z) => VILLAGE && Math.hypot(x - VILLAGE.c[0], z - VILLAGE.c[1]) < VILLAGE.r + 9;
 const BIOME_LAMP = { meadow: 'wood', forest: 'stone', lake: 'wood', swamp: 'swamp', canyon: 'iron', plateau: 'iron', blight: 'crystal', snow: 'snow' };
 const biomeAt = (x, z) => (F.regionAt(x, z) || {}).biome || 'meadow';
-const okSpot = (x, z, pad = 1) => Math.abs(x) < W.half - 110 && Math.abs(z) < W.half - 110 && !wet(x, z) && slope(x, z) < 0.55 && !kept(x, z, pad) && !inVillage(x, z) && !nearLm(x, z, pad - 4);
+const okSpot = (x, z, pad = 1) => Math.abs(x) < W.half - 110 && Math.abs(z) < W.half - 110 && !wet(x, z) && slope(x, z) < 0.55 && !kept(x, z, pad) && !inVillage(x, z) && !nearLm(x, z, pad - 4) && !(F.crags && F.crags.at(x, z, pad));
 // 등불: 모든 길을 따라 일정 간격, 양쪽 번갈아 (길 쪽으로 팔을 뻗어요)
 srand(hashS('roadlamps'));
 for (const rd of W.roads){
