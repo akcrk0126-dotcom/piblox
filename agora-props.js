@@ -1149,7 +1149,7 @@ const VR = { camp: 2.5, ruinwall: 3, cairn: 2, hollowlog: 2.2, flowerring: 3, sh
       const x = (i + 0.15 + 0.7 * hash2(i, j, 11 + t)) * GS, z = (j + 0.15 + 0.7 * hash2(i, j, 31 + t)) * GS;
       if (Math.abs(x) > 670 || Math.abs(z) > 670) continue;
       const rg = F.regionAt(x, z); if (!rg || rg.id === 'village') continue;
-      if (wetR(x, z, 4) || slope(x, z) > 0.32 || roadD(x, z) < 8 || kept(x, z, 6) || nearSettle(x, z, 10) || nearLm(x, z, 1, 15) || nearCamp(x, z, 0.8)) continue;
+      if (wetR(x, z, 4) || slope(x, z) > 0.32 || roadD(x, z) < 8 || kept(x, z, 6) || nearSettle(x, z, 10) || nearLm(x, z, 1, 15) || nearCamp(x, z, 0.8) || (F.crags && F.crags.at(x, z, 3))) continue;
       const [lo, hi] = foot(x, z, 3.2); if (hi - lo > 1.4) continue;
       if (lmD(x, z) < 7 || treeD(x, z) < 3.4 || placed(x, z, 10)) continue;
       spot = [x, z, rg];

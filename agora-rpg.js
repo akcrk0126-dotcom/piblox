@@ -1137,6 +1137,7 @@ function okSpot(x, z, regId, maxSl, gap, list){
   const r = F.regionAt(x, z); if (!r || r.id !== regId) return false;
   if (F.isWater(x, z) || F.slope(x, z) > maxSl) return false;
   if (F.roadDist && F.roadDist(x, z) < 3.5) return false;
+  if (F.crags && F.crags.at(x, z, 1.5)) return false;   // 바위 속 X
   for (const l of W.landmarks) if (Math.hypot(x - l.c[0], z - l.c[1]) < l.r * 0.75) return false;
   for (const c of KEEP) if (Math.hypot(x - c[0], z - c[1]) < 7) return false;
   for (const o of list) if (Math.hypot(x - o.x, z - o.z) < gap) return false;
