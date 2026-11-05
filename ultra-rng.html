@@ -625,6 +625,17 @@ const NEW_AURAS2 = [
   A("Eternity's Edge",2.5e-07,'#ffc83a',{ font:'Cinzel Decorative', accent:'#ff5fd0', tag:'영원의 끝자락', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#1f0a00', emblem:'clock' }],['astra',{ mode:0, orb:7, tendrils:7, flares:10 }],['gyro',{ n:3 }],['sparks',{ n:.6 }]] }),
 ];
 NEW_AURAS2.forEach(a=>AURAS.push(a));
+// 👑 최상위 오라 6종 (1/12억 ~ 1/250억)
+const TOP_AURAS = [
+  A('Starweaver',8.333333333333334e-08,'#7a4dff',{ font:'Michroma', accent:'#3fe0ff', tag:'별을 엮는 자', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#0a0030', emblem:'star', es:12 }],['astra',{ mode:0, orb:6, tendrils:8, flares:10 }],['gyro',{ n:4 }],['sparks',{ n:.8 }]] }),
+  A('Twin Horizon',5e-08,'#e8e8f0',{ font:'Syncopate', accent:'#8a8aa0', tag:'빛과 어둠이 맞닿는 곳', perk:'all', clean:1, mods:[['duality',{ r:7 }],['astraDepth',{ deep:'#000000', emblem:'clock', es:12, shade:.9 }],['astra',{ mode:2, orb:0, tendrils:6, tr:2.4, flares:6, mist:3 }]] }),
+  A('Oblivion Bloom',2.5e-08,'#ff2bb0',{ font:'Nosifer', accent:'#7a00ff', tag:'망각 속에 피는 꽃', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#14001a', emblem:'thorn', es:12 }],['astra',{ mode:2, orb:0, tendrils:12, twist:1.6, tr:2.8, spin:1.8, flares:6 }],['sparks',{ n:.8 }]] }),
+  A('Solar Crown',1.4285714285714286e-08,'#ff9a00',{ font:'Cinzel Decorative', accent:'#ffe14a', tag:'태양을 쓴 자', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#2a0a00', emblem:'sun', es:12 }],['astra',{ mode:1, tendrils:12, twist:.25, tr:1.5, orb:4, discs:0, flares:12 }],['gyro',{ n:4 }],['sparks',{ n:.8 }]] }),
+  A('Primeval Ocean',8.333333333333334e-09,'#0077ff',{ font:'Pirata One', accent:'#00e5d1', tag:'태초의 바다', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#000a26', emblem:'wave', es:12 }],['astra',{ mode:3, orb:7, tendrils:8, tr:2.8, spin:1.5, mist:8, flares:6 }],['sparks',{ n:.8 }]] }),
+  A('The First Light',4e-09,'#ffd36b',{ font:'Cinzel Decorative', accent:'#6fe8ff', tag:'모든 빛의 시작', perk:'all', clean:1, mods:[['astraDepth',{ deep:'#140a00', emblem:'star', es:12 }],['astra',{ mode:1, tendrils:10, twist:.6, tr:2.2, orb:8, disc:5, flares:14 }],['gyro',{ n:4 }],['sparks',{ n:.8 }]] }),
+];
+TOP_AURAS.forEach(a=>AURAS.push(a));
+
 SIG_AURAS.forEach(a=>AURAS.push(a)); AURAS.sort((p, q)=>q.chance - p.chance);
 const POOL = AURAS.map((a, tier)=>{ const odds = Math.round(100/a.chance); return Object.assign({}, a, { tier, odds, font:odds <= 100 ? 'Russo One' : a.font }); }); // 1/100 이하는 폰트 통일
 const MAXT = POOL.length - 1;
@@ -2077,6 +2088,26 @@ MODS.astraDepth = function(A, o){ const deep = new THREE.Color(o.deep || '#00000
   // 4) 공중 안개층 (허리 높이, 기울어진 고리 — 앞뒤로 겹쳐 입체감)
   const ring = A.plane(9, A.U({ c1:'#' + deep.getHexString(), c2:'#' + main.getHexString() }, { uSpin:1.1, uCore:0 }), AMIST_FS); ring.rotation.set(-Math.PI/2 + .32, 0, 0); ring.position.y = 2.2; ring.scale.setScalar(.85);
   A.up((dt, t)=>{ ring.rotation.z += dt*.25; }); };
+// ☯ 흑백 균형 — 바닥이 빛과 어둠으로 갈라져 서로를 쫓아 돌고, 하얀 별과 검은 별이 몸 주위를 맞물려 돈다
+const DUAL_FS = GLSL_NOISE + `uniform float uTime,uBoost;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float r=length(p);if(r>1.)discard;float a=atan(p.y,p.x);
+  float sw=a-uTime*.35+r*2.4;float side=smoothstep(-.05,.05,sin(sw));float n=fbm(vec3(cos(sw)*r*3.,sin(sw)*r*3.,uTime*.15));
+  float lines=pow(.5+.5*sin(r*40.-uTime*2.+n*6.),18.)*smoothstep(1.,.3,r);float edge=smoothstep(1.,.75,r);
+  vec3 c=mix(vec3(.01),vec3(1.)*(.75+n*.35),side);c=mix(c,vec3(1.)-c,lines*.85);float seam=exp(-pow(sin(sw)*6.,2.))*smoothstep(1.,.2,r);c+=vec3(1.)*seam*.6*(1.-side);
+  gl_FragColor=vec4(c,edge*(.82+side*.1)*min(uBoost,1.2));}`;
+MODS.duality = function(A, o){ const R = o.r || 6;
+  const fl = A.plane(R*2, A.U(o), DUAL_FS, THREE.NormalBlending); fl.rotation.x = -Math.PI/2; fl.position.y = .045; fl.renderOrder = 1;
+  // 하얀 별 · 검은 별
+  const white = new THREE.Sprite(new THREE.SpriteMaterial({ map:GLINT_TEX, color:new THREE.Color(2.4, 2.4, 2.4), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })); white.scale.setScalar(2.4); A.mats.push(white.material); A.group.add(white);
+  const wglow = new THREE.Sprite(new THREE.SpriteMaterial({ map:spriteTex, color:new THREE.Color(1.2, 1.2, 1.3), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending })); wglow.scale.setScalar(2.2); A.mats.push(wglow.material); A.group.add(wglow);
+  const bm = rimMat(0x000000, 0, new THREE.Color(1.6, 1.6, 1.8)); A.mats.push(bm); const black = new THREE.Mesh(new THREE.SphereGeometry(.55, 24, 16), bm); A.group.add(black);
+  // 맞물린 고리: 하얀 고리 · 검은 고리
+  const wr = new THREE.Mesh(new THREE.TorusGeometry(3.1, .045, 8, 160), new THREE.MeshBasicMaterial({ color:new THREE.Color(2, 2, 2) })); A.mats.push(wr.material); wr.position.y = 3; A.group.add(wr);
+  const br = new THREE.Mesh(new THREE.TorusGeometry(3.1, .07, 8, 160), new THREE.MeshBasicMaterial({ color:0x000000 })); A.mats.push(br.material); br.position.y = 3; A.group.add(br);
+  // 사선으로 가르는 빛 — 화면을 향한 가는 띠
+  const slash = A.plane(1, A.U(o), `uniform float uTime,uBoost;varying vec2 vUv;void main(){float x=abs(vUv.y-.5)*2.;float k=exp(-x*x*400.)*1.6+exp(-x*x*20.)*.25;float f=smoothstep(0.,.15,vUv.x)*smoothstep(1.,.85,vUv.x);gl_FragColor=vec4(vec3(k*f)*(.7+.3*sin(uTime*3.))*min(uBoost,1.4),1.);}`);
+  slash.scale.set(14, 1.2, 1); A.billboard(slash, 3.4, -.2);
+  A.up((dt, t)=>{ const a = t*1.1, r = 2.4; white.position.set(Math.cos(a)*r, 3 + Math.sin(t*1.7)*.6, Math.sin(a)*r); wglow.position.copy(white.position); black.position.set(-Math.cos(a)*r, 3 - Math.sin(t*1.7)*.6, -Math.sin(a)*r);
+    white.material.rotation = t*.6; wr.rotation.set(1.1 + Math.sin(t*.4)*.2, t*.5, .3); br.rotation.set(-1.1 + Math.cos(t*.4)*.2, -t*.5, -.3); slash.rotation.z = -.5 + Math.sin(t*.3)*.08; }); };
 class Aura {
   constructor(it, lite){
     this.it = it; this.t = it.tier; this.k = it.tier/MAXT; this.lite = !!lite; this.lc = lite ? .5 : 1;
@@ -3115,6 +3146,7 @@ function gachaPull(n){ if (gachaBusy) return; const cost = GACHA_COST[n === 10 ?
 const gachaLabel = g=>g[1] === 'lum' ? ['💠', fmt(g[2]) + ' 루멘'] : [POTIONS[g[2]].icon, POTIONS[g[2]].name];
 // 📌 게시판 — 공지 · 업데이트
 const NOTICES = [
+  { d:'11.06', t:'👑 최상위 오라 6종', b:'Starweaver(1/12억) · Twin Horizon(1/20억) · Oblivion Bloom(1/40억) · Solar Crown(1/70억) · Primeval Ocean(1/120억) · The First Light(1/250억)' },
   { d:'11.05', t:'🎣 낚시 오픈!', b:'낚시 섬 4곳(호수 · 벚꽃 · 화산 · 심연). 낚싯대 6등급, 물고기 27종. 장착한 오라가 희귀할수록 낚시 행운↑, 섬과 색이 맞으면 입질도 빨라요. 낚아서 팔면 루멘!' },
   { d:'11.05', t:'✨ 새 오라 10종', b:'Tidecaller · Moonlit Koi · Ember Leviathan · Glacial Crown · Verdant Oracle · Neon Requiem · Storm Herald · Scarlet Eclipse · Aurora Sovereign · Eternity\'s Edge' },
   { d:'11.05', t:'🎰 가챠 오픈!', b:'상점 옆 🎰 가챠에서 루멘으로 뽑기. 루멘 · 물약 · 황금 시간(행운 x2) · 빠른 손(쿨타임 1초)이 나와요. 1% 확률로 💎 오천배의 물약(행운 x5000 · 1/10만 이상 확정)!' },
