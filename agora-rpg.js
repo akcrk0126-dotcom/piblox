@@ -1137,6 +1137,7 @@ function okSpot(x, z, regId, maxSl, gap, list){
   const r = F.regionAt(x, z); if (!r || r.id !== regId) return false;
   if (F.isWater(x, z) || F.slope(x, z) > maxSl) return false;
   if (F.roadDist && F.roadDist(x, z) < 3.5) return false;
+  if (F.crags && F.crags.at(x, z, 1.5)) return false;   // 바위 속 X
   for (const l of W.landmarks) if (Math.hypot(x - l.c[0], z - l.c[1]) < l.r * 0.75) return false;
   for (const c of KEEP) if (Math.hypot(x - c[0], z - c[1]) < 7) return false;
   for (const o of list) if (Math.hypot(x - o.x, z - o.z) < gap) return false;
@@ -1253,7 +1254,7 @@ function buildChests(){
   const out = [];
   // 랜드마크 가장자리에서 평평하고 길 · NPC 와 떨어진 자리 (없으면 조건을 풀어 한 번 더)
   const trySpot = (l, r0, r1, sl, strict) => { for (let t = 0; t < 40; t++){ const a = SR() * TAU, d = r0 + SR() * (r1 - r0), x = l.c[0] + Math.cos(a) * d, z = l.c[1] + Math.sin(a) * d;
-      if (Math.abs(x) > HALF - 110 || Math.abs(z) > HALF - 110 || F.isWater(x, z) || F.slope(x, z) > sl || (F.roadDist && F.roadDist(x, z) < 2.5) || KEEP.some(c => Math.hypot(x - c[0], z - c[1]) < 6)) continue;
+      if (Math.abs(x) > HALF - 110 || Math.abs(z) > HALF - 110 || F.isWater(x, z) || F.slope(x, z) > sl || (F.roadDist && F.roadDist(x, z) < 2.5) || KEEP.some(c => Math.hypot(x - c[0], z - c[1]) < 6) || (F.crags && F.crags.at(x, z, 2))) continue;
       if (strict && W.landmarks.some(o => o !== l && Math.hypot(x - o.c[0], z - o.c[1]) < o.r * 0.6)) continue;
       if (SPECIAL.some(sp => Math.hypot(x - sp[2], z - sp[3]) < 12) || out.some(c => Math.hypot(x - c.x, z - c.z) < 10)) continue; return [x, z]; } return null; };
   for (const l of W.landmarks){ if (l.id === 'village' || l.id === 'runegate') continue; srand(hashS('chest:' + l.id));
